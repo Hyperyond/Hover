@@ -36,6 +36,17 @@ export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEve
     env: { ...process.env, CLAUDECODE: '' },
   });
 
+  // Wire abort: when the caller signals (e.g. WS disconnect), terminate the
+  // child so we don't leak orphan agent processes that keep driving the
+  // browser after the user has navigated away.
+  const onAbort = () => {
+    if (!child.killed) child.kill('SIGTERM');
+  };
+  if (opts.signal) {
+    if (opts.signal.aborted) onAbort();
+    else opts.signal.addEventListener('abort', onAbort, { once: true });
+  }
+
   if (usesStdinPrompt && child.stdin) {
     child.stdin.write(opts.prompt);
     child.stdin.end();
@@ -53,7 +64,8 @@ export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEve
   }
 
   const code = await exitPromise;
-  if (!sawSessionEnd && code !== 0) {
+  opts.signal?.removeEventListener('abort', onAbort);
+  if (!sawSessionEnd && code !== 0 && !opts.signal?.aborted) {
     yield {
       kind: 'session_end',
       isError: true,

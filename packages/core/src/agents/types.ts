@@ -44,6 +44,9 @@ export interface InvokeOptions {
   model?: string;
   cwd?: string;
   sessionId?: string;
+  /** Aborts the spawned child if signaled. Used to stop an orphan run when
+   *  the WebSocket caller disconnects (e.g. user reloads the dev page). */
+  signal?: AbortSignal;
 }
 
 /**

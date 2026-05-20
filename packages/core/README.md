@@ -56,4 +56,4 @@ The `claude -p` invocation is locked down so Claude can only drive the browser:
 - `--permission-mode dontAsk` — anything not whitelisted aborts the run
 - `--max-budget-usd 0.50` — hard ceiling per session
 
-Together these implement [docs/PRD.md §7.3](../../docs/PRD.md) "Claude Code 调用必须沙箱化".
+Together these enforce the rule that the spawned agent can only reach the browser via Playwright MCP — never the host filesystem, shell, or network. A hijacked prompt or hallucinated destructive action has nowhere to land.

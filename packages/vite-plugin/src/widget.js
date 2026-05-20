@@ -8,6 +8,8 @@
 
   const PORT = window.__HOVER_PORT__ ?? 51789;
   const WS_URL = `ws://127.0.0.1:${PORT}`;
+  const STORAGE_KEY = 'hover:state:v1';
+  const MESSAGE_CAP = 200;
 
   const host = document.createElement('div');
   host.id = HOST_ID;
@@ -52,7 +54,7 @@
       .panel.open { opacity: 1; pointer-events: auto; transform: translateY(0); }
 
       header {
-        padding: 12px 16px; border-bottom: 1px solid #eee;
+        padding: 10px 14px; border-bottom: 1px solid #eee;
         display: flex; align-items: center; gap: 8px;
       }
       .title { font-weight: 600; font-size: 14px; flex: 1; }
@@ -64,6 +66,16 @@
       .status.connected { background: #d1fae5; color: #065f46; }
       .status.disconnected { background: #fee2e2; color: #991b1b; }
       .status.running { background: #dbeafe; color: #1e40af; }
+
+      .iconbtn {
+        border: 1px solid #e5e7eb; background: #fff;
+        border-radius: 6px; width: 24px; height: 24px;
+        font-size: 16px; line-height: 1; color: #6b7280;
+        cursor: pointer; padding: 0;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .iconbtn:hover { background: #f3f4f6; color: #111; }
+      .iconbtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
       .body {
         flex: 1; padding: 14px; overflow-y: auto;
@@ -134,6 +146,7 @@
     <div class="panel" role="dialog" aria-label="Hover">
       <header>
         <span class="title">Hover</span>
+        <button class="iconbtn newbtn" type="button" aria-label="New conversation" title="New conversation (clears history)">+</button>
         <span class="status disconnected">connecting…</span>
       </header>
       <div class="body" aria-live="polite"></div>
@@ -151,128 +164,229 @@
   const launcher = $('.launcher');
   const panel = $('.panel');
   const statusEl = $('.status');
+  const newBtn = $('.newbtn');
   const bodyEl = $('.body');
   const textarea = $('textarea');
   const sendBtn = $('.send');
 
+  // ───────────────────────── persistent state ─────────────────────────
+  // Survives panel close, page reload, and AI-driven navigations within
+  // localhost. Schema is `v1` — bump STORAGE_KEY if shape changes.
+  //
+  //   messages: ordered list of semantic messages (not HTML)
+  //   sessionId: most recent agent session id, used to --resume on next send
+
+  const state = { messages: [], sessionId: null, open: false };
+
+  const saveState = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      /* quota / privacy mode — degrade silently */
+    }
+  };
+
+  const loadState = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.messages)) {
+        state.messages = parsed.messages.slice(-MESSAGE_CAP);
+      }
+      if (typeof parsed.sessionId === 'string') {
+        state.sessionId = parsed.sessionId;
+      }
+      if (typeof parsed.open === 'boolean') {
+        state.open = parsed.open;
+      }
+    } catch {
+      /* corrupt — start fresh */
+    }
+  };
+
   // ───────────────────────── panel open/close ─────────────────────────
+  // Deliberately NO click-outside-to-close: when the agent drives the page,
+  // every browser_click would otherwise dismiss the panel. Toggle via the
+  // launcher; Esc closes ONLY when focus is inside the shadow root.
 
   const setOpen = (open) => {
     panel.classList.toggle('open', open);
     launcher.classList.toggle('open', open);
     launcher.setAttribute('aria-expanded', String(open));
     if (open) setTimeout(() => textarea.focus(), 50);
+    state.open = open;
+    saveState();
   };
   const isOpen = () => panel.classList.contains('open');
 
-  launcher.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setOpen(!isOpen());
-  });
-  document.addEventListener('click', (e) => {
-    if (!isOpen()) return;
-    if (e.composedPath().includes(host)) return;
-    setOpen(false);
-  });
-  document.addEventListener('keydown', (e) => {
+  launcher.addEventListener('click', () => setOpen(!isOpen()));
+
+  // Esc inside shadow → close. We listen on the shadow root, not document,
+  // so a stray Esc on the host page (or AI key input) doesn't dismiss us.
+  root.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && isOpen()) setOpen(false);
   });
 
-  // ───────────────────────── status + rendering ─────────────────────────
+  // ───────────────────────── rendering ─────────────────────────
+
+  const scrollToBottom = () => {
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  };
+
+  const renderUser = (text) => {
+    const div = document.createElement('div');
+    div.className = 'msg user';
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    b.textContent = text;
+    div.appendChild(b);
+    bodyEl.appendChild(div);
+    scrollToBottom();
+  };
+
+  const renderSystem = (text) => {
+    const div = document.createElement('div');
+    div.className = 'msg system';
+    div.textContent = text;
+    bodyEl.appendChild(div);
+    scrollToBottom();
+  };
+
+  let lastStepDiv = null;
+  const renderStep = (msg) => {
+    const div = document.createElement('div');
+    div.className = 'msg step' + (msg.isError ? ' error' : '');
+    const argStr = JSON.stringify(msg.input ?? {});
+    const short = argStr.length > 80 ? argStr.slice(0, 77) + '…' : argStr;
+    div.innerHTML = `
+      <span class="arrow">→</span>
+      <span class="tool"></span>
+      <span class="args"></span>
+    `;
+    div.querySelector('.tool').textContent = msg.tool;
+    div.querySelector('.args').textContent = ' ' + short;
+    bodyEl.appendChild(div);
+    lastStepDiv = div;
+    scrollToBottom();
+  };
+
+  const renderAi = (text) => {
+    const div = document.createElement('div');
+    div.className = 'msg ai';
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    b.textContent = text;
+    div.appendChild(b);
+    bodyEl.appendChild(div);
+    scrollToBottom();
+  };
+
+  const renderDone = (msg) => {
+    const div = document.createElement('div');
+    div.className = 'msg done' + (msg.isError ? ' error' : '');
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const turns = msg.turns != null ? `${msg.turns} turn${msg.turns === 1 ? '' : 's'}` : 'done';
+    const cost = msg.costUsd != null ? ` · $${msg.costUsd.toFixed(4)}` : '';
+    meta.textContent = (msg.isError ? '✗ ' : '✓ ') + turns + cost;
+    div.appendChild(meta);
+    if (msg.summary) {
+      const s = document.createElement('div');
+      s.className = 'summary';
+      s.textContent = msg.summary;
+      div.appendChild(s);
+    }
+    bodyEl.appendChild(div);
+    scrollToBottom();
+  };
+
+  const renderMessage = (msg) => {
+    switch (msg.kind) {
+      case 'user':   return renderUser(msg.text);
+      case 'system': return renderSystem(msg.text);
+      case 'step':   return renderStep(msg);
+      case 'ai':     return renderAi(msg.text);
+      case 'done':   return renderDone(msg);
+    }
+  };
+
+  // Append a serialized message: push to state + render + persist.
+  const addMessage = (msg) => {
+    state.messages.push(msg);
+    if (state.messages.length > MESSAGE_CAP) state.messages.shift();
+    saveState();
+    renderMessage(msg);
+  };
+
+  // Restore all stored messages on init (no re-persist, no DOM re-flow).
+  const replayState = () => {
+    bodyEl.innerHTML = '';
+    lastStepDiv = null;
+    for (const m of state.messages) renderMessage(m);
+  };
+
+  // ───────────────────────── status + new conversation ─────────────────────────
 
   const setStatus = (text, cls) => {
     statusEl.textContent = text;
     statusEl.className = `status ${cls}`;
   };
 
-  const scrollToBottom = () => {
-    bodyEl.scrollTop = bodyEl.scrollHeight;
-  };
+  newBtn.addEventListener('click', () => {
+    if (state.messages.length === 0 && !state.sessionId) return;
+    if (!confirm('Start a new conversation? Current history will be cleared.')) return;
+    state.messages = [];
+    state.sessionId = null;
+    saveState();
+    bodyEl.innerHTML = '';
+    lastStepDiv = null;
+  });
 
-  const appendMessage = (className, build) => {
-    const div = document.createElement('div');
-    div.className = `msg ${className}`;
-    build(div);
-    bodyEl.appendChild(div);
-    scrollToBottom();
-    return div;
-  };
+  // ───────────────────────── server event → state mutation ─────────────────────────
 
-  const renderUser = (text) =>
-    appendMessage('user', (div) => {
-      const b = document.createElement('div');
-      b.className = 'bubble';
-      b.textContent = text;
-      div.appendChild(b);
-    });
-
-  const renderSystem = (text) =>
-    appendMessage('system', (div) => {
-      div.textContent = text;
-    });
-
-  const renderStep = (ev) =>
-    appendMessage('step', (div) => {
-      const argStr = JSON.stringify(ev.input ?? {});
-      const short = argStr.length > 80 ? argStr.slice(0, 77) + '…' : argStr;
-      div.innerHTML = `
-        <span class="arrow">→</span>
-        <span class="tool"></span>
-        <span class="args"></span>
-      `;
-      div.querySelector('.tool').textContent = ev.tool;
-      div.querySelector('.args').textContent = ' ' + short;
-    });
-
-  const renderAiText = (text) =>
-    appendMessage('ai', (div) => {
-      const b = document.createElement('div');
-      b.className = 'bubble';
-      b.textContent = text;
-      div.appendChild(b);
-    });
-
-  const renderDone = (ev) =>
-    appendMessage(ev.isError ? 'done error' : 'done', (div) => {
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-      const turns = ev.turns != null ? `${ev.turns} turn${ev.turns === 1 ? '' : 's'}` : 'done';
-      const cost = ev.costUsd != null ? ` · $${ev.costUsd.toFixed(4)}` : '';
-      meta.textContent = (ev.isError ? '✗ ' : '✓ ') + turns + cost;
-      div.appendChild(meta);
-      if (ev.summary) {
-        const s = document.createElement('div');
-        s.className = 'summary';
-        s.textContent = ev.summary;
-        div.appendChild(s);
-      }
-    });
-
-  // mark a previous tool_use as errored when the matching tool_result arrives
-  let lastStepDiv = null;
-  const renderEvent = (ev) => {
+  const handleServerEvent = (ev) => {
     switch (ev.kind) {
       case 'session_start':
-        renderSystem(`session ${ev.sessionId.slice(0, 8)} · ${ev.model ?? '?'}`);
+        state.sessionId = ev.sessionId;
+        saveState();
+        addMessage({
+          kind: 'system',
+          text: `session ${ev.sessionId.slice(0, 8)} · ${ev.model ?? '?'}`,
+        });
         return;
       case 'mcp_status':
-        renderSystem(`mcp/${ev.server}: ${ev.status}`);
+        addMessage({ kind: 'system', text: `mcp/${ev.server}: ${ev.status}` });
         return;
       case 'tool_use':
-        lastStepDiv = renderStep(ev);
+        addMessage({ kind: 'step', tool: ev.tool, input: ev.input });
         return;
       case 'tool_result':
-        if (ev.isError && lastStepDiv) lastStepDiv.classList.add('error');
+        if (ev.isError && lastStepDiv) {
+          lastStepDiv.classList.add('error');
+          // also mutate the persisted step so reload reflects the error state
+          for (let i = state.messages.length - 1; i >= 0; i--) {
+            if (state.messages[i].kind === 'step') {
+              state.messages[i].isError = true;
+              saveState();
+              break;
+            }
+          }
+        }
         lastStepDiv = null;
         return;
       case 'text':
-        renderAiText(ev.text);
+        addMessage({ kind: 'ai', text: ev.text });
         return;
       case 'session_end':
-        renderDone(ev);
+        addMessage({
+          kind: 'done',
+          turns: ev.turns,
+          costUsd: ev.costUsd,
+          isError: ev.isError,
+          summary: ev.summary,
+        });
         return;
-      case 'raw':
-        return; // ignore noisy raw passthrough in UI
     }
   };
 
@@ -286,6 +400,7 @@
     running = r;
     sendBtn.disabled = r || !ws || ws.readyState !== WebSocket.OPEN;
     textarea.disabled = r || !ws || ws.readyState !== WebSocket.OPEN;
+    newBtn.disabled = r;
     if (r) setStatus('running', 'running');
     else if (ws && ws.readyState === WebSocket.OPEN) setStatus('connected', 'connected');
   };
@@ -294,7 +409,7 @@
     setStatus('connecting…', 'disconnected');
     try {
       ws = new WebSocket(WS_URL);
-    } catch (e) {
+    } catch {
       scheduleReconnect();
       return;
     }
@@ -317,10 +432,10 @@
       let msg;
       try { msg = JSON.parse(e.data); } catch { return; }
       if (msg.type === 'event' && msg.payload) {
-        renderEvent(msg.payload);
+        handleServerEvent(msg.payload);
         if (msg.payload.kind === 'session_end') setRunning(false);
       } else if (msg.type === 'error') {
-        renderSystem(`error: ${msg.payload?.message ?? 'unknown'}`);
+        addMessage({ kind: 'system', text: `error: ${msg.payload?.message ?? 'unknown'}` });
         setRunning(false);
       } else if (msg.type === 'hello') {
         // handshake — could surface agentId/model later
@@ -338,10 +453,15 @@
   const submit = () => {
     const text = textarea.value.trim();
     if (!text || running || !ws || ws.readyState !== WebSocket.OPEN) return;
-    renderUser(text);
+    addMessage({ kind: 'user', text });
     textarea.value = '';
     setRunning(true);
-    ws.send(JSON.stringify({ type: 'command', payload: { text } }));
+    // Include sessionId so the service can pass --resume to claude. Server
+    // ignores it if the agent doesn't support resume.
+    ws.send(JSON.stringify({
+      type: 'command',
+      payload: { text, sessionId: state.sessionId ?? undefined },
+    }));
   };
 
   sendBtn.addEventListener('click', submit);
@@ -351,6 +471,30 @@
       submit();
     }
   });
+
+  // ───────────────────────── boot ─────────────────────────
+
+  loadState();
+  replayState();
+
+  // If the last persisted message wasn't a 'done' card, the previous session
+  // was interrupted (most commonly: AI navigated to a same-origin URL → page
+  // reload destroyed the widget mid-stream). Surface a transient note so the
+  // user knows the agent run may not have finished. Not persisted — only
+  // shown once per boot.
+  const lastMsg = state.messages[state.messages.length - 1];
+  if (lastMsg && lastMsg.kind !== 'done') {
+    const div = document.createElement('div');
+    div.className = 'msg system';
+    div.style.color = '#d97706';
+    div.textContent = '↻ resumed — previous run may have been interrupted by a page reload.';
+    bodyEl.appendChild(div);
+    scrollToBottom();
+  }
+
+  // Restore the panel open/closed state last so the user sees what they were
+  // looking at before the reload.
+  if (state.open) setOpen(true);
 
   connect();
 })();

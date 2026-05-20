@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "smoke": "pnpm --filter @hover/core smoke",
-    "smoke:chrome": "open -na 'Google Chrome' --args --remote-debugging-port=9222 --user-data-dir=/tmp/hover-smoke",
+    "smoke:chrome": "./scripts/smoke-chrome.sh",
     "detect": "pnpm --filter @hover/core detect",
     "verify-widget": "pnpm --filter @hover/core verify-widget",
     "ws-smoke": "pnpm --filter @hover/core ws-smoke",

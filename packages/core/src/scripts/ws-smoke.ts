@@ -14,13 +14,22 @@ const URL = `ws://127.0.0.1:${PORT}`;
 const PROMPT =
   process.argv[2] ??
   'List the open tabs, then say which one is the example-frontend dev server.';
+// Pass HOVER_RESUME=<sessionId> to continue an earlier conversation —
+// claude.ts will translate this into `--resume <id>` argv.
+const RESUME = process.env.HOVER_RESUME;
 
 const ws = new WebSocket(URL);
 
 ws.on('open', () => {
   console.log(`• WS connected to ${URL}`);
+  if (RESUME) console.log(`• Resuming session ${RESUME.slice(0, 8)}…`);
   console.log(`• Sending: ${PROMPT}\n`);
-  ws.send(JSON.stringify({ type: 'command', payload: { text: PROMPT } }));
+  ws.send(
+    JSON.stringify({
+      type: 'command',
+      payload: { text: PROMPT, sessionId: RESUME },
+    }),
+  );
 });
 
 ws.on('error', err => {
@@ -55,7 +64,7 @@ ws.on('message', raw => {
   const ev = msg.payload as InvokeEvent;
   switch (ev.kind) {
     case 'session_start':
-      console.log(`• session ${ev.sessionId.slice(0, 8)} (${ev.model ?? '?'})`);
+      console.log(`• session ${ev.sessionId} (${ev.model ?? '?'})`);
       break;
     case 'mcp_status':
       console.log(`• mcp/${ev.server}: ${ev.status}`);

@@ -13,3 +13,61 @@ export async function connectAndListTabs(cdpUrl: string): Promise<string[]> {
     await browser.close();
   }
 }
+
+export type CdpPreflightResult =
+  | { ok: true; browser: string; tabCount: number }
+  | { ok: false; reason: string };
+
+/**
+ * Lightweight CDP health check via the /json endpoints.
+ *
+ * Critical: this MUST run before invoking the agent. If CDP isn't responsive,
+ * the Playwright MCP server falls back to launching its OWN Chromium — and
+ * Hover's premise is to drive the user's existing Chrome (with their dev
+ * state, cookies, devtools open), never spawn a fresh one.
+ *
+ * Pure HTTP — no playwright-core handshake, no setDownloadBehavior nonsense
+ * that can get stuck on busy CDP sessions.
+ */
+export async function preflightCDP(
+  cdpUrl: string,
+  timeoutMs = 2000,
+): Promise<CdpPreflightResult> {
+  let versionRes: Response;
+  try {
+    versionRes = await fetch(`${cdpUrl}/json/version`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `Chrome debug session not detected at ${cdpUrl}. Start it with: pnpm smoke:chrome`,
+    };
+  }
+  if (!versionRes.ok) {
+    return { ok: false, reason: `CDP returned HTTP ${versionRes.status}` };
+  }
+
+  let versionJson: { Browser?: string };
+  try {
+    versionJson = (await versionRes.json()) as { Browser?: string };
+  } catch {
+    return { ok: false, reason: 'CDP /json/version returned non-JSON' };
+  }
+
+  let listJson: unknown[] = [];
+  try {
+    const listRes = await fetch(`${cdpUrl}/json/list`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (listRes.ok) listJson = (await listRes.json()) as unknown[];
+  } catch {
+    // tab list is best-effort
+  }
+
+  return {
+    ok: true,
+    browser: versionJson.Browser ?? 'unknown',
+    tabCount: listJson.length,
+  };
+}
