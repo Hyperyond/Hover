@@ -13,7 +13,7 @@
  *    page changed and the literal selectors no longer apply, the agent has
  *    enough context to adapt rather than fail.
  */
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -153,4 +153,73 @@ function blockquote(s: string): string {
     .split('\n')
     .map(line => `> ${line}`)
     .join('\n');
+}
+
+export interface SkillSummary {
+  slug: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+/**
+ * List skills under <devRoot>/.claude/skills/, reading the YAML frontmatter
+ * of each SKILL.md for `name` and `description`. Malformed entries are
+ * silently skipped — better to show 9 valid skills than refuse to render
+ * because one is broken. Hand-edited skills are first-class.
+ */
+export async function listSkills(devRoot: string): Promise<SkillSummary[]> {
+  const root = join(devRoot, '.claude', 'skills');
+  let entries: string[];
+  try {
+    entries = await readdir(root);
+  } catch {
+    return [];
+  }
+
+  const skills: SkillSummary[] = [];
+  for (const slug of entries) {
+    if (slug.startsWith('.')) continue;
+    const path = join(root, slug, 'SKILL.md');
+    let content: string;
+    try {
+      content = await readFile(path, 'utf-8');
+    } catch {
+      continue;
+    }
+    const fm = parseFrontmatter(content);
+    skills.push({
+      slug,
+      name: fm.name ?? slug,
+      description: fm.description ?? '',
+      path,
+    });
+  }
+  // Sort newest-first by mtime would require fs.stat; alpha is fine and stable.
+  skills.sort((a, b) => a.slug.localeCompare(b.slug));
+  return skills;
+}
+
+function parseFrontmatter(content: string): Record<string, string> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  const out: Record<string, string> = {};
+  for (const line of match[1].split('\n')) {
+    const m = line.match(/^(\w+)\s*:\s*(.+)$/);
+    if (!m) continue;
+    let value = m[2].trim();
+    // Strip wrapping quotes if present (yamlString() in renderSkill quotes
+    // strings with YAML-significant chars).
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value
+        .slice(1, -1)
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+    }
+    out[m[1]] = value;
+  }
+  return out;
 }

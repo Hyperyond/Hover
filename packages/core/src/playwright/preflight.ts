@@ -14,8 +14,14 @@ export async function connectAndListTabs(cdpUrl: string): Promise<string[]> {
   }
 }
 
+export interface CdpTabInfo {
+  url: string;
+  title?: string;
+  type?: string;
+}
+
 export type CdpPreflightResult =
-  | { ok: true; browser: string; tabCount: number }
+  | { ok: true; browser: string; tabs: CdpTabInfo[] }
   | { ok: false; reason: string };
 
 /**
@@ -55,12 +61,18 @@ export async function preflightCDP(
     return { ok: false, reason: 'CDP /json/version returned non-JSON' };
   }
 
-  let listJson: unknown[] = [];
+  let tabs: CdpTabInfo[] = [];
   try {
     const listRes = await fetch(`${cdpUrl}/json/list`, {
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (listRes.ok) listJson = (await listRes.json()) as unknown[];
+    if (listRes.ok) {
+      const raw = (await listRes.json()) as { url?: string; title?: string; type?: string }[];
+      tabs = raw
+        .filter(t => t.type === 'page' || !t.type)
+        .map(t => ({ url: t.url ?? '', title: t.title, type: t.type }))
+        .filter(t => t.url.length > 0);
+    }
   } catch {
     // tab list is best-effort
   }
@@ -68,6 +80,6 @@ export async function preflightCDP(
   return {
     ok: true,
     browser: versionJson.Browser ?? 'unknown',
-    tabCount: listJson.length,
+    tabs,
   };
 }

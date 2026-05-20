@@ -11,12 +11,14 @@
  *     { type: 'event',        payload: InvokeEvent }              // see agents/types.ts
  *     { type: 'skill-saved',  payload: { name, path } }
  *     { type: 'skill-exists', payload: { slug, existingPath } }
+ *     { type: 'skills-list',  payload: { skills: SkillSummary[] } }
  *     { type: 'error',        payload: { message } }
  *
  *   client → server
- *     { type: 'command',    payload: { text, sessionId? } }
+ *     { type: 'command',     payload: { text, sessionId? } }
  *     { type: 'cancel' }
- *     { type: 'save-skill', payload: { name, description, steps, overwrite? } }
+ *     { type: 'save-skill',  payload: { name, description, steps, overwrite? } }
+ *     { type: 'list-skills' }
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +26,12 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
 import type { InvokeEvent } from './agents/types.js';
 import { preflightCDP } from './playwright/preflight.js';
-import { writeSkill, SkillExistsError, type SkillStep } from './skills/writeSkill.js';
+import {
+  writeSkill,
+  listSkills,
+  SkillExistsError,
+  type SkillStep,
+} from './skills/writeSkill.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
@@ -126,6 +133,11 @@ export function startService(opts: ServiceOptions): ServiceHandle {
         await handleSaveSkill(ws, msg, devRoot);
         return;
       }
+      if (msg.type === 'list-skills') {
+        const skills = await listSkills(devRoot);
+        send(ws, { type: 'skills-list', payload: { skills } });
+        return;
+      }
       if (msg.type !== 'command') return;
       const text = msg.payload?.text;
       const resumeSessionId =
@@ -162,6 +174,14 @@ export function startService(opts: ServiceOptions): ServiceHandle {
           return;
         }
 
+        // Build a system-prompt addendum telling the agent about the user's
+        // current tab. The most common waste we observed: agent calls
+        // browser_navigate to the same URL the user is already on, triggering
+        // a wasteful full-page reload that also destroys the Hover widget
+        // momentarily (the widget re-injects + recovers, but the agent's
+        // own session sometimes gets confused).
+        const appendSystemPrompt = buildCdpHint(cdp.tabs);
+
         for await (const ev of invokeAgent({
           agentId,
           prompt: text,
@@ -170,6 +190,7 @@ export function startService(opts: ServiceOptions): ServiceHandle {
           // cwd = devRoot so Claude Code auto-discovers `.claude/skills/`
           // saved from this project (and CLAUDE.md, if any).
           cwd: devRoot,
+          appendSystemPrompt,
           allowedTools: ['mcp__playwright'],
           disallowedTools: [
             'Bash', 'BashOutput', 'KillBash',
@@ -214,6 +235,25 @@ function send(ws: WebSocket, message: { type: string; payload?: unknown }): void
   ws.send(JSON.stringify(message));
 }
 
+function buildCdpHint(tabs: { url: string; title?: string }[]): string {
+  if (tabs.length === 0) return '';
+  // Prefer the localhost tab if we have multiple — that's almost always the
+  // dev server the user is testing against.
+  const localhost = tabs.find(t => /localhost|127\.0\.0\.1/.test(t.url));
+  const active = localhost ?? tabs[0];
+  return [
+    `The user's Chrome currently has these tabs open:`,
+    ...tabs.map(t => `  - ${t.url}${t.title ? `  (${t.title})` : ''}`),
+    ``,
+    `The likely active dev tab is: ${active.url}`,
+    ``,
+    `Important: do NOT call browser_navigate to a URL that is already the active tab.`,
+    `That triggers an unnecessary full page reload. Instead, call browser_snapshot`,
+    `first to see the current page state, and only navigate if you actually need a`,
+    `different URL.`,
+  ].join('\n');
+}
+
 async function handleSaveSkill(
   ws: WebSocket,
   msg: ClientMessage,
@@ -240,6 +280,10 @@ async function handleSaveSkill(
       type: 'skill-saved',
       payload: { name: result.slug, path: result.path },
     });
+    // Push a fresh list so the widget's skills overlay updates without a
+    // round-trip — most relevant right after the save.
+    const skills = await listSkills(devRoot);
+    send(ws, { type: 'skills-list', payload: { skills } });
   } catch (err) {
     if (err instanceof SkillExistsError) {
       send(ws, {

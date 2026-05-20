@@ -44,6 +44,11 @@ export interface InvokeOptions {
   model?: string;
   cwd?: string;
   sessionId?: string;
+  /** Extra text appended to the agent's system prompt (claude: via
+   *  --append-system-prompt). Used to inject session-specific context like
+   *  "the user's current Chrome tab is already on http://localhost:5173/,
+   *  don't browser_navigate there". */
+  appendSystemPrompt?: string;
   /** Aborts the spawned child if signaled. Used to stop an orphan run when
    *  the WebSocket caller disconnects (e.g. user reloads the dev page). */
   signal?: AbortSignal;

@@ -47,6 +47,9 @@ export const claudeAgent: AgentDescriptor = {
     if (opts.sessionId) {
       args.push('--resume', opts.sessionId);
     }
+    if (opts.appendSystemPrompt && opts.appendSystemPrompt.trim().length > 0) {
+      args.push('--append-system-prompt', opts.appendSystemPrompt);
+    }
     return args;
   },
 

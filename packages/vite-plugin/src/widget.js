@@ -70,12 +70,54 @@
       .iconbtn {
         border: 1px solid #e5e7eb; background: #fff;
         border-radius: 6px; width: 24px; height: 24px;
-        font-size: 16px; line-height: 1; color: #6b7280;
+        font-size: 13px; line-height: 1; color: #6b7280;
         cursor: pointer; padding: 0;
         display: flex; align-items: center; justify-content: center;
       }
       .iconbtn:hover { background: #f3f4f6; color: #111; }
       .iconbtn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .iconbtn.active { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+
+      /* Skills overlay slides over the body+footer area. Panel itself is
+         position:fixed, so absolute children align to it. */
+      .skills-overlay {
+        position: absolute; top: 41px; left: 0; right: 0; bottom: 0;
+        background: #fff;
+        display: none;
+        flex-direction: column;
+        z-index: 5;
+      }
+      .skills-overlay.open { display: flex; }
+      .skills-overlay .skills-header {
+        padding: 10px 14px; border-bottom: 1px solid #eee;
+        display: flex; align-items: center; gap: 8px;
+        font-size: 12px; color: #6b7280;
+      }
+      .skills-overlay .skills-header .count {
+        font-weight: 600; color: #111;
+      }
+      .skills-overlay .skills-list-items {
+        flex: 1; overflow-y: auto; padding: 8px;
+      }
+      .skills-overlay .skills-empty {
+        padding: 20px 16px; text-align: center;
+        color: #9ca3af; font-size: 12px; line-height: 1.5;
+      }
+      .skill-row {
+        padding: 10px 12px; border-radius: 8px;
+        cursor: pointer; margin-bottom: 4px;
+        border: 1px solid transparent;
+      }
+      .skill-row:hover { background: #f9fafb; border-color: #e5e7eb; }
+      .skill-row .skill-name { font-weight: 600; color: #111; font-size: 13px; }
+      .skill-row .skill-desc {
+        font-size: 12px; color: #6b7280; margin-top: 2px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .skill-row .skill-slug {
+        font-size: 11px; color: #9ca3af; margin-top: 2px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      }
 
       .body {
         flex: 1; padding: 14px; overflow-y: auto;
@@ -161,10 +203,20 @@
     <div class="panel" role="dialog" aria-label="Hover">
       <header>
         <span class="title">Hover</span>
+        <button class="iconbtn skillsbtn" type="button" aria-label="Skills" title="Saved skills">📚</button>
         <button class="iconbtn newbtn" type="button" aria-label="New conversation" title="New conversation (clears history)">+</button>
         <span class="status disconnected">connecting…</span>
       </header>
       <div class="body" aria-live="polite"></div>
+
+      <div class="skills-overlay" aria-hidden="true">
+        <div class="skills-header">
+          Saved skills · <span class="count">0</span>
+          <span style="flex:1"></span>
+          <button class="iconbtn skills-close" type="button" aria-label="Close skills">×</button>
+        </div>
+        <div class="skills-list-items"></div>
+      </div>
       <footer>
         <textarea placeholder="e.g. test the login flow" rows="3" disabled aria-label="instruction"></textarea>
         <div class="row">
@@ -180,6 +232,11 @@
   const panel = $('.panel');
   const statusEl = $('.status');
   const newBtn = $('.newbtn');
+  const skillsBtn = $('.skillsbtn');
+  const skillsOverlay = $('.skills-overlay');
+  const skillsListEl = $('.skills-list-items');
+  const skillsCountEl = $('.skills-overlay .count');
+  const skillsCloseBtn = $('.skills-close');
   const bodyEl = $('.body');
   const textarea = $('textarea');
   const sendBtn = $('.send');
@@ -423,6 +480,75 @@
     }, 8000);
   };
 
+  // ───────────────────────── skills overlay ─────────────────────────
+
+  const requestSkillsList = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'list-skills' }));
+    }
+  };
+
+  const renderSkills = (skills) => {
+    skillsCountEl.textContent = String(skills.length);
+    skillsListEl.innerHTML = '';
+    if (skills.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'skills-empty';
+      empty.textContent = 'No saved skills yet. Run a session, then click 💾 Save as Skill on the result card.';
+      skillsListEl.appendChild(empty);
+      return;
+    }
+    for (const s of skills) {
+      const row = document.createElement('div');
+      row.className = 'skill-row';
+      const n = document.createElement('div');
+      n.className = 'skill-name';
+      n.textContent = s.name || s.slug;
+      const d = document.createElement('div');
+      d.className = 'skill-desc';
+      d.textContent = s.description || '(no description)';
+      const slug = document.createElement('div');
+      slug.className = 'skill-slug';
+      slug.textContent = s.slug;
+      row.appendChild(n);
+      row.appendChild(d);
+      row.appendChild(slug);
+      row.addEventListener('click', () => executeSkill(s));
+      skillsListEl.appendChild(row);
+    }
+  };
+
+  const executeSkill = (skill) => {
+    if (running || !ws || ws.readyState !== WebSocket.OPEN) return;
+    closeSkillsOverlay();
+    const prompt = `execute the ${skill.slug} skill`;
+    addMessage({ kind: 'user', text: prompt });
+    setRunning(true);
+    ws.send(JSON.stringify({
+      type: 'command',
+      payload: { text: prompt, sessionId: state.sessionId ?? undefined },
+    }));
+  };
+
+  const openSkillsOverlay = () => {
+    skillsOverlay.classList.add('open');
+    skillsOverlay.setAttribute('aria-hidden', 'false');
+    skillsBtn.classList.add('active');
+    requestSkillsList();
+  };
+
+  const closeSkillsOverlay = () => {
+    skillsOverlay.classList.remove('open');
+    skillsOverlay.setAttribute('aria-hidden', 'true');
+    skillsBtn.classList.remove('active');
+  };
+
+  skillsBtn.addEventListener('click', () => {
+    if (skillsOverlay.classList.contains('open')) closeSkillsOverlay();
+    else openSkillsOverlay();
+  });
+  skillsCloseBtn.addEventListener('click', closeSkillsOverlay);
+
   const handleSkillExists = (slug, existingPath) => {
     if (!pendingSave) return;
     const overwrite = confirm(
@@ -590,6 +716,8 @@
       } else if (msg.type === 'skill-exists') {
         const p = msg.payload ?? {};
         handleSkillExists(p.slug, p.existingPath);
+      } else if (msg.type === 'skills-list') {
+        renderSkills(msg.payload?.skills ?? []);
       } else if (msg.type === 'hello') {
         // handshake — could surface agentId/model later
       }
