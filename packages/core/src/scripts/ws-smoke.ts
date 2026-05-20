@@ -13,7 +13,7 @@ const PORT = Number(process.env.HOVER_PORT ?? 51789);
 const URL = `ws://127.0.0.1:${PORT}`;
 const PROMPT =
   process.argv[2] ??
-  'List the open tabs, then say which one is the example-frontend dev server.';
+  'List the open tabs, then say which one is the basic-app dev server.';
 // Pass HOVER_RESUME=<sessionId> to continue an earlier conversation —
 // claude.ts will translate this into `--resume <id>` argv.
 const RESUME = process.env.HOVER_RESUME;

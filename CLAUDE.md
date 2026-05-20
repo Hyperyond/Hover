@@ -20,7 +20,12 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*
 
 - `packages/core` is `@hover/core` — the Node service. Owns agent invocation, Playwright CDP preflight, MCP config, and the WebSocket bridge between the injected UI and the agent process.
 - `packages/vite-plugin` is `@hover/vite-plugin` — the Vite plugin that injects the floating chat widget into the user's dev server page. Must be a no-op in production builds (`apply: 'serve'`).
-- `examples/example-frontend` is a Vite + React app used as the target for smoke tests.
+- `examples/basic-app` is the minimal Vite + React app used as the default smoke target — login + counter + todos. Vite port 5173.
+- `examples/checkout-flow` is a 5-step purchase wizard: plan → account → address → payment → review → success. Stresses long action chains and cross-step state preservation. Vite port 5174.
+- `examples/event-form` is a single-screen rich form: text/textarea/date/time/select/multi-select chips/number/range/radio/checkboxes/toggle/file input. Stresses AI form filling on complex controls. Vite port 5175.
+- `examples/canvas-paint` is a drawing app: `<canvas>` for the artwork, DOM toolbar for tools/color/brush size. Stresses AI's ability to find DOM controls amidst graphical content (canvas pixels are opaque to Playwright snapshots). Vite port 5176.
+
+All four examples share `@hover/vite-plugin` (workspace) and default the Hover service to 51789, so run **one example at a time**.
 
 ## Inactive or placeholder directories
 
@@ -28,7 +33,7 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*
 
 ## Repository status
 
-Phase 0 (end-to-end feasibility) is verified — a `claude -p` invocation, sandboxed to only the Playwright MCP server, successfully drives the user's Chrome through a multi-step task in `examples/example-frontend`. Phase 1 (Vite plugin + chat UI + persistent Node service) is the active work.
+Phase 0 (end-to-end feasibility) is verified — a `claude -p` invocation, sandboxed to only the Playwright MCP server, successfully drives the user's Chrome through a multi-step task in `examples/basic-app`. Phase 1 (Vite plugin + chat UI + persistent Node service) is the active work.
 
 Development order is Phase 0 → 1 → 2 → 3. Phase 1 work order: WebSocket server in `@hover/core` → real Vite plugin injection (`transformIndexHtml` + Shadow DOM widget) → "save as Playwright spec" file emission.
 
@@ -80,14 +85,14 @@ Starting **2026-06-15**, `claude -p` calls draw from a new monthly Agent SDK cre
 
 - Runtime is Node 24+, pnpm 10+. The repo is ESM throughout. No CJS at the source layer.
 - `tsconfig.base.json` at the root is the shared TS config every package extends. There is no root `tsconfig.json` — typecheck runs per-package via `pnpm typecheck`.
-- Test stack: Vitest for unit tests (per-package, under `packages/*/tests/`), Playwright dogfooding for integration (crystallized specs under `examples/example-frontend/__vibe_tests__/`). No linter or formatter is configured yet.
+- Test stack: Vitest for unit tests (per-package, under `packages/*/tests/`), Playwright dogfooding for integration (crystallized specs under `examples/basic-app/__vibe_tests__/`). No linter or formatter is configured yet.
 
 ## Local lifecycle
 
 Three terminals on first run; once Chrome and Vite are up they stay running across many smoke loops:
 
 1. `pnpm smoke:chrome` — launches a debug-mode Chrome (`--remote-debugging-port=9222`, isolated profile at `/tmp/hover-smoke`).
-2. `pnpm dev:example` — example-frontend at http://localhost:5173.
+2. `pnpm dev:basic` — basic-app at http://localhost:5173. (Or `dev:checkout` / `dev:form` / `dev:canvas` on 5174 / 5175 / 5176 for the other scenarios.)
 3. `pnpm smoke` — end-to-end: detect agents → CDP preflight → invoke `claude` → stream events.
 
 Custom target / prompt:
@@ -130,7 +135,7 @@ Tag versions at meaningful milestones so the history has anchor points:
 ## Test strategy
 
 - Unit tests: **Vitest**, per-package, in `packages/*/tests/` sibling to `src/`. Run with `pnpm --filter @hover/core test` or `pnpm test` at the root (which fans out across the workspace). Keep `src/` source-only; do not place `*.test.ts` inside `src/`. Current coverage: `packages/core/tests/agents/` (argv dispatcher, claude descriptor, registry).
-- Integration / e2e: **Playwright dogfooding**. Crystallized specs land under `examples/example-frontend/__vibe_tests__/` and run with standard `@playwright/test`. The agent must not be involved at CI time — only the Playwright script runs. Bootstrap on a fresh machine: `pnpm --filter example-frontend exec playwright install chromium`. Run with `pnpm test:e2e`.
+- Integration / e2e: **Playwright dogfooding**. Crystallized specs land under `examples/basic-app/__vibe_tests__/` and run with standard `@playwright/test`. The agent must not be involved at CI time — only the Playwright script runs. Bootstrap on a fresh machine: `pnpm --filter basic-app exec playwright install chromium`. Run with `pnpm test:e2e`.
 - Smoke-level end-to-end (agent in the loop): `pnpm smoke`. This requires a running debug Chrome and the example frontend; it is not part of CI.
 
 ## Validation strategy
@@ -148,7 +153,10 @@ pnpm install              # workspace install (also runs husky install via the `
 pnpm typecheck            # tsc --noEmit, per-package
 pnpm test                 # vitest, per-package (where present)
 pnpm test:e2e             # Playwright dogfood suite — first run needs `playwright install chromium`
-pnpm dev:example          # start example-frontend at http://localhost:5173
+pnpm dev:basic            # start basic-app at http://localhost:5173
+pnpm dev:checkout         # checkout-flow wizard at http://localhost:5174
+pnpm dev:form             # event-form rich-controls demo at http://localhost:5175
+pnpm dev:canvas           # canvas-paint at http://localhost:5176
 pnpm smoke:chrome         # launch debug-mode Chrome (--remote-debugging-port=9222)
 pnpm smoke                # end-to-end: detect agents → CDP preflight → invoke claude
 pnpm detect               # list installed coding agents
@@ -160,7 +168,7 @@ pnpm ws-smoke             # exercise the @hover/core WebSocket bridge in isolati
 pnpm --filter @hover/core test
 pnpm --filter @hover/core typecheck
 pnpm --filter @hover/vite-plugin typecheck
-pnpm --filter example-frontend dev
+pnpm --filter basic-app dev
 ```
 
 # FAQ

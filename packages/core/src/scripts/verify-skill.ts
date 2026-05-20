@@ -1,6 +1,6 @@
 /**
  * Unit-level verification for writeSkill — writes a synthetic skill to the
- * example-frontend project, reads it back, prints it.
+ * basic-app project, reads it back, prints it.
  *
  *   pnpm --filter @hover/core verify-skill
  */
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { writeSkill } from '../skills/writeSkill.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DEV_ROOT = resolve(HERE, '..', '..', '..', '..', 'examples', 'example-frontend');
+const DEV_ROOT = resolve(HERE, '..', '..', '..', '..', 'examples', 'basic-app');
 
 const fixture = {
   devRoot: DEV_ROOT,

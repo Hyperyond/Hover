@@ -9,8 +9,8 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * To bootstrap on a fresh machine:
  *   pnpm install
- *   pnpm --filter example-frontend exec playwright install chromium
- *   pnpm --filter example-frontend test
+ *   pnpm --filter basic-app exec playwright install chromium
+ *   pnpm --filter basic-app test
  */
 export default defineConfig({
   testDir: './__vibe_tests__',

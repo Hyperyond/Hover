@@ -8,7 +8,7 @@ export default function App() {
 
   return (
     <main className="page">
-      <h1>example-frontend</h1>
+      <h1>basic-app</h1>
       <p className="subtitle">
         Target app for Hover smoke tests — login, counter, and a todo list cover
         the basic interaction primitives (form fill, click, read state).

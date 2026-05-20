@@ -27,8 +27,8 @@ To add an agent: implement an `AgentDescriptor`, register it in `registry.ts`. D
 # Terminal 1: launch debug-mode Chrome
 pnpm smoke:chrome    # from repo root
 
-# Terminal 2: run example-frontend so the smoke test has a target
-pnpm dev:example     # from repo root, serves http://localhost:5173
+# Terminal 2: run basic-app so the smoke test has a target
+pnpm dev:basic       # from repo root, serves http://localhost:5173
 
 # Terminal 3: run the smoke test
 pnpm smoke           # from repo root, defaults to http://localhost:5173

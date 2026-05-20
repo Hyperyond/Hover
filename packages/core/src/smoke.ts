@@ -20,9 +20,9 @@ const CHROME_CMD = `/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Ch
 
 function defaultPromptFor(target: string): string {
   if (target.includes('localhost:5173')) {
-    // Tailored to examples/example-frontend
+    // Tailored to examples/basic-app (login + counter + todos)
     return [
-      `The user's Chrome is connected via CDP and example-frontend is running at ${target}.`,
+      `The user's Chrome is connected via CDP and basic-app is running at ${target}.`,
       `Step 1: call browser_tabs(action="list"). If no tab is on ${target}, navigate there.`,
       `Step 2: in the Login section, fill the email field with "claude@sparkplay.io" and the password field with "demo1234", then click Submit.`,
       `Step 3: verify the welcome message now shows "claude@sparkplay.io".`,

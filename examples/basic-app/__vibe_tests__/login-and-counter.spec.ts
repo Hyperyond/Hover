@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
  * Selectors prefer getByRole / getByLabel / getByTestId over CSS/XPath, so
  * the saved spec survives layout/markup changes that don't touch semantics.
  */
-test.describe('example-frontend / login + counter', () => {
+test.describe('basic-app / login + counter', () => {
   test('logs in and increments the counter to 3', async ({ page }) => {
     await page.goto('/');
 
