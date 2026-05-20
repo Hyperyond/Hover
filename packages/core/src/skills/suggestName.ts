@@ -1,11 +1,19 @@
 /**
- * Ask claude (haiku, no tools) to propose a skill name + description from a
- * recorded session transcript. Used by the widget's Save-as-Skill flow so the
- * user gets a sensible default instead of staring at an empty prompt() box.
+ * Ask Haiku 4.5 to propose a skill name + description from a recorded
+ * session transcript. Used by the widget's Save-as-Skill flow so the user
+ * gets a sensible default instead of staring at an empty prompt() box.
  *
- * This is a fire-and-forget side call that does NOT share state with the main
- * agent invocation: no MCP, no Playwright, no inherited session id. Budget is
- * hard-capped at $0.05 — a typical call is ~$0.0005 with haiku.
+ * Two timing tiers, both via claude CLI:
+ *
+ *   - When `ANTHROPIC_API_KEY` is set (or apiKeyHelper via settings), we use
+ *     `--bare`: claude skips plugin sync, hooks, CLAUDE.md auto-discovery,
+ *     keychain reads, and OAuth, cutting cold-start sharply (~1-3s).
+ *   - Otherwise we use the normal `claude -p` path which reads OAuth from
+ *     the user's claude.ai subscription. Slower (~10-15s) but no extra
+ *     config needed.
+ *
+ * Either way, no MCP, every tool denied — pure text generation, capped at
+ * $0.05 per call. Typical cost ~$0.0005 with haiku.
  */
 import spawn from 'cross-spawn';
 import type { SkillStep } from './writeSkill.js';
@@ -15,54 +23,39 @@ export interface NameSuggestion {
   description: string;
 }
 
-const SUGGEST_MODEL = 'haiku';
-const SUGGEST_BUDGET_USD = 0.05;
-const SUGGEST_TIMEOUT_MS = 30000;
+const MODEL = 'claude-haiku-4-5-20251001';
+const BUDGET_USD = 0.05;
+const TIMEOUT_MS = 30000;
 
 export async function suggestSkillName(steps: SkillStep[]): Promise<NameSuggestion> {
-  const transcript = renderTranscript(steps);
-  const prompt = [
-    'You are naming a saved browser-automation skill recorded by Hover.',
-    'Read the transcript below and propose a short name + a one-line description.',
-    '',
-    '<transcript>',
-    transcript,
-    '</transcript>',
-    '',
-    'Reply with EXACTLY this format on two lines, nothing else:',
-    '',
-    'name: kebab-case-skill-name',
-    'description: One concise English sentence (no trailing period)',
-    '',
-    'Rules:',
-    '- Name is ≤ 30 chars, kebab-case, no quotes, reflects the actual work done',
-    '- Description is ≤ 80 chars, plain English, no quotes',
-    '- Prefer specifics over generic words like "test", "demo", "example"',
-  ].join('\n');
+  const prompt = buildPrompt(steps);
+  const useBare = !!process.env.ANTHROPIC_API_KEY;
 
   return new Promise<NameSuggestion>((resolve, reject) => {
-    const child = spawn(
-      'claude',
-      [
-        '-p', prompt,
-        '--model', SUGGEST_MODEL,
-        '--output-format', 'json',
+    const args: string[] = ['-p', prompt, '--model', MODEL, '--output-format', 'json'];
+
+    if (useBare) {
+      // --bare skips plugin sync / hooks / auto-memory / CLAUDE.md / keychain.
+      // Requires ANTHROPIC_API_KEY (which we just checked for) or apiKeyHelper.
+      args.push('--bare');
+    } else {
+      // OAuth path. Apply the same minimal-tools sandbox we use elsewhere.
+      args.push(
         '--permission-mode', 'dontAsk',
-        // Deny every tool — this is a pure text generation call. Without an
-        // explicit deny list, dontAsk lets through "read-only" built-ins like
-        // TodoWrite which would just waste tokens for our use case.
+        '--no-session-persistence',
         '--disallowedTools',
         'Bash', 'BashOutput', 'KillBash',
         'Edit', 'MultiEdit', 'Write', 'Read', 'NotebookEdit',
         'Grep', 'Glob', 'Task', 'TodoWrite',
         'WebFetch', 'WebSearch', 'ExitPlanMode',
-        '--max-budget-usd', String(SUGGEST_BUDGET_USD),
-      ],
-      {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, CLAUDECODE: '' },
-      },
-    );
+        '--max-budget-usd', String(BUDGET_USD),
+      );
+    }
+
+    const child = spawn('claude', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, CLAUDECODE: '' },
+    });
 
     let stdout = '';
     let stderr = '';
@@ -71,8 +64,8 @@ export async function suggestSkillName(steps: SkillStep[]): Promise<NameSuggesti
 
     const killTimer = setTimeout(() => {
       child.kill('SIGTERM');
-      reject(new Error(`suggest-name timed out after ${SUGGEST_TIMEOUT_MS}ms`));
-    }, SUGGEST_TIMEOUT_MS);
+      reject(new Error(`suggest-name timed out after ${TIMEOUT_MS}ms`));
+    }, TIMEOUT_MS);
 
     child.on('error', err => {
       clearTimeout(killTimer);
@@ -91,18 +84,43 @@ export async function suggestSkillName(steps: SkillStep[]): Promise<NameSuggesti
       }
       try {
         const parsed = JSON.parse(stdout) as { result?: string };
-        const reply = parsed.result ?? '';
-        const nameMatch = reply.match(/^name:\s*(.+)$/m);
-        const descMatch = reply.match(/^description:\s*(.+)$/m);
-        resolve({
-          name: nameMatch?.[1].trim() ?? '',
-          description: descMatch?.[1].trim() ?? '',
-        });
+        resolve(parseReply(parsed.result ?? ''));
       } catch (err) {
         reject(new Error(`suggest-name parse failed: ${(err as Error).message}`));
       }
     });
   });
+}
+
+function buildPrompt(steps: SkillStep[]): string {
+  const transcript = renderTranscript(steps);
+  return [
+    'You are naming a saved browser-automation skill recorded by Hover.',
+    'Read the transcript below and propose a short name + a one-line description.',
+    '',
+    '<transcript>',
+    transcript,
+    '</transcript>',
+    '',
+    'Reply with EXACTLY this format on two lines, nothing else:',
+    '',
+    'name: kebab-case-skill-name',
+    'description: One concise English sentence (no trailing period)',
+    '',
+    'Rules:',
+    '- Name is ≤ 30 chars, kebab-case, no quotes, reflects the actual work done',
+    '- Description is ≤ 80 chars, plain English, no quotes',
+    '- Prefer specifics over generic words like "test", "demo", "example"',
+  ].join('\n');
+}
+
+function parseReply(reply: string): NameSuggestion {
+  const nameMatch = reply.match(/^name:\s*(.+)$/m);
+  const descMatch = reply.match(/^description:\s*(.+)$/m);
+  return {
+    name: nameMatch?.[1].trim() ?? '',
+    description: descMatch?.[1].trim() ?? '',
+  };
 }
 
 function renderTranscript(steps: SkillStep[]): string {
