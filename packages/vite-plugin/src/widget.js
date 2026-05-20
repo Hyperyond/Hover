@@ -151,6 +151,9 @@
       }
       .send:hover:not(:disabled) { background: #4f46e5; }
       .send:disabled { background: #cbd5e1; cursor: not-allowed; }
+      .send.stop { background: #dc2626; cursor: pointer; }
+      .send.stop:hover { background: #b91c1c; }
+      .send.stop:disabled { background: #cbd5e1; cursor: not-allowed; }
     </style>
 
     <button class="launcher" type="button" aria-label="Open Hover" aria-expanded="false">&#x2728;</button>
@@ -381,6 +384,10 @@
     return idx === -1 ? state.messages.slice() : state.messages.slice(idx);
   };
 
+  // Pending save state — remembered so a confirm-overwrite reply can re-send
+  // with overwrite=true without re-prompting the user for name/description.
+  let pendingSave = null;
+
   const saveSkillFromLastSession = (button) => {
     const steps = lastSessionSlice();
     if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
@@ -397,11 +404,13 @@
     if (name == null || !name.trim()) return;
     const description = prompt('One-line description (optional):', '') ?? '';
 
+    pendingSave = { name: name.trim(), description: description.trim(), steps, button };
+
     button.disabled = true;
     button.textContent = 'Saving…';
     ws.send(JSON.stringify({
       type: 'save-skill',
-      payload: { name: name.trim(), description: description.trim(), steps },
+      payload: { name: pendingSave.name, description: pendingSave.description, steps },
     }));
 
     // Re-enable in a few seconds in case the server doesn't ack (so the user
@@ -412,6 +421,33 @@
         button.textContent = '💾 Save as Skill';
       }
     }, 8000);
+  };
+
+  const handleSkillExists = (slug, existingPath) => {
+    if (!pendingSave) return;
+    const overwrite = confirm(
+      `Skill "${slug}" already exists:\n${existingPath}\n\nOverwrite the existing file?`,
+    );
+    if (overwrite) {
+      ws.send(JSON.stringify({
+        type: 'save-skill',
+        payload: {
+          name: pendingSave.name,
+          description: pendingSave.description,
+          steps: pendingSave.steps,
+          overwrite: true,
+        },
+      }));
+      // Keep pendingSave so the eventual skill-saved ack hits the same button.
+      return;
+    }
+    // Cancelled — restore the button and clear pending state
+    if (pendingSave.button) {
+      pendingSave.button.disabled = false;
+      pendingSave.button.textContent = '💾 Save as Skill';
+    }
+    addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
+    pendingSave = null;
   };
 
   // ───────────────────────── status + new conversation ─────────────────────────
@@ -486,11 +522,24 @@
 
   const setRunning = (r) => {
     running = r;
-    sendBtn.disabled = r || !ws || ws.readyState !== WebSocket.OPEN;
-    textarea.disabled = r || !ws || ws.readyState !== WebSocket.OPEN;
-    newBtn.disabled = r;
-    if (r) setStatus('running', 'running');
-    else if (ws && ws.readyState === WebSocket.OPEN) setStatus('connected', 'connected');
+    // While running, the Send button becomes a red Stop button instead of
+    // being disabled. Stop is the only way out of a long or stuck session.
+    const wsReady = ws && ws.readyState === WebSocket.OPEN;
+    if (r) {
+      sendBtn.textContent = 'Stop';
+      sendBtn.classList.add('stop');
+      sendBtn.disabled = !wsReady;
+      textarea.disabled = true;
+      newBtn.disabled = true;
+      setStatus('running', 'running');
+    } else {
+      sendBtn.textContent = 'Send';
+      sendBtn.classList.remove('stop');
+      sendBtn.disabled = !wsReady;
+      textarea.disabled = !wsReady;
+      newBtn.disabled = false;
+      if (wsReady) setStatus('connected', 'connected');
+    }
   };
 
   const connect = () => {
@@ -538,6 +587,9 @@
             b.textContent = '💾 Save as Skill';
           }
         });
+      } else if (msg.type === 'skill-exists') {
+        const p = msg.payload ?? {};
+        handleSkillExists(p.slug, p.existingPath);
       } else if (msg.type === 'hello') {
         // handshake — could surface agentId/model later
       }
@@ -565,7 +617,13 @@
     }));
   };
 
-  sendBtn.addEventListener('click', submit);
+  const cancelRunning = () => {
+    if (!running || !ws || ws.readyState !== WebSocket.OPEN) return;
+    sendBtn.disabled = true; // until server acks with session_end
+    ws.send(JSON.stringify({ type: 'cancel' }));
+  };
+
+  sendBtn.addEventListener('click', () => (running ? cancelRunning() : submit()));
   textarea.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();

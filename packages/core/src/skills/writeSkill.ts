@@ -14,7 +14,15 @@
  *    enough context to adapt rather than fail.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+
+export class SkillExistsError extends Error {
+  constructor(public readonly slug: string, public readonly path: string) {
+    super(`Skill "${slug}" already exists at ${path}`);
+    this.name = 'SkillExistsError';
+  }
+}
 
 /**
  * Serialized message shape from the widget's localStorage. Matches the
@@ -38,6 +46,10 @@ export interface WriteSkillOptions {
   name: string;
   description?: string;
   steps: SkillStep[];
+  /** If false (default), throws SkillExistsError when a skill with the same
+   *  slug already exists. If true, overwrites unconditionally. The widget
+   *  uses the two paths to give the user a confirm dialog. */
+  overwrite?: boolean;
 }
 
 export interface WriteSkillResult {
@@ -55,10 +67,14 @@ export async function writeSkill(opts: WriteSkillOptions): Promise<WriteSkillRes
   }
 
   const dir = join(opts.devRoot, '.claude', 'skills', slug);
-  await mkdir(dir, { recursive: true });
-
-  const md = renderSkill(slug, opts.description ?? '', opts.steps);
   const path = join(dir, 'SKILL.md');
+
+  if (!opts.overwrite && existsSync(path)) {
+    throw new SkillExistsError(slug, path);
+  }
+
+  await mkdir(dir, { recursive: true });
+  const md = renderSkill(slug, opts.description ?? '', opts.steps);
   await writeFile(path, md, 'utf-8');
   return { path, slug };
 }

@@ -7,14 +7,16 @@
  * Wire protocol (newline-free JSON over WebSocket):
  *
  *   server → client
- *     { type: 'hello',       payload: { agentId, model, version } }
- *     { type: 'event',       payload: InvokeEvent }              // see agents/types.ts
- *     { type: 'skill-saved', payload: { name, path } }
- *     { type: 'error',       payload: { message } }
+ *     { type: 'hello',        payload: { agentId, model, version } }
+ *     { type: 'event',        payload: InvokeEvent }              // see agents/types.ts
+ *     { type: 'skill-saved',  payload: { name, path } }
+ *     { type: 'skill-exists', payload: { slug, existingPath } }
+ *     { type: 'error',        payload: { message } }
  *
  *   client → server
  *     { type: 'command',    payload: { text, sessionId? } }
- *     { type: 'save-skill', payload: { name, description, steps } }
+ *     { type: 'cancel' }
+ *     { type: 'save-skill', payload: { name, description, steps, overwrite? } }
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +24,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
 import type { InvokeEvent } from './agents/types.js';
 import { preflightCDP } from './playwright/preflight.js';
-import { writeSkill, type SkillStep } from './skills/writeSkill.js';
+import { writeSkill, SkillExistsError, type SkillStep } from './skills/writeSkill.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
@@ -55,6 +57,7 @@ interface ClientMessage {
     name?: string;
     description?: string;
     steps?: SkillStep[];
+    overwrite?: boolean;
   };
 }
 
@@ -82,6 +85,7 @@ export function startService(opts: ServiceOptions): ServiceHandle {
 
     let busy = false;
     let inflight: AbortController | null = null;
+    let cancelled = false;
 
     // If the page reloads (e.g. AI navigated to a same-origin URL), the WS
     // connection drops. Abort the in-flight agent so we don't leave an
@@ -90,11 +94,32 @@ export function startService(opts: ServiceOptions): ServiceHandle {
       inflight?.abort();
     });
 
+    const cancel = () => {
+      if (!busy) return;
+      cancelled = true;
+      inflight?.abort();
+      // Send a synthetic session_end so the widget resets to idle immediately.
+      // The for-await loop below short-circuits on `cancelled`, so no events
+      // from the dying child will arrive after this.
+      send(ws, {
+        type: 'event',
+        payload: {
+          kind: 'session_end',
+          isError: true,
+          summary: 'cancelled by user',
+        } satisfies InvokeEvent,
+      });
+    };
+
     ws.on('message', async data => {
       let msg: ClientMessage;
       try {
         msg = JSON.parse(data.toString()) as ClientMessage;
       } catch {
+        return;
+      }
+      if (msg.type === 'cancel') {
+        cancel();
         return;
       }
       if (msg.type === 'save-skill') {
@@ -117,6 +142,7 @@ export function startService(opts: ServiceOptions): ServiceHandle {
       }
 
       busy = true;
+      cancelled = false;
       inflight = new AbortController();
       try {
         // Preflight: refuse to invoke if CDP isn't reachable. Otherwise the
@@ -155,7 +181,7 @@ export function startService(opts: ServiceOptions): ServiceHandle {
           model,
           signal: inflight.signal,
         })) {
-          if (ws.readyState !== WebSocket.OPEN) return;
+          if (cancelled || ws.readyState !== WebSocket.OPEN) return;
           send(ws, { type: 'event', payload: ev });
         }
       } catch (err) {
@@ -206,13 +232,22 @@ async function handleSaveSkill(
     return;
   }
 
+  const overwrite = msg.payload?.overwrite === true;
+
   try {
-    const result = await writeSkill({ devRoot, name, description, steps });
+    const result = await writeSkill({ devRoot, name, description, steps, overwrite });
     send(ws, {
       type: 'skill-saved',
       payload: { name: result.slug, path: result.path },
     });
   } catch (err) {
+    if (err instanceof SkillExistsError) {
+      send(ws, {
+        type: 'skill-exists',
+        payload: { slug: err.slug, existingPath: err.path },
+      });
+      return;
+    }
     const message = err instanceof Error ? err.message : String(err);
     send(ws, {
       type: 'error',
