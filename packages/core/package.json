@@ -1,0 +1,28 @@
+{
+  "name": "@hover/core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./agents": "./src/agents/index.ts",
+    "./service": "./src/service.ts"
+  },
+  "scripts": {
+    "smoke": "tsx src/smoke.ts",
+    "detect": "tsx src/scripts/detect-cli.ts",
+    "verify-widget": "tsx src/scripts/verify-widget.ts",
+    "ws-smoke": "tsx src/scripts/ws-smoke.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "playwright-core": "^1.50.0",
+    "ws": "^8.20.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "hover",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "AI that hovers over your dev workflow. Natural language frontend testing.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "smoke": "pnpm --filter @hover/core smoke",
+    "smoke:chrome": "open -na 'Google Chrome' --args --remote-debugging-port=9222 --user-data-dir=/tmp/hover-smoke",
+    "detect": "pnpm --filter @hover/core detect",
+    "verify-widget": "pnpm --filter @hover/core verify-widget",
+    "ws-smoke": "pnpm --filter @hover/core ws-smoke",
+    "dev:example": "NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter example-frontend dev",
+    "build:example": "pnpm --filter example-frontend build",
+    "typecheck": "pnpm -r exec tsc --noEmit",
+    "test": "pnpm -r --if-present test",
+    "test:e2e": "pnpm --filter example-frontend test",
+    "commitlint": "commitlint --edit",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.7.0",
+    "@commitlint/config-conventional": "^19.7.0",
+    "@types/node": "^25.9.1",
+    "husky": "^9.1.7",
+    "tsx": "^4.22.0",
+    "typescript": "^5.9.0"
+  }
+}
