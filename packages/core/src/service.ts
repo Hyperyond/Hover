@@ -7,20 +7,18 @@
  * Wire protocol (newline-free JSON over WebSocket):
  *
  *   server → client
- *     { type: 'hello',           payload: { agentId, model, version } }
- *     { type: 'event',           payload: InvokeEvent }              // see agents/types.ts
- *     { type: 'skill-saved',     payload: { name, path } }
- *     { type: 'skill-exists',    payload: { slug, existingPath } }
- *     { type: 'skills-list',     payload: { skills: SkillSummary[] } }
- *     { type: 'name-suggestion', payload: { name, description, error? } }
- *     { type: 'error',           payload: { message } }
+ *     { type: 'hello',        payload: { agentId, model, version } }
+ *     { type: 'event',        payload: InvokeEvent }              // see agents/types.ts
+ *     { type: 'skill-saved',  payload: { name, path } }
+ *     { type: 'skill-exists', payload: { slug, existingPath } }
+ *     { type: 'skills-list',  payload: { skills: SkillSummary[] } }
+ *     { type: 'error',        payload: { message } }
  *
  *   client → server
- *     { type: 'command',            payload: { text, sessionId? } }
+ *     { type: 'command',     payload: { text, sessionId? } }
  *     { type: 'cancel' }
- *     { type: 'save-skill',         payload: { name, description, steps, overwrite? } }
+ *     { type: 'save-skill',  payload: { name, description, steps, overwrite? } }
  *     { type: 'list-skills' }
- *     { type: 'suggest-skill-name', payload: { steps } }
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +32,6 @@ import {
   SkillExistsError,
   type SkillStep,
 } from './skills/writeSkill.js';
-import { suggestSkillName } from './skills/suggestName.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
@@ -139,10 +136,6 @@ export function startService(opts: ServiceOptions): ServiceHandle {
       if (msg.type === 'list-skills') {
         const skills = await listSkills(devRoot);
         send(ws, { type: 'skills-list', payload: { skills } });
-        return;
-      }
-      if (msg.type === 'suggest-skill-name') {
-        await handleSuggestName(ws, msg);
         return;
       }
       if (msg.type !== 'command') return;
@@ -259,29 +252,6 @@ function buildCdpHint(tabs: { url: string; title?: string }[]): string {
     `first to see the current page state, and only navigate if you actually need a`,
     `different URL.`,
   ].join('\n');
-}
-
-async function handleSuggestName(ws: WebSocket, msg: ClientMessage): Promise<void> {
-  const steps = msg.payload?.steps;
-  if (!Array.isArray(steps) || steps.length === 0) {
-    send(ws, {
-      type: 'name-suggestion',
-      payload: { name: '', description: '', error: 'no steps to summarise' },
-    });
-    return;
-  }
-  try {
-    const sugg = await suggestSkillName(steps);
-    send(ws, { type: 'name-suggestion', payload: sugg });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    // Don't escalate to a hard error — widget will just fall back to empty
-    // defaults if the suggestion fails.
-    send(ws, {
-      type: 'name-suggestion',
-      payload: { name: '', description: '', error: message },
-    });
-  }
 }
 
 async function handleSaveSkill(
