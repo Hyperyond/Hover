@@ -12,7 +12,7 @@
  *     { type: 'error',   payload: { message } }
  *
  *   client → server
- *     { type: 'command', payload: { text } }
+ *     { type: 'command', payload: { text, sessionId? } }
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

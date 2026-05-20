@@ -7,11 +7,11 @@
   "license": "Apache-2.0",
   "scripts": {
     "smoke": "pnpm --filter @hover/core smoke",
-    "smoke:chrome": "./scripts/smoke-chrome.sh",
+    "smoke:chrome": "pnpm --filter @hover/core smoke:chrome",
     "detect": "pnpm --filter @hover/core detect",
     "verify-widget": "pnpm --filter @hover/core verify-widget",
     "ws-smoke": "pnpm --filter @hover/core ws-smoke",
-    "dev:example": "NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter example-frontend dev",
+    "dev:example": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter example-frontend dev",
     "build:example": "pnpm --filter example-frontend build",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "test": "pnpm -r --if-present test",
@@ -23,6 +23,7 @@
     "@commitlint/cli": "^19.7.0",
     "@commitlint/config-conventional": "^19.7.0",
     "@types/node": "^25.9.1",
+    "cross-env": "^10.1.0",
     "husky": "^9.1.7",
     "tsx": "^4.22.0",
     "typescript": "^5.9.0"

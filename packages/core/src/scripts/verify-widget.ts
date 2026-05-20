@@ -21,9 +21,14 @@ const existing = contexts
 const page = existing ?? (await contexts[0]!.newPage());
 if (!existing) {
   await page.goto(TARGET, { waitUntil: 'load' });
-} else {
-  await page.reload({ waitUntil: 'load' });
 }
+
+// Clear any persisted widget state (open flag, messages, sessionId) so the
+// "initial" assertions below test a fresh widget, not a session in progress.
+await page.evaluate(() => {
+  try { localStorage.removeItem('hover:state:v1'); } catch {}
+});
+await page.reload({ waitUntil: 'load' });
 
 await page.waitForSelector('#hover-widget-host', { timeout: 3000, state: 'attached' });
 

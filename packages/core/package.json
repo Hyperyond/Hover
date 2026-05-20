@@ -11,6 +11,7 @@
   },
   "scripts": {
     "smoke": "tsx src/smoke.ts",
+    "smoke:chrome": "tsx src/scripts/start-chrome.ts",
     "detect": "tsx src/scripts/detect-cli.ts",
     "verify-widget": "tsx src/scripts/verify-widget.ts",
     "ws-smoke": "tsx src/scripts/ws-smoke.ts",
@@ -18,10 +19,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "cross-spawn": "^7.0.6",
     "playwright-core": "^1.50.0",
     "ws": "^8.20.1"
   },
   "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
     "@types/ws": "^8.18.1",
     "vitest": "^3.0.0"
   }

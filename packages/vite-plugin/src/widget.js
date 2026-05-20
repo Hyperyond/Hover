@@ -105,6 +105,9 @@
       .msg.step .arrow { color: #9ca3af; margin-right: 4px; }
 
       .msg.ai .bubble { background: #fff; border: 1px solid #e5e7eb; padding: 8px 12px; border-radius: 10px 10px 10px 2px; display: inline-block; max-width: 100%; word-wrap: break-word; white-space: pre-wrap; }
+      .msg.ai .bubble strong { font-weight: 600; }
+      .msg.ai .bubble em { font-style: italic; }
+      .msg.ai .bubble code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; background: #f3f4f6; padding: 1px 4px; border-radius: 3px; }
 
       .msg.system { font-size: 11px; color: #9ca3af; font-style: italic; }
 
@@ -271,12 +274,28 @@
     scrollToBottom();
   };
 
+  // Minimal markdown renderer: bold, italic, inline code. Escapes HTML first
+  // so AI-controlled text can never inject markup; then applies the three
+  // patterns. Anything else (lists, links, headings) renders as-is — fine,
+  // since the AI bubble is short prose.
+  const escapeHtml = (s) =>
+    s.replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+  const renderMarkdownLite = (text) =>
+    escapeHtml(text)
+      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+
   const renderAi = (text) => {
     const div = document.createElement('div');
     div.className = 'msg ai';
     const b = document.createElement('div');
     b.className = 'bubble';
-    b.textContent = text;
+    b.innerHTML = renderMarkdownLite(text);
     div.appendChild(b);
     bodyEl.appendChild(div);
     scrollToBottom();

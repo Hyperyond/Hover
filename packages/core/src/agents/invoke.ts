@@ -1,4 +1,7 @@
-import { spawn } from 'node:child_process';
+// cross-spawn is a drop-in for child_process.spawn that fixes Windows behaviour
+// around `.cmd`/`.bat` shims (e.g. npm-installed `claude.cmd`). The return type
+// is identical to node:child_process so call sites are unchanged.
+import spawn from 'cross-spawn';
 import { createInterface } from 'node:readline';
 import { buildArgv } from './argv.js';
 import { resolveBinForAgent } from './detect.js';
