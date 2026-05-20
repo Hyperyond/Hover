@@ -441,8 +441,11 @@
     return idx === -1 ? state.messages.slice() : state.messages.slice(idx);
   };
 
-  // Pending save state — remembered so a confirm-overwrite reply can re-send
-  // with overwrite=true without re-prompting the user for name/description.
+  // Save flow has two pending slots:
+  //   pendingSuggestion: between Save-click and the agent's name suggestion
+  //   pendingSave: between sending save-skill and the server's skill-saved /
+  //                skill-exists reply (so overwrite-confirm can re-send)
+  let pendingSuggestion = null;
   let pendingSave = null;
 
   const saveSkillFromLastSession = (button) => {
@@ -456,26 +459,58 @@
       return;
     }
 
-    // Browser-native prompts are ugly but functional. Upgrade to inline form later.
-    const name = prompt('Skill name (kebab-case suggested, e.g. "login-as-claude"):', '');
-    if (name == null || !name.trim()) return;
-    const description = prompt('One-line description (optional):', '') ?? '';
-
-    pendingSave = { name: name.trim(), description: description.trim(), steps, button };
-
     button.disabled = true;
-    button.textContent = 'Saving…';
+    button.textContent = '💭 Suggesting name…';
+
+    // Ask the server (which spawns a cheap haiku call) to propose a name +
+    // description from the transcript. Fallback to empty defaults if the
+    // suggestion takes too long or fails.
+    const fallback = setTimeout(() => {
+      if (pendingSuggestion && pendingSuggestion.button === button) {
+        promptAndSave({ name: '', description: '' });
+      }
+    }, 12000);
+    pendingSuggestion = { steps, button, fallback };
+
+    ws.send(JSON.stringify({ type: 'suggest-skill-name', payload: { steps } }));
+  };
+
+  const promptAndSave = (suggestion) => {
+    const ps = pendingSuggestion;
+    if (!ps) return;
+    clearTimeout(ps.fallback);
+    pendingSuggestion = null;
+
+    const name = prompt(
+      'Skill name (suggested below — edit if you want):',
+      suggestion.name || '',
+    );
+    if (name == null || !name.trim()) {
+      ps.button.disabled = false;
+      ps.button.textContent = '💾 Save as Skill';
+      return;
+    }
+    const description = prompt(
+      'One-line description:',
+      suggestion.description || '',
+    ) ?? '';
+
+    pendingSave = {
+      name: name.trim(),
+      description: description.trim(),
+      steps: ps.steps,
+      button: ps.button,
+    };
+    ps.button.textContent = 'Saving…';
     ws.send(JSON.stringify({
       type: 'save-skill',
-      payload: { name: pendingSave.name, description: pendingSave.description, steps },
+      payload: { name: pendingSave.name, description: pendingSave.description, steps: ps.steps },
     }));
 
-    // Re-enable in a few seconds in case the server doesn't ack (so the user
-    // can retry). Will be visually overridden by the skill-saved message.
     setTimeout(() => {
-      if (button.textContent === 'Saving…') {
-        button.disabled = false;
-        button.textContent = '💾 Save as Skill';
+      if (ps.button.textContent === 'Saving…') {
+        ps.button.disabled = false;
+        ps.button.textContent = '💾 Save as Skill';
       }
     }, 8000);
   };
@@ -718,6 +753,11 @@
         handleSkillExists(p.slug, p.existingPath);
       } else if (msg.type === 'skills-list') {
         renderSkills(msg.payload?.skills ?? []);
+      } else if (msg.type === 'name-suggestion') {
+        promptAndSave({
+          name: msg.payload?.name ?? '',
+          description: msg.payload?.description ?? '',
+        });
       } else if (msg.type === 'hello') {
         // handshake — could surface agentId/model later
       }
