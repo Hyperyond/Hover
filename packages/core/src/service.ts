@@ -7,12 +7,14 @@
  * Wire protocol (newline-free JSON over WebSocket):
  *
  *   server → client
- *     { type: 'hello',   payload: { agentId, model, version } }
- *     { type: 'event',   payload: InvokeEvent }              // see agents/types.ts
- *     { type: 'error',   payload: { message } }
+ *     { type: 'hello',       payload: { agentId, model, version } }
+ *     { type: 'event',       payload: InvokeEvent }              // see agents/types.ts
+ *     { type: 'skill-saved', payload: { name, path } }
+ *     { type: 'error',       payload: { message } }
  *
  *   client → server
- *     { type: 'command', payload: { text, sessionId? } }
+ *     { type: 'command',    payload: { text, sessionId? } }
+ *     { type: 'save-skill', payload: { name, description, steps } }
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +22,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
 import type { InvokeEvent } from './agents/types.js';
 import { preflightCDP } from './playwright/preflight.js';
+import { writeSkill, type SkillStep } from './skills/writeSkill.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
@@ -32,6 +35,11 @@ export interface ServiceOptions {
   mcpConfig?: string;
   /** CDP URL to preflight before each command (default http://localhost:9222). */
   cdpUrl?: string;
+  /** Working directory for the spawned agent. Also where skills are saved
+   *  ('<devRoot>/.claude/skills/<slug>/SKILL.md'). Defaults to process.cwd().
+   *  In Vite plugin context, set to `server.config.root` so Claude
+   *  auto-discovers skills the user previously saved from this project. */
+  devRoot?: string;
 }
 
 export interface ServiceHandle {
@@ -41,7 +49,13 @@ export interface ServiceHandle {
 
 interface ClientMessage {
   type: string;
-  payload?: { text?: string; sessionId?: string };
+  payload?: {
+    text?: string;
+    sessionId?: string;
+    name?: string;
+    description?: string;
+    steps?: SkillStep[];
+  };
 }
 
 const PROTOCOL_VERSION = 1;
@@ -53,6 +67,7 @@ export function startService(opts: ServiceOptions): ServiceHandle {
   const maxBudgetUsd = opts.maxBudgetUsd ?? 0.5;
   const mcpConfig = opts.mcpConfig ?? DEFAULT_MCP_CONFIG;
   const cdpUrl = opts.cdpUrl ?? 'http://localhost:9222';
+  const devRoot = opts.devRoot ?? process.cwd();
 
   const wss = new WebSocketServer({ host: '127.0.0.1', port });
 
@@ -80,6 +95,10 @@ export function startService(opts: ServiceOptions): ServiceHandle {
       try {
         msg = JSON.parse(data.toString()) as ClientMessage;
       } catch {
+        return;
+      }
+      if (msg.type === 'save-skill') {
+        await handleSaveSkill(ws, msg, devRoot);
         return;
       }
       if (msg.type !== 'command') return;
@@ -122,6 +141,9 @@ export function startService(opts: ServiceOptions): ServiceHandle {
           prompt: text,
           sessionId: resumeSessionId,
           mcpConfig,
+          // cwd = devRoot so Claude Code auto-discovers `.claude/skills/`
+          // saved from this project (and CLAUDE.md, if any).
+          cwd: devRoot,
           allowedTools: ['mcp__playwright'],
           disallowedTools: [
             'Bash', 'BashOutput', 'KillBash',
@@ -164,4 +186,37 @@ export function startService(opts: ServiceOptions): ServiceHandle {
 
 function send(ws: WebSocket, message: { type: string; payload?: unknown }): void {
   ws.send(JSON.stringify(message));
+}
+
+async function handleSaveSkill(
+  ws: WebSocket,
+  msg: ClientMessage,
+  devRoot: string,
+): Promise<void> {
+  const name = msg.payload?.name;
+  const description = msg.payload?.description ?? '';
+  const steps = msg.payload?.steps;
+
+  if (typeof name !== 'string' || !name.trim()) {
+    send(ws, { type: 'error', payload: { message: 'save-skill: name is required' } });
+    return;
+  }
+  if (!Array.isArray(steps) || steps.length === 0) {
+    send(ws, { type: 'error', payload: { message: 'save-skill: no steps to save' } });
+    return;
+  }
+
+  try {
+    const result = await writeSkill({ devRoot, name, description, steps });
+    send(ws, {
+      type: 'skill-saved',
+      payload: { name: result.slug, path: result.path },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    send(ws, {
+      type: 'error',
+      payload: { message: `save-skill failed: ${message}` },
+    });
+  }
 }

@@ -14,6 +14,7 @@
     "smoke:chrome": "tsx src/scripts/start-chrome.ts",
     "detect": "tsx src/scripts/detect-cli.ts",
     "verify-widget": "tsx src/scripts/verify-widget.ts",
+    "verify-skill": "tsx src/scripts/verify-skill.ts",
     "ws-smoke": "tsx src/scripts/ws-smoke.ts",
     "test": "vitest run",
     "test:watch": "vitest"

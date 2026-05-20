@@ -118,6 +118,15 @@
       .msg.done.error { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
       .msg.done .meta { font-weight: 600; margin-bottom: 4px; }
       .msg.done .summary { color: inherit; opacity: 0.9; white-space: pre-wrap; }
+      .msg.done .actions { margin-top: 8px; display: flex; gap: 6px; }
+      .msg.done .actions button {
+        font-size: 11px; padding: 4px 10px;
+        border-radius: 6px; border: 1px solid #86efac;
+        background: #fff; color: #166534;
+        cursor: pointer;
+      }
+      .msg.done .actions button:hover { background: #f0fdf4; }
+      .msg.done .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
 
       footer {
         border-top: 1px solid #eee; padding: 10px;
@@ -316,6 +325,21 @@
       s.textContent = msg.summary;
       div.appendChild(s);
     }
+
+    // Save-as-Skill button on successful runs. Always saves the most recent
+    // session (last 'user' → end of state.messages), regardless of which done
+    // card it lives on — UI affordance, not per-card scoping.
+    if (!msg.isError) {
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.textContent = '💾 Save as Skill';
+      saveBtn.addEventListener('click', () => saveSkillFromLastSession(saveBtn));
+      actions.appendChild(saveBtn);
+      div.appendChild(actions);
+    }
+
     bodyEl.appendChild(div);
     scrollToBottom();
   };
@@ -343,6 +367,51 @@
     bodyEl.innerHTML = '';
     lastStepDiv = null;
     for (const m of state.messages) renderMessage(m);
+  };
+
+  // ───────────────────────── save as skill ─────────────────────────
+
+  // Pluck the most recent session out of state.messages: everything from the
+  // last user message to the end. Used as the payload of {type:'save-skill'}.
+  const lastSessionSlice = () => {
+    let idx = -1;
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      if (state.messages[i].kind === 'user') { idx = i; break; }
+    }
+    return idx === -1 ? state.messages.slice() : state.messages.slice(idx);
+  };
+
+  const saveSkillFromLastSession = (button) => {
+    const steps = lastSessionSlice();
+    if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
+      addMessage({ kind: 'system', text: 'Nothing to save (no tool steps in the last session).' });
+      return;
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      addMessage({ kind: 'system', text: 'Cannot save: service disconnected.' });
+      return;
+    }
+
+    // Browser-native prompts are ugly but functional. Upgrade to inline form later.
+    const name = prompt('Skill name (kebab-case suggested, e.g. "login-as-claude"):', '');
+    if (name == null || !name.trim()) return;
+    const description = prompt('One-line description (optional):', '') ?? '';
+
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    ws.send(JSON.stringify({
+      type: 'save-skill',
+      payload: { name: name.trim(), description: description.trim(), steps },
+    }));
+
+    // Re-enable in a few seconds in case the server doesn't ack (so the user
+    // can retry). Will be visually overridden by the skill-saved message.
+    setTimeout(() => {
+      if (button.textContent === 'Saving…') {
+        button.disabled = false;
+        button.textContent = '💾 Save as Skill';
+      }
+    }, 8000);
   };
 
   // ───────────────────────── status + new conversation ─────────────────────────
@@ -456,6 +525,19 @@
       } else if (msg.type === 'error') {
         addMessage({ kind: 'system', text: `error: ${msg.payload?.message ?? 'unknown'}` });
         setRunning(false);
+      } else if (msg.type === 'skill-saved') {
+        const p = msg.payload ?? {};
+        addMessage({
+          kind: 'system',
+          text: `✓ saved skill "${p.name}" → ${p.path}\n  try: "execute ${p.name}" in a new conversation`,
+        });
+        // Re-arm any saving buttons in the panel
+        root.querySelectorAll('.msg.done .actions button').forEach((b) => {
+          if (b.textContent === 'Saving…') {
+            b.disabled = false;
+            b.textContent = '💾 Save as Skill';
+          }
+        });
       } else if (msg.type === 'hello') {
         // handshake — could surface agentId/model later
       }

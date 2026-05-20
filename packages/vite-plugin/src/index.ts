@@ -45,7 +45,15 @@ export function hover(options: HoverOptions = {}): Plugin {
     configureServer(server) {
       if (!enabled) return;
       try {
-        service = startService({ port, agentId, model, maxBudgetUsd });
+        service = startService({
+          port,
+          agentId,
+          model,
+          maxBudgetUsd,
+          // The Vite project root is where the agent runs (cwd) and where
+          // `Save as Skill` writes `.claude/skills/<slug>/SKILL.md`.
+          devRoot: server.config.root,
+        });
         server.config.logger.info(
           `[hover] service ready · ws://127.0.0.1:${port} · agent=${agentId} model=${model}`,
         );
