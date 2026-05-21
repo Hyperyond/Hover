@@ -11,16 +11,16 @@
     "detect": "pnpm --filter @hover/core detect",
     "verify-widget": "pnpm --filter @hover/core verify-widget",
     "ws-smoke": "pnpm --filter @hover/core ws-smoke",
-    "dev:basic": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter basic-app dev",
-    "dev:checkout": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter checkout-flow dev",
-    "dev:form": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter event-form dev",
-    "dev:canvas": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter canvas-paint dev",
-    "build:basic": "pnpm --filter basic-app build",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "test": "pnpm -r --if-present test",
     "test:e2e": "pnpm --filter basic-app test",
     "commitlint": "commitlint --edit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "dev:example:basic-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter basic-app dev",
+    "dev:example:checkout-flow": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter checkout-flow dev",
+    "dev:example:event-form": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter event-form dev",
+    "dev:example:canvas-paint": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter canvas-paint dev",
+    "dev:example:payment-provider": "pnpm --filter payment-provider dev"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.7.0",

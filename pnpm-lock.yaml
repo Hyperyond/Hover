@@ -133,6 +133,28 @@ importers:
         specifier: ^7.0.0
         version: 7.3.3(@types/node@25.9.1)(jiti@2.6.1)(tsx@4.22.3)
 
+  examples/payment-provider:
+    dependencies:
+      react:
+        specifier: ^19.0.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.15)
+      '@vitejs/plugin-react':
+        specifier: ^5.0.0
+        version: 5.2.0(vite@7.3.3(@types/node@25.9.1)(jiti@2.6.1)(tsx@4.22.3))
+      vite:
+        specifier: ^7.0.0
+        version: 7.3.3(@types/node@25.9.1)(jiti@2.6.1)(tsx@4.22.3)
+
   packages/core:
     dependencies:
       cross-spawn:

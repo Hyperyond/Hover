@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 type Plan = 'basic' | 'pro' | 'enterprise';
 
@@ -6,8 +6,10 @@ interface CheckoutState {
   plan: Plan | null;
   account: { name: string; email: string };
   address: { street: string; city: string; state: string; zip: string };
-  payment: { card: string; expiry: string; cvv: string };
+  payment: { method: 'card' | 'external'; card: string; expiry: string; cvv: string; ref?: string };
 }
+
+const PAYMENT_PROVIDER_ORIGIN = 'http://localhost:5177';
 
 const PLANS: { id: Plan; name: string; price: string; perks: string[] }[] = [
   { id: 'basic', name: 'Basic', price: '$9/mo', perks: ['1 user', '5 projects', 'Community support'] },
@@ -23,7 +25,7 @@ const emptyState: CheckoutState = {
   plan: null,
   account: { name: '', email: '' },
   address: { street: '', city: '', state: '', zip: '' },
-  payment: { card: '', expiry: '', cvv: '' },
+  payment: { method: 'card', card: '', expiry: '', cvv: '' },
 };
 
 export default function App() {
@@ -228,11 +230,53 @@ function AddressStep({ state, setState, onNext, onBack }: StepProps) {
 }
 
 function PaymentStep({ state, setState, onNext, onBack }: StepProps) {
+  const [providerStatus, setProviderStatus] = useState<'idle' | 'waiting' | 'declined'>('idle');
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const { card, expiry, cvv } = state.payment;
-    if (card.length >= 12 && /^\d{2}\/\d{2}$/.test(expiry) && cvv.length >= 3) onNext();
+    if (card.length >= 12 && /^\d{2}\/\d{2}$/.test(expiry) && cvv.length >= 3) {
+      setState(s => ({ ...s, payment: { ...s.payment, method: 'card' } }));
+      onNext();
+    }
   }
+
+  // Listen for postMessage from the payment-provider popup. Only accept
+  // messages from the provider's origin — that's what makes this a real
+  // cross-origin redirect simulation, not a same-origin shortcut.
+  useEffect(() => {
+    if (providerStatus !== 'waiting') return;
+    const handler = (e: MessageEvent) => {
+      if (e.origin !== PAYMENT_PROVIDER_ORIGIN) return;
+      if (e.data?.type !== 'payment-result') return;
+      if (e.data.status === 'approved') {
+        setState(s => ({
+          ...s,
+          payment: { method: 'external', card: '', expiry: '', cvv: '', ref: e.data.ref },
+        }));
+        setProviderStatus('idle');
+        onNext();
+      } else {
+        setProviderStatus('declined');
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [providerStatus, onNext, setState]);
+
+  function payWithProvider() {
+    if (!state.plan) return;
+    const ref = 'ORD-' + Math.random().toString(36).slice(2, 9).toUpperCase();
+    const plan = PLANS.find(p => p.id === state.plan)!;
+    const url = `${PAYMENT_PROVIDER_ORIGIN}/?ref=${encodeURIComponent(ref)}&amount=${encodeURIComponent(plan.price)}&return=${encodeURIComponent(location.origin)}`;
+    const w = window.open(url, 'payhover-checkout', 'width=520,height=720');
+    if (!w) {
+      alert('Please allow pop-ups for this site to use the external payment provider.');
+      return;
+    }
+    setProviderStatus('waiting');
+  }
+
   return (
     <section aria-labelledby="payment-heading">
       <h2 id="payment-heading">Payment</h2>
@@ -273,9 +317,34 @@ function PaymentStep({ state, setState, onNext, onBack }: StepProps) {
         </div>
         <div className="actions">
           <button type="button" onClick={onBack}>Back</button>
-          <button type="submit">Continue</button>
+          <button type="submit">Continue with card</button>
         </div>
       </form>
+
+      <div className="divider"><span>or</span></div>
+
+      <div className="provider-block">
+        <p className="provider-blurb">
+          Pay through <strong>PayHover</strong> — opens in a new tab.
+          Tests cross-origin redirect, popup return via{' '}
+          <code>window.opener.postMessage</code>.
+        </p>
+        <button
+          type="button"
+          onClick={payWithProvider}
+          disabled={providerStatus === 'waiting'}
+          className="provider-btn"
+          data-testid="pay-with-provider"
+          aria-label="pay with provider"
+        >
+          {providerStatus === 'waiting' ? '⏳ Waiting for provider…' : '🔒 Pay with PayHover →'}
+        </button>
+        {providerStatus === 'declined' && (
+          <p className="provider-error" data-testid="provider-declined">
+            Provider declined. You can try again or use a card.
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -298,7 +367,9 @@ function ReviewStep({ state, onBack, onConfirm }: { state: CheckoutState; onBack
         </dd>
         <dt>Payment</dt>
         <dd data-testid="review-payment">
-          •••• •••• •••• {state.payment.card.slice(-4)} (exp {state.payment.expiry})
+          {state.payment.method === 'external'
+            ? `PayHover · ref ${state.payment.ref ?? '(unknown)'}`
+            : `•••• •••• •••• ${state.payment.card.slice(-4)} (exp ${state.payment.expiry})`}
         </dd>
       </dl>
       <div className="actions">

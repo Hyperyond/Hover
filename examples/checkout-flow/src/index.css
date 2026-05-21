@@ -51,6 +51,31 @@ form label input:focus, form label select:focus { outline: 2px solid #6366f1; bo
 .actions button.primary { background: #6366f1; color: #fff; border-color: #6366f1; }
 .actions button.primary:hover { background: #4f46e5; }
 
+.divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 20px 0; color: #9ca3af; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
+
+.provider-block { text-align: center; }
+.provider-blurb { font-size: 13px; color: #6b7280; margin: 0 0 12px; line-height: 1.5; }
+.provider-blurb code {
+  background: #f3f4f6; padding: 1px 5px;
+  border-radius: 3px; font-size: 11px;
+}
+.provider-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 20px; font-size: 14px; font-weight: 600;
+  background: #1e3a8a; color: #fff;
+  border: 1px solid #1e3a8a; border-radius: 8px; cursor: pointer;
+}
+.provider-btn:hover:not(:disabled) { background: #312e81; }
+.provider-btn:disabled { background: #94a3b8; border-color: #94a3b8; cursor: wait; }
+.provider-error {
+  margin-top: 10px; color: #991b1b; font-size: 12px;
+}
+
 dl.review { display: grid; grid-template-columns: 130px 1fr; gap: 8px 12px; margin: 0; font-size: 14px; }
 dl.review dt { font-weight: 600; color: #6b7280; }
 dl.review dd { margin: 0; }

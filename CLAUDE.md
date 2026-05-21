@@ -24,8 +24,9 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*
 - `examples/checkout-flow` is a 5-step purchase wizard: plan → account → address → payment → review → success. Stresses long action chains and cross-step state preservation. Vite port 5174.
 - `examples/event-form` is a single-screen rich form: text/textarea/date/time/select/multi-select chips/number/range/radio/checkboxes/toggle/file input. Stresses AI form filling on complex controls. Vite port 5175.
 - `examples/canvas-paint` is a drawing app: `<canvas>` for the artwork, DOM toolbar for tools/color/brush size. Stresses AI's ability to find DOM controls amidst graphical content (canvas pixels are opaque to Playwright snapshots). Vite port 5176.
+- `examples/payment-provider` is a **deliberately unintegrated** mock third-party payment page used as the popup target for checkout-flow's "Pay with PayHover" button. Vite port 5177. **Does NOT install `@hover/vite-plugin`** — the widget must not appear on the simulated third-party origin. Stresses agent behaviour around cross-tab flows: agent must `browser_tabs(action='list')` to discover the new tab, `browser_tabs(action='select')` to switch, operate the page without a widget, and verify the original tab advances on `window.opener.postMessage` callback.
 
-All four examples share `@hover/vite-plugin` (workspace) and default the Hover service to 51789, so run **one example at a time**.
+Four of the five examples share `@hover/vite-plugin` and default the Hover service to 51789 — run **one of those four at a time**. `payment-provider` has no service, so it can (and should) run alongside checkout-flow when testing the cross-tab flow.
 
 ## Inactive or placeholder directories
 
@@ -153,10 +154,11 @@ pnpm install              # workspace install (also runs husky install via the `
 pnpm typecheck            # tsc --noEmit, per-package
 pnpm test                 # vitest, per-package (where present)
 pnpm test:e2e             # Playwright dogfood suite — first run needs `playwright install chromium`
-pnpm dev:basic            # start basic-app at http://localhost:5173
-pnpm dev:checkout         # checkout-flow wizard at http://localhost:5174
-pnpm dev:form             # event-form rich-controls demo at http://localhost:5175
-pnpm dev:canvas           # canvas-paint at http://localhost:5176
+pnpm dev:example:basic-app         # http://localhost:5173 — login / counter / todos
+pnpm dev:example:checkout-flow     # http://localhost:5174 — 5-step purchase wizard
+pnpm dev:example:event-form        # http://localhost:5175 — eleven rich controls
+pnpm dev:example:canvas-paint      # http://localhost:5176 — canvas + DOM toolbar
+pnpm dev:example:payment-provider  # http://localhost:5177 — mock third-party popup, no widget
 pnpm smoke:chrome         # launch debug-mode Chrome (--remote-debugging-port=9222)
 pnpm smoke                # end-to-end: detect agents → CDP preflight → invoke claude
 pnpm detect               # list installed coding agents
