@@ -91,7 +91,11 @@ jobs:
         run: pnpm typecheck
 
       - name: Unit tests
-        run: pnpm test
+        # Only the @hyperyond/* packages — `pnpm test` at the root also
+        # fans out to examples/basic-app whose tests are Playwright e2e
+        # against an actual dev server (not appropriate as a publish gate,
+        # and would need a chromium install in CI).
+        run: pnpm -r --filter '@hyperyond/*' --if-present test
 
       - name: Build
         run: pnpm build
