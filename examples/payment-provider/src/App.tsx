@@ -3,8 +3,10 @@ import { useMemo, useState } from 'react';
 // Origins that are allowed to receive postMessage results. In a real
 // provider this would be the merchant's registered return URL.
 const ALLOWED_RETURN_ORIGINS = [
-  'http://localhost:5174', // checkout-flow
+  'http://localhost:5174', // checkout-flow (the e-commerce store)
 ];
+
+const DEFAULT_MERCHANT = 'Hover Store';
 
 type Status = 'pending' | 'approved' | 'declined';
 
@@ -12,6 +14,7 @@ export default function App() {
   const params = useMemo(() => new URLSearchParams(location.search), []);
   const ref = params.get('ref') ?? 'UNKNOWN';
   const amount = params.get('amount') ?? '$0';
+  const merchant = params.get('merchant') ?? DEFAULT_MERCHANT;
   const returnOrigin = params.get('return') ?? ALLOWED_RETURN_ORIGINS[0];
 
   const [status, setStatus] = useState<Status>('pending');
@@ -51,7 +54,9 @@ export default function App() {
         {status === 'pending' && (
           <>
             <h1>Confirm payment</h1>
-            <p className="merchant">You are paying Hover Inc.</p>
+            <p className="merchant" data-testid="merchant">
+              You are paying <strong>{merchant}</strong>
+            </p>
             <div className="amount" data-testid="amount">{amount}</div>
             <dl>
               <dt>Reference</dt>
