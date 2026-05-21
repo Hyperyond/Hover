@@ -235,6 +235,174 @@
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.4; transform: scale(0.7); }
       }
+
+      /* ───── footer redesign: hint flows between buttons, send shows chord ───── */
+      .footer-actions {
+        display: flex; align-items: center; gap: 8px;
+      }
+      .footer-actions .hint {
+        flex: 1;
+        font-size: 11px; color: #9ca3af;
+        text-align: right;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .send {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 10px 6px 14px;
+        border-radius: 8px; border: none;
+        background: #6366f1; color: #fff;
+        font-size: 13px; font-weight: 600;
+        cursor: pointer; font-family: inherit;
+        transition: background 0.12s, transform 0.06s;
+      }
+      .send:active:not(:disabled) { transform: translateY(1px); }
+      .send .chord {
+        font-size: 10px; opacity: 0.75;
+        padding: 1px 5px;
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 4px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+      .send.stop .chord { display: none; }
+
+      /* ───── done card buttons: spec=primary, skill=secondary ───── */
+      .msg.done .actions button {
+        font-size: 12px; padding: 6px 12px;
+        border-radius: 7px; border: 1px solid transparent;
+        font-weight: 600; cursor: pointer;
+        font-family: inherit;
+        display: inline-flex; align-items: center; gap: 5px;
+        transition: background 0.12s, border-color 0.12s, transform 0.06s;
+      }
+      .msg.done .actions button:active:not(:disabled) { transform: translateY(1px); }
+      .msg.done .actions .btn-save-spec {
+        background: #166534; color: #fff; border-color: #166534;
+      }
+      .msg.done .actions .btn-save-spec:hover:not(:disabled) { background: #14532d; }
+      .msg.done .actions .btn-save-skill {
+        background: #fff; color: #166534; border-color: #86efac;
+      }
+      .msg.done .actions .btn-save-skill:hover:not(:disabled) { background: #f0fdf4; border-color: #4ade80; }
+
+      /* ───── modal: replaces native prompt() and confirm() ───── */
+      .modal {
+        position: absolute; inset: 0;
+        display: none; align-items: center; justify-content: center;
+        z-index: 20;
+      }
+      .modal.open { display: flex; }
+      .modal-backdrop {
+        position: absolute; inset: 0;
+        background: rgba(15, 23, 42, 0.42);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+        animation: modal-fade-in 0.16s ease;
+      }
+      @keyframes modal-fade-in { from { opacity: 0; } to { opacity: 1; } }
+      .modal-card {
+        position: relative;
+        width: calc(100% - 28px);
+        max-width: 340px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+        display: flex; flex-direction: column;
+        overflow: hidden;
+        animation: modal-card-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes modal-card-in {
+        from { transform: translateY(10px) scale(0.96); opacity: 0; }
+        to { transform: translateY(0) scale(1); opacity: 1; }
+      }
+      .modal-head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 14px 14px 4px;
+      }
+      .modal-title {
+        flex: 1;
+        font-weight: 600; font-size: 14px; color: #111;
+      }
+      .modal-close {
+        border: none; background: transparent;
+        font-size: 20px; line-height: 1; color: #9ca3af;
+        cursor: pointer; padding: 0;
+        width: 24px; height: 24px;
+        border-radius: 6px;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .modal-close:hover { background: #f3f4f6; color: #111; }
+      .modal-body {
+        padding: 8px 14px 4px;
+        display: flex; flex-direction: column; gap: 12px;
+        color: #374151; font-size: 13px; line-height: 1.5;
+      }
+      .modal-field { display: flex; flex-direction: column; gap: 5px; }
+      .modal-field label {
+        font-size: 11px; color: #6b7280;
+        text-transform: uppercase; letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+      .modal-field input {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 13px; color: #111;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.12s, box-shadow 0.12s;
+        background: #fff;
+      }
+      .modal-field input::placeholder { color: #c1c7d0; }
+      .modal-field input:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+      }
+      .modal-field input.error {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+        animation: modal-shake 0.22s;
+      }
+      @keyframes modal-shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-4px); }
+        75% { transform: translateX(4px); }
+      }
+      .modal-context {
+        font-size: 12px; color: #6b7280;
+        background: #f9fafb;
+        border: 1px solid #f3f4f6;
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        word-break: break-all;
+      }
+      .modal-actions {
+        padding: 12px 14px 14px;
+        display: flex; gap: 8px; justify-content: flex-end;
+      }
+      .modal-actions button {
+        font-size: 13px; font-weight: 600;
+        padding: 7px 14px;
+        border-radius: 7px;
+        cursor: pointer;
+        font-family: inherit;
+        border: 1px solid transparent;
+        transition: background 0.12s, border-color 0.12s, transform 0.06s;
+      }
+      .modal-actions button:active:not(:disabled) { transform: translateY(1px); }
+      .modal-actions .m-ghost {
+        background: #fff; color: #4b5563;
+        border-color: #e5e7eb;
+      }
+      .modal-actions .m-ghost:hover { background: #f9fafb; border-color: #d1d5db; }
+      .modal-actions .m-primary {
+        background: #6366f1; color: #fff;
+      }
+      .modal-actions .m-primary:hover { background: #4f46e5; }
+      .modal-actions .m-danger {
+        background: #dc2626; color: #fff;
+      }
+      .modal-actions .m-danger:hover { background: #b91c1c; }
     </style>
 
     <button class="launcher" type="button" aria-label="Open Hover" aria-expanded="false">&#x2728;</button>
@@ -261,14 +429,29 @@
       </div>
       <footer>
         <textarea placeholder="e.g. test the login flow" rows="3" disabled aria-label="instruction"></textarea>
-        <div class="row">
-          <span class="hint">⏎ send · ⌥/Alt + click any page element to assert</span>
+        <div class="footer-actions">
           <button type="button" class="record-btn" aria-label="record manual interactions" title="Record your own clicks/typing on the page">
             <span class="rec-dot"></span><span class="rec-label">Record</span>
           </button>
-          <button type="button" class="send" disabled>Send</button>
+          <span class="hint">⌥ + click element to assert</span>
+          <button type="button" class="send" disabled>
+            <span class="send-label">Send</span>
+            <span class="chord" aria-hidden="true">⏎</span>
+          </button>
         </div>
       </footer>
+
+      <div class="modal" aria-hidden="true">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="hover-modal-title">
+          <div class="modal-head">
+            <span class="modal-title" id="hover-modal-title"></span>
+            <button class="modal-close" type="button" aria-label="Close">×</button>
+          </div>
+          <div class="modal-body"></div>
+          <div class="modal-actions"></div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -348,9 +531,180 @@
 
   // Esc inside shadow → close. We listen on the shadow root, not document,
   // so a stray Esc on the host page (or AI key input) doesn't dismiss us.
+  // If a modal is open it consumes Esc first (handled below).
   root.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isOpen()) setOpen(false);
+    if (e.key !== 'Escape') return;
+    if (modalEl.classList.contains('open')) return; // modal handler will close it
+    if (isOpen()) setOpen(false);
   });
+
+  // ───────────────────────── modal (prompt / confirm replacement) ─────────────────────────
+  //
+  // Two flavours, both return a Promise:
+  //   hoverPrompt({ title, fields, confirmLabel, cancelLabel, context })
+  //     → resolves with { [field.id]: trimmedValue } or null on cancel
+  //   hoverConfirm({ title, body, confirmLabel, cancelLabel, danger })
+  //     → resolves true on confirm, false on cancel
+  //
+  // Native window.prompt() / confirm() block the agent's browser_click events
+  // (the user's Chrome stops processing input until they dismiss the dialog),
+  // and they look out-of-place vs. the rest of the widget. The inline modal
+  // lives inside the shadow root and inherits the panel's design language.
+
+  const modalEl = $('.modal');
+  const modalTitleEl = $('.modal-title');
+  const modalBodyEl = $('.modal-body');
+  const modalActionsEl = $('.modal-actions');
+  const modalCloseEl = $('.modal-close');
+  const modalBackdropEl = $('.modal-backdrop');
+
+  let modalResolve = null;
+
+  const closeModal = (value) => {
+    if (!modalResolve) return;
+    modalEl.classList.remove('open');
+    modalEl.setAttribute('aria-hidden', 'true');
+    const r = modalResolve;
+    modalResolve = null;
+    r(value);
+  };
+
+  const openModal = (resolve) => {
+    // If a previous modal is somehow still resolving, cancel it.
+    if (modalResolve) modalResolve(null);
+    modalResolve = resolve;
+    modalEl.classList.add('open');
+    modalEl.setAttribute('aria-hidden', 'false');
+  };
+
+  modalCloseEl.addEventListener('click', () => closeModal(null));
+  modalBackdropEl.addEventListener('click', () => closeModal(null));
+
+  // Esc closes the modal (takes precedence over panel-Esc).
+  root.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalEl.classList.contains('open')) {
+      e.stopPropagation();
+      closeModal(null);
+    }
+  }, true);
+
+  function hoverPrompt({ title, fields, confirmLabel = 'Save', cancelLabel = 'Cancel', context }) {
+    return new Promise((resolve) => {
+      modalTitleEl.textContent = title;
+      modalBodyEl.innerHTML = '';
+      modalActionsEl.innerHTML = '';
+
+      if (context) {
+        const ctx = document.createElement('div');
+        ctx.className = 'modal-context';
+        ctx.textContent = context;
+        modalBodyEl.appendChild(ctx);
+      }
+
+      const inputs = [];
+      for (const f of fields) {
+        const wrap = document.createElement('div');
+        wrap.className = 'modal-field';
+        const lbl = document.createElement('label');
+        lbl.textContent = f.label;
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.autocomplete = 'off';
+        inp.spellcheck = false;
+        inp.placeholder = f.placeholder ?? '';
+        inp.value = f.initial ?? '';
+        inp.dataset.fieldId = f.id;
+        inp.dataset.required = f.required ? '1' : '0';
+        const id = `hover-modal-${f.id}`;
+        inp.id = id;
+        lbl.htmlFor = id;
+        wrap.appendChild(lbl);
+        wrap.appendChild(inp);
+        modalBodyEl.appendChild(wrap);
+        inputs.push(inp);
+      }
+
+      const submit = () => {
+        const out = {};
+        for (const inp of inputs) {
+          const v = inp.value.trim();
+          if (inp.dataset.required === '1' && !v) {
+            inp.classList.remove('error');
+            // re-trigger animation
+            void inp.offsetWidth;
+            inp.classList.add('error');
+            inp.focus();
+            return;
+          }
+          out[inp.dataset.fieldId] = v;
+        }
+        closeModal(out);
+      };
+
+      for (const inp of inputs) {
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        });
+        inp.addEventListener('input', () => inp.classList.remove('error'));
+      }
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'm-ghost';
+      cancelBtn.textContent = cancelLabel;
+      cancelBtn.addEventListener('click', () => closeModal(null));
+
+      const confirmBtn = document.createElement('button');
+      confirmBtn.type = 'button';
+      confirmBtn.className = 'm-primary';
+      confirmBtn.textContent = confirmLabel;
+      confirmBtn.addEventListener('click', submit);
+
+      modalActionsEl.appendChild(cancelBtn);
+      modalActionsEl.appendChild(confirmBtn);
+
+      openModal(resolve);
+      setTimeout(() => inputs[0]?.focus(), 60);
+    });
+  }
+
+  function hoverConfirm({ title, body, confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false, context }) {
+    return new Promise((resolve) => {
+      modalTitleEl.textContent = title;
+      modalBodyEl.innerHTML = '';
+      modalActionsEl.innerHTML = '';
+
+      if (body) {
+        const p = document.createElement('div');
+        p.textContent = body;
+        modalBodyEl.appendChild(p);
+      }
+      if (context) {
+        const ctx = document.createElement('div');
+        ctx.className = 'modal-context';
+        ctx.textContent = context;
+        modalBodyEl.appendChild(ctx);
+      }
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'm-ghost';
+      cancelBtn.textContent = cancelLabel;
+      cancelBtn.addEventListener('click', () => closeModal(false));
+
+      const confirmBtn = document.createElement('button');
+      confirmBtn.type = 'button';
+      confirmBtn.className = danger ? 'm-danger' : 'm-primary';
+      confirmBtn.textContent = confirmLabel;
+      confirmBtn.addEventListener('click', () => closeModal(true));
+
+      modalActionsEl.appendChild(cancelBtn);
+      modalActionsEl.appendChild(confirmBtn);
+
+      openModal(resolve);
+      setTimeout(() => confirmBtn.focus(), 60);
+    });
+  }
 
   // ───────────────────────── rendering ─────────────────────────
 
@@ -440,17 +794,21 @@
 
     // Save-as-Skill / Save-as-Spec buttons on successful runs. Always saves
     // the most recent session (last 'user' → end of state.messages),
-    // regardless of which done card it lives on.
+    // regardless of which done card it lives on. Spec is the primary action
+    // (deterministic .spec.ts is Hover's main differentiator); Skill is the
+    // secondary, looser-form artifact.
     if (!msg.isError) {
       const actions = document.createElement('div');
       actions.className = 'actions';
       const saveSkillBtn = document.createElement('button');
       saveSkillBtn.type = 'button';
+      saveSkillBtn.className = 'btn-save-skill';
       saveSkillBtn.textContent = '💾 Save as Skill';
       saveSkillBtn.addEventListener('click', () => saveSkillFromLastSession(saveSkillBtn));
       actions.appendChild(saveSkillBtn);
       const saveSpecBtn = document.createElement('button');
       saveSpecBtn.type = 'button';
+      saveSpecBtn.className = 'btn-save-spec';
       saveSpecBtn.textContent = '📜 Save as spec';
       saveSpecBtn.addEventListener('click', () => saveSpecFromLastSession(saveSpecBtn));
       actions.appendChild(saveSpecBtn);
@@ -504,7 +862,7 @@
   let pendingSave = null;
   let pendingSpec = null;
 
-  const saveSkillFromLastSession = (button) => {
+  const saveSkillFromLastSession = async (button) => {
     const steps = lastSessionSlice();
     if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
       addMessage({ kind: 'system', text: 'Nothing to save (no tool steps in the last session).' });
@@ -515,11 +873,17 @@
       return;
     }
 
-    const name = prompt('Skill name (kebab-case suggested, e.g. "login-as-claude"):', '');
-    if (name == null || !name.trim()) return;
-    const description = prompt('One-line description (optional):', '') ?? '';
+    const result = await hoverPrompt({
+      title: 'Save as Skill',
+      fields: [
+        { id: 'name', label: 'Skill name', placeholder: 'login-as-claude', required: true },
+        { id: 'description', label: 'Description', placeholder: 'optional · one line' },
+      ],
+      confirmLabel: 'Save skill',
+    });
+    if (!result) return;
 
-    pendingSave = { name: name.trim(), description: description.trim(), steps, button };
+    pendingSave = { name: result.name, description: result.description, steps, button };
 
     button.disabled = true;
     button.textContent = 'Saving…';
@@ -611,7 +975,7 @@
   });
   skillsCloseBtn.addEventListener('click', closeSkillsOverlay);
 
-  const saveSpecFromLastSession = (button) => {
+  const saveSpecFromLastSession = async (button) => {
     const steps = lastSessionSlice();
     if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
       addMessage({ kind: 'system', text: 'Nothing to save (no tool steps in the last session).' });
@@ -621,13 +985,21 @@
       addMessage({ kind: 'system', text: 'Cannot save: service disconnected.' });
       return;
     }
-    const name = prompt('Spec name (kebab-case suggested, e.g. "login-flow"):', '');
-    if (name == null || !name.trim()) return;
-    const description = prompt('One-line description (optional):', '') ?? '';
+    const nAssert = state.assertions.length;
+    const result = await hoverPrompt({
+      title: 'Save as Playwright spec',
+      fields: [
+        { id: 'name', label: 'Spec name', placeholder: 'login-flow', required: true },
+        { id: 'description', label: 'Description', placeholder: 'optional · one line' },
+      ],
+      context: nAssert > 0 ? `+ ${nAssert} pending assertion${nAssert === 1 ? '' : 's'} will be baked in` : undefined,
+      confirmLabel: 'Save spec',
+    });
+    if (!result) return;
 
     pendingSpec = {
-      name: name.trim(),
-      description: description.trim(),
+      name: result.name,
+      description: result.description,
       steps,
       assertions: state.assertions.slice(),
       button,
@@ -652,11 +1024,15 @@
     }, 8000);
   };
 
-  const handleSpecExists = (slug, existingPath) => {
+  const handleSpecExists = async (slug, existingPath) => {
     if (!pendingSpec) return;
-    const overwrite = confirm(
-      `Spec "${slug}" already exists:\n${existingPath}\n\nOverwrite the existing file?`,
-    );
+    const overwrite = await hoverConfirm({
+      title: 'Overwrite existing spec?',
+      body: `A Playwright spec named "${slug}" already exists.`,
+      context: existingPath,
+      confirmLabel: 'Overwrite',
+      danger: true,
+    });
     if (overwrite) {
       ws.send(JSON.stringify({
         type: 'save-spec',
@@ -678,11 +1054,15 @@
     pendingSpec = null;
   };
 
-  const handleSkillExists = (slug, existingPath) => {
+  const handleSkillExists = async (slug, existingPath) => {
     if (!pendingSave) return;
-    const overwrite = confirm(
-      `Skill "${slug}" already exists:\n${existingPath}\n\nOverwrite the existing file?`,
-    );
+    const overwrite = await hoverConfirm({
+      title: 'Overwrite existing skill?',
+      body: `A skill named "${slug}" already exists.`,
+      context: existingPath,
+      confirmLabel: 'Overwrite',
+      danger: true,
+    });
     if (overwrite) {
       ws.send(JSON.stringify({
         type: 'save-skill',
@@ -712,9 +1092,15 @@
     statusEl.className = `status ${cls}`;
   };
 
-  newBtn.addEventListener('click', () => {
+  newBtn.addEventListener('click', async () => {
     if (state.messages.length === 0 && !state.sessionId && state.assertions.length === 0) return;
-    if (!confirm('Start a new conversation? Current history and assertions will be cleared.')) return;
+    const ok = await hoverConfirm({
+      title: 'Start a new conversation?',
+      body: 'Current history and any pending assertions will be cleared.',
+      confirmLabel: 'Start new',
+      danger: true,
+    });
+    if (!ok) return;
     state.messages = [];
     state.sessionId = null;
     state.assertions = [];
@@ -742,9 +1128,16 @@
     }
   };
 
-  assertBtn.addEventListener('click', () => {
-    if (state.assertions.length === 0) return;
-    if (!confirm(`Clear all ${state.assertions.length} pending assertion${state.assertions.length === 1 ? '' : 's'}?`)) return;
+  assertBtn.addEventListener('click', async () => {
+    const n = state.assertions.length;
+    if (n === 0) return;
+    const ok = await hoverConfirm({
+      title: 'Clear pending assertions?',
+      body: `${n} assertion${n === 1 ? '' : 's'} will be discarded. They have not been saved to a spec yet.`,
+      confirmLabel: 'Clear',
+      danger: true,
+    });
+    if (!ok) return;
     state.assertions = [];
     saveState();
     updateAssertBadge();
@@ -1117,11 +1510,12 @@
   let backoff = 500;
   let running = false;
 
+  const sendLabel = $('.send .send-label');
   const setRunning = (r) => {
     running = r;
     const wsReady = ws && ws.readyState === WebSocket.OPEN;
     if (r) {
-      sendBtn.textContent = 'Stop';
+      sendLabel.textContent = 'Stop';
       sendBtn.classList.add('stop');
       sendBtn.disabled = !wsReady;
       textarea.disabled = true;
@@ -1129,7 +1523,7 @@
       recordBtn.disabled = true;
       setStatus('running', 'running');
     } else {
-      sendBtn.textContent = 'Send';
+      sendLabel.textContent = 'Send';
       sendBtn.classList.remove('stop');
       sendBtn.disabled = !wsReady || recording;
       textarea.disabled = !wsReady || recording;
