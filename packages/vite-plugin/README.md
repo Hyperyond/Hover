@@ -6,18 +6,11 @@ Part of the [Hover](https://github.com/Hyperyond/Hover) monorepo. See the top-le
 
 ## Install
 
-The packages are published to GitHub Packages, not npm.org. Add `.npmrc`:
-
-```ini
-@hyperyond:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-`GITHUB_TOKEN` is a PAT with `read:packages` scope. Then:
-
 ```bash
 pnpm add -D @hyperyond/vite-plugin
 ```
+
+No `.npmrc`, no auth tokens — `@hyperyond/*` is public on npmjs.com.
 
 ## Use
 

@@ -123,25 +123,7 @@ pnpm add -D @hyperyond/vite-plugin
 # or:  yarn add -D @hyperyond/vite-plugin
 ```
 
-<details>
-<summary>One-time auth setup (GitHub Packages registry)</summary>
-
-Hover is published to GitHub Packages, not npm.org. Tell your package manager where to find `@hyperyond/*` — add an `.npmrc` at the root of your project (and commit it; it has no secrets):
-
-```ini
-@hyperyond:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-Then export a Personal Access Token with `read:packages` scope ([create one in 30 seconds](https://github.com/settings/tokens/new?scopes=read:packages&description=hyperyond-packages-read)):
-
-```bash
-export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxx
-```
-
-Or set it permanently in your shell rc. The token is read-only for public packages — safe to keep around.
-
-</details>
+That's it — no `.npmrc`, no auth tokens. The `@hyperyond/*` packages are public on npmjs.com.
 
 Then start Chrome in debug mode so Hover can connect:
 

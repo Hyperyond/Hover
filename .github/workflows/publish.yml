@@ -1,24 +1,29 @@
 name: Publish
 
-# Auto-publishes @hyperyond/* packages to GitHub Packages
-# (https://npm.pkg.github.com) when a v* tag is pushed.
+# Auto-publishes @hyperyond/* packages to the public npm.org registry
+# (https://registry.npmjs.org) when a v* tag is pushed. The same tarballs
+# are also attached to a GitHub Release for archival.
 #
-# Trigger:    git tag -a v0.1.1 -m "..." && git push --tags
-# Auth:       GITHUB_TOKEN (provided by Actions) — no manual secrets needed
-# Scope:      packages must be @hyperyond/* (matches the repo org)
+# Trigger:    git tag -a v0.1.5 -m "..." && git push --tags
+# Auth:       NPM_TOKEN repo secret (a granular automation token from
+#             https://www.npmjs.com/settings/<user>/tokens with read+write
+#             on @hyperyond/*) — must be added before the first run.
+#             GITHUB_TOKEN is auto-injected (used for the Release).
+# Scope:      packages are @hyperyond/* — the org must exist on npm.org
+#             (https://www.npmjs.com/settings/hyperyond).
 #
 # What it does:
 #   1. Checkout, install pnpm + Node 24, restore pnpm cache
-#   2. Rewrite package.json versions from the tag (v0.1.1 → "0.1.1")
+#   2. Rewrite package.json versions from the tag (v0.1.5 → "0.1.5")
 #      so we don't have to remember to bump package.json in lockstep
 #   3. Typecheck + unit tests as a release gate
 #   4. Build each @hyperyond/* package (tsc + asset copy for vite-plugin)
-#   5. pnpm publish each one to https://npm.pkg.github.com
+#   5. pnpm publish each one to https://registry.npmjs.org
+#   6. Pack the same tarballs and attach to a GitHub Release
 #
-# To consume the published packages elsewhere, install with an .npmrc:
-#   @hyperyond:registry=https://npm.pkg.github.com
-#   //npm.pkg.github.com/:_authToken=${GITHUB_PAT}
-# where GITHUB_PAT has the `read:packages` scope.
+# Consumers can then install with no .npmrc and no auth — same shape as any
+# other public npm package:
+#   pnpm add -D @hyperyond/vite-plugin
 
 on:
   push:
@@ -29,13 +34,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g. 0.1.2). Required for manual runs.'
+        description: 'Version to publish (e.g. 0.1.5). Required for manual runs.'
         required: true
         type: string
 
 permissions:
-  contents: write   # needed by softprops/action-gh-release to create the Release
-  packages: write
+  contents: write   # softprops/action-gh-release needs this to create the Release
 
 jobs:
   publish:
@@ -49,11 +53,11 @@ jobs:
         with:
           version: 10
 
-      - name: Setup Node + GitHub Packages registry
+      - name: Setup Node + npm.org registry
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@hyperyond'
           cache: 'pnpm'
 
@@ -66,7 +70,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
           else
-            # GITHUB_REF_NAME is e.g. "v0.1.1"; strip the leading "v"
+            # GITHUB_REF_NAME is e.g. "v0.1.5"; strip the leading "v"
             VERSION="${GITHUB_REF_NAME#v}"
           fi
           if [ -z "$VERSION" ]; then
@@ -100,18 +104,20 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish to GitHub Packages
+      - name: Publish to npm.org
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # --no-git-checks: CI checkouts are detached HEAD, would otherwise
-        # be flagged as "not on a branch". The git tag is the source of
-        # truth for this release; pnpm doesn't need to verify that itself.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # --no-git-checks: CI checkouts are detached HEAD; pnpm would
+        # otherwise refuse to publish. The git tag is the source of truth
+        # for this release.
+        # --access public: required on the first publish of a scoped
+        # package; npm.org defaults scoped packages to restricted/private
+        # unless you say otherwise.
         run: pnpm -r --filter '@hyperyond/*' publish --no-git-checks --access public
 
       - name: Pack tarballs for release assets
         # Re-pack so the GitHub Release has the same tarballs we just
-        # published — useful for users on networks that block
-        # npm.pkg.github.com or for archival.
+        # published — useful for archival / offline mirroring.
         run: |
           mkdir -p release-tarballs
           pnpm -r --filter '@hyperyond/*' exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release-tarballs"

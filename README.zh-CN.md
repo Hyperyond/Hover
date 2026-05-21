@@ -123,25 +123,7 @@ pnpm add -D @hyperyond/vite-plugin
 # 或者:  yarn add -D @hyperyond/vite-plugin
 ```
 
-<details>
-<summary>一次性鉴权配置（GitHub Packages 仓库）</summary>
-
-Hover 发布在 GitHub Packages，不在 npm.org。在你项目根目录加一个 `.npmrc`（这文件可以提交进 git，里面没有真实 secret）：
-
-```ini
-@hyperyond:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-然后导出一个有 `read:packages` 权限的 Personal Access Token（[30 秒就能创建](https://github.com/settings/tokens/new?scopes=read:packages&description=hyperyond-packages-read)）：
-
-```bash
-export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxx
-```
-
-或者写进 shell 启动脚本里永久生效。公开包用的是只读 token，留着不会有安全问题。
-
-</details>
+就这一行 —— 不用 `.npmrc`、不用 token。`@hyperyond/*` 在 npmjs.com 上是公开包。
 
 接着用 debug 模式启动 Chrome 让 Hover 可以连：
 
