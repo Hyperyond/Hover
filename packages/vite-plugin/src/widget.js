@@ -205,6 +205,36 @@
       .send.stop { background: #dc2626; cursor: pointer; }
       .send.stop:hover { background: #b91c1c; }
       .send.stop:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+      .record-btn {
+        background: transparent;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 12px;
+        color: #6b7280;
+        cursor: pointer;
+        font-family: inherit;
+        display: inline-flex; align-items: center; gap: 4px;
+      }
+      .record-btn:hover { color: #dc2626; border-color: #fca5a5; background: #fef2f2; }
+      .record-btn .rec-dot {
+        display: inline-block;
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #dc2626;
+      }
+      .record-btn.recording {
+        background: #fee2e2;
+        color: #dc2626;
+        border-color: #fca5a5;
+        font-weight: 600;
+      }
+      .record-btn.recording .rec-dot { animation: rec-pulse 1.2s ease-in-out infinite; }
+      @keyframes rec-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(0.7); }
+      }
     </style>
 
     <button class="launcher" type="button" aria-label="Open Hover" aria-expanded="false">&#x2728;</button>
@@ -233,6 +263,9 @@
         <textarea placeholder="e.g. test the login flow" rows="3" disabled aria-label="instruction"></textarea>
         <div class="row">
           <span class="hint">⏎ send · ⌥/Alt + click any page element to assert</span>
+          <button type="button" class="record-btn" aria-label="record manual interactions" title="Record your own clicks/typing on the page">
+            <span class="rec-dot"></span><span class="rec-label">Record</span>
+          </button>
           <button type="button" class="send" disabled>Send</button>
         </div>
       </footer>
@@ -251,6 +284,8 @@
   const skillsCloseBtn = $('.skills-close');
   const assertBtn = $('.assertbtn');
   const assertCountEl = $('.assert-count');
+  const recordBtn = $('.record-btn');
+  const recLabel = $('.rec-label');
   const bodyEl = $('.body');
   const textarea = $('textarea');
   const sendBtn = $('.send');
@@ -854,6 +889,159 @@
     return s.replace(/(["\\#.:[\]>])/g, '\\$1');
   }
 
+  // ───────────────────────── Recording mode ───────────────────────
+  //
+  // "Record" toggle in the footer. While recording, every manual click /
+  // text input / select change / checkbox toggle on the host page is
+  // captured and appended to state.messages as a step in the same shape
+  // the agent emits — so writeSkill / writeSpec downstream don't care
+  // whether the steps came from claude or from the user.
+
+  let recording = false;
+  let recordStartIdx = 0;
+  const pendingFills = new Map(); // element → last seen value
+
+  const setRecording = (on) => {
+    recording = on;
+    if (on) {
+      recordBtn.classList.add('recording');
+      recLabel.textContent = 'Stop';
+      // Send/textarea become inert while recording.
+      sendBtn.disabled = true;
+      textarea.disabled = true;
+      addMessage({ kind: 'user', text: '(recording manual interactions)' });
+      recordStartIdx = state.messages.length;
+    } else {
+      recordBtn.classList.remove('recording');
+      recLabel.textContent = 'Record';
+      flushAllFills();
+      const wsReady = ws && ws.readyState === WebSocket.OPEN;
+      sendBtn.disabled = !wsReady;
+      textarea.disabled = !wsReady;
+      const captured = state.messages.slice(recordStartIdx).filter(m => m.kind === 'step').length;
+      addMessage({
+        kind: 'done',
+        turns: captured,
+        costUsd: 0,
+        summary: `Recorded ${captured} action${captured === 1 ? '' : 's'}. Click Save as Skill / Spec on this card to keep it.`,
+      });
+    }
+  };
+
+  recordBtn.addEventListener('click', () => {
+    if (running) return;
+    setRecording(!recording);
+  });
+
+  function recordStep(tool, input) {
+    addMessage({ kind: 'step', tool, input });
+  }
+
+  function flushFillFor(el) {
+    if (!pendingFills.has(el)) return;
+    const value = pendingFills.get(el);
+    pendingFills.delete(el);
+    const name = accessibleName(el) || el.getAttribute('name') || el.getAttribute('placeholder') || '';
+    const role = roleOf(el) || 'textbox';
+    recordStep('browser_fill_form', {
+      fields: [{ name, type: role, value }],
+    });
+  }
+
+  function flushAllFills() {
+    for (const el of [...pendingFills.keys()]) flushFillFor(el);
+  }
+
+  function describeForAgent(el) {
+    const name = accessibleName(el);
+    const role = roleOf(el);
+    if (role && name) return `${name} ${role}`;
+    if (name) return `"${name}"`;
+    if (role) return role;
+    return el.tagName.toLowerCase();
+  }
+
+  document.addEventListener(
+    'input',
+    (e) => {
+      if (!recording) return;
+      if (e.composedPath().includes(host)) return;
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        const t = (el.getAttribute('type') || 'text').toLowerCase();
+        if (t === 'checkbox' || t === 'radio') return; // handled on change
+        pendingFills.set(el, el.value);
+      }
+    },
+    { capture: true },
+  );
+
+  document.addEventListener(
+    'change',
+    (e) => {
+      if (!recording) return;
+      if (e.composedPath().includes(host)) return;
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+
+      if (el.tagName === 'SELECT') {
+        recordStep('browser_select_option', {
+          element: describeForAgent(el),
+          values: [el.value],
+        });
+        return;
+      }
+      if (el.tagName === 'INPUT') {
+        const t = (el.getAttribute('type') || 'text').toLowerCase();
+        if (t === 'checkbox' || t === 'radio') {
+          recordStep('browser_click', { element: describeForAgent(el) });
+          return;
+        }
+      }
+      // Text input / textarea — finalize pending value
+      flushFillFor(el);
+    },
+    { capture: true },
+  );
+
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!recording) return;
+      if (e.altKey) return; // Alt-click is "Assert This", not record
+      if (e.composedPath().includes(host)) return;
+      const el = e.target;
+      if (!(el instanceof Element)) return;
+
+      // Flush any text input the user was typing in before this click
+      flushAllFills();
+
+      // For form submission via Enter, the click event won't fire; we
+      // catch that case via the submit listener below.
+      recordStep('browser_click', { element: describeForAgent(el) });
+    },
+    { capture: true },
+  );
+
+  document.addEventListener(
+    'submit',
+    (e) => {
+      if (!recording) return;
+      if (e.composedPath().includes(host)) return;
+      flushAllFills();
+      // Mirror what happens on Submit click — the submit button (or Enter).
+      // The agent's view of this is just a click; emit one for the form's
+      // submit button if we can find it.
+      const form = e.target;
+      if (form instanceof HTMLFormElement) {
+        const btn = form.querySelector('button[type="submit"], input[type="submit"]');
+        if (btn) recordStep('browser_click', { element: describeForAgent(btn) });
+      }
+    },
+    { capture: true },
+  );
+
   function flashElement(el) {
     const old = {
       outline: el.style.outline,
@@ -925,8 +1113,6 @@
 
   const setRunning = (r) => {
     running = r;
-    // While running, the Send button becomes a red Stop button instead of
-    // being disabled. Stop is the only way out of a long or stuck session.
     const wsReady = ws && ws.readyState === WebSocket.OPEN;
     if (r) {
       sendBtn.textContent = 'Stop';
@@ -934,14 +1120,17 @@
       sendBtn.disabled = !wsReady;
       textarea.disabled = true;
       newBtn.disabled = true;
+      recordBtn.disabled = true;
       setStatus('running', 'running');
     } else {
       sendBtn.textContent = 'Send';
       sendBtn.classList.remove('stop');
-      sendBtn.disabled = !wsReady;
-      textarea.disabled = !wsReady;
+      sendBtn.disabled = !wsReady || recording;
+      textarea.disabled = !wsReady || recording;
       newBtn.disabled = false;
-      if (wsReady) setStatus('connected', 'connected');
+      recordBtn.disabled = false;
+      if (recording) setStatus('recording', 'running');
+      else if (wsReady) setStatus('connected', 'connected');
     }
   };
 

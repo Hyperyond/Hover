@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+### Added (Phase 2 — spec crystallisation)
+
+- **Save as Playwright spec** (`📜 Save as spec` button beside Save as Skill on every successful done card). Writes a standard `@playwright/test` file to `<devRoot>/__vibe_tests__/<slug>.spec.ts`. The file imports only `@playwright/test`, has no Hover runtime dependency, and uses `getByRole / getByLabel / getByTestId` semantic selectors derived from the agent's natural-language element descriptions. Same overwrite-confirm dance as Save as Skill.
+- **"Assert This" Alt-click** — While the widget is open, holding **Alt / ⌥** and clicking any element on the host page intercepts the click and produces a Playwright assertion derived entirely from the element's current state. Assertions accumulate (badge in the header shows count) and ship out with the next Save as Spec, embedded after the action steps with their hint as a `// comment`. Selector priority: `data-testid` → `aria-label` → `role + accessible name` → visible text. Assertion shape: `toBeChecked / toHaveValue / toBeDisabled / toHaveText / toBeVisible` chosen automatically from the element's tag and current state. 900ms green outline flash on the captured target.
+- **Recording mode** — `🔴 Record` toggle in the footer. While recording, every manual click / text input / `<select>` change / checkbox toggle on the host page is captured and appended to `state.messages` in the same shape the agent emits. `writeSkill` and `writeSpec` work on recorded sessions without modification — they cannot tell whether the steps came from `claude` or from the user. Text input fills are debounced (flushed on blur or before the next click). Form submits via Enter are caught via a `submit` listener. Recorded sessions get a fabricated "user" message at the start and a synthetic `session_end` at stop, so the action bar's Save buttons appear.
+
 ### Added
 
 - **Local CLI Agent First architecture** (`@hover/core/agents`) — Hover bundles no AI runtime. It detects whichever coding-agent CLI the user already has on `PATH` (`claude` today; `codex` / `cursor` / `aider` are one-file additions to the registry) and normalises its output to a single `InvokeEvent` stream.
