@@ -94,6 +94,17 @@ A verified Hover session can crystallize two different ways. Both buttons sit on
 
 Most flows you'll save both. Spec for the test suite; Skill for the next time you want the agent to pick up where you left off.
 
+### Shareable across the team, not locked into a tool
+
+Both files check into the same git repo as the rest of your code. The moment a frontend developer saves a flow, everyone else can use it — **no Hover required, no agent, no token**:
+
+- **QA / dedicated testers** clone the repo and run `pnpm test:e2e`. Playwright runs the spec like any other test — they don't need to install Hover, configure Chrome, or know what an "agent" is. The CI signal is the same one your frontend devs see.
+- **Other frontends** invoke a saved skill from their own Hover widget — *"execute login-as-claude"* skips the login dance and drops them straight into the screen they're actually working on. Skills become reusable "macros" the whole team builds up over time.
+- **PR review** treats every saved spec as plain code — diff-able, blame-able, `requestChanges`-able. There's no proprietary file format, no SaaS dashboard, no "the test passed but we can't see how it got there".
+- **Onboarding** is `git clone && pnpm install && pnpm test:e2e`. The test suite doubles as living documentation of how every important flow in the app works — new hires watch real browsers walk through real scenarios.
+
+Everything checks into git. Nothing lives in a vendor's database. A spec written on a developer's laptop on Monday is reviewed by QA on Tuesday and runs in CI from Wednesday — same file, no export step.
+
 ## What you get when Phase 1 ships (this release)
 
 - **Vite plugin** that injects a Shadow-DOM widget into your dev page. No-op in production. Marked `data-hover="true"` so your own Playwright runs can skip it.

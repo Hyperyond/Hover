@@ -94,6 +94,17 @@
 
 大部分流程你两种都会保。Spec 给测试套件，Skill 给"下次你想让 agent 接着从这里干"的场景。
 
+### 团队内可共享，不绑在工具里
+
+两种文件都跟你代码一起 commit 进 git。一个前端开发把流程一存，剩下的所有人都能用 —— **不用装 Hover、不用 agent、不用 token**：
+
+- **QA / 测试团队** clone 仓库跑 `pnpm test:e2e`。Playwright 跟跑普通测试一样跑这些 spec —— 不用装 Hover、不用配 Chrome、不用懂"agent"是什么。CI 给的信号跟前端开发看到的一模一样。
+- **其他前端** 在自己的 Hover widget 里调起已存的 skill —— *"execute login-as-claude"* 跳过登录流程，直接进入要调试的页面。Skill 成为团队累积起来的"宏"。
+- **PR review** 把每个 spec 当成普通代码处理 —— 可 diff、可 blame、可 `requestChanges`。没有专有格式、没有 SaaS 仪表盘、没有"测试过了但看不到怎么过的"。
+- **新人 onboarding** 就是 `git clone && pnpm install && pnpm test:e2e`。测试套件本身就是这个 app 每条重要流程**怎么跑通**的活文档 —— 新人看真实浏览器走过真实场景。
+
+所有东西都进 git。没有任何东西在某个供应商的数据库里。前端周一在本地写的 spec，QA 周二 review，周三在 CI 里跑 —— 同一个文件，无导出步骤。
+
 ## Phase 1 里你能拿到的（当前 release）
 
 - **Vite 插件** —— 通过 `transformIndexHtml` 往 dev 页面注入一个 Shadow DOM widget。生产构建里完全是 no-op。`data-hover="true"` 标记让你自己的 Playwright 跑测试时自动跳过它。
