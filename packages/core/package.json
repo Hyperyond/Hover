@@ -15,6 +15,7 @@
     "detect": "tsx src/scripts/detect-cli.ts",
     "verify-widget": "tsx src/scripts/verify-widget.ts",
     "verify-skill": "tsx src/scripts/verify-skill.ts",
+    "verify-spec": "tsx src/scripts/verify-spec.ts",
     "ws-smoke": "tsx src/scripts/ws-smoke.ts",
     "test": "vitest run",
     "test:watch": "vitest"

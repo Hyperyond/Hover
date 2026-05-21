@@ -12,12 +12,15 @@
  *     { type: 'skill-saved',  payload: { name, path } }
  *     { type: 'skill-exists', payload: { slug, existingPath } }
  *     { type: 'skills-list',  payload: { skills: SkillSummary[] } }
+ *     { type: 'spec-saved',   payload: { name, path } }
+ *     { type: 'spec-exists',  payload: { slug, existingPath } }
  *     { type: 'error',        payload: { message } }
  *
  *   client → server
  *     { type: 'command',     payload: { text, sessionId? } }
  *     { type: 'cancel' }
  *     { type: 'save-skill',  payload: { name, description, steps, overwrite? } }
+ *     { type: 'save-spec',   payload: { name, description, steps, assertions?, overwrite? } }
  *     { type: 'list-skills' }
  */
 import { dirname, resolve } from 'node:path';
@@ -32,6 +35,7 @@ import {
   SkillExistsError,
   type SkillStep,
 } from './skills/writeSkill.js';
+import { writeSpec, SpecExistsError, type SpecAssertion } from './specs/writeSpec.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
@@ -64,6 +68,7 @@ interface ClientMessage {
     name?: string;
     description?: string;
     steps?: SkillStep[];
+    assertions?: SpecAssertion[];
     overwrite?: boolean;
   };
 }
@@ -136,6 +141,10 @@ export function startService(opts: ServiceOptions): ServiceHandle {
       if (msg.type === 'list-skills') {
         const skills = await listSkills(devRoot);
         send(ws, { type: 'skills-list', payload: { skills } });
+        return;
+      }
+      if (msg.type === 'save-spec') {
+        await handleSaveSpec(ws, msg, devRoot);
         return;
       }
       if (msg.type !== 'command') return;
@@ -252,6 +261,48 @@ function buildCdpHint(tabs: { url: string; title?: string }[]): string {
     `first to see the current page state, and only navigate if you actually need a`,
     `different URL.`,
   ].join('\n');
+}
+
+async function handleSaveSpec(
+  ws: WebSocket,
+  msg: ClientMessage,
+  devRoot: string,
+): Promise<void> {
+  const name = msg.payload?.name;
+  const description = msg.payload?.description ?? '';
+  const steps = msg.payload?.steps;
+  const assertions = msg.payload?.assertions ?? [];
+
+  if (typeof name !== 'string' || !name.trim()) {
+    send(ws, { type: 'error', payload: { message: 'save-spec: name is required' } });
+    return;
+  }
+  if (!Array.isArray(steps) || steps.length === 0) {
+    send(ws, { type: 'error', payload: { message: 'save-spec: no steps to save' } });
+    return;
+  }
+  const overwrite = msg.payload?.overwrite === true;
+
+  try {
+    const result = await writeSpec({ devRoot, name, description, steps, assertions, overwrite });
+    send(ws, {
+      type: 'spec-saved',
+      payload: { name: result.slug, path: result.path },
+    });
+  } catch (err) {
+    if (err instanceof SpecExistsError) {
+      send(ws, {
+        type: 'spec-exists',
+        payload: { slug: err.slug, existingPath: err.path },
+      });
+      return;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    send(ws, {
+      type: 'error',
+      payload: { message: `save-spec failed: ${message}` },
+    });
+  }
 }
 
 async function handleSaveSkill(

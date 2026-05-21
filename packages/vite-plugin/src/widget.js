@@ -386,17 +386,22 @@
       div.appendChild(s);
     }
 
-    // Save-as-Skill button on successful runs. Always saves the most recent
-    // session (last 'user' → end of state.messages), regardless of which done
-    // card it lives on — UI affordance, not per-card scoping.
+    // Save-as-Skill / Save-as-Spec buttons on successful runs. Always saves
+    // the most recent session (last 'user' → end of state.messages),
+    // regardless of which done card it lives on.
     if (!msg.isError) {
       const actions = document.createElement('div');
       actions.className = 'actions';
-      const saveBtn = document.createElement('button');
-      saveBtn.type = 'button';
-      saveBtn.textContent = '💾 Save as Skill';
-      saveBtn.addEventListener('click', () => saveSkillFromLastSession(saveBtn));
-      actions.appendChild(saveBtn);
+      const saveSkillBtn = document.createElement('button');
+      saveSkillBtn.type = 'button';
+      saveSkillBtn.textContent = '💾 Save as Skill';
+      saveSkillBtn.addEventListener('click', () => saveSkillFromLastSession(saveSkillBtn));
+      actions.appendChild(saveSkillBtn);
+      const saveSpecBtn = document.createElement('button');
+      saveSpecBtn.type = 'button';
+      saveSpecBtn.textContent = '📜 Save as spec';
+      saveSpecBtn.addEventListener('click', () => saveSpecFromLastSession(saveSpecBtn));
+      actions.appendChild(saveSpecBtn);
       div.appendChild(actions);
     }
 
@@ -443,7 +448,9 @@
 
   // Pending save state — remembered so a confirm-overwrite reply can re-send
   // with overwrite=true without re-prompting the user for name/description.
+  // Two slots, one per output format (skill vs spec).
   let pendingSave = null;
+  let pendingSpec = null;
 
   const saveSkillFromLastSession = (button) => {
     const steps = lastSessionSlice();
@@ -545,6 +552,61 @@
     else openSkillsOverlay();
   });
   skillsCloseBtn.addEventListener('click', closeSkillsOverlay);
+
+  const saveSpecFromLastSession = (button) => {
+    const steps = lastSessionSlice();
+    if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
+      addMessage({ kind: 'system', text: 'Nothing to save (no tool steps in the last session).' });
+      return;
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      addMessage({ kind: 'system', text: 'Cannot save: service disconnected.' });
+      return;
+    }
+    const name = prompt('Spec name (kebab-case suggested, e.g. "login-flow"):', '');
+    if (name == null || !name.trim()) return;
+    const description = prompt('One-line description (optional):', '') ?? '';
+
+    pendingSpec = { name: name.trim(), description: description.trim(), steps, button };
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    ws.send(JSON.stringify({
+      type: 'save-spec',
+      payload: { name: pendingSpec.name, description: pendingSpec.description, steps },
+    }));
+
+    setTimeout(() => {
+      if (button.textContent === 'Saving…') {
+        button.disabled = false;
+        button.textContent = '📜 Save as spec';
+      }
+    }, 8000);
+  };
+
+  const handleSpecExists = (slug, existingPath) => {
+    if (!pendingSpec) return;
+    const overwrite = confirm(
+      `Spec "${slug}" already exists:\n${existingPath}\n\nOverwrite the existing file?`,
+    );
+    if (overwrite) {
+      ws.send(JSON.stringify({
+        type: 'save-spec',
+        payload: {
+          name: pendingSpec.name,
+          description: pendingSpec.description,
+          steps: pendingSpec.steps,
+          overwrite: true,
+        },
+      }));
+      return;
+    }
+    if (pendingSpec.button) {
+      pendingSpec.button.disabled = false;
+      pendingSpec.button.textContent = '📜 Save as spec';
+    }
+    addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
+    pendingSpec = null;
+  };
 
   const handleSkillExists = (slug, existingPath) => {
     if (!pendingSave) return;
@@ -713,6 +775,22 @@
       } else if (msg.type === 'skill-exists') {
         const p = msg.payload ?? {};
         handleSkillExists(p.slug, p.existingPath);
+      } else if (msg.type === 'spec-saved') {
+        const p = msg.payload ?? {};
+        addMessage({
+          kind: 'system',
+          text: `✓ saved Playwright spec "${p.name}" → ${p.path}\n  run it: pnpm test:e2e`,
+        });
+        root.querySelectorAll('.msg.done .actions button').forEach((b) => {
+          if (b.textContent === 'Saving…') {
+            b.disabled = false;
+            b.textContent = '📜 Save as spec';
+          }
+        });
+        pendingSpec = null;
+      } else if (msg.type === 'spec-exists') {
+        const p = msg.payload ?? {};
+        handleSpecExists(p.slug, p.existingPath);
       } else if (msg.type === 'skills-list') {
         renderSkills(msg.payload?.skills ?? []);
       } else if (msg.type === 'hello') {
