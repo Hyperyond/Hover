@@ -1,7 +1,17 @@
 {
   "name": "@hyperyond/core",
-  "private": true,
   "version": "0.0.0",
+  "description": "Hover's local Node service: agent invocation, Playwright CDP preflight, WebSocket bridge.",
+  "license": "Apache-2.0",
+  "author": "Hyperyond",
+  "homepage": "https://github.com/Hyperyond/Hover#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hyperyond/Hover.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/Hyperyond/Hover/issues",
+  "keywords": ["hover", "playwright", "mcp", "agent", "browser-testing", "claude"],
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -9,7 +19,15 @@
     "./agents": "./src/agents/index.ts",
     "./service": "./src/service.ts"
   },
+  "files": [
+    "dist",
+    "mcp.config.json",
+    "README.md"
+  ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "pnpm run clean && pnpm run build",
     "smoke": "tsx src/smoke.ts",
     "smoke:chrome": "tsx src/scripts/start-chrome.ts",
     "detect": "tsx src/scripts/detect-cli.ts",
@@ -29,5 +47,25 @@
     "@types/cross-spawn": "^6.0.6",
     "@types/ws": "^8.18.1",
     "vitest": "^3.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./agents": {
+        "types": "./dist/agents/index.d.ts",
+        "import": "./dist/agents/index.js"
+      },
+      "./service": {
+        "types": "./dist/service.d.ts",
+        "import": "./dist/service.js"
+      }
+    }
   }
 }

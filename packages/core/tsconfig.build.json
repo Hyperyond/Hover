@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true
+  },
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/__tests__/**",
+    "tests/**",
+    "src/scripts/**",
+    "src/smoke.ts"
+  ]
+}

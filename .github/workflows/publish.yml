@@ -1,0 +1,105 @@
+name: Publish
+
+# Auto-publishes @hyperyond/* packages to GitHub Packages
+# (https://npm.pkg.github.com) when a v* tag is pushed.
+#
+# Trigger:    git tag -a v0.1.1 -m "..." && git push --tags
+# Auth:       GITHUB_TOKEN (provided by Actions) — no manual secrets needed
+# Scope:      packages must be @hyperyond/* (matches the repo org)
+#
+# What it does:
+#   1. Checkout, install pnpm + Node 24, restore pnpm cache
+#   2. Rewrite package.json versions from the tag (v0.1.1 → "0.1.1")
+#      so we don't have to remember to bump package.json in lockstep
+#   3. Typecheck + unit tests as a release gate
+#   4. Build each @hyperyond/* package (tsc + asset copy for vite-plugin)
+#   5. pnpm publish each one to https://npm.pkg.github.com
+#
+# To consume the published packages elsewhere, install with an .npmrc:
+#   @hyperyond:registry=https://npm.pkg.github.com
+#   //npm.pkg.github.com/:_authToken=${GITHUB_PAT}
+# where GITHUB_PAT has the `read:packages` scope.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Allow manual reruns from the Actions tab. Uses the workflow's current
+  # tip — useful for re-publishing a botched release without retagging.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 0.1.2). Required for manual runs.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node + GitHub Packages registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@hyperyond'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            # GITHUB_REF_NAME is e.g. "v0.1.1"; strip the leading "v"
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not resolve a version to publish."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Will publish version $VERSION"
+
+      - name: Bump package versions in-place
+        run: |
+          # Rewrite each @hyperyond/* package.json's version field without
+          # committing or git-tagging (the tag already exists, that's why
+          # we're here). --allow-same-version is a safety net if someone
+          # already bumped manually before tagging.
+          pnpm -r --filter '@hyperyond/*' exec npm version \
+            "${{ steps.version.outputs.version }}" \
+            --no-git-tag-version \
+            --allow-same-version
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # --no-git-checks: CI checkouts are detached HEAD, would otherwise
+        # be flagged as "not on a branch". The git tag is the source of
+        # truth for this release; pnpm doesn't need to verify that itself.
+        run: pnpm -r --filter '@hyperyond/*' publish --no-git-checks --access public

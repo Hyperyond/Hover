@@ -12,6 +12,8 @@
     "verify-widget": "pnpm --filter @hyperyond/core verify-widget",
     "ws-smoke": "pnpm --filter @hyperyond/core ws-smoke",
     "typecheck": "pnpm -r exec tsc --noEmit",
+    "build": "pnpm -r --filter '@hyperyond/*' build",
+    "clean": "pnpm -r --filter '@hyperyond/*' clean",
     "test": "pnpm -r --if-present test",
     "test:e2e": "pnpm --filter basic-app test",
     "commitlint": "commitlint --edit",
