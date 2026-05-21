@@ -83,32 +83,97 @@ pnpm smoke http://localhost:5173/ "log in then add a todo named 'verify hover'"
 
 Or just open `http://localhost:5173/` in the debug Chrome, click the ✨ floating button, and type into the widget.
 
-## Use Hover in your own Vite app
+## Install
 
-The packages are published to **GitHub Packages** (not npm.org). Add an `.npmrc` to your project root:
+```bash
+pnpm add -D @hyperyond/vite-plugin
+# or:  npm install -D @hyperyond/vite-plugin
+# or:  yarn add -D @hyperyond/vite-plugin
+```
+
+<details>
+<summary>One-time auth setup (GitHub Packages registry)</summary>
+
+Hover is published to GitHub Packages, not npm.org. Tell your package manager where to find `@hyperyond/*` — add an `.npmrc` at the root of your project (and commit it; it has no secrets):
 
 ```ini
 @hyperyond:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-`GITHUB_TOKEN` should be a Personal Access Token with `read:packages` scope ([create one here](https://github.com/settings/tokens)). Then:
+Then export a Personal Access Token with `read:packages` scope ([create one in 30 seconds](https://github.com/settings/tokens/new?scopes=read:packages&description=hyperyond-packages-read)):
 
 ```bash
-pnpm add -D @hyperyond/vite-plugin
+export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxx
 ```
+
+Or set it permanently in your shell rc. The token is read-only for public packages — safe to keep around.
+
+</details>
+
+Then start Chrome in debug mode so Hover can connect:
+
+```bash
+# macOS
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/hover-chrome
+```
+
+Open your dev server in *that* Chrome window. The ✨ launcher appears bottom-right.
+
+## Use it in a React (Vite) project
 
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import { hover } from '@hyperyond/vite-plugin';
 
 export default defineConfig({
-  plugins: [hover()],
+  plugins: [
+    react(),
+    hover(),                 // 👈 add this line
+  ],
 });
 ```
 
-Start Chrome with `--remote-debugging-port=9222`, open your dev server in it, and the widget appears.
+That's the whole integration. `vite dev` as usual; open your app in the debug Chrome; click ✨.
+
+> Verified specs that you save via the widget land in `__vibe_tests__/` at your project root. Run them with `npx playwright test`. They import only `@playwright/test` and have no runtime dependency on Hover — so CI can run them with the widget completely disabled.
+
+## Use it in a Vue (Vite) project
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { hover } from '@hyperyond/vite-plugin';
+
+export default defineConfig({
+  plugins: [
+    vue(),
+    hover(),                 // 👈 add this line
+  ],
+});
+```
+
+Same flow. Vite dev server → debug Chrome → ✨.
+
+> Works the same in Svelte / Solid / Qwik / Astro / vanilla — anything Vite serves. The plugin is framework-agnostic; it just injects a Shadow DOM widget into your dev page via `transformIndexHtml`.
+
+## Plugin options
+
+```ts
+hover({
+  port: 51789,             // local WebSocket port; auto-bumps if taken
+  enabled: true,           // false to disable (default: only in dev mode)
+  chromeDebugPort: 9222,
+  agentId: 'claude',       // matches @hyperyond/core's agent registry
+  model: 'sonnet',         // 'opus' costs ~5× — use sonnet for browser driving
+  maxBudgetUsd: 0.5,       // hard ceiling per agent invocation
+});
+```
 
 ## The five example apps
 
