@@ -30,6 +30,7 @@ export function hover(options: HoverOptions = {}): Plugin {
 
   let enabled = true;
   let service: ServiceHandle | null = null;
+  let servicePort = port;
 
   return {
     name: 'hover',
@@ -42,10 +43,10 @@ export function hover(options: HoverOptions = {}): Plugin {
           : options.enabled ?? config.mode === 'development';
     },
 
-    configureServer(server) {
+    async configureServer(server) {
       if (!enabled) return;
       try {
-        service = startService({
+        service = await startService({
           port,
           agentId,
           model,
@@ -54,12 +55,14 @@ export function hover(options: HoverOptions = {}): Plugin {
           // `Save as Skill` writes `.claude/skills/<slug>/SKILL.md`.
           devRoot: server.config.root,
         });
+        servicePort = service.port;
+        const bumped = servicePort !== port;
         server.config.logger.info(
-          `[hover] service ready · ws://127.0.0.1:${port} · agent=${agentId} model=${model}`,
+          `[hover] service ready · ws://127.0.0.1:${servicePort}${bumped ? ` (auto-bumped from ${port})` : ''} · agent=${agentId} model=${model} · root=${server.config.root}`,
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        server.config.logger.error(`[hover] failed to start service on port ${port}: ${msg}`);
+        server.config.logger.error(`[hover] failed to start service: ${msg}`);
       }
     },
 
@@ -75,8 +78,10 @@ export function hover(options: HoverOptions = {}): Plugin {
       handler() {
         if (!enabled) return;
         const widgetSource = readFileSync(WIDGET_PATH, 'utf-8');
-        // Inject HOVER_PORT before the widget source so the IIFE can read it.
-        const preamble = `window.__HOVER_PORT__ = ${port};`;
+        // Inject the ACTUAL port the service bound to (not the requested
+        // one) so the widget connects to its own example's service even if
+        // a sibling Vite already took 51789.
+        const preamble = `window.__HOVER_PORT__ = ${servicePort};`;
         return [
           {
             tag: 'script',

@@ -26,7 +26,7 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*
 - `examples/canvas-paint` is a drawing app: `<canvas>` for the artwork, DOM toolbar for tools/color/brush size. Stresses AI's ability to find DOM controls amidst graphical content (canvas pixels are opaque to Playwright snapshots). Vite port 5176.
 - `examples/payment-provider` is a **deliberately unintegrated** mock third-party payment page used as the popup target for e-commerce's "Pay with PayHover" button. Vite port 5177. **Does NOT install `@hover/vite-plugin`** — the widget must not appear on the simulated third-party origin. Stresses agent behaviour around cross-tab flows: agent must `browser_tabs(action='list')` to discover the new tab, `browser_tabs(action='select')` to switch, operate the page without a widget, and verify the original tab advances on `window.opener.postMessage` callback.
 
-Four of the five examples share `@hover/vite-plugin` and default the Hover service to 51789 — run **one of those four at a time**. `payment-provider` has no service, so it can (and should) run alongside e-commerce when testing the cross-tab flow.
+Each example's `@hover/vite-plugin` instance starts its own Hover service. The first one to boot binds `127.0.0.1:51789`; subsequent ones auto-bump (51790, 51791, …, up to 51798). The injected widget reads `window.__HOVER_PORT__` so each example's widget connects only to its own service — running multiple examples concurrently is supported and each writes skills + specs into its own `devRoot`. `payment-provider` has no service at all.
 
 ## Inactive or placeholder directories
 

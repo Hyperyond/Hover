@@ -56,6 +56,8 @@ export interface ServiceOptions {
 }
 
 export interface ServiceHandle {
+  /** The port the WebSocketServer actually bound to. May differ from
+   *  the requested port if it was taken (we auto-bump up to 10 times). */
   port: number;
   close(): Promise<void>;
 }
@@ -74,9 +76,50 @@ interface ClientMessage {
 }
 
 const PROTOCOL_VERSION = 1;
+const PORT_RETRIES = 10;
 
-export function startService(opts: ServiceOptions): ServiceHandle {
-  const port = opts.port;
+/**
+ * Try to bind a WebSocketServer to <host>:<port>. Resolves with the wss on
+ * success; rejects with the bind error (typically EADDRINUSE) on failure.
+ */
+function bind(host: string, port: number): Promise<WebSocketServer> {
+  return new Promise((resolve, reject) => {
+    const wss = new WebSocketServer({ host, port });
+    const onError = (err: Error) => {
+      wss.off('listening', onListening);
+      reject(err);
+    };
+    const onListening = () => {
+      wss.off('error', onError);
+      resolve(wss);
+    };
+    wss.once('error', onError);
+    wss.once('listening', onListening);
+  });
+}
+
+/**
+ * Find a free port in [start, start+attempts) and bind a WebSocketServer to
+ * it. Each example app that loads @hover/vite-plugin runs its own service —
+ * with auto-bump, multiple Vite dev servers can coexist (basic-app on 51789,
+ * stock-registration on 51790, etc.) and each widget connects only to its
+ * own service. The widget reads the actual port from window.__HOVER_PORT__.
+ */
+async function pickAndBind(host: string, start: number, attempts: number): Promise<WebSocketServer> {
+  let lastErr: Error | null = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await bind(host, start + i);
+    } catch (err) {
+      lastErr = err as Error;
+      if ((err as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw err;
+    }
+  }
+  throw new Error(`[hover] no free port in [${start}, ${start + attempts}): ${lastErr?.message ?? ''}`);
+}
+
+export async function startService(opts: ServiceOptions): Promise<ServiceHandle> {
+  const requestedPort = opts.port;
   const agentId = opts.agentId ?? 'claude';
   const model = opts.model ?? 'sonnet';
   const maxBudgetUsd = opts.maxBudgetUsd ?? 0.5;
@@ -84,10 +127,10 @@ export function startService(opts: ServiceOptions): ServiceHandle {
   const cdpUrl = opts.cdpUrl ?? 'http://localhost:9222';
   const devRoot = opts.devRoot ?? process.cwd();
 
-  const wss = new WebSocketServer({ host: '127.0.0.1', port });
+  const wss = await pickAndBind('127.0.0.1', requestedPort, PORT_RETRIES);
+  const port = (wss.address() as { port: number }).port;
 
-  // Surface bind failures (EADDRINUSE etc.) instead of letting the unhandled
-  // 'error' event crash the Vite process. Caller can decide what to do.
+  // Surface post-listen errors instead of crashing the host process.
   wss.on('error', err => {
     process.stderr.write(`[hover] WebSocketServer error: ${err.message}\n`);
   });
