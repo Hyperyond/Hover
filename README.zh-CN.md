@@ -80,7 +80,7 @@
 
 ### 一次探索，三种受众
 
-跑通的 Hover 会话可以以三种方式落盘，三个按钮并排在 done card 上，任意组合点。
+跑通的 Hover 会话可以以三种方式落盘。done card 上一个 **💾 Save as ▾** 下拉按钮展开三个选项，挑一个、两个、或都存。
 
 - **📜 Save as spec** → `__vibe_tests__/<slug>.spec.ts` —— 标准 `@playwright/test` 代码，selector 用 `getByRole / getByLabel / getByTestId`。CI 跑、pre-commit 跑、新机器都能跑。不需要 agent，不需要 `claude` 二进制，不需要 API key。这是该流程的**ground truth**。**JSDoc 头部现在带一段编号的人话 `Steps:` 块 + `Expected:` 块**，QA / PM 不用打开 Playwright 文档就能读懂这个 spec 在干嘛。
 - **💾 Save as Skill** → `.claude/skills/<slug>/SKILL.md` —— 一份可重放的指令集，agent 下次会话会自动发现。在未来任何一次会话里说一句 *"execute login-as-claude"*，记录的步骤会用同样的 Playwright MCP 沙箱、在你真实的浏览器里重新跑一遍。Skill 就是 Markdown 文件，跟着仓库走。
@@ -97,7 +97,7 @@
 可以只存一种，也可以全存。Spec 给 CI，Skill 给下一次探索，Case 给测试团队和 sprint board —— 同一个会话、同一张 Save card。
 
 <p align="center">
-  <img src="docs/screenshots/05-three-save-buttons.png" alt="一张 done card，三个 save 按钮" width="48%" />
+  <img src="docs/screenshots/05-save-dropdown.png" alt="Save 下拉菜单 — Playwright spec、Claude Code Skill、Jira test case (CSV)" width="48%" />
   <img src="docs/screenshots/06-jira-case-modal.png" alt="Save as Jira case 弹窗" width="48%" />
 </p>
 

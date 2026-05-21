@@ -364,34 +364,14 @@
       div.appendChild(s);
     }
 
-    // Save-as-Skill / Save-as-Spec / Save-as-Jira-case buttons on
-    // successful runs. Always saves the most recent session (last 'user'
-    // → end of state.messages), regardless of which done card it lives
-    // on. One verified exploration, three audiences:
-    //   - Skill  → future agent runs ("execute login-as-claude")
-    //   - Spec   → CI's deterministic gate (`.spec.ts`)
-    //   - Case   → QA / PM review in Jira / Xray / Zephyr (`.case.csv`)
+    // Save dropdown on successful runs. One trigger button, three menu
+    // items — one per artifact format the saved session can crystallise
+    // into. Always saves the most recent session (last 'user' → end of
+    // state.messages), regardless of which done card it lives on.
     if (!msg.isError) {
       const actions = document.createElement('div');
       actions.className = 'actions';
-      const saveSkillBtn = document.createElement('button');
-      saveSkillBtn.type = 'button';
-      saveSkillBtn.className = 'btn-save-skill';
-      saveSkillBtn.textContent = '💾 Save as Skill';
-      saveSkillBtn.addEventListener('click', () => saveSkillFromLastSession(saveSkillBtn));
-      actions.appendChild(saveSkillBtn);
-      const saveSpecBtn = document.createElement('button');
-      saveSpecBtn.type = 'button';
-      saveSpecBtn.className = 'btn-save-spec';
-      saveSpecBtn.textContent = '📜 Save as spec';
-      saveSpecBtn.addEventListener('click', () => saveSpecFromLastSession(saveSpecBtn));
-      actions.appendChild(saveSpecBtn);
-      const saveCaseBtn = document.createElement('button');
-      saveCaseBtn.type = 'button';
-      saveCaseBtn.className = 'btn-save-case';
-      saveCaseBtn.textContent = '📋 Save as Jira case';
-      saveCaseBtn.addEventListener('click', () => saveCaseCsvFromLastSession(saveCaseBtn));
-      actions.appendChild(saveCaseBtn);
+      actions.appendChild(buildSaveDropdown());
       div.appendChild(actions);
     }
 
@@ -423,6 +403,112 @@
     lastStepDiv = null;
     for (const m of state.messages) renderMessage(m);
   };
+
+  // ───────────────────────── save dropdown ─────────────────────────
+  //
+  // One trigger button per done card; the menu lists the three artifact
+  // formats. Each menu item delegates to the same save* function that
+  // used to be wired to its own button, passing the trigger so the
+  // Saving…/restore flow has something to update.
+
+  const TRIGGER_LABEL_HTML = '<span class="trigger-label">💾 Save as</span><span class="caret">▾</span>';
+
+  const restoreTrigger = (b) => {
+    b.disabled = false;
+    b.innerHTML = TRIGGER_LABEL_HTML;
+  };
+
+  function buildSaveDropdown() {
+    const wrap = document.createElement('div');
+    wrap.className = 'save-wrap';
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'save-trigger';
+    trigger.innerHTML = TRIGGER_LABEL_HTML;
+    trigger.setAttribute('aria-haspopup', 'menu');
+    trigger.setAttribute('aria-expanded', 'false');
+
+    const menu = document.createElement('div');
+    menu.className = 'save-menu';
+    menu.hidden = true;
+    menu.setAttribute('role', 'menu');
+
+    const items = [
+      {
+        icon: '📜', label: 'Playwright spec',
+        sub: '__vibe_tests__/<slug>.spec.ts · for CI',
+        cls: 'item-spec',
+        run: () => saveSpecFromLastSession(trigger),
+      },
+      {
+        icon: '💾', label: 'Claude Code Skill',
+        sub: '.claude/skills/<slug>/SKILL.md · for future agent replay',
+        cls: 'item-skill',
+        run: () => saveSkillFromLastSession(trigger),
+      },
+      {
+        icon: '📋', label: 'Jira test case (CSV)',
+        sub: '__vibe_tests__/<slug>.case.csv · for Xray / Zephyr / Jira',
+        cls: 'item-case',
+        run: () => saveCaseCsvFromLastSession(trigger),
+      },
+    ];
+    for (const it of items) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'save-menu-item ' + it.cls;
+      btn.setAttribute('role', 'menuitem');
+      const icon = document.createElement('span');
+      icon.className = 'i-icon'; icon.textContent = it.icon;
+      const text = document.createElement('span'); text.className = 'i-text';
+      const label = document.createElement('span'); label.className = 'i-label'; label.textContent = it.label;
+      const sub = document.createElement('span'); sub.className = 'i-sub'; sub.textContent = it.sub;
+      text.appendChild(label); text.appendChild(sub);
+      btn.appendChild(icon); btn.appendChild(text);
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeMenu();
+        it.run();
+      });
+      menu.appendChild(btn);
+    }
+
+    const closeOnOutside = (e) => {
+      if (!e.composedPath().includes(wrap)) closeMenu();
+    };
+    const closeOnEsc = (e) => {
+      if (e.key === 'Escape' && !menu.hidden) {
+        e.stopPropagation();
+        closeMenu();
+      }
+    };
+    function openMenu() {
+      menu.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      // Listeners attached on next tick so the click that opened the
+      // menu doesn't immediately bubble to closeOnOutside.
+      setTimeout(() => {
+        document.addEventListener('click', closeOnOutside, { capture: true });
+        root.addEventListener('keydown', closeOnEsc, { capture: true });
+      }, 0);
+    }
+    function closeMenu() {
+      menu.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('click', closeOnOutside, { capture: true });
+      root.removeEventListener('keydown', closeOnEsc, { capture: true });
+    }
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (menu.hidden) openMenu();
+      else closeMenu();
+    });
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+    return wrap;
+  }
 
   // ───────────────────────── save as skill ─────────────────────────
 
@@ -474,10 +560,7 @@
     }));
 
     setTimeout(() => {
-      if (button.textContent === 'Saving…') {
-        button.disabled = false;
-        button.textContent = '💾 Save as Skill';
-      }
+      if (button.textContent === 'Saving…') restoreTrigger(button);
     }, 8000);
   };
 
@@ -598,10 +681,7 @@
     }));
 
     setTimeout(() => {
-      if (button.textContent === 'Saving…') {
-        button.disabled = false;
-        button.textContent = '📜 Save as spec';
-      }
+      if (button.textContent === 'Saving…') restoreTrigger(button);
     }, 8000);
   };
 
@@ -655,10 +735,7 @@
     }));
 
     setTimeout(() => {
-      if (button.textContent === 'Saving…') {
-        button.disabled = false;
-        button.textContent = '📋 Save as Jira case';
-      }
+      if (button.textContent === 'Saving…') restoreTrigger(button);
     }, 8000);
   };
 
@@ -686,10 +763,7 @@
       }));
       return;
     }
-    if (pendingCase.button) {
-      pendingCase.button.disabled = false;
-      pendingCase.button.textContent = '📋 Save as Jira case';
-    }
+    if (pendingCase.button) restoreTrigger(pendingCase.button);
     addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
     pendingCase = null;
   };
@@ -716,10 +790,7 @@
       }));
       return;
     }
-    if (pendingSpec.button) {
-      pendingSpec.button.disabled = false;
-      pendingSpec.button.textContent = '📜 Save as spec';
-    }
+    if (pendingSpec.button) restoreTrigger(pendingSpec.button);
     addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
     pendingSpec = null;
   };
@@ -747,10 +818,7 @@
       return;
     }
     // Cancelled — restore the button and clear pending state
-    if (pendingSave.button) {
-      pendingSave.button.disabled = false;
-      pendingSave.button.textContent = '💾 Save as Skill';
-    }
+    if (pendingSave.button) restoreTrigger(pendingSave.button);
     addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
     pendingSave = null;
   };
@@ -1268,11 +1336,8 @@
           text: `✓ saved skill "${p.name}" → ${p.path}\n  try: "execute ${p.name}" in a new conversation`,
         });
         // Re-arm any saving buttons in the panel
-        root.querySelectorAll('.msg.done .actions button').forEach((b) => {
-          if (b.textContent === 'Saving…') {
-            b.disabled = false;
-            b.textContent = '💾 Save as Skill';
-          }
+        root.querySelectorAll('.msg.done .actions .save-trigger').forEach((b) => {
+          if (b.textContent === 'Saving…') restoreTrigger(b);
         });
       } else if (msg.type === 'skill-exists') {
         const p = msg.payload ?? {};
@@ -1284,11 +1349,8 @@
           kind: 'system',
           text: `✓ saved Playwright spec "${p.name}"${n > 0 ? ` (+${n} assertion${n === 1 ? '' : 's'})` : ''} → ${p.path}\n  run it: pnpm test:e2e`,
         });
-        root.querySelectorAll('.msg.done .actions button').forEach((b) => {
-          if (b.textContent === 'Saving…') {
-            b.disabled = false;
-            b.textContent = '📜 Save as spec';
-          }
+        root.querySelectorAll('.msg.done .actions .save-trigger').forEach((b) => {
+          if (b.textContent === 'Saving…') restoreTrigger(b);
         });
         // Saved successfully — assertions are now baked into the file, clear them
         state.assertions = [];
@@ -1304,12 +1366,7 @@
           kind: 'system',
           text: `✓ saved Jira test case "${p.name}" → ${p.path}\n  import via Xray Test Case Importer · or Zephyr Scale · or Jira issue importer (CSV).`,
         });
-        // Reset the case-save button specifically (don't touch other
-        // Saving… buttons that belong to a different save flow).
-        if (pendingCase?.button) {
-          pendingCase.button.disabled = false;
-          pendingCase.button.textContent = '📋 Save as Jira case';
-        }
+        if (pendingCase?.button) restoreTrigger(pendingCase.button);
         pendingCase = null;
       } else if (msg.type === 'case-csv-exists') {
         const p = msg.payload ?? {};

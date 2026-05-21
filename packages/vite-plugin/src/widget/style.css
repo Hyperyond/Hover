@@ -161,28 +161,91 @@ header {
 .msg.done .meta { font-weight: 600; margin-bottom: 4px; }
 .msg.done .summary { color: inherit; opacity: 0.9; white-space: pre-wrap; }
 .msg.done .actions { margin-top: 8px; display: flex; gap: 6px; }
-.msg.done .actions button {
-  font-size: 12px; padding: 6px 12px;
-  border-radius: 7px; border: 1px solid transparent;
-  font-weight: 600; cursor: pointer;
+/* ───── Save dropdown — replaces three side-by-side buttons ──────
+   One primary CTA ("💾 Save as ▾") with a stacked menu that opens
+   upward so it never gets clipped by the chat scroll. Three items,
+   one per artifact format; each shows the destination path as a
+   subtitle so a fresh user can pick without reading the README. */
+.msg.done .actions .save-wrap {
+  position: relative;
+  display: inline-block;
+}
+.save-trigger {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 12px;
+  border-radius: 7px;
+  border: 1px solid #166534;
+  background: #166534;
+  color: #fff;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: background 0.12s, transform 0.06s;
+}
+.save-trigger:hover:not(:disabled) { background: #14532d; }
+.save-trigger:active:not(:disabled) { transform: translateY(1px); }
+.save-trigger:disabled { opacity: 0.6; cursor: not-allowed; }
+.save-trigger[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.save-trigger .caret {
+  font-size: 10px; opacity: 0.85;
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+
+.save-menu {
+  position: absolute;
+  bottom: calc(100% + 6px); left: 0;
+  min-width: 280px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  padding: 4px;
+  z-index: 15;
+  display: flex; flex-direction: column;
+  animation: save-menu-in 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.save-menu[hidden] { display: none; }
+@keyframes save-menu-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.save-menu-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
   font-family: inherit;
-  display: inline-flex; align-items: center; gap: 5px;
-  transition: background 0.12s, border-color 0.12s, transform 0.06s;
+  transition: background 0.1s;
 }
-.msg.done .actions button:active:not(:disabled) { transform: translateY(1px); }
-.msg.done .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
-.msg.done .actions .btn-save-spec {
-  background: #166534; color: #fff; border-color: #166534;
+.save-menu-item:hover { background: #f9fafb; }
+.save-menu-item:active { background: #f3f4f6; }
+.save-menu-item .i-icon {
+  font-size: 18px; line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
-.msg.done .actions .btn-save-spec:hover:not(:disabled) { background: #14532d; }
-.msg.done .actions .btn-save-skill {
-  background: #fff; color: #166534; border-color: #86efac;
+.save-menu-item .i-text {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
 }
-.msg.done .actions .btn-save-skill:hover:not(:disabled) { background: #f0fdf4; border-color: #4ade80; }
-.msg.done .actions .btn-save-case {
-  background: #fff; color: #1d4ed8; border-color: #93c5fd;
+.save-menu-item .i-label {
+  font-weight: 600; font-size: 13px;
 }
-.msg.done .actions .btn-save-case:hover:not(:disabled) { background: #eff6ff; border-color: #60a5fa; }
+.save-menu-item .i-sub {
+  font-size: 11px; color: #6b7280;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  word-break: break-all;
+}
+/* Accent the label colour by format, mirroring the per-format theme
+   we used when the three buttons were laid out side-by-side. */
+.save-menu-item.item-spec .i-label  { color: #166534; }
+.save-menu-item.item-skill .i-label { color: #047857; }
+.save-menu-item.item-case .i-label  { color: #1d4ed8; }
 
 footer {
   border-top: 1px solid #eee; padding: 10px;

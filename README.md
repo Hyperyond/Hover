@@ -80,7 +80,7 @@ The differentiator is the handoff. AI authors the session; the artifacts are dec
 
 ### One exploration, three audiences
 
-A verified Hover session can crystallize three different ways. All three buttons sit on the same done card; pick any combination.
+A verified Hover session can crystallize three different ways. A single **💾 Save as ▾** dropdown on the done card opens a menu listing all three; pick one, two, or all three.
 
 - **📜 Save as spec** → `__vibe_tests__/<slug>.spec.ts` — standard `@playwright/test` code with `getByRole / getByLabel / getByTestId` semantic selectors. Runs in CI, in pre-commit, on a fresh machine. No agent, no `claude` binary, no API key. **Ground truth for the flow.** The JSDoc header now carries a numbered plain-English `Steps:` block plus an `Expected:` block, so QA / PMs can read what the test does without opening Playwright docs.
 - **💾 Save as Skill** → `.claude/skills/<slug>/SKILL.md` — a replayable instruction set the agent auto-discovers next time. Type *"execute login-as-claude"* in any future conversation and the recorded steps run again, in your real browser, using the same Playwright MCP sandbox. Skills are plain Markdown checked into your repo.
@@ -97,7 +97,7 @@ A verified Hover session can crystallize three different ways. All three buttons
 Pick one or pick all three. Spec for CI, Skill for the next exploration, Case for the test team / sprint board — same session, same Save card.
 
 <p align="center">
-  <img src="docs/screenshots/05-three-save-buttons.png" alt="Three save buttons on one done card" width="48%" />
+  <img src="docs/screenshots/05-save-dropdown.png" alt="Save dropdown — Playwright spec, Claude Code Skill, Jira test case (CSV)" width="48%" />
   <img src="docs/screenshots/06-jira-case-modal.png" alt="Save as Jira case modal" width="48%" />
 </p>
 
