@@ -19,7 +19,7 @@
     "dev:example:basic-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter basic-app dev",
     "dev:example:stock-registration": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter stock-registration dev",
     "dev:example:canvas-paint": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter canvas-paint dev",
-    "dev:example:checkout-flow": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter checkout-flow dev",
+    "dev:example:e-commerce": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter e-commerce dev",
     "dev:example:payment-provider": "pnpm --filter payment-provider dev"
   },
   "devDependencies": {

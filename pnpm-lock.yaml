@@ -83,7 +83,7 @@ importers:
         specifier: ^7.0.0
         version: 7.3.3(@types/node@25.9.1)(jiti@2.6.1)(tsx@4.22.3)
 
-  examples/checkout-flow:
+  examples/e-commerce:
     dependencies:
       react:
         specifier: ^19.0.0

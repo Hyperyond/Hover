@@ -21,12 +21,12 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*
 - `packages/core` is `@hover/core` — the Node service. Owns agent invocation, Playwright CDP preflight, MCP config, and the WebSocket bridge between the injected UI and the agent process.
 - `packages/vite-plugin` is `@hover/vite-plugin` — the Vite plugin that injects the floating chat widget into the user's dev server page. Must be a no-op in production builds (`apply: 'serve'`).
 - `examples/basic-app` is the minimal Vite + React app used as the default smoke target — login + counter + todos. Vite port 5173.
-- `examples/checkout-flow` is an Amazon-style e-commerce SPA: product grid (with category sidebar + search) → product detail → cart → checkout (shipping address + payment method) → success. Payment method offers an inline card form OR a "Pay with PayHover" button that opens the payment-provider in a new tab and listens for the postMessage result. Stresses long action chains, cart state, conditional UI per payment method, and cross-tab popup flows. Vite port 5174.
+- `examples/e-commerce` is an Amazon-style e-commerce SPA: product grid (with category sidebar + search) → product detail → cart → checkout (shipping address + payment method) → success. Payment method offers an inline card form OR a "Pay with PayHover" button that opens the payment-provider in a new tab and listens for the postMessage result. Stresses long action chains, cart state, conditional UI per payment method, and cross-tab popup flows. Vite port 5174.
 - `examples/stock-registration` is a realistic brokerage account opening form (think IBKR / Schwab account application). 8 sections, ~50 fields, conditional reveals (foreign-tax fields when not US tax resident, previous address when current < 2 years, employer block when employed/self-employed, PEP/FINRA/control-person follow-ups, ACH bank fields when funding via ACH), multi-select chips, file upload, range slider, compliance acknowledgements. Stresses AI form filling on rich realistic-business controls. Vite port 5175.
 - `examples/canvas-paint` is a drawing app: `<canvas>` for the artwork, DOM toolbar for tools/color/brush size. Stresses AI's ability to find DOM controls amidst graphical content (canvas pixels are opaque to Playwright snapshots). Vite port 5176.
-- `examples/payment-provider` is a **deliberately unintegrated** mock third-party payment page used as the popup target for checkout-flow's "Pay with PayHover" button. Vite port 5177. **Does NOT install `@hover/vite-plugin`** — the widget must not appear on the simulated third-party origin. Stresses agent behaviour around cross-tab flows: agent must `browser_tabs(action='list')` to discover the new tab, `browser_tabs(action='select')` to switch, operate the page without a widget, and verify the original tab advances on `window.opener.postMessage` callback.
+- `examples/payment-provider` is a **deliberately unintegrated** mock third-party payment page used as the popup target for e-commerce's "Pay with PayHover" button. Vite port 5177. **Does NOT install `@hover/vite-plugin`** — the widget must not appear on the simulated third-party origin. Stresses agent behaviour around cross-tab flows: agent must `browser_tabs(action='list')` to discover the new tab, `browser_tabs(action='select')` to switch, operate the page without a widget, and verify the original tab advances on `window.opener.postMessage` callback.
 
-Four of the five examples share `@hover/vite-plugin` and default the Hover service to 51789 — run **one of those four at a time**. `payment-provider` has no service, so it can (and should) run alongside checkout-flow when testing the cross-tab flow.
+Four of the five examples share `@hover/vite-plugin` and default the Hover service to 51789 — run **one of those four at a time**. `payment-provider` has no service, so it can (and should) run alongside e-commerce when testing the cross-tab flow.
 
 ## Inactive or placeholder directories
 
@@ -155,7 +155,7 @@ pnpm typecheck            # tsc --noEmit, per-package
 pnpm test                 # vitest, per-package (where present)
 pnpm test:e2e             # Playwright dogfood suite — first run needs `playwright install chromium`
 pnpm dev:example:basic-app         # http://localhost:5173 — login / counter / todos
-pnpm dev:example:checkout-flow     # http://localhost:5174 — 5-step purchase wizard
+pnpm dev:example:e-commerce        # http://localhost:5174 — Amazon-style storefront
 pnpm dev:example:event-form        # http://localhost:5175 — eleven rich controls
 pnpm dev:example:canvas-paint      # http://localhost:5176 — canvas + DOM toolbar
 pnpm dev:example:payment-provider  # http://localhost:5177 — mock third-party popup, no widget

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 // Origins that are allowed to receive postMessage results. In a real
 // provider this would be the merchant's registered return URL.
 const ALLOWED_RETURN_ORIGINS = [
-  'http://localhost:5174', // checkout-flow (the e-commerce store)
+  'http://localhost:5174', // examples/e-commerce store
 ];
 
 const DEFAULT_MERCHANT = 'Hover Store';
