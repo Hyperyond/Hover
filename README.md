@@ -2,9 +2,11 @@
 
 # Hover
 
-### **The local-first, open-source way to author end-to-end tests with AI.**
+<img src="docs/assets/banner.png" alt="Hover — the local-first, open-source way to author end-to-end tests with AI" width="100%" />
 
-Your coding-agent CLI on `PATH` drives your real Chrome from a chat widget in your Vite dev page. Verified sessions crystallize into standard `@playwright/test` specs that run in CI **without an agent in the loop, ever.**
+<p>
+  <b>English</b> · <a href="./README.zh-CN.md">简体中文</a>
+</p>
 
 <p>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square" /></a>
@@ -36,6 +38,28 @@ Open the floating chat in your dev page, describe what you want to verify in pla
 │                       (plain @playwright/test, no agent) │
 └──────────────────────────────────────────────────────────┘
 ```
+
+## See it in action
+
+<table>
+<tr>
+<td width="50%" valign="top" align="center">
+<sub><b>01 · Floating widget on your dev page</b><br/><i>(coming soon)</i></sub>
+</td>
+<td width="50%" valign="top">
+<img src="docs/screenshots/02-ai-driving.png" alt="02 · AI driving a real form" /><br/>
+<sub><b>02 · AI driving a real form</b> — The agent is filling out the brokerage stock-registration example mid-flow. Notice the status pill is <code>running</code>, the Send button has turned into <code>Stop</code>, and the right rail streams every <code>browser_*</code> tool call live so you can interrupt the moment it goes off-script.</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top" align="center">
+<sub><b>03 · Save as Playwright spec</b><br/><i>(coming soon)</i></sub>
+</td>
+<td width="50%" valign="top" align="center">
+<sub><b>04 · The saved spec running in CI</b><br/><i>(coming soon)</i></sub>
+</td>
+</tr>
+</table>
 
 ## Why Hover
 
