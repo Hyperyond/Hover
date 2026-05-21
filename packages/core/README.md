@@ -8,7 +8,7 @@ The local Node service. Owns:
 
 ## Architecture (agents/)
 
-Borrowed from HTML Anything's "Local CLI Agent First":
+"Local CLI Agent First" — Hover bundles no AI runtime. It spawns whichever coding-agent CLI is on the user's `PATH` and normalizes its output to a single event stream:
 
 | File | Purpose |
 |---|---|
@@ -28,7 +28,7 @@ To add an agent: implement an `AgentDescriptor`, register it in `registry.ts`. D
 pnpm smoke:chrome    # from repo root
 
 # Terminal 2: run basic-app so the smoke test has a target
-pnpm dev:basic       # from repo root, serves http://localhost:5173
+pnpm dev:example:basic-app   # from repo root, serves http://localhost:5173
 
 # Terminal 3: run the smoke test
 pnpm smoke           # from repo root, defaults to http://localhost:5173
