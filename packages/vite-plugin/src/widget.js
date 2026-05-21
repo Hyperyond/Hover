@@ -77,6 +77,15 @@
       .iconbtn:hover { background: #f3f4f6; color: #111; }
       .iconbtn:disabled { opacity: 0.4; cursor: not-allowed; }
       .iconbtn.active { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+      .iconbtn.assertbtn[hidden] { display: none; }
+      .iconbtn.assertbtn {
+        width: auto; padding: 0 8px;
+        background: #ecfdf5; border-color: #a7f3d0; color: #047857;
+        gap: 4px; font-size: 11px; font-weight: 600;
+      }
+      .iconbtn.assertbtn:hover { background: #d1fae5; border-color: #6ee7b7; }
+      .iconbtn.assertbtn .assert-glyph { font-size: 12px; }
+      .iconbtn.assertbtn .assert-count { font-variant-numeric: tabular-nums; }
 
       /* Skills overlay slides over the body+footer area. Panel itself is
          position:fixed, so absolute children align to it. */
@@ -204,6 +213,9 @@
       <header>
         <span class="title">Hover</span>
         <button class="iconbtn skillsbtn" type="button" aria-label="Skills" title="Saved skills">📚</button>
+        <button class="iconbtn assertbtn" type="button" hidden aria-label="Pending assertions" title="Pending assertions — click to clear">
+          <span class="assert-glyph">✓</span><span class="assert-count">0</span>
+        </button>
         <button class="iconbtn newbtn" type="button" aria-label="New conversation" title="New conversation (clears history)">+</button>
         <span class="status disconnected">connecting…</span>
       </header>
@@ -220,7 +232,7 @@
       <footer>
         <textarea placeholder="e.g. test the login flow" rows="3" disabled aria-label="instruction"></textarea>
         <div class="row">
-          <span class="hint">⏎ to send · ⇧⏎ for newline · Esc to close</span>
+          <span class="hint">⏎ send · ⌥/Alt + click any page element to assert</span>
           <button type="button" class="send" disabled>Send</button>
         </div>
       </footer>
@@ -237,6 +249,8 @@
   const skillsListEl = $('.skills-list-items');
   const skillsCountEl = $('.skills-overlay .count');
   const skillsCloseBtn = $('.skills-close');
+  const assertBtn = $('.assertbtn');
+  const assertCountEl = $('.assert-count');
   const bodyEl = $('.body');
   const textarea = $('textarea');
   const sendBtn = $('.send');
@@ -248,7 +262,7 @@
   //   messages: ordered list of semantic messages (not HTML)
   //   sessionId: most recent agent session id, used to --resume on next send
 
-  const state = { messages: [], sessionId: null, open: false };
+  const state = { messages: [], sessionId: null, open: false, assertions: [] };
 
   const saveState = () => {
     try {
@@ -271,6 +285,9 @@
       }
       if (typeof parsed.open === 'boolean') {
         state.open = parsed.open;
+      }
+      if (Array.isArray(parsed.assertions)) {
+        state.assertions = parsed.assertions.slice(-100);
       }
     } catch {
       /* corrupt — start fresh */
@@ -567,12 +584,23 @@
     if (name == null || !name.trim()) return;
     const description = prompt('One-line description (optional):', '') ?? '';
 
-    pendingSpec = { name: name.trim(), description: description.trim(), steps, button };
+    pendingSpec = {
+      name: name.trim(),
+      description: description.trim(),
+      steps,
+      assertions: state.assertions.slice(),
+      button,
+    };
     button.disabled = true;
     button.textContent = 'Saving…';
     ws.send(JSON.stringify({
       type: 'save-spec',
-      payload: { name: pendingSpec.name, description: pendingSpec.description, steps },
+      payload: {
+        name: pendingSpec.name,
+        description: pendingSpec.description,
+        steps,
+        assertions: pendingSpec.assertions,
+      },
     }));
 
     setTimeout(() => {
@@ -595,6 +623,7 @@
           name: pendingSpec.name,
           description: pendingSpec.description,
           steps: pendingSpec.steps,
+          assertions: pendingSpec.assertions,
           overwrite: true,
         },
       }));
@@ -643,14 +672,203 @@
   };
 
   newBtn.addEventListener('click', () => {
-    if (state.messages.length === 0 && !state.sessionId) return;
-    if (!confirm('Start a new conversation? Current history will be cleared.')) return;
+    if (state.messages.length === 0 && !state.sessionId && state.assertions.length === 0) return;
+    if (!confirm('Start a new conversation? Current history and assertions will be cleared.')) return;
     state.messages = [];
     state.sessionId = null;
+    state.assertions = [];
     saveState();
     bodyEl.innerHTML = '';
     lastStepDiv = null;
+    updateAssertBadge();
   });
+
+  // ───────────────────────── Alt-click "Assert This" ─────────────────
+  //
+  // While the panel is open, holding Alt and clicking any element in the
+  // host page produces an assertion derived from that element's current
+  // state. Click is intercepted in the capture phase so the host app's
+  // own handler does not fire. Assertions accumulate in state.assertions
+  // and ship out with the next Save as Spec.
+
+  const updateAssertBadge = () => {
+    const n = state.assertions.length;
+    if (n === 0) {
+      assertBtn.hidden = true;
+    } else {
+      assertBtn.hidden = false;
+      assertCountEl.textContent = String(n);
+    }
+  };
+
+  assertBtn.addEventListener('click', () => {
+    if (state.assertions.length === 0) return;
+    if (!confirm(`Clear all ${state.assertions.length} pending assertion${state.assertions.length === 1 ? '' : 's'}?`)) return;
+    state.assertions = [];
+    saveState();
+    updateAssertBadge();
+    addMessage({ kind: 'system', text: 'Cleared pending assertions.' });
+  });
+
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!e.altKey) return;
+      if (!isOpen()) return;
+      // Skip clicks inside our own widget.
+      if (e.composedPath().includes(host)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const target = e.target;
+      if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
+
+      const ass = inspectElement(target);
+      if (!ass) {
+        addMessage({ kind: 'system', text: `⊘ Alt-click ignored: ${target.tagName.toLowerCase()} has no usable identity` });
+        return;
+      }
+      state.assertions.push(ass);
+      saveState();
+      updateAssertBadge();
+      flashElement(target);
+      addMessage({ kind: 'system', text: `✓ Asserted: ${ass.hint}` });
+    },
+    { capture: true },
+  );
+
+  function inspectElement(el) {
+    const sel = bestSelector(el);
+    const ass = bestAssertion(el);
+    if (!sel || !ass) return null;
+    return {
+      code: ass.code.replace('SEL', sel.code),
+      hint: `${sel.hint} ${ass.hint}`,
+    };
+  }
+
+  function bestSelector(el) {
+    const testid = el.getAttribute('data-testid');
+    if (testid) return { code: `page.getByTestId(${JSON.stringify(testid)})`, hint: `testid="${testid}"` };
+
+    const ariaLabel = el.getAttribute('aria-label');
+    if (ariaLabel) return { code: `page.getByLabel(${JSON.stringify(ariaLabel)})`, hint: `label "${ariaLabel}"` };
+
+    const role = roleOf(el);
+    const name = accessibleName(el);
+    if (role && name) return { code: `page.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)} })`, hint: `${role} "${name}"` };
+    if (role) return { code: `page.getByRole(${JSON.stringify(role)})`, hint: role };
+
+    const text = (el.textContent || '').trim();
+    if (text && text.length < 80) return { code: `page.getByText(${JSON.stringify(text)})`, hint: `text "${text.slice(0, 30)}${text.length > 30 ? '…' : ''}"` };
+
+    if (el.id) return { code: `page.locator('#${cssEscape(el.id)}')`, hint: `#${el.id}` };
+    return null;
+  }
+
+  function roleOf(el) {
+    const explicit = el.getAttribute('role');
+    if (explicit) return explicit;
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'button') return 'button';
+    if (tag === 'a' && el.hasAttribute('href')) return 'link';
+    if (tag === 'input') {
+      const t = (el.getAttribute('type') || 'text').toLowerCase();
+      if (t === 'checkbox') return 'checkbox';
+      if (t === 'radio') return 'radio';
+      if (t === 'range') return 'slider';
+      if (t === 'submit' || t === 'button' || t === 'reset') return 'button';
+      return 'textbox';
+    }
+    if (tag === 'textarea') return 'textbox';
+    if (tag === 'select') return 'combobox';
+    if (/^h[1-6]$/.test(tag)) return 'heading';
+    if (tag === 'img') return 'img';
+    if (tag === 'li') return 'listitem';
+    if (tag === 'ul' || tag === 'ol') return 'list';
+    return null;
+  }
+
+  function accessibleName(el) {
+    // For inputs we want the associated label, not the value.
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+      // aria-labelledby
+      const labelledby = el.getAttribute('aria-labelledby');
+      if (labelledby) {
+        const lbl = document.getElementById(labelledby);
+        if (lbl) return (lbl.textContent || '').trim();
+      }
+      // <label for=id>
+      if (el.id) {
+        const lbl = document.querySelector(`label[for="${el.id}"]`);
+        if (lbl) return (lbl.textContent || '').trim();
+      }
+      // Wrapping <label>
+      let p = el.parentElement;
+      while (p && p !== document.body) {
+        if (p.tagName === 'LABEL') {
+          const text = (p.textContent || '').trim();
+          // Subtract the input's own value from the wrapping text if present
+          const v = el.value ? text.split(el.value)[0].trim() : text;
+          return v || text;
+        }
+        p = p.parentElement;
+      }
+      return el.placeholder || '';
+    }
+    return (el.textContent || '').trim().slice(0, 80);
+  }
+
+  function bestAssertion(el) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'input') {
+      const t = (el.getAttribute('type') || 'text').toLowerCase();
+      if (t === 'checkbox' || t === 'radio') {
+        return el.checked
+          ? { code: `expect(SEL).toBeChecked()`, hint: '· is checked' }
+          : { code: `expect(SEL).not.toBeChecked()`, hint: '· is unchecked' };
+      }
+      const v = el.value ?? '';
+      if (v) return { code: `expect(SEL).toHaveValue(${JSON.stringify(v)})`, hint: `· value "${String(v).slice(0, 30)}"` };
+      return { code: `expect(SEL).toBeVisible()`, hint: '· visible' };
+    }
+    if (tag === 'textarea') {
+      const v = el.value ?? '';
+      if (v) return { code: `expect(SEL).toHaveValue(${JSON.stringify(v)})`, hint: '· has value' };
+      return { code: `expect(SEL).toBeVisible()`, hint: '· visible' };
+    }
+    if (tag === 'select') {
+      const v = el.value ?? '';
+      return { code: `expect(SEL).toHaveValue(${JSON.stringify(v)})`, hint: `· "${v}" selected` };
+    }
+    if (el.disabled) return { code: `expect(SEL).toBeDisabled()`, hint: '· is disabled' };
+    const text = (el.textContent || '').trim();
+    if (text && text.length < 120) {
+      return { code: `expect(SEL).toHaveText(${JSON.stringify(text)})`, hint: `· text "${text.slice(0, 30)}${text.length > 30 ? '…' : ''}"` };
+    }
+    return { code: `expect(SEL).toBeVisible()`, hint: '· visible' };
+  }
+
+  function cssEscape(s) {
+    return s.replace(/(["\\#.:[\]>])/g, '\\$1');
+  }
+
+  function flashElement(el) {
+    const old = {
+      outline: el.style.outline,
+      outlineOffset: el.style.outlineOffset,
+      transition: el.style.transition,
+    };
+    el.style.transition = 'outline 0.15s ease';
+    el.style.outline = '3px solid #10b981';
+    el.style.outlineOffset = '3px';
+    setTimeout(() => {
+      el.style.outline = old.outline;
+      el.style.outlineOffset = old.outlineOffset;
+      el.style.transition = old.transition;
+    }, 900);
+  }
 
   // ───────────────────────── server event → state mutation ─────────────────────────
 
@@ -777,9 +995,10 @@
         handleSkillExists(p.slug, p.existingPath);
       } else if (msg.type === 'spec-saved') {
         const p = msg.payload ?? {};
+        const n = pendingSpec?.assertions?.length ?? 0;
         addMessage({
           kind: 'system',
-          text: `✓ saved Playwright spec "${p.name}" → ${p.path}\n  run it: pnpm test:e2e`,
+          text: `✓ saved Playwright spec "${p.name}"${n > 0 ? ` (+${n} assertion${n === 1 ? '' : 's'})` : ''} → ${p.path}\n  run it: pnpm test:e2e`,
         });
         root.querySelectorAll('.msg.done .actions button').forEach((b) => {
           if (b.textContent === 'Saving…') {
@@ -787,6 +1006,10 @@
             b.textContent = '📜 Save as spec';
           }
         });
+        // Saved successfully — assertions are now baked into the file, clear them
+        state.assertions = [];
+        saveState();
+        updateAssertBadge();
         pendingSpec = null;
       } else if (msg.type === 'spec-exists') {
         const p = msg.payload ?? {};
@@ -838,6 +1061,7 @@
 
   loadState();
   replayState();
+  updateAssertBadge();
 
   // If the last persisted message wasn't a 'done' card, the previous session
   // was interrupted (most commonly: AI navigated to a same-origin URL → page
