@@ -20,7 +20,10 @@ export interface HoverOptions {
 }
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
-const WIDGET_PATH = resolve(PLUGIN_DIR, 'widget.js');
+const WIDGET_DIR = resolve(PLUGIN_DIR, 'widget');
+const WIDGET_HTML = resolve(WIDGET_DIR, 'template.html');
+const WIDGET_CSS = resolve(WIDGET_DIR, 'style.css');
+const WIDGET_JS = resolve(WIDGET_DIR, 'client.js');
 
 export function hover(options: HoverOptions = {}): Plugin {
   const port = options.port ?? 51789;
@@ -77,16 +80,30 @@ export function hover(options: HoverOptions = {}): Plugin {
       order: 'post',
       handler() {
         if (!enabled) return;
-        const widgetSource = readFileSync(WIDGET_PATH, 'utf-8');
+        // Read the widget's three source files at request time so any edit
+        // to template.html / style.css / client.js is reflected on the next
+        // page load — no plugin restart needed. Splitting these out (vs.
+        // one giant .js with an innerHTML template literal) means each gets
+        // proper editor syntax highlighting, no string-escaping gymnastics
+        // for CSS / HTML, and CSS reads from a single source of truth.
+        const html = readFileSync(WIDGET_HTML, 'utf-8');
+        const css = readFileSync(WIDGET_CSS, 'utf-8');
+        const js = readFileSync(WIDGET_JS, 'utf-8');
         // Inject the ACTUAL port the service bound to (not the requested
         // one) so the widget connects to its own example's service even if
-        // a sibling Vite already took 51789.
-        const preamble = `window.__HOVER_PORT__ = ${servicePort};`;
+        // a sibling Vite already took 51789. CSS / HTML are stringified
+        // (JSON.stringify handles escaping) and stashed on window globals
+        // the client IIFE reads on boot.
+        const preamble = [
+          `window.__HOVER_PORT__ = ${servicePort};`,
+          `window.__HOVER_CSS__ = ${JSON.stringify(css)};`,
+          `window.__HOVER_HTML__ = ${JSON.stringify(html)};`,
+        ].join('\n');
         return [
           {
             tag: 'script',
             attrs: { type: 'module' },
-            children: `${preamble}\n${widgetSource}`,
+            children: `${preamble}\n${js}`,
             injectTo: 'body',
           },
         ];
