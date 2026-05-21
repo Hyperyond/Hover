@@ -8,69 +8,105 @@ export default function App() {
 
   return (
     <main className="page">
-      <h1>basic-app</h1>
-      <p className="subtitle">
-        Target app for Hover smoke tests — login, counter, and a todo list cover
-        the basic interaction primitives (form fill, click, read state).
-      </p>
+      <header className="masthead">
+        <div className="brand">
+          <span className="brand-bar" aria-hidden="true" />
+          <span className="brand-name">basic⁄app</span>
+        </div>
+        <p className="lede">
+          A simple target for verifying Hover. Three primitives — auth, state,
+          list — laid out as plainly as possible so misbehaviour is obvious.
+        </p>
+        <ul className="meta">
+          <li><span>port</span><code>5173</code></li>
+          <li><span>stack</span><code>vite · react 19 · ts</code></li>
+          <li><span>controls</span><code>3 sections</code></li>
+        </ul>
+      </header>
 
-      <section aria-labelledby="auth-heading">
-        <h2 id="auth-heading">Login</h2>
+      <section className="panel" aria-labelledby="auth-heading">
+        <header className="panel-head">
+          <span className="panel-no">01</span>
+          <h2 id="auth-heading">Login</h2>
+          <span className={`panel-state ${user ? 'on' : ''}`}>{user ? 'signed in' : 'signed out'}</span>
+        </header>
         {user ? (
-          <div>
+          <div className="panel-body welcome">
             <p>
-              Welcome, <strong data-testid="welcome">{user}</strong>!
+              Welcome,&nbsp;<strong data-testid="welcome">{user}</strong>.
             </p>
-            <button onClick={() => setUser(null)}>Log out</button>
+            <button className="btn-secondary" onClick={() => setUser(null)}>Log out</button>
           </div>
         ) : (
-          <LoginForm onSubmit={setUser} />
+          <div className="panel-body">
+            <LoginForm onSubmit={setUser} />
+          </div>
         )}
       </section>
 
-      <section aria-labelledby="counter-heading">
-        <h2 id="counter-heading">Counter</h2>
-        <p>
-          Count: <strong data-testid="count">{count}</strong>
-        </p>
-        <button onClick={() => setCount(c => c + 1)}>+1</button>
-        <button onClick={() => setCount(c => c - 1)}>-1</button>
-        <button onClick={() => setCount(0)}>Reset</button>
+      <section className="panel" aria-labelledby="counter-heading">
+        <header className="panel-head">
+          <span className="panel-no">02</span>
+          <h2 id="counter-heading">Counter</h2>
+          <span className="panel-state mono">state · {count}</span>
+        </header>
+        <div className="panel-body counter-body">
+          <div className="counter-display" data-testid="count" aria-live="polite">
+            {count.toString().padStart(2, '0')}
+          </div>
+          <div className="counter-actions">
+            <button className="btn-primary" onClick={() => setCount(c => c + 1)}>+ 1</button>
+            <button className="btn-secondary" onClick={() => setCount(c => c - 1)}>− 1</button>
+            <button className="btn-ghost" onClick={() => setCount(0)}>Reset</button>
+          </div>
+        </div>
       </section>
 
-      <section aria-labelledby="todos-heading">
-        <h2 id="todos-heading">Todos</h2>
-        <ul data-testid="todo-list">
-          {todos.map((t, i) => (
-            <li key={`${i}-${t}`}>
-              <span>{t}</span>
-              <button
-                onClick={() => setTodos(ts => ts.filter((_, j) => j !== i))}
-                aria-label={`remove ${t}`}
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-        <form
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            if (draft.trim()) {
-              setTodos(ts => [...ts, draft.trim()]);
-              setDraft('');
-            }
-          }}
-        >
-          <input
-            type="text"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            placeholder="New todo"
-            aria-label="new todo"
-          />
-          <button type="submit">Add</button>
-        </form>
+      <section className="panel" aria-labelledby="todos-heading">
+        <header className="panel-head">
+          <span className="panel-no">03</span>
+          <h2 id="todos-heading">Todos</h2>
+          <span className="panel-state mono">{todos.length} item{todos.length === 1 ? '' : 's'}</span>
+        </header>
+        <div className="panel-body">
+          <ul className="todos" data-testid="todo-list">
+            {todos.map((t, i) => (
+              <li key={`${i}-${t}`}>
+                <span className="todo-num">{String(i + 1).padStart(2, '0')}</span>
+                <span className="todo-text">{t}</span>
+                <button
+                  className="todo-remove"
+                  onClick={() => setTodos(ts => ts.filter((_, j) => j !== i))}
+                  aria-label={`remove ${t}`}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+            {todos.length === 0 && (
+              <li className="todos-empty">No items. Add one below.</li>
+            )}
+          </ul>
+          <form
+            className="todo-form"
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault();
+              if (draft.trim()) {
+                setTodos(ts => [...ts, draft.trim()]);
+                setDraft('');
+              }
+            }}
+          >
+            <input
+              type="text"
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder="New todo"
+              aria-label="new todo"
+            />
+            <button type="submit" className="btn-primary">Add</button>
+          </form>
+        </div>
       </section>
     </main>
   );
@@ -96,35 +132,33 @@ function LoginForm({ onSubmit }: { onSubmit: (user: string) => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div>
-        <label>
-          Email:{' '}
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            aria-label="email"
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          Password:{' '}
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            aria-label="password"
-          />
-        </label>
-      </div>
+    <form className="login-form" onSubmit={handleSubmit}>
+      <label>
+        <span>Email</span>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          aria-label="email"
+          autoComplete="email"
+        />
+      </label>
+      <label>
+        <span>Password</span>
+        <input
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          aria-label="password"
+          autoComplete="current-password"
+        />
+      </label>
       {error && (
-        <p data-testid="login-error" style={{ color: 'crimson' }}>
+        <p data-testid="login-error" className="login-error">
           {error}
         </p>
       )}
-      <button type="submit">Submit</button>
+      <button type="submit" className="btn-primary">Submit →</button>
     </form>
   );
 }
