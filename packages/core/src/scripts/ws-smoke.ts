@@ -3,8 +3,8 @@
  * and stream events back to stdout. Exits 0 on session_end (success or
  * agent-reported error), 1 on connection/protocol failure.
  *
- *   pnpm --filter @hover/core ws-smoke
- *   pnpm --filter @hover/core ws-smoke "your custom prompt here"
+ *   pnpm --filter @hyperyond/core ws-smoke
+ *   pnpm --filter @hyperyond/core ws-smoke "your custom prompt here"
  */
 import { WebSocket } from 'ws';
 import type { InvokeEvent } from '../agents/types.js';

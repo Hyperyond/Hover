@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startService, type ServiceHandle } from '@hover/core/service';
+import { startService, type ServiceHandle } from '@hyperyond/core/service';
 import type { Plugin } from 'vite';
 
 export interface HoverOptions {
@@ -11,7 +11,7 @@ export interface HoverOptions {
   enabled?: boolean | ((env: { mode: string }) => boolean);
   /** Chrome CDP debug port the agent will operate on (default 9222). */
   chromeDebugPort?: number;
-  /** Agent id from @hover/core's registry (default 'claude'). */
+  /** Agent id from @hyperyond/core's registry (default 'claude'). */
   agentId?: string;
   /** Model passed to the agent (default 'sonnet'). */
   model?: string;

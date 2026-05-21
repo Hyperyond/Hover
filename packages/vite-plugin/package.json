@@ -1,5 +1,5 @@
 {
-  "name": "@hover/vite-plugin",
+  "name": "@hyperyond/vite-plugin",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@hover/core": "workspace:*"
+    "@hyperyond/core": "workspace:*"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"

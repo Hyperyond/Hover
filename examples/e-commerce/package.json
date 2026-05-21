@@ -13,7 +13,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@hover/vite-plugin": "workspace:*",
+    "@hyperyond/vite-plugin": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",

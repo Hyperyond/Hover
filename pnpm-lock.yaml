@@ -39,7 +39,7 @@ importers:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
     devDependencies:
-      '@hover/vite-plugin':
+      '@hyperyond/vite-plugin':
         specifier: workspace:*
         version: link:../../packages/vite-plugin
       '@playwright/test':
@@ -67,7 +67,7 @@ importers:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
     devDependencies:
-      '@hover/vite-plugin':
+      '@hyperyond/vite-plugin':
         specifier: workspace:*
         version: link:../../packages/vite-plugin
       '@types/react':
@@ -92,7 +92,7 @@ importers:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
     devDependencies:
-      '@hover/vite-plugin':
+      '@hyperyond/vite-plugin':
         specifier: workspace:*
         version: link:../../packages/vite-plugin
       '@types/react':
@@ -139,7 +139,7 @@ importers:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
     devDependencies:
-      '@hover/vite-plugin':
+      '@hyperyond/vite-plugin':
         specifier: workspace:*
         version: link:../../packages/vite-plugin
       '@types/react':
@@ -179,7 +179,7 @@ importers:
 
   packages/vite-plugin:
     dependencies:
-      '@hover/core':
+      '@hyperyond/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

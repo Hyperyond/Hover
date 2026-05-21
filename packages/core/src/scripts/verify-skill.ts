@@ -2,7 +2,7 @@
  * Unit-level verification for writeSkill — writes a synthetic skill to the
  * basic-app project, reads it back, prints it.
  *
- *   pnpm --filter @hover/core verify-skill
+ *   pnpm --filter @hyperyond/core verify-skill
  */
 import { readFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';

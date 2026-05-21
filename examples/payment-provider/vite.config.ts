@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Note: NO @hover/vite-plugin here — this app simulates a third-party
+// Note: NO @hyperyond/vite-plugin here — this app simulates a third-party
 // payment provider that wouldn't have Hover installed in the real world.
 // The widget should not appear on this origin.
 export default defineConfig({

@@ -1,4 +1,4 @@
-# @hover/core
+# @hyperyond/core
 
 The local Node service. Owns:
 

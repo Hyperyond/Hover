@@ -64,14 +64,14 @@ If something fails, climb the ladder: typecheck → verify-widget → ws-smoke �
 
 ```
 packages/
-├── core/                   @hover/core
+├── core/                   @hyperyond/core
 │   ├── src/agents/         Local CLI Agent First — types, registry, detect, argv, invoke, claude.ts
 │   ├── src/playwright/     CDP preflight (lightweight HTTP probe + playwright-core handshake)
 │   ├── src/skills/         writeSkill, listSkills (write/read .claude/skills/<slug>/SKILL.md)
 │   ├── src/service.ts      WebSocket bridge (widget ↔ agent)
 │   ├── src/smoke.ts        Command-line agent smoke
 │   └── src/scripts/        start-chrome.ts, ws-smoke.ts, verify-widget.ts, verify-skill.ts, detect-cli.ts
-├── vite-plugin/            @hover/vite-plugin
+├── vite-plugin/            @hyperyond/vite-plugin
 │   └── src/index.ts        configureServer (boot service) + transformIndexHtml (inject widget)
 │   └── src/widget.js       Vanilla JS Shadow-DOM widget — no React, no transpilation
 └── …
@@ -114,7 +114,7 @@ Copy `package.json`, `tsconfig.json`, `vite.config.ts`, `index.html`, `src/main.
 - `vite.config.ts` `server.port` to a free port (5178+).
 - `index.html` `<title>` to `my-example · Hover`.
 
-The plugin is already pulled in via `@hover/vite-plugin: workspace:*` — running `pnpm install` will link it.
+The plugin is already pulled in via `@hyperyond/vite-plugin: workspace:*` — running `pnpm install` will link it.
 
 Add a root script:
 

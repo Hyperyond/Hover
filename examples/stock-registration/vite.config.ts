@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { hover } from '@hover/vite-plugin';
+import { hover } from '@hyperyond/vite-plugin';
 
 export default defineConfig({
   plugins: [react(), hover()],
