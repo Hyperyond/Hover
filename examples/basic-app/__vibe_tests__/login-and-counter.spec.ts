@@ -17,12 +17,12 @@ test.describe('basic-app / login + counter', () => {
 
     await expect(page.getByTestId('welcome')).toHaveText('claude@sparkplay.io');
 
-    const plusOne = page.getByRole('button', { name: '+1' });
+    const plusOne = page.getByRole('button', { name: '+ 1' });
     await plusOne.click();
     await plusOne.click();
     await plusOne.click();
 
-    await expect(page.getByTestId('count')).toHaveText('3');
+    await expect(page.getByTestId('count')).toHaveText('03');
   });
 
   test('adds and removes a todo', async ({ page }) => {
