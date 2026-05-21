@@ -74,9 +74,25 @@ Three things in this space already exist; Hover is what falls out when you combi
 |---|---|---|
 | **Playwright Codegen** | Records your clicks → spec | Can't think; just replay |
 | **Stagehand / Midscene** | AI drives the browser at test time | Agent stays in the loop forever — slow, flaky, $$$ |
-| **Hover** | AI drives the browser **once** to explore; saves a deterministic spec | The agent's job ends at "save"; CI runs plain Playwright |
+| **Hover** | AI drives the browser **once** to explore; saves both a deterministic spec *and* a replayable agent skill | The agent's job ends at "save"; CI runs plain Playwright |
 
-The differentiator is the handoff. AI authors the test; the artifact is decoupled from AI.
+The differentiator is the handoff. AI authors the session; the artifacts are decoupled from AI.
+
+### One exploration, two artifacts
+
+A verified Hover session can crystallize two different ways. Both buttons sit on the same done card; click either or both.
+
+- **📜 Save as spec** → `__vibe_tests__/<slug>.spec.ts` — standard `@playwright/test` code with `getByRole / getByLabel / getByTestId` semantic selectors. Runs in CI, in pre-commit, on a fresh machine. No agent, no `claude` binary, no API key. This is the **ground truth** for the flow.
+- **💾 Save as Skill** → `.claude/skills/<slug>/SKILL.md` — a replayable instruction set the agent auto-discovers next time. Type *"execute login-as-claude"* in any future conversation and the recorded steps run again, in your real browser, using the same Playwright MCP sandbox. Skills are plain Markdown checked into your repo, so they travel with the project and survive across machines.
+
+| | `__vibe_tests__/*.spec.ts` (Save as spec) | `.claude/skills/*/SKILL.md` (Save as Skill) |
+|---|---|---|
+| **Runs in** | CI, pre-commit, any Node + Playwright | Agent only — needs `claude` (or another supported CLI) |
+| **Determinism** | Hard contract: must pass on every run | Best-effort replay: agent re-derives the steps |
+| **Use it for** | Regression tests, golden paths | Reusable setup ("log me in"), agent building blocks |
+| **Edits with** | A code editor — it's plain TypeScript | A Markdown editor, or just delete and re-record |
+
+Most flows you'll save both. Spec for the test suite; Skill for the next time you want the agent to pick up where you left off.
 
 ## What you get when Phase 1 ships (this release)
 

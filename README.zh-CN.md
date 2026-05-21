@@ -74,9 +74,25 @@
 |---|---|---|
 | **Playwright Codegen** | 录制你的点击 → spec | 不会思考；只能复读 |
 | **Stagehand / Midscene** | 让 AI 在跑测试时驱动浏览器 | AI 永远在测试链路里 —— 慢、不稳、烧钱 |
-| **Hover** | AI 只在**探索**时驱动浏览器一次；保存出确定性的 spec | AI 的工作在 "Save" 时结束；CI 跑的就是普通 Playwright |
+| **Hover** | AI 只在**探索**时驱动浏览器一次；同时产出**确定性的 spec** 和**可重放的 agent skill** | AI 的工作在 "Save" 时结束；CI 跑的就是普通 Playwright |
 
-差异点在于**交接**：AI 写测试，但产物跟 AI 解耦。
+差异点在于**交接**：AI 写一次会话，但产物都跟 AI 解耦。
+
+### 一次探索，两种产物
+
+跑通的 Hover 会话可以以两种方式落盘，两个按钮就并排在 done card 上，按任意一个或都按。
+
+- **📜 Save as spec** → `__vibe_tests__/<slug>.spec.ts` —— 标准 `@playwright/test` 代码，selector 用 `getByRole / getByLabel / getByTestId`。CI 跑、pre-commit 跑、新机器都能跑。不需要 agent，不需要 `claude` 二进制，不需要 API key。这是该流程的**ground truth**。
+- **💾 Save as Skill** → `.claude/skills/<slug>/SKILL.md` —— 一份可重放的指令集，agent 下次会话会自动发现。在未来任何一次会话里说一句 *"execute login-as-claude"*，记录的步骤会用同样的 Playwright MCP 沙箱、在你真实的浏览器里重新跑一遍。Skill 就是 Markdown 文件，跟着仓库走，换机器都活。
+
+| | `__vibe_tests__/*.spec.ts`（Save as spec） | `.claude/skills/*/SKILL.md`（Save as Skill） |
+|---|---|---|
+| **跑在哪** | CI、pre-commit、任何带 Node + Playwright 的环境 | 仅 agent 内 —— 需要 `claude`（或别的支持的 CLI） |
+| **确定性** | 硬合约：每次必须过 | 尽力重放：agent 自己重新推导步骤 |
+| **用来做什么** | 回归测试、关键路径 | 可复用的 setup（"帮我登录"）、agent 的搭建块 |
+| **编辑方式** | 代码编辑器 —— 就是 TypeScript | Markdown 编辑器，或者直接删了重录 |
+
+大部分流程你两种都会保。Spec 给测试套件，Skill 给"下次你想让 agent 接着从这里干"的场景。
 
 ## Phase 1 里你能拿到的（当前 release）
 
