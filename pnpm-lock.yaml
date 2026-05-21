@@ -108,7 +108,7 @@ importers:
         specifier: ^7.0.0
         version: 7.3.3(@types/node@25.9.1)(jiti@2.6.1)(tsx@4.22.3)
 
-  examples/event-form:
+  examples/payment-provider:
     dependencies:
       react:
         specifier: ^19.0.0
@@ -117,9 +117,6 @@ importers:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
     devDependencies:
-      '@hover/vite-plugin':
-        specifier: workspace:*
-        version: link:../../packages/vite-plugin
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.15
@@ -133,7 +130,7 @@ importers:
         specifier: ^7.0.0
         version: 7.3.3(@types/node@25.9.1)(jiti@2.6.1)(tsx@4.22.3)
 
-  examples/payment-provider:
+  examples/stock-registration:
     dependencies:
       react:
         specifier: ^19.0.0
@@ -142,6 +139,9 @@ importers:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
     devDependencies:
+      '@hover/vite-plugin':
+        specifier: workspace:*
+        version: link:../../packages/vite-plugin
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.15
