@@ -577,8 +577,14 @@
   const executeSkill = (skill) => {
     if (running || !ws || ws.readyState !== WebSocket.OPEN) return;
     closeSkillsOverlay();
-    const prompt = `execute the ${skill.slug} skill`;
-    addMessage({ kind: 'user', text: prompt });
+    // Phrased to nudge the agent toward the Skill tool with the exact slug,
+    // not toward parsing the verb "execute" as a skill name (which we
+    // observed in 2.1.145).
+    const prompt =
+      `Use the Skill tool to invoke the skill named "${skill.slug}". ` +
+      `It is in ${skill.path}. Read its replay steps and run them with ` +
+      `mcp__playwright tools. Do not search for the file yourself.`;
+    addMessage({ kind: 'user', text: `execute "${skill.slug}"` });
     setRunning(true);
     ws.send(JSON.stringify({
       type: 'command',

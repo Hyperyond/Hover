@@ -243,12 +243,27 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           // saved from this project (and CLAUDE.md, if any).
           cwd: devRoot,
           appendSystemPrompt,
-          allowedTools: ['mcp__playwright'],
+          // Skill stays in the allow list so saved skills under
+          // <devRoot>/.claude/skills/ can be invoked. mcp__playwright covers
+          // every browser tool.
+          allowedTools: ['mcp__playwright', 'Skill'],
           disallowedTools: [
+            // file / shell / data access — never appropriate for browser driving
             'Bash', 'BashOutput', 'KillBash',
             'Edit', 'MultiEdit', 'Write', 'Read', 'NotebookEdit',
             'Grep', 'Glob', 'Task', 'TodoWrite',
-            'WebFetch', 'WebSearch', 'ExitPlanMode',
+            'WebFetch', 'WebSearch',
+            // plan / worktree / cron / notification — irrelevant in -p mode
+            'EnterPlanMode', 'ExitPlanMode',
+            'EnterWorktree', 'ExitWorktree',
+            'CronCreate', 'CronDelete', 'CronList',
+            'PushNotification', 'RemoteTrigger',
+            // task & tool introspection added in claude 2.1.x — let through and
+            // the agent will burn turns exploring instead of executing
+            'ToolSearch',
+            'Monitor', 'TaskOutput', 'TaskStop',
+            'AskUserQuestion',
+            'ShareOnboardingGuide',
           ],
           maxBudgetUsd,
           model,
