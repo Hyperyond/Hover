@@ -74,33 +74,41 @@ Three things in this space already exist; Hover is what falls out when you combi
 |---|---|---|
 | **Playwright Codegen** | Records your clicks → spec | Can't think; just replay |
 | **Stagehand / Midscene** | AI drives the browser at test time | Agent stays in the loop forever — slow, flaky, $$$ |
-| **Hover** | AI drives the browser **once** to explore; saves both a deterministic spec *and* a replayable agent skill | The agent's job ends at "save"; CI runs plain Playwright |
+| **Hover** | AI drives the browser **once** to explore; saves a deterministic spec, a replayable agent skill, *and* a Jira-importable test case from the same click | The agent's job ends at "save"; CI runs plain Playwright |
 
 The differentiator is the handoff. AI authors the session; the artifacts are decoupled from AI.
 
-### One exploration, two artifacts
+### One exploration, three audiences
 
-A verified Hover session can crystallize two different ways. Both buttons sit on the same done card; click either or both.
+A verified Hover session can crystallize three different ways. All three buttons sit on the same done card; pick any combination.
 
-- **📜 Save as spec** → `__vibe_tests__/<slug>.spec.ts` — standard `@playwright/test` code with `getByRole / getByLabel / getByTestId` semantic selectors. Runs in CI, in pre-commit, on a fresh machine. No agent, no `claude` binary, no API key. This is the **ground truth** for the flow.
-- **💾 Save as Skill** → `.claude/skills/<slug>/SKILL.md` — a replayable instruction set the agent auto-discovers next time. Type *"execute login-as-claude"* in any future conversation and the recorded steps run again, in your real browser, using the same Playwright MCP sandbox. Skills are plain Markdown checked into your repo, so they travel with the project and survive across machines.
+- **📜 Save as spec** → `__vibe_tests__/<slug>.spec.ts` — standard `@playwright/test` code with `getByRole / getByLabel / getByTestId` semantic selectors. Runs in CI, in pre-commit, on a fresh machine. No agent, no `claude` binary, no API key. **Ground truth for the flow.** The JSDoc header now carries a numbered plain-English `Steps:` block plus an `Expected:` block, so QA / PMs can read what the test does without opening Playwright docs.
+- **💾 Save as Skill** → `.claude/skills/<slug>/SKILL.md` — a replayable instruction set the agent auto-discovers next time. Type *"execute login-as-claude"* in any future conversation and the recorded steps run again, in your real browser, using the same Playwright MCP sandbox. Skills are plain Markdown checked into your repo.
+- **📋 Save as Jira case** → `__vibe_tests__/<slug>.case.csv` — a multi-row CSV in the [Xray Test Case Importer](https://docs.getxray.app/display/XRAY/Importing+Manual+Tests+using+Test+Case+Importer) format (Manual Test type, one Action per row, Expected Result on the last row). Drag it into Xray, [Zephyr Scale](https://support.smartbear.com/zephyr-scale-cloud/docs/en/test-management/test-cases/importing-test-cases.html), or the native Jira issue importer and the agent's flow shows up as a real, trackable test case — instantly assignable, linkable to a story / sprint, runnable as a Manual Test session. **No copy-pasting steps from a code editor into Jira ever again.**
 
-| | `__vibe_tests__/*.spec.ts` (Save as spec) | `.claude/skills/*/SKILL.md` (Save as Skill) |
-|---|---|---|
-| **Runs in** | CI, pre-commit, any Node + Playwright | Agent only — needs `claude` (or another supported CLI) |
-| **Determinism** | Hard contract: must pass on every run | Best-effort replay: agent re-derives the steps |
-| **Use it for** | Regression tests, golden paths | Reusable setup ("log me in"), agent building blocks |
-| **Edits with** | A code editor — it's plain TypeScript | A Markdown editor, or just delete and re-record |
+| | `📜 .spec.ts` | `💾 SKILL.md` | `📋 .case.csv` |
+|---|---|---|---|
+| **Lands in** | `__vibe_tests__/` | `.claude/skills/` | `__vibe_tests__/` |
+| **Read by** | Node + Playwright (CI) | Claude Code / agent | Xray · Zephyr Scale · Jira issue importer |
+| **Audience** | CI, devs writing code | Future you, exploring | QA reviewing · PM tracking · auditor signing off |
+| **Determinism** | Hard contract | Best-effort replay | Manual review — human runs and ticks |
+| **Edit with** | Code editor | Markdown editor | Spreadsheet, or the test-mgmt UI after import |
 
-Most flows you'll save both. Spec for the test suite; Skill for the next time you want the agent to pick up where you left off.
+Pick one or pick all three. Spec for CI, Skill for the next exploration, Case for the test team / sprint board — same session, same Save card.
+
+<p align="center">
+  <img src="docs/screenshots/05-three-save-buttons.png" alt="Three save buttons on one done card" width="48%" />
+  <img src="docs/screenshots/06-jira-case-modal.png" alt="Save as Jira case modal" width="48%" />
+</p>
 
 ### Shareable across the team, not locked into a tool
 
-Both files check into the same git repo as the rest of your code. The moment a frontend developer saves a flow, everyone else can use it — **no Hover required, no agent, no token**:
+All three files check into the same git repo as the rest of your code. The moment a frontend developer saves a flow, everyone else can use it — **no Hover required, no agent, no token**:
 
-- **QA / dedicated testers** clone the repo and run `pnpm test:e2e`. Playwright runs the spec like any other test — they don't need to install Hover, configure Chrome, or know what an "agent" is. The CI signal is the same one your frontend devs see.
+- **QA / dedicated testers** clone the repo and run `pnpm test:e2e` for the deterministic specs, *or* drag the matching `.case.csv` into Xray / Zephyr Scale / Jira and run the same flow as a tracked Manual Test session. They don't need to install Hover, configure Chrome, or know what an "agent" is.
 - **Other frontends** invoke a saved skill from their own Hover widget — *"execute login-as-claude"* skips the login dance and drops them straight into the screen they're actually working on. Skills become reusable "macros" the whole team builds up over time.
 - **PR review** treats every saved spec as plain code — diff-able, blame-able, `requestChanges`-able. There's no proprietary file format, no SaaS dashboard, no "the test passed but we can't see how it got there".
+- **Sprint planning / PM tracking** — `.case.csv` imports into Jira as a real test issue, linkable to a story, assignable to a tester, runnable as a Manual Test session. The Jira board now reflects what your app *can* do, not just what's planned.
 - **Onboarding** is `git clone && pnpm install && pnpm test:e2e`. The test suite doubles as living documentation of how every important flow in the app works — new hires watch real browsers walk through real scenarios.
 
 Everything checks into git. Nothing lives in a vendor's database. A spec written on a developer's laptop on Monday is reviewed by QA on Tuesday and runs in CI from Wednesday — same file, no export step.
@@ -110,8 +118,9 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
 - **Vite plugin** that injects a Shadow-DOM widget into your dev page. No-op in production. Marked `data-hover="true"` so your own Playwright runs can skip it.
 - **Local Node service** on `127.0.0.1` that bridges the widget to a coding-agent CLI on your PATH (`claude` today; `codex` / `cursor` / `aider` are a one-file addition).
 - **CDP-attached browser driving** — Hover talks to *your* Chrome (the one you're already debugging in), never spawns a fresh Chromium. Cookies, dev-tools state, the page you were inspecting — all preserved.
-- **Save as Playwright spec** → `__vibe_tests__/<slug>.spec.ts`, uses `getByRole / getByLabel / getByTestId` semantic selectors derived from the agent's element descriptions.
+- **Save as Playwright spec** → `__vibe_tests__/<slug>.spec.ts`, uses `getByRole / getByLabel / getByTestId` semantic selectors. JSDoc header carries plain-English Steps + Expected blocks so non-coders can review.
 - **Save as Skill** → `.claude/skills/<slug>/SKILL.md`, replayable by saying *"execute login-as-claude"* in a future conversation.
+- **Save as Jira case** → `__vibe_tests__/<slug>.case.csv`, an Xray-compatible multi-row CSV that imports straight into Jira / Xray / Zephyr Scale as a Manual Test issue.
 - **Alt-click "Assert This"** — Hold ⌥, click any element in your page, get a generated assertion (`expect(...).toHaveValue / toBeChecked / toHaveText / …`). Assertions accumulate; the next *Save as spec* bakes them in.
 - **Record mode** — Toggle 🔴 Record, do the flow manually, get the same step sequence as if the agent had driven it. The downstream save path doesn't care whether the steps came from a human or from Claude.
 - **Session persistence + resume** — Widget state survives page reload via `localStorage`; the next prompt resumes the same `claude --session-id`.

@@ -74,33 +74,41 @@
 |---|---|---|
 | **Playwright Codegen** | 录制你的点击 → spec | 不会思考；只能复读 |
 | **Stagehand / Midscene** | 让 AI 在跑测试时驱动浏览器 | AI 永远在测试链路里 —— 慢、不稳、烧钱 |
-| **Hover** | AI 只在**探索**时驱动浏览器一次；同时产出**确定性的 spec** 和**可重放的 agent skill** | AI 的工作在 "Save" 时结束；CI 跑的就是普通 Playwright |
+| **Hover** | AI 只在**探索**时驱动浏览器一次；同时产出**确定性的 spec**、**可重放的 agent skill** 和**可直接导入 Jira 的测试用例** | AI 的工作在 "Save" 时结束；CI 跑的就是普通 Playwright |
 
 差异点在于**交接**：AI 写一次会话，但产物都跟 AI 解耦。
 
-### 一次探索，两种产物
+### 一次探索，三种受众
 
-跑通的 Hover 会话可以以两种方式落盘，两个按钮就并排在 done card 上，按任意一个或都按。
+跑通的 Hover 会话可以以三种方式落盘，三个按钮并排在 done card 上，任意组合点。
 
-- **📜 Save as spec** → `__vibe_tests__/<slug>.spec.ts` —— 标准 `@playwright/test` 代码，selector 用 `getByRole / getByLabel / getByTestId`。CI 跑、pre-commit 跑、新机器都能跑。不需要 agent，不需要 `claude` 二进制，不需要 API key。这是该流程的**ground truth**。
-- **💾 Save as Skill** → `.claude/skills/<slug>/SKILL.md` —— 一份可重放的指令集，agent 下次会话会自动发现。在未来任何一次会话里说一句 *"execute login-as-claude"*，记录的步骤会用同样的 Playwright MCP 沙箱、在你真实的浏览器里重新跑一遍。Skill 就是 Markdown 文件，跟着仓库走，换机器都活。
+- **📜 Save as spec** → `__vibe_tests__/<slug>.spec.ts` —— 标准 `@playwright/test` 代码，selector 用 `getByRole / getByLabel / getByTestId`。CI 跑、pre-commit 跑、新机器都能跑。不需要 agent，不需要 `claude` 二进制，不需要 API key。这是该流程的**ground truth**。**JSDoc 头部现在带一段编号的人话 `Steps:` 块 + `Expected:` 块**，QA / PM 不用打开 Playwright 文档就能读懂这个 spec 在干嘛。
+- **💾 Save as Skill** → `.claude/skills/<slug>/SKILL.md` —— 一份可重放的指令集，agent 下次会话会自动发现。在未来任何一次会话里说一句 *"execute login-as-claude"*，记录的步骤会用同样的 Playwright MCP 沙箱、在你真实的浏览器里重新跑一遍。Skill 就是 Markdown 文件，跟着仓库走。
+- **📋 Save as Jira case** → `__vibe_tests__/<slug>.case.csv` —— 多行格式 CSV，遵循 [Xray Test Case Importer](https://docs.getxray.app/display/XRAY/Importing+Manual+Tests+using+Test+Case+Importer) 规范（Manual Test 类型、每一步一行 Action、最后一行带 Expected Result）。直接拖进 Xray、[Zephyr Scale](https://support.smartbear.com/zephyr-scale-cloud/docs/en/test-management/test-cases/importing-test-cases.html) 或者原生 Jira issue importer，agent 跑过的流程就以**真实可追踪的测试用例**形态出现在 Jira 里 —— 立刻能分派、能挂到 story / sprint 上、能作为人工 Manual Test 跑。**再也不用把测试步骤从代码编辑器一行一行抄进 Jira。**
 
-| | `__vibe_tests__/*.spec.ts`（Save as spec） | `.claude/skills/*/SKILL.md`（Save as Skill） |
-|---|---|---|
-| **跑在哪** | CI、pre-commit、任何带 Node + Playwright 的环境 | 仅 agent 内 —— 需要 `claude`（或别的支持的 CLI） |
-| **确定性** | 硬合约：每次必须过 | 尽力重放：agent 自己重新推导步骤 |
-| **用来做什么** | 回归测试、关键路径 | 可复用的 setup（"帮我登录"）、agent 的搭建块 |
-| **编辑方式** | 代码编辑器 —— 就是 TypeScript | Markdown 编辑器，或者直接删了重录 |
+| | `📜 .spec.ts` | `💾 SKILL.md` | `📋 .case.csv` |
+|---|---|---|---|
+| **落在哪** | `__vibe_tests__/` | `.claude/skills/` | `__vibe_tests__/` |
+| **谁读** | Node + Playwright (CI) | Claude Code / agent | Xray · Zephyr Scale · Jira issue importer |
+| **受众** | CI、写代码的开发 | 未来探索时的你 | QA review · PM 追踪 · auditor 签字 |
+| **确定性** | 硬合约 | 尽力重放 | 人工 review，人手动跑勾选 |
+| **编辑方式** | 代码编辑器 | Markdown 编辑器 | 表格软件，或导入后用测试管理工具的 UI |
 
-大部分流程你两种都会保。Spec 给测试套件，Skill 给"下次你想让 agent 接着从这里干"的场景。
+可以只存一种，也可以全存。Spec 给 CI，Skill 给下一次探索，Case 给测试团队和 sprint board —— 同一个会话、同一张 Save card。
+
+<p align="center">
+  <img src="docs/screenshots/05-three-save-buttons.png" alt="一张 done card，三个 save 按钮" width="48%" />
+  <img src="docs/screenshots/06-jira-case-modal.png" alt="Save as Jira case 弹窗" width="48%" />
+</p>
 
 ### 团队内可共享，不绑在工具里
 
-两种文件都跟你代码一起 commit 进 git。一个前端开发把流程一存，剩下的所有人都能用 —— **不用装 Hover、不用 agent、不用 token**：
+三种文件都跟你代码一起 commit 进 git。一个前端开发把流程一存，剩下的所有人都能用 —— **不用装 Hover、不用 agent、不用 token**：
 
-- **QA / 测试团队** clone 仓库跑 `pnpm test:e2e`。Playwright 跟跑普通测试一样跑这些 spec —— 不用装 Hover、不用配 Chrome、不用懂"agent"是什么。CI 给的信号跟前端开发看到的一模一样。
+- **QA / 测试团队** clone 仓库跑 `pnpm test:e2e` 拿 spec 的确定性结果，*或者* 把对应的 `.case.csv` 拖进 Xray / Zephyr Scale / Jira，按 Manual Test 流程跑同一套步骤 —— 全程可追踪、可分派。不用装 Hover、不用配 Chrome、不用懂"agent"是什么。
 - **其他前端** 在自己的 Hover widget 里调起已存的 skill —— *"execute login-as-claude"* 跳过登录流程，直接进入要调试的页面。Skill 成为团队累积起来的"宏"。
 - **PR review** 把每个 spec 当成普通代码处理 —— 可 diff、可 blame、可 `requestChanges`。没有专有格式、没有 SaaS 仪表盘、没有"测试过了但看不到怎么过的"。
+- **Sprint 规划 / PM 追踪** —— `.case.csv` 进 Jira 就是真实的 test issue，可以挂在 story 上、分派给测试、按 Manual Test session 跑。Jira board 上反映的就是这个 app **真能做**的事，不是"计划要做"。
 - **新人 onboarding** 就是 `git clone && pnpm install && pnpm test:e2e`。测试套件本身就是这个 app 每条重要流程**怎么跑通**的活文档 —— 新人看真实浏览器走过真实场景。
 
 所有东西都进 git。没有任何东西在某个供应商的数据库里。前端周一在本地写的 spec，QA 周二 review，周三在 CI 里跑 —— 同一个文件，无导出步骤。
@@ -110,8 +118,9 @@
 - **Vite 插件** —— 通过 `transformIndexHtml` 往 dev 页面注入一个 Shadow DOM widget。生产构建里完全是 no-op。`data-hover="true"` 标记让你自己的 Playwright 跑测试时自动跳过它。
 - **本地 Node 服务**绑在 `127.0.0.1`，连接 widget ↔ 你 `PATH` 上的 agent CLI（当前是 `claude`；`codex` / `cursor` / `aider` 都是一个文件就能加上）。
 - **CDP 直连你已开的 Chrome** —— Hover 跟**你正在调试的那个 Chrome** 说话，绝不会启一个新的 Chromium。Cookie、DevTools 状态、你停留的那个页面 —— 全部保留。
-- **Save as Playwright spec** → 落盘到 `__vibe_tests__/<slug>.spec.ts`，selector 用 `getByRole / getByLabel / getByTestId`，从 agent 描述元素的自然语言推断出来。
+- **Save as Playwright spec** → 落盘到 `__vibe_tests__/<slug>.spec.ts`，selector 用 `getByRole / getByLabel / getByTestId`。JSDoc 头部带人话 Steps + Expected 块，方便非程序员 review。
 - **Save as Skill** → 落盘到 `.claude/skills/<slug>/SKILL.md`，未来对话里说一句 *"execute login-as-claude"* 就能重放。
+- **Save as Jira case** → 落盘到 `__vibe_tests__/<slug>.case.csv`，Xray 兼容的多行 CSV，直接导入 Jira / Xray / Zephyr Scale 成为 Manual Test issue。
 - **Alt-click "Assert This"** —— 按住 ⌥ 点页面上任何元素，生成一条 Playwright 断言（`expect(...).toHaveValue / toBeChecked / toHaveText / …`）。断言会累积，下一次 *Save as spec* 时一起烘焙进文件。
 - **录制模式** —— 切到 🔴 Record，手动跑一遍流程，得到跟 AI 驱动同样形状的 step 序列。下游 save 路径根本不关心 step 是 AI 跑出来的还是你点出来的。
 - **会话持久化 + resume** —— widget 状态通过 `localStorage` 跨页面刷新存活；下次提示会接上同一个 `claude --session-id`。

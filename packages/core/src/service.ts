@@ -7,20 +7,23 @@
  * Wire protocol (newline-free JSON over WebSocket):
  *
  *   server → client
- *     { type: 'hello',        payload: { agentId, model, version } }
- *     { type: 'event',        payload: InvokeEvent }              // see agents/types.ts
- *     { type: 'skill-saved',  payload: { name, path } }
- *     { type: 'skill-exists', payload: { slug, existingPath } }
- *     { type: 'skills-list',  payload: { skills: SkillSummary[] } }
- *     { type: 'spec-saved',   payload: { name, path } }
- *     { type: 'spec-exists',  payload: { slug, existingPath } }
- *     { type: 'error',        payload: { message } }
+ *     { type: 'hello',           payload: { agentId, model, version } }
+ *     { type: 'event',           payload: InvokeEvent }              // see agents/types.ts
+ *     { type: 'skill-saved',     payload: { name, path } }
+ *     { type: 'skill-exists',    payload: { slug, existingPath } }
+ *     { type: 'skills-list',     payload: { skills: SkillSummary[] } }
+ *     { type: 'spec-saved',      payload: { name, path } }
+ *     { type: 'spec-exists',     payload: { slug, existingPath } }
+ *     { type: 'case-csv-saved',  payload: { name, path } }
+ *     { type: 'case-csv-exists', payload: { slug, existingPath } }
+ *     { type: 'error',           payload: { message } }
  *
  *   client → server
- *     { type: 'command',     payload: { text, sessionId? } }
+ *     { type: 'command',       payload: { text, sessionId? } }
  *     { type: 'cancel' }
- *     { type: 'save-skill',  payload: { name, description, steps, overwrite? } }
- *     { type: 'save-spec',   payload: { name, description, steps, assertions?, overwrite? } }
+ *     { type: 'save-skill',    payload: { name, description, steps, overwrite? } }
+ *     { type: 'save-spec',     payload: { name, description, steps, assertions?, overwrite? } }
+ *     { type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
  *     { type: 'list-skills' }
  */
 import { dirname, resolve } from 'node:path';
@@ -36,6 +39,7 @@ import {
   type SkillStep,
 } from './skills/writeSkill.js';
 import { writeSpec, SpecExistsError, type SpecAssertion } from './specs/writeSpec.js';
+import { writeCaseCsv, CaseCsvExistsError } from './specs/writeCaseCsv.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
@@ -72,6 +76,10 @@ interface ClientMessage {
     steps?: SkillStep[];
     assertions?: SpecAssertion[];
     overwrite?: boolean;
+    /** save-case-csv only — passed through to writeCaseCsv as extra
+     *  fields on the test case's Labels column. */
+    jiraProjectKey?: string;
+    labels?: string;
   };
 }
 
@@ -193,6 +201,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       }
       if (msg.type === 'save-spec') {
         await handleSaveSpec(ws, msg, devRoot);
+        return;
+      }
+      if (msg.type === 'save-case-csv') {
+        await handleSaveCaseCsv(ws, msg, devRoot);
         return;
       }
       if (msg.type !== 'command') return;
@@ -364,6 +376,53 @@ async function handleSaveSpec(
     send(ws, {
       type: 'error',
       payload: { message: `save-spec failed: ${message}` },
+    });
+  }
+}
+
+async function handleSaveCaseCsv(
+  ws: WebSocket,
+  msg: ClientMessage,
+  devRoot: string,
+): Promise<void> {
+  const name = msg.payload?.name;
+  const description = msg.payload?.description ?? '';
+  const steps = msg.payload?.steps;
+  const assertions = msg.payload?.assertions ?? [];
+  const jiraProjectKey = msg.payload?.jiraProjectKey;
+  const labels = msg.payload?.labels;
+
+  if (typeof name !== 'string' || !name.trim()) {
+    send(ws, { type: 'error', payload: { message: 'save-case-csv: name is required' } });
+    return;
+  }
+  if (!Array.isArray(steps) || steps.length === 0) {
+    send(ws, { type: 'error', payload: { message: 'save-case-csv: no steps to save' } });
+    return;
+  }
+  const overwrite = msg.payload?.overwrite === true;
+
+  try {
+    const result = await writeCaseCsv({
+      devRoot, name, description, steps, assertions,
+      jiraProjectKey, labels, overwrite,
+    });
+    send(ws, {
+      type: 'case-csv-saved',
+      payload: { name: result.slug, path: result.path },
+    });
+  } catch (err) {
+    if (err instanceof CaseCsvExistsError) {
+      send(ws, {
+        type: 'case-csv-exists',
+        payload: { slug: err.slug, existingPath: err.path },
+      });
+      return;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    send(ws, {
+      type: 'error',
+      payload: { message: `save-case-csv failed: ${message}` },
     });
   }
 }

@@ -364,11 +364,13 @@
       div.appendChild(s);
     }
 
-    // Save-as-Skill / Save-as-Spec buttons on successful runs. Always saves
-    // the most recent session (last 'user' → end of state.messages),
-    // regardless of which done card it lives on. Spec is the primary action
-    // (deterministic .spec.ts is Hover's main differentiator); Skill is the
-    // secondary, looser-form artifact.
+    // Save-as-Skill / Save-as-Spec / Save-as-Jira-case buttons on
+    // successful runs. Always saves the most recent session (last 'user'
+    // → end of state.messages), regardless of which done card it lives
+    // on. One verified exploration, three audiences:
+    //   - Skill  → future agent runs ("execute login-as-claude")
+    //   - Spec   → CI's deterministic gate (`.spec.ts`)
+    //   - Case   → QA / PM review in Jira / Xray / Zephyr (`.case.csv`)
     if (!msg.isError) {
       const actions = document.createElement('div');
       actions.className = 'actions';
@@ -384,6 +386,12 @@
       saveSpecBtn.textContent = '📜 Save as spec';
       saveSpecBtn.addEventListener('click', () => saveSpecFromLastSession(saveSpecBtn));
       actions.appendChild(saveSpecBtn);
+      const saveCaseBtn = document.createElement('button');
+      saveCaseBtn.type = 'button';
+      saveCaseBtn.className = 'btn-save-case';
+      saveCaseBtn.textContent = '📋 Save as Jira case';
+      saveCaseBtn.addEventListener('click', () => saveCaseCsvFromLastSession(saveCaseBtn));
+      actions.appendChild(saveCaseBtn);
       div.appendChild(actions);
     }
 
@@ -433,6 +441,7 @@
   // Two slots, one per output format (skill vs spec).
   let pendingSave = null;
   let pendingSpec = null;
+  let pendingCase = null;
 
   const saveSkillFromLastSession = async (button) => {
     const steps = lastSessionSlice();
@@ -594,6 +603,95 @@
         button.textContent = '📜 Save as spec';
       }
     }, 8000);
+  };
+
+  const saveCaseCsvFromLastSession = async (button) => {
+    const steps = lastSessionSlice();
+    if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
+      addMessage({ kind: 'system', text: 'Nothing to save (no tool steps in the last session).' });
+      return;
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      addMessage({ kind: 'system', text: 'Cannot save: service disconnected.' });
+      return;
+    }
+    const nAssert = state.assertions.length;
+    const result = await hoverPrompt({
+      title: 'Save as Jira test case (Xray CSV)',
+      fields: [
+        { id: 'name', label: 'Test case name', placeholder: 'login-flow', required: true },
+        { id: 'description', label: 'Summary', placeholder: 'optional · used as the test case Summary in Jira' },
+        { id: 'jiraProjectKey', label: 'Jira project key', placeholder: 'optional · e.g. PROJ — added as a label' },
+        { id: 'labels', label: 'Labels', placeholder: 'optional · space- or comma-separated' },
+      ],
+      context: nAssert > 0
+        ? `+ ${nAssert} pending assertion${nAssert === 1 ? '' : 's'} will become the Expected Result`
+        : 'Imports into Xray, Zephyr Scale, or the generic Jira issue importer.',
+      confirmLabel: 'Save Jira case',
+    });
+    if (!result) return;
+
+    pendingCase = {
+      name: result.name,
+      description: result.description,
+      jiraProjectKey: result.jiraProjectKey,
+      labels: result.labels,
+      steps,
+      assertions: state.assertions.slice(),
+      button,
+    };
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    ws.send(JSON.stringify({
+      type: 'save-case-csv',
+      payload: {
+        name: pendingCase.name,
+        description: pendingCase.description,
+        jiraProjectKey: pendingCase.jiraProjectKey,
+        labels: pendingCase.labels,
+        steps,
+        assertions: pendingCase.assertions,
+      },
+    }));
+
+    setTimeout(() => {
+      if (button.textContent === 'Saving…') {
+        button.disabled = false;
+        button.textContent = '📋 Save as Jira case';
+      }
+    }, 8000);
+  };
+
+  const handleCaseCsvExists = async (slug, existingPath) => {
+    if (!pendingCase) return;
+    const overwrite = await hoverConfirm({
+      title: 'Overwrite existing Jira case CSV?',
+      body: `A test case CSV named "${slug}" already exists.`,
+      context: existingPath,
+      confirmLabel: 'Overwrite',
+      danger: true,
+    });
+    if (overwrite) {
+      ws.send(JSON.stringify({
+        type: 'save-case-csv',
+        payload: {
+          name: pendingCase.name,
+          description: pendingCase.description,
+          jiraProjectKey: pendingCase.jiraProjectKey,
+          labels: pendingCase.labels,
+          steps: pendingCase.steps,
+          assertions: pendingCase.assertions,
+          overwrite: true,
+        },
+      }));
+      return;
+    }
+    if (pendingCase.button) {
+      pendingCase.button.disabled = false;
+      pendingCase.button.textContent = '📋 Save as Jira case';
+    }
+    addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
+    pendingCase = null;
   };
 
   const handleSpecExists = async (slug, existingPath) => {
@@ -1200,6 +1298,22 @@
       } else if (msg.type === 'spec-exists') {
         const p = msg.payload ?? {};
         handleSpecExists(p.slug, p.existingPath);
+      } else if (msg.type === 'case-csv-saved') {
+        const p = msg.payload ?? {};
+        addMessage({
+          kind: 'system',
+          text: `✓ saved Jira test case "${p.name}" → ${p.path}\n  import via Xray Test Case Importer · or Zephyr Scale · or Jira issue importer (CSV).`,
+        });
+        // Reset the case-save button specifically (don't touch other
+        // Saving… buttons that belong to a different save flow).
+        if (pendingCase?.button) {
+          pendingCase.button.disabled = false;
+          pendingCase.button.textContent = '📋 Save as Jira case';
+        }
+        pendingCase = null;
+      } else if (msg.type === 'case-csv-exists') {
+        const p = msg.payload ?? {};
+        handleCaseCsvExists(p.slug, p.existingPath);
       } else if (msg.type === 'skills-list') {
         renderSkills(msg.payload?.skills ?? []);
       } else if (msg.type === 'hello') {
