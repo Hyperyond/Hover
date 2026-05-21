@@ -79,6 +79,8 @@ describe('claudeAgent.parseEvent', () => {
   });
 
   it('parses assistant tool_use blocks and strips the mcp__playwright__ prefix', () => {
+    // Reset the running-cost accumulator by feeding a fresh system/init.
+    claudeAgent.parseEvent(JSON.stringify({ type: 'system', subtype: 'init', session_id: 's', model: 'sonnet' }));
     const line = JSON.stringify({
       type: 'assistant',
       message: {
@@ -87,17 +89,51 @@ describe('claudeAgent.parseEvent', () => {
         ],
       },
     });
+    // Every assistant event now prepends a usage event with the running cost
+    // and turn count, so the widget can show a live $ counter mid-stream.
     expect(claudeAgent.parseEvent(line)).toEqual([
+      { kind: 'usage', costUsd: 0, turns: 1 },
       { kind: 'tool_use', tool: 'browser_navigate', input: { url: '/' } },
     ]);
   });
 
   it('parses assistant text blocks but drops empty whitespace', () => {
+    claudeAgent.parseEvent(JSON.stringify({ type: 'system', subtype: 'init', session_id: 's', model: 'sonnet' }));
     const line = JSON.stringify({
       type: 'assistant',
       message: { content: [{ type: 'text', text: '   ' }, { type: 'text', text: 'ok' }] },
     });
-    expect(claudeAgent.parseEvent(line)).toEqual([{ kind: 'text', text: 'ok' }]);
+    expect(claudeAgent.parseEvent(line)).toEqual([
+      { kind: 'usage', costUsd: 0, turns: 1 },
+      { kind: 'text', text: 'ok' },
+    ]);
+  });
+
+  it('emits a running cost from intermediate total_cost_usd when present', () => {
+    claudeAgent.parseEvent(JSON.stringify({ type: 'system', subtype: 'init', session_id: 's', model: 'sonnet' }));
+    const line = JSON.stringify({
+      type: 'assistant',
+      total_cost_usd: 0.0123,
+      message: { content: [{ type: 'text', text: 'hi' }] },
+    });
+    expect(claudeAgent.parseEvent(line)).toEqual([
+      { kind: 'usage', costUsd: 0.0123, turns: 1 },
+      { kind: 'text', text: 'hi' },
+    ]);
+  });
+
+  it('estimates running cost from message.usage tokens when total_cost_usd is absent', () => {
+    claudeAgent.parseEvent(JSON.stringify({ type: 'system', subtype: 'init', session_id: 's', model: 'sonnet' }));
+    const line = JSON.stringify({
+      type: 'assistant',
+      message: {
+        usage: { input_tokens: 1000, output_tokens: 500 },
+        content: [{ type: 'text', text: 'hi' }],
+      },
+    });
+    const events = claudeAgent.parseEvent(line);
+    // sonnet pricing: 1000 input @ $3/M + 500 output @ $15/M = $0.003 + $0.0075 = $0.0105
+    expect(events[0]).toEqual({ kind: 'usage', costUsd: 0.0105, turns: 1 });
   });
 
   it('parses result events into session_end', () => {

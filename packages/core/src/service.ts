@@ -122,7 +122,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   const requestedPort = opts.port;
   const agentId = opts.agentId ?? 'claude';
   const model = opts.model ?? 'sonnet';
-  const maxBudgetUsd = opts.maxBudgetUsd ?? 0.5;
+  // No default budget cap — long real-world flows (form filling, multi-step
+  // checkouts) routinely run past the old $0.50 ceiling and got cut off
+  // mid-run. The widget shows the running $ counter in the header instead,
+  // so the user can hit Stop when they've seen enough. Pass maxBudgetUsd
+  // explicitly (or via the Vite plugin option) if a hard ceiling is needed.
+  const maxBudgetUsd = opts.maxBudgetUsd;
   const mcpConfig = opts.mcpConfig ?? DEFAULT_MCP_CONFIG;
   const cdpUrl = opts.cdpUrl ?? 'http://localhost:9222';
   const devRoot = opts.devRoot ?? process.cwd();

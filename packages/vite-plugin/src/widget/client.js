@@ -45,6 +45,7 @@
   const bodyEl = $('.body');
   const textarea = $('textarea');
   const sendBtn = $('.send');
+  const costEl = $('.cost');
 
   // ───────────────────────── persistent state ─────────────────────────
   // Survives panel close, page reload, and AI-driven navigations within
@@ -679,6 +680,7 @@
     bodyEl.innerHTML = '';
     lastStepDiv = null;
     updateAssertBadge();
+    hideCost();
   });
 
   // ───────────────────────── Alt-click "Assert This" ─────────────────
@@ -1030,6 +1032,22 @@
 
   // ───────────────────────── server event → state mutation ─────────────────────────
 
+  // ───────────────────────── live cost chip ─────────────────────────
+  // Surfaces the running session cost in the header so the user can see
+  // money tick up during long runs and decide when to hit Stop. There's no
+  // server-side budget cap any more — the cost chip is the user's signal.
+
+  const fmtCost = (n) => '$' + (Number(n) || 0).toFixed(4);
+  const showCost = (costUsd, live) => {
+    costEl.textContent = fmtCost(costUsd);
+    costEl.hidden = false;
+    costEl.classList.toggle('live', !!live);
+  };
+  const hideCost = () => {
+    costEl.hidden = true;
+    costEl.classList.remove('live');
+  };
+
   const handleServerEvent = (ev) => {
     switch (ev.kind) {
       case 'session_start':
@@ -1039,9 +1057,14 @@
           kind: 'system',
           text: `session ${ev.sessionId.slice(0, 8)} · ${ev.model ?? '?'}`,
         });
+        // Fresh session — zero out the live cost chip and let it tick.
+        showCost(0, true);
         return;
       case 'mcp_status':
         addMessage({ kind: 'system', text: `mcp/${ev.server}: ${ev.status}` });
+        return;
+      case 'usage':
+        showCost(ev.costUsd ?? 0, true);
         return;
       case 'tool_use':
         addMessage({ kind: 'step', tool: ev.tool, input: ev.input });
@@ -1071,6 +1094,9 @@
           isError: ev.isError,
           summary: ev.summary,
         });
+        // Done card carries the final cost; hide the live chip so the
+        // header doesn't display stale running data after the run ends.
+        hideCost();
         return;
     }
   };

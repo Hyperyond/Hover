@@ -45,6 +45,19 @@ header {
 .status.disconnected { background: #fee2e2; color: #991b1b; }
 .status.running { background: #dbeafe; color: #1e40af; }
 
+/* Live running-cost chip in the header. Shown only while a session is
+   running (or just ended) — done card carries the canonical final cost. */
+.cost {
+  font-size: 11px; padding: 2px 8px;
+  border-radius: 999px; font-weight: 600;
+  background: #f3f4f6; color: #374151;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  transition: background 0.2s, color 0.2s;
+}
+.cost[hidden] { display: none; }
+.cost.live { background: #dbeafe; color: #1e40af; }
+
 .iconbtn {
   border: 1px solid #e5e7eb; background: #fff;
   border-radius: 6px; width: 24px; height: 24px;

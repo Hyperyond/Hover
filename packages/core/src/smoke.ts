@@ -59,6 +59,15 @@ function render(ev: InvokeEvent): void {
     case 'text':
       console.log(`  AI: ${ev.text}`);
       return;
+    case 'usage': {
+      // Mid-run running totals — keep the CLI output light by re-printing on
+      // a single carriage-return line. The widget displays the same data as
+      // a live chip in the header.
+      const cost = ev.costUsd != null ? `$${ev.costUsd.toFixed(4)}` : '—';
+      const turns = ev.turns != null ? `${ev.turns}t` : '';
+      process.stdout.write(`\r  • running · ${turns} · ${cost}        `);
+      return;
+    }
     case 'session_end': {
       const turns = ev.turns != null ? ` ${ev.turns} turn${ev.turns === 1 ? '' : 's'}` : '';
       const cost = ev.costUsd != null ? `, cost $${ev.costUsd.toFixed(4)}` : '';
@@ -97,15 +106,22 @@ async function main(): Promise<number> {
   console.log(`OK (${tabs.length} tab${tabs.length === 1 ? '' : 's'})`);
   tabs.forEach(t => console.log(`    └ ${t}`));
 
-  // 3. Invoke agent and stream events
-  console.log(`\n• Invoking ${AGENT_ID} (model: ${MODEL}, strict MCP sandbox, $0.50 budget)\n`);
+  // 3. Invoke agent and stream events.
+  // No default budget cap — running cost is reported via 'usage' events so
+  // the CLI / widget can show a live counter; user hits Ctrl-C / Stop when
+  // they've seen enough. Set HOVER_MAX_BUDGET_USD to re-enable a hard cap.
+  const maxBudgetUsd = process.env.HOVER_MAX_BUDGET_USD
+    ? Number(process.env.HOVER_MAX_BUDGET_USD)
+    : undefined;
+  const budgetTag = maxBudgetUsd != null ? `$${maxBudgetUsd} budget` : 'no budget cap';
+  console.log(`\n• Invoking ${AGENT_ID} (model: ${MODEL}, strict MCP sandbox, ${budgetTag})\n`);
   for await (const ev of invokeAgent({
     agentId: AGENT_ID,
     prompt: PROMPT,
     mcpConfig: MCP_CONFIG,
     allowedTools: ['mcp__playwright'],
     disallowedTools: ['Bash', 'Edit', 'Write', 'Read', 'Grep', 'Glob', 'Task', 'WebFetch', 'WebSearch'],
-    maxBudgetUsd: 0.5,
+    maxBudgetUsd,
     model: MODEL,
   })) {
     render(ev);

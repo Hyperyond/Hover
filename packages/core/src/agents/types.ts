@@ -64,6 +64,11 @@ export type InvokeEvent =
   | { kind: 'tool_use'; tool: string; input: unknown }
   | { kind: 'tool_result'; isError?: boolean; preview?: string }
   | { kind: 'text'; text: string }
+  /** Running cost / turn-count update emitted mid-session so the widget can
+   *  show a live $ counter without waiting for session_end. Claude Code's
+   *  stream-json includes `total_cost_usd` on intermediate result-ish events;
+   *  agents that don't surface running cost simply never emit this. */
+  | { kind: 'usage'; costUsd?: number; turns?: number }
   | { kind: 'session_end'; turns?: number; costUsd?: number; isError?: boolean; summary?: string }
   | { kind: 'raw'; line: string };
 
