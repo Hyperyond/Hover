@@ -41,22 +41,27 @@
 
 ## 实际效果
 
+[`examples/`](./examples/) 下 4 个真实的 Vite app，每个都压一种不同的测试场景。右边的 Hover widget 都是同一套 UI 在驱动 —— 一样的 loop，四种工作流。
+
 <table>
 <tr>
-<td width="50%" valign="top" align="center">
-<sub><b>01 · dev 页面上的浮动 widget</b><br/><i>(截图待补)</i></sub>
+<td width="50%" valign="top">
+<img src="docs/screenshots/01-basic-app.png" alt="01 · basic-app — 登录 + 计数器 + todos" /><br/>
+<sub><b>01 · <a href="./examples/basic-app"><code>basic-app</code></a> —— 烟雾基线。</b> 登录 → +1 计数 → 加 todo。Agent 11 turn 跑完整个流程，花了 $0.16；结果卡同时给出 <b>Save as Skill</b>（下次对话可复用）和 <b>Save as spec</b>（标准的 <code>@playwright/test</code> 文件）。</sub>
 </td>
 <td width="50%" valign="top">
-<img src="docs/screenshots/02-ai-driving.png" alt="02 · AI 正在填写真实表单" /><br/>
-<sub><b>02 · AI 正在填写真实表单</b> —— Agent 正在填写券商开户的多步表单。注意右上角状态变为 <code>running</code>、Send 按钮变成红色的 <code>Stop</code>，右侧实时滚动每一次 <code>browser_*</code> 工具调用 —— 一旦看到走偏，立刻可以打断。</sub>
+<img src="docs/screenshots/02-stock-registration.png" alt="02 · stock-registration — 多步券商开户表单" /><br/>
+<sub><b>02 · <a href="./examples/stock-registration"><code>stock-registration</code></a> —— ~50 字段、条件展示的券商开户表单。</b> Agent 填完了文本字段，然后页面自带的校验逻辑标出三个必填 radio（性别 / 婚姻 / 美国税务居民）。Hover 停下来给一张说明清楚为什么停的 done card —— 人手动勾完那三个继续跑就行。</sub>
 </td>
 </tr>
 <tr>
-<td width="50%" valign="top" align="center">
-<sub><b>03 · Save as Playwright spec 弹窗</b><br/><i>(截图待补)</i></sub>
+<td width="50%" valign="top">
+<img src="docs/screenshots/03-e-commerce.png" alt="03 · e-commerce — 购物车 + 结账" /><br/>
+<sub><b>03 · <a href="./examples/e-commerce"><code>e-commerce</code></a> —— Amazon 风格电商。</b> "买两件销量最高的耳机，地址用我之前存的，刷卡。" Agent 选对了品类、加了两件商品、走到了支付步骤。长动作链、真实购物车状态、随时可以 <b>Save as spec</b>。</sub>
 </td>
-<td width="50%" valign="top" align="center">
-<sub><b>04 · 生成的 spec 在 CI 中跑通</b><br/><i>(截图待补)</i></sub>
+<td width="50%" valign="top">
+<img src="docs/screenshots/04-canvas-paint.png" alt="04 · canvas-paint — DOM 工具栏夹在 canvas 像素中" /><br/>
+<sub><b>04 · <a href="./examples/canvas-paint"><code>canvas-paint</code></a> —— 一个画图 app，画布本身是不透明的 <code>&lt;canvas&gt;</code>。</b> 截图工具看不到像素内容，但 Agent 通过 DOM 工具栏（工具 · 颜色 · 笔刷大小 · 保存）一路操作下来 —— 证明 Hover 的"优先选语义化 selector" 策略在画布场景下依然好使。</sub>
 </td>
 </tr>
 </table>

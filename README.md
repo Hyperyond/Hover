@@ -41,22 +41,27 @@ Open the floating chat in your dev page, describe what you want to verify in pla
 
 ## See it in action
 
+Four real example apps under [`examples/`](./examples/), each stressing a different testing surface. The Hover widget on the right is driving each one — same loop, same UI, four very different workflows.
+
 <table>
 <tr>
-<td width="50%" valign="top" align="center">
-<sub><b>01 · Floating widget on your dev page</b><br/><i>(coming soon)</i></sub>
+<td width="50%" valign="top">
+<img src="docs/screenshots/01-basic-app.png" alt="01 · basic-app — login + counter + todos" /><br/>
+<sub><b>01 · <a href="./examples/basic-app"><code>basic-app</code></a> — the smoke baseline.</b> Login → increment a counter → add a todo. The agent ran the full sequence in 11 turns at $0.16; the result card surfaces both <b>Save as Skill</b> (replayable from the next conversation) and <b>Save as spec</b> (a standard <code>@playwright/test</code> file).</sub>
 </td>
 <td width="50%" valign="top">
-<img src="docs/screenshots/02-ai-driving.png" alt="02 · AI driving a real form" /><br/>
-<sub><b>02 · AI driving a real form</b> — The agent is filling out the brokerage stock-registration example mid-flow. Notice the status pill is <code>running</code>, the Send button has turned into <code>Stop</code>, and the right rail streams every <code>browser_*</code> tool call live so you can interrupt the moment it goes off-script.</sub>
+<img src="docs/screenshots/02-stock-registration.png" alt="02 · stock-registration — multi-step brokerage form" /><br/>
+<sub><b>02 · <a href="./examples/stock-registration"><code>stock-registration</code></a> — ~50-field broker application with conditional reveals.</b> The agent filled the text fields, then the form's own validator caught three required radio groups (Sex / Marital status / US tax residency). Hover pauses and surfaces a done card explaining why — the human can flip those three radios and re-run.</sub>
 </td>
 </tr>
 <tr>
-<td width="50%" valign="top" align="center">
-<sub><b>03 · Save as Playwright spec</b><br/><i>(coming soon)</i></sub>
+<td width="50%" valign="top">
+<img src="docs/screenshots/03-e-commerce.png" alt="03 · e-commerce — cart and checkout" /><br/>
+<sub><b>03 · <a href="./examples/e-commerce"><code>e-commerce</code></a> — Amazon-style storefront.</b> "Buy two top-rated headphones, ship to my saved address, pay with card." The agent picked the right category, added two items, and walked the cart up to the payment step. Long action chain, real cart state, ready for <b>Save as spec</b>.</sub>
 </td>
-<td width="50%" valign="top" align="center">
-<sub><b>04 · The saved spec running in CI</b><br/><i>(coming soon)</i></sub>
+<td width="50%" valign="top">
+<img src="docs/screenshots/04-canvas-paint.png" alt="04 · canvas-paint — DOM toolbar amid canvas pixels" /><br/>
+<sub><b>04 · <a href="./examples/canvas-paint"><code>canvas-paint</code></a> — a drawing app where the artwork is an opaque <code>&lt;canvas&gt;</code>.</b> Snapshots can't read pixel content, but the agent navigates the DOM toolbar (Tool · Color · Brush size · Save) end-to-end — proving Hover's semantic-selector preference holds up when the visual surface itself isn't introspectable.</sub>
 </td>
 </tr>
 </table>
