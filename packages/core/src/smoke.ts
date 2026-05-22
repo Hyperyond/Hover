@@ -14,9 +14,7 @@ const MODEL = process.env.HOVER_MODEL ?? 'sonnet';
 const TARGET = process.argv[2] ?? 'http://localhost:5173/';
 const PROMPT = process.argv[3] ?? defaultPromptFor(TARGET);
 
-const CHROME_CMD = `/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \\
-  --remote-debugging-port=9222 \\
-  --user-data-dir=/tmp/hover-smoke`;
+const CHROME_CMD = `pnpm smoke:chrome    # or: pnpm exec hover-chrome`;
 
 function defaultPromptFor(target: string): string {
   if (target.includes('localhost:5173')) {

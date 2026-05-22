@@ -24,24 +24,25 @@ pnpm typecheck       # fans out to every package
 
 ## Dev workflow
 
-Three things must be running for end-to-end testing. Once Chrome and Vite are up, they stay running across many smoke loops:
+Two things must be running for end-to-end testing. Once Chrome and Vite are up, they stay running across many smoke loops:
 
 ```bash
-# Terminal 1 — debug Chrome on port 9222, isolated profile under /tmp/hover-smoke.
-# Idempotent: if Chrome is already listening on 9222, exits 0 without restart.
-pnpm smoke:chrome
-
-# Terminal 2 — start an example app + the Hover service.
-# Five examples (run one at a time):
+# Terminal 1 — start an example app + the Hover service. Examples in this
+# repo pass `autoLaunchChrome: true`, so this ALSO spawns an isolated debug
+# Chrome (--remote-debugging-port=9222, profile under <tmpdir>/hover-chrome)
+# navigated to the dev URL. Idempotent: reuses an existing debug Chrome if
+# 9222 is already alive.
 pnpm dev:example:basic-app          # http://localhost:5173 — minimal: login + counter + todos
 pnpm dev:example:e-commerce         # http://localhost:5174 — Amazon-style storefront
 pnpm dev:example:stock-registration # http://localhost:5175 — IBKR-style account-opening wizard
 pnpm dev:example:canvas-paint       # http://localhost:5176 — drawing app + DOM toolbar
 pnpm dev:example:payment-provider   # http://localhost:5177 — third-party popup (NO widget)
 
-# Terminal 3 — command-line agent smoke (alternate to using the widget in-browser).
+# Terminal 2 — command-line agent smoke (alternate to using the widget in-browser).
 pnpm smoke "test the login flow"
 ```
+
+Need a debug Chrome without starting any example? `pnpm smoke:chrome` (or `pnpm exec hover-chrome`) spawns one standalone, same profile, idempotent.
 
 The Hover service listens on `127.0.0.1:51789`; the widget connects there over WebSocket.
 

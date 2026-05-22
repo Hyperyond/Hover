@@ -128,7 +128,7 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
 
 ## Quick start
 
-You need three terminals on first run. Once Chrome and Vite are up, they stay running across many loops.
+You need two terminals on first run. Once Chrome and Vite are up, they stay running across many loops.
 
 ```bash
 git clone https://github.com/Hyperyond/Hover.git
@@ -138,17 +138,14 @@ pnpm --filter basic-app exec playwright install chromium   # for `pnpm test:e2e`
 ```
 
 ```bash
-# Terminal 1 — debug-mode Chrome on port 9222, isolated profile
-pnpm smoke:chrome
-```
-
-```bash
-# Terminal 2 — basic-app on http://localhost:5173
+# Terminal 1 — basic-app on http://localhost:5173. Examples pass
+# `autoLaunchChrome: true`, so this ALSO spawns a debug Chrome on port 9222
+# (isolated profile under <tmpdir>/hover-chrome) navigated to the dev URL.
 pnpm dev:example:basic-app
 ```
 
 ```bash
-# Terminal 3 — run the AI smoke loop (CDP preflight → invoke claude → stream events)
+# Terminal 2 — run the AI smoke loop (CDP preflight → invoke claude → stream events)
 pnpm smoke
 # or with custom target + prompt:
 pnpm smoke http://localhost:5173/ "log in then add a todo named 'verify hover'"
@@ -166,16 +163,19 @@ pnpm add -D @hyperyond/vite-plugin
 
 That's it — no `.npmrc`, no auth tokens. The `@hyperyond/*` packages are public on npmjs.com.
 
-Then start Chrome in debug mode so Hover can connect:
+Then just run your dev server:
 
 ```bash
-# macOS
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/hover-chrome
+pnpm dev
 ```
 
-Open your dev server in *that* Chrome window. The ✨ launcher appears bottom-right.
+Open your dev URL in any Chrome. The ✨ launcher appears bottom-right and tells you what to do via its colour:
+
+- **Blue** — you're already in a debug Chrome. Click and chat.
+- **Amber** — no debug Chrome yet. Click and the widget launches one for you (isolated profile under `<tmpdir>/hover-chrome`, navigated to your dev URL), then prompts you to switch over.
+- **Gray** — a debug Chrome is running, but this window isn't it. Click to bring the right window to the front.
+
+Prefer it to pre-warm Chrome at `vite dev`? `hover({ autoLaunchChrome: true })`. Prefer to start Chrome yourself? `pnpm exec hover-chrome` (or `npx hover-chrome`).
 
 ## Use it in a React (Vite) project
 
@@ -193,7 +193,7 @@ export default defineConfig({
 });
 ```
 
-That's the whole integration. `vite dev` as usual; open your app in the debug Chrome; click ✨.
+That's the whole integration. `vite dev` as usual; open your app; click ✨. The launcher colour tells you what (if anything) it needs from you.
 
 > Verified specs that you save via the widget land in `__vibe_tests__/` at your project root. Run them with `npx playwright test`. They import only `@playwright/test` and have no runtime dependency on Hover — so CI can run them with the widget completely disabled.
 

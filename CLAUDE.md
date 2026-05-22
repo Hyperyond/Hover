@@ -58,11 +58,28 @@ Per-agent strategy lives in its own file (currently just `claude.ts`). To add a 
 
 The full flow for one command: page UI → WebSocket → `@hyperyond/core` → spawn agent → MCP → Playwright → CDP → user's Chrome. Step events flow back the same path in reverse.
 
+## Widget-driven Chrome lifecycle
+
+The widget knows the page it's running in (`window.location.href`). The service knows which Chrome it can reach over CDP (`/json/list`). Comparing the two answers a question the user shouldn't have to: "is this widget actually in the debug Chrome?" Three answers:
+
+| State | Meaning | Widget UI |
+|---|---|---|
+| `same-window` | Origin matches a CDP tab. Agent can drive this very tab. | Normal blue ✨, full UI |
+| `wrong-window` | A debug Chrome exists, but this widget isn't in it. | Gray ✨, panel says "use the other window"; click → service runs `Page.bringToFront()` on the matching tab |
+| `no-cdp` | No debug Chrome at all. | Amber ✨, panel says "launch debug Chrome"; click → service runs `launchDebugChrome()` |
+
+Wire protocol additions (client → server): `check-cdp { pageUrl }`, `launch-chrome { pageUrl }`, `focus-debug { pageUrl }`. Server → client: `cdp-status { state, launching?, reason?, browser?, matchingTabUrl? }`. Widget fires `check-cdp` on every WS open (including reconnects after HMR).
+
+Origin comparison (not full-URL) is deliberate — the user might be on `/login` while the debug Chrome tab is on `/`; they're the same app and the agent can route within it.
+
+The Vite plugin's `autoLaunchChrome` option (default `false`) pre-warms a debug Chrome at `vite dev`. The widget's on-demand launching makes the default `false` safe — users who do nothing still get guided to a working state on first ✨ click. Examples in this monorepo opt in (`autoLaunchChrome: true`) to keep `pnpm smoke` etc. one-step.
+
 ## Boundary constraints
 
 These are load-bearing — several are non-obvious:
 
-- Connect to the user's Chrome, never launch a new one. Use `connectOverCDP` and pick the existing context/page whose URL matches the dev-server origin.
+- The **agent** never launches its own Chromium — it connects to whatever debug Chrome is on `chromeDebugPort` via `connectOverCDP` and picks the existing context/page whose URL matches the dev-server origin. The agent's Playwright MCP is sandboxed to a CDP target it can't change.
+- The **service** is allowed to spawn one specific Chrome: the isolated debug Chrome under `<tmpdir>/hover-chrome` via `launchDebugChrome()` (in `playwright/launchChrome.ts`). This happens either at Vite startup (when `autoLaunchChrome: true`) or on widget demand (when the user clicks an amber ✨). It is *not* the user's primary Chrome profile.
 - Strict sandboxing. The smoke test passes `--strict-mcp-config`, `--permission-mode dontAsk`, `--allowedTools mcp__playwright`, `--disallowedTools "Bash Edit Write Read Grep Glob Task WebFetch WebSearch"`, and `--max-budget-usd 0.50`. The Playwright MCP server is the only tool Claude can reach. Filesystem access (other than the eventual `__vibe_tests__/` write path) is forbidden.
 - Default model is `sonnet`, not `opus`. Opus is ~5× more expensive per browser-driving session. Override with `HOVER_MODEL=opus` if needed for harder tasks.
 - The injected UI lives in a Shadow DOM and marks itself with `data-vibe-test="true"` so Playwright can skip it. Tailwind's default scan does not work inside Shadow DOM — use inline styles or CSS-in-JS.
@@ -90,11 +107,12 @@ Starting **2026-06-15**, `claude -p` calls draw from a new monthly Agent SDK cre
 
 ## Local lifecycle
 
-Three terminals on first run; once Chrome and Vite are up they stay running across many smoke loops:
+Two terminals on first run; once Chrome and Vite are up they stay running across many smoke loops:
 
-1. `pnpm smoke:chrome` — launches a debug-mode Chrome (`--remote-debugging-port=9222`, isolated profile at `/tmp/hover-smoke`).
-2. `pnpm dev:basic` — basic-app at http://localhost:5173. (Or `dev:checkout` / `dev:form` / `dev:canvas` on 5174 / 5175 / 5176 for the other scenarios.)
-3. `pnpm smoke` — end-to-end: detect agents → CDP preflight → invoke `claude` → stream events.
+1. `pnpm dev:example:basic-app` — basic-app at http://localhost:5173. Because the example sets `autoLaunchChrome: true`, this also spawns the debug Chrome (`--remote-debugging-port=9222`, isolated profile at `<tmpdir>/hover-chrome`) navigated to the dev URL. (Same for `dev:example:e-commerce` / `…:stock-registration` / `…:canvas-paint` on 5174 / 5175 / 5176.)
+2. `pnpm smoke` — end-to-end: detect agents → CDP preflight → invoke `claude` → stream events.
+
+Need the debug Chrome without a Vite example? `pnpm smoke:chrome` standalone-spawns it (same `<tmpdir>/hover-chrome` profile, idempotent).
 
 Custom target / prompt:
 

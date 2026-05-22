@@ -24,15 +24,19 @@ export default defineConfig({
 });
 ```
 
-Start Chrome in debug mode so Hover can connect:
+Run your dev server:
 
 ```bash
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/hover-chrome
+pnpm dev
 ```
 
-Open your dev server in that Chrome. The ✨ floating button appears in the bottom-right; click it, type a prompt.
+Open your dev URL in any Chrome — the ✨ launcher in the bottom-right colour-codes what (if anything) it needs:
+
+- **Blue** — page is already in a debug Chrome. Click and chat.
+- **Amber** — no debug Chrome detected. Click → widget launches one (isolated profile under `<tmpdir>/hover-chrome`, navigated to your dev URL) → prompts you to switch over.
+- **Gray** — a debug Chrome is running but in a different Chrome process. Click → service brings the right tab to the front. The widget in this window stays disabled — use the one in the debug Chrome.
+
+Pass `autoLaunchChrome: true` to skip the colour dance and pre-warm Chrome at `vite dev` instead (matches the smoke flow). Pass `false` (the default) to let the widget drive it on demand. Either way, `pnpm exec hover-chrome` (or `npx hover-chrome`) is available as an escape hatch.
 
 ## Options
 
@@ -41,6 +45,7 @@ hover({
   port?: 51789,                // local WebSocket port; auto-bumps if taken
   enabled?: true,              // false to disable (default: only in dev mode)
   chromeDebugPort?: 9222,
+  autoLaunchChrome?: false,    // true to launch Chrome at vite dev (widget drives it by default)
   agentId?: 'claude',          // matches @hyperyond/core's agent registry
   model?: 'sonnet',            // 'opus' costs ~5x; sonnet is fine for browser driving
   maxBudgetUsd?: 0.5,          // per-invocation ceiling

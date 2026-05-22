@@ -128,7 +128,7 @@
 
 ## 快速开始
 
-第一次需要三个终端。Chrome 和 Vite 起来之后会一直跑，跨多次 loop 都不用关。
+第一次需要两个终端。Chrome 和 Vite 起来之后会一直跑，跨多次 loop 都不用关。
 
 ```bash
 git clone https://github.com/Hyperyond/Hover.git
@@ -138,17 +138,14 @@ pnpm --filter basic-app exec playwright install chromium   # 仅 `pnpm test:e2e`
 ```
 
 ```bash
-# 终端 1 —— debug 模式 Chrome，9222 端口，隔离 profile
-pnpm smoke:chrome
-```
-
-```bash
-# 终端 2 —— basic-app 跑在 http://localhost:5173
+# 终端 1 —— basic-app 跑在 http://localhost:5173。仓库里的 examples 都传了
+# `autoLaunchChrome: true`，所以这一步也会顺带拉起 debug Chrome（9222 端口，
+# 隔离 profile 在 <tmpdir>/hover-chrome）并打开 dev URL。
 pnpm dev:example:basic-app
 ```
 
 ```bash
-# 终端 3 —— 跑 AI 烟雾测试（CDP 预检 → 调起 claude → 流式输出事件）
+# 终端 2 —— 跑 AI 烟雾测试（CDP 预检 → 调起 claude → 流式输出事件）
 pnpm smoke
 # 或者自定义目标 + 提示：
 pnpm smoke http://localhost:5173/ "登录然后加一条名为 'verify hover' 的 todo"
@@ -166,16 +163,19 @@ pnpm add -D @hyperyond/vite-plugin
 
 就这一行 —— 不用 `.npmrc`、不用 token。`@hyperyond/*` 在 npmjs.com 上是公开包。
 
-接着用 debug 模式启动 Chrome 让 Hover 可以连：
+接着直接跑你的 dev server：
 
 ```bash
-# macOS
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/hover-chrome
+pnpm dev
 ```
 
-在**那个** Chrome 窗口里打开你的 dev 服务器，✨ 浮动按钮就会出现在右下角。
+在**任意** Chrome 里打开 dev URL。右下角的 ✨ 浮动按钮会用颜色告诉你它现在的状态：
+
+- **蓝色** —— 你正在 debug Chrome 里，直接点开聊天。
+- **琥珀色** —— 还没 debug Chrome。点一下，widget 会自动拉起一个（profile 隔离在 `<tmpdir>/hover-chrome`，并直接打开你的 dev URL），然后提示你切过去用。
+- **灰色** —— debug Chrome 在跑，但你不在那个窗口里。点一下，把那个窗口拉到前台。
+
+希望 `vite dev` 时就预热好 Chrome？`hover({ autoLaunchChrome: true })`。喜欢自己手动开？`pnpm exec hover-chrome`（或 `npx hover-chrome`）。
 
 ## 在 React (Vite) 项目里用
 
@@ -193,7 +193,7 @@ export default defineConfig({
 });
 ```
 
-集成就这一行。照常 `vite dev`，在 debug Chrome 里打开你的应用，点 ✨。
+集成就这一行。照常 `vite dev`，打开你的应用，点 ✨。按钮颜色会告诉你它还需要什么（如果有的话）。
 
 > 通过 widget 保存的 spec 落在项目根目录的 `__vibe_tests__/` 下。用 `npx playwright test` 跑。它只 import `@playwright/test`，对 Hover 没有任何运行时依赖 —— 所以 CI 跑测试时 widget 完全可以禁用。
 
