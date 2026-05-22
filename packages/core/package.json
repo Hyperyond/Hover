@@ -17,7 +17,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./agents": "./src/agents/index.ts",
-    "./service": "./src/service.ts"
+    "./service": "./src/service.ts",
+    "./launch-chrome": "./src/playwright/launchChrome.ts"
   },
   "files": [
     "dist",
@@ -53,6 +54,9 @@
     "access": "public",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "bin": {
+      "hover-chrome": "dist/scripts/start-chrome.js"
+    },
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
@@ -65,6 +69,10 @@
       "./service": {
         "types": "./dist/service.d.ts",
         "import": "./dist/service.js"
+      },
+      "./launch-chrome": {
+        "types": "./dist/playwright/launchChrome.d.ts",
+        "import": "./dist/playwright/launchChrome.js"
       }
     }
   }
