@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { launchDebugChrome } from '@hyperyond/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hyperyond/core/service';
 import type { Plugin } from 'vite';
 
@@ -11,6 +12,13 @@ export interface HoverOptions {
   enabled?: boolean | ((env: { mode: string }) => boolean);
   /** Chrome CDP debug port the agent will operate on (default 9222). */
   chromeDebugPort?: number;
+  /** Auto-launch a debug Chrome pointed at the dev server when Vite starts.
+   *  Default false: the widget detects on first click whether it's running in
+   *  the debug Chrome and launches one if not, which is less disruptive than
+   *  popping a window on every `pnpm dev`. Set true to pre-warm Chrome at
+   *  startup (matches the old behaviour). Idempotent — reuses an existing
+   *  debug Chrome if `chromeDebugPort` is already alive. */
+  autoLaunchChrome?: boolean;
   /** Agent id from @hyperyond/core's registry (default 'claude'). */
   agentId?: string;
   /** Model passed to the agent (default 'sonnet'). */
@@ -27,6 +35,8 @@ const WIDGET_JS = resolve(WIDGET_DIR, 'client.js');
 
 export function hover(options: HoverOptions = {}): Plugin {
   const port = options.port ?? 51789;
+  const chromeDebugPort = options.chromeDebugPort ?? 9222;
+  const autoLaunchChrome = options.autoLaunchChrome ?? false;
   const agentId = options.agentId ?? 'claude';
   const model = options.model ?? 'sonnet';
   const maxBudgetUsd = options.maxBudgetUsd ?? 0.5;
@@ -54,6 +64,7 @@ export function hover(options: HoverOptions = {}): Plugin {
           agentId,
           model,
           maxBudgetUsd,
+          cdpUrl: `http://localhost:${chromeDebugPort}`,
           // The Vite project root is where the agent runs (cwd) and where
           // `Save as Skill` writes `.claude/skills/<slug>/SKILL.md`.
           devRoot: server.config.root,
@@ -66,6 +77,40 @@ export function hover(options: HoverOptions = {}): Plugin {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         server.config.logger.error(`[hover] failed to start service: ${msg}`);
+      }
+
+      // Once Vite is listening, fire-and-forget a debug Chrome on
+      // chromeDebugPort, pointed at the dev URL. If a debug Chrome is already
+      // there (port 9222 alive) launchDebugChrome short-circuits — so this is
+      // idempotent across HMR restarts and across multiple concurrent example
+      // apps. The user gets a working browser without an extra command.
+      if (!autoLaunchChrome) return;
+      const launch = () => {
+        const url = server.resolvedUrls?.local[0] ?? `http://localhost:${server.config.server.port ?? 5173}/`;
+        launchDebugChrome({ url, port: chromeDebugPort })
+          .then(result => {
+            if (!result.ok) {
+              server.config.logger.warn(
+                `[hover] couldn't auto-launch Chrome: ${result.reason}. Open ${url} in a Chrome started with --remote-debugging-port=${chromeDebugPort}, or run \`pnpm exec hover-chrome\`.`,
+              );
+            } else if (result.alreadyRunning) {
+              server.config.logger.info(`[hover] reusing existing debug Chrome on :${result.port}`);
+            } else {
+              server.config.logger.info(
+                `[hover] debug Chrome launched on :${result.port} (data-dir=${result.userDataDir})`,
+              );
+            }
+          })
+          .catch(err => {
+            const msg = err instanceof Error ? err.message : String(err);
+            server.config.logger.warn(`[hover] Chrome auto-launch error: ${msg}`);
+          });
+      };
+      if (server.httpServer) {
+        server.httpServer.once('listening', launch);
+      } else {
+        // middleware mode — no httpServer; URL is best-effort
+        launch();
       }
     },
 
