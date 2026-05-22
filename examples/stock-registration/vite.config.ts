@@ -3,6 +3,6 @@ import react from '@vitejs/plugin-react';
 import { hover } from '@hyperyond/vite-plugin';
 
 export default defineConfig({
-  plugins: [react(), hover()],
+  plugins: [react(), hover({ autoLaunchChrome: true })],
   server: { port: 5175, strictPort: true },
 });
