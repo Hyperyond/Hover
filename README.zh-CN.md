@@ -41,6 +41,14 @@
 
 ## 实际效果
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=ZviL3wRANiI">
+    <img src="https://img.youtube.com/vi/ZviL3wRANiI/maxresdefault.jpg" alt="Hover 演示视频 — 在 YouTube 观看" width="70%" />
+  </a>
+  <br/>
+  <sub><b><a href="https://www.youtube.com/watch?v=ZviL3wRANiI">▶ 在 YouTube 观看演示视频</a></b></sub>
+</p>
+
 [`examples/`](./examples/) 下 4 个真实的 Vite app，每个都压一种不同的测试场景。右边的 Hover widget 都是同一套 UI 在驱动 —— 一样的 loop，四种工作流。
 
 <table>

@@ -41,6 +41,14 @@ Open the floating chat in your dev page, describe what you want to verify in pla
 
 ## See it in action
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=ZviL3wRANiI">
+    <img src="https://img.youtube.com/vi/ZviL3wRANiI/maxresdefault.jpg" alt="Hover demo — watch on YouTube" width="70%" />
+  </a>
+  <br/>
+  <sub><b><a href="https://www.youtube.com/watch?v=ZviL3wRANiI">▶ Watch the demo on YouTube</a></b></sub>
+</p>
+
 Four real example apps under [`examples/`](./examples/), each stressing a different testing surface. The Hover widget on the right is driving each one — same loop, same UI, four very different workflows.
 
 <table>
