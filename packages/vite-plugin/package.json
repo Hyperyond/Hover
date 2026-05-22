@@ -40,6 +40,9 @@
     "access": "public",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "bin": {
+      "hover-chrome": "dist/bin/hover-chrome.js"
+    },
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",
