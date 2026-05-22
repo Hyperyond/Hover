@@ -9,6 +9,7 @@
  *   server → client
  *     { type: 'hello',           payload: { agentId, model, version } }
  *     { type: 'event',           payload: InvokeEvent }              // see agents/types.ts
+ *     { type: 'cdp-status',      payload: { state, reason?, matchingTabUrl?, browser?, launching? } }
  *     { type: 'skill-saved',     payload: { name, path } }
  *     { type: 'skill-exists',    payload: { slug, existingPath } }
  *     { type: 'skills-list',     payload: { skills: SkillSummary[] } }
@@ -21,6 +22,9 @@
  *   client → server
  *     { type: 'command',       payload: { text, sessionId? } }
  *     { type: 'cancel' }
+ *     { type: 'check-cdp',     payload: { pageUrl } }                 // "is this widget in the debug Chrome?"
+ *     { type: 'launch-chrome', payload: { pageUrl } }                 // start debug Chrome, navigate to pageUrl
+ *     { type: 'focus-debug',   payload: { pageUrl } }                 // bringToFront the matching tab in debug Chrome
  *     { type: 'save-skill',    payload: { name, description, steps, overwrite? } }
  *     { type: 'save-spec',     payload: { name, description, steps, assertions?, overwrite? } }
  *     { type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
@@ -31,6 +35,8 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
 import type { InvokeEvent } from './agents/types.js';
+import { checkCdpStatus, focusDebugTab } from './playwright/cdpStatus.js';
+import { launchDebugChrome } from './playwright/launchChrome.js';
 import { preflightCDP } from './playwright/preflight.js';
 import {
   writeSkill,
@@ -80,6 +86,10 @@ interface ClientMessage {
      *  fields on the test case's Labels column. */
     jiraProjectKey?: string;
     labels?: string;
+    /** check-cdp / launch-chrome / focus-debug — the widget's
+     *  window.location.href so service can compare origins or navigate the
+     *  newly-launched debug Chrome to the same URL. */
+    pageUrl?: string;
   };
 }
 
@@ -205,6 +215,18 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       }
       if (msg.type === 'save-case-csv') {
         await handleSaveCaseCsv(ws, msg, devRoot);
+        return;
+      }
+      if (msg.type === 'check-cdp') {
+        await handleCheckCdp(ws, msg, cdpUrl);
+        return;
+      }
+      if (msg.type === 'launch-chrome') {
+        await handleLaunchChrome(ws, msg, cdpUrl);
+        return;
+      }
+      if (msg.type === 'focus-debug') {
+        await handleFocusDebug(ws, msg, cdpUrl);
         return;
       }
       if (msg.type !== 'command') return;
@@ -336,6 +358,88 @@ function buildCdpHint(tabs: { url: string; title?: string }[]): string {
     `first to see the current page state, and only navigate if you actually need a`,
     `different URL.`,
   ].join('\n');
+}
+
+/**
+ * "Is this widget running inside the debug Chrome?" The widget asks this on
+ * connect (and after every status-changing event) so it can render itself as
+ * either:
+ *   - same-window  → normal, drives the page
+ *   - wrong-window → disabled, with a "use the other window" notice
+ *   - no-cdp       → enabled but click triggers launch-chrome instead
+ */
+async function handleCheckCdp(
+  ws: WebSocket,
+  msg: ClientMessage,
+  cdpUrl: string,
+): Promise<void> {
+  const pageUrl = msg.payload?.pageUrl;
+  if (typeof pageUrl !== 'string' || !pageUrl) {
+    send(ws, { type: 'error', payload: { message: 'check-cdp: pageUrl is required' } });
+    return;
+  }
+  const status = await checkCdpStatus(cdpUrl, pageUrl);
+  send(ws, { type: 'cdp-status', payload: status });
+}
+
+/**
+ * Launch a debug Chrome navigated to `pageUrl`, then re-check status. The
+ * re-check usually returns 'wrong-window' (because the widget asking is in
+ * the user's regular Chrome, not the freshly-launched one) — the widget then
+ * displays the "use the other window" state.
+ */
+async function handleLaunchChrome(
+  ws: WebSocket,
+  msg: ClientMessage,
+  cdpUrl: string,
+): Promise<void> {
+  const pageUrl = msg.payload?.pageUrl;
+  if (typeof pageUrl !== 'string' || !pageUrl) {
+    send(ws, { type: 'error', payload: { message: 'launch-chrome: pageUrl is required' } });
+    return;
+  }
+  // Tell the widget we're launching so it can render a spinner immediately —
+  // findChromeBinary + spawn + ready-poll can take a few seconds.
+  send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', launching: true } });
+
+  const port = (() => {
+    try {
+      return Number(new URL(cdpUrl).port) || 9222;
+    } catch {
+      return 9222;
+    }
+  })();
+  const result = await launchDebugChrome({ url: pageUrl, port });
+  if (!result.ok) {
+    send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', reason: result.reason } });
+    return;
+  }
+  // Re-check after launch so the widget gets the real status.
+  const status = await checkCdpStatus(cdpUrl, pageUrl);
+  send(ws, { type: 'cdp-status', payload: status });
+}
+
+/**
+ * bringToFront the debug-Chrome tab matching `pageUrl`'s origin (or open one
+ * if none exists). Used by the wrong-window UI's "switch to debug Chrome"
+ * button. Doesn't return cdp-status — bringToFront doesn't change anything
+ * the widget cares about, and the widget the user is about to focus is a
+ * different page (and will run its own check-cdp on its own ws connection).
+ */
+async function handleFocusDebug(
+  ws: WebSocket,
+  msg: ClientMessage,
+  cdpUrl: string,
+): Promise<void> {
+  const pageUrl = msg.payload?.pageUrl;
+  if (typeof pageUrl !== 'string' || !pageUrl) {
+    send(ws, { type: 'error', payload: { message: 'focus-debug: pageUrl is required' } });
+    return;
+  }
+  const result = await focusDebugTab(cdpUrl, pageUrl);
+  if (!result.ok) {
+    send(ws, { type: 'error', payload: { message: `focus-debug: ${result.reason}` } });
+  }
 }
 
 async function handleSaveSpec(

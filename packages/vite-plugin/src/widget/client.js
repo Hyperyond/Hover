@@ -46,6 +46,11 @@
   const textarea = $('textarea');
   const sendBtn = $('.send');
   const costEl = $('.cost');
+  const cdpOverlay = $('.cdp-overlay');
+  const cdpIconEl = $('.cdp-icon');
+  const cdpTitleEl = $('.cdp-title');
+  const cdpBodyEl = $('.cdp-body');
+  const cdpActionEl = $('.cdp-action');
 
   // ───────────────────────── persistent state ─────────────────────────
   // Survives panel close, page reload, and AI-driven navigations within
@@ -102,6 +107,95 @@
   const isOpen = () => panel.classList.contains('open');
 
   launcher.addEventListener('click', () => setOpen(!isOpen()));
+
+  // ───────────────────────── CDP state ─────────────────────────
+  // The widget asks the local service "is this Chrome the debug Chrome?" on
+  // connect. Three meaningful states:
+  //   - 'same-window'  → widget is in the debug Chrome; everything works.
+  //   - 'wrong-window' → debug Chrome is running, but in a different process.
+  //                       Disable this widget, show "use the other window".
+  //   - 'no-cdp'       → no debug Chrome at all. Clicking the action button
+  //                       fires launch-chrome on the service.
+  // 'launching' is a UI sub-state of 'no-cdp' while the service spawns Chrome.
+
+  let cdpState = 'unknown';
+  let cdpLaunching = false;
+
+  const wsOpen = () => ws && ws.readyState === WebSocket.OPEN;
+
+  const sendCheckCdp = () => {
+    if (!wsOpen()) return;
+    ws.send(JSON.stringify({ type: 'check-cdp', payload: { pageUrl: location.href } }));
+  };
+
+  const renderCdpOverlay = () => {
+    // Hide overlay entirely when widget is healthy.
+    const blocking = cdpState === 'wrong-window' || cdpState === 'no-cdp' || cdpLaunching;
+    cdpOverlay.classList.toggle('open', blocking);
+    cdpOverlay.setAttribute('aria-hidden', blocking ? 'false' : 'true');
+    cdpOverlay.classList.toggle('cdp-launching', cdpLaunching);
+
+    if (cdpLaunching) {
+      cdpIconEl.textContent = '⏳';
+      cdpTitleEl.textContent = 'Launching debug Chrome…';
+      cdpBodyEl.textContent = 'A new Chrome window will open with this URL. Use the widget over there.';
+      cdpActionEl.hidden = true;
+      return;
+    }
+    if (cdpState === 'wrong-window') {
+      cdpIconEl.textContent = '👉';
+      cdpTitleEl.textContent = 'Use the other window';
+      cdpBodyEl.textContent = 'A debug Chrome is already running. This widget belongs to your regular Chrome; please switch over.';
+      cdpActionEl.hidden = false;
+      cdpActionEl.textContent = 'Switch me to it';
+      cdpActionEl.dataset.action = 'focus';
+      return;
+    }
+    if (cdpState === 'no-cdp') {
+      cdpIconEl.textContent = '🌐';
+      cdpTitleEl.textContent = 'No debug Chrome detected';
+      cdpBodyEl.textContent = 'Hover needs to drive a Chrome started with the debugging port open. Click below to start one.';
+      cdpActionEl.hidden = false;
+      cdpActionEl.textContent = 'Launch debug Chrome';
+      cdpActionEl.dataset.action = 'launch';
+      return;
+    }
+    // same-window / unknown — overlay hidden; no content update needed.
+  };
+
+  const refreshLauncherCdpClass = () => {
+    launcher.classList.remove('cdp-wrong-window', 'cdp-no-cdp', 'cdp-launching');
+    if (cdpLaunching) launcher.classList.add('cdp-launching');
+    else if (cdpState === 'wrong-window') launcher.classList.add('cdp-wrong-window');
+    else if (cdpState === 'no-cdp') launcher.classList.add('cdp-no-cdp');
+  };
+
+  const applyCdpState = (newState, opts = {}) => {
+    cdpState = newState;
+    cdpLaunching = !!opts.launching;
+    refreshLauncherCdpClass();
+    renderCdpOverlay();
+    // Keep the textarea/sendBtn in sync with whether we're allowed to drive.
+    // When the overlay is up, the underlying input is visually hidden but
+    // still focusable — disable it so a stray Enter doesn't dispatch.
+    const blocking = cdpState === 'wrong-window' || cdpState === 'no-cdp' || cdpLaunching;
+    if (blocking) {
+      textarea.disabled = true;
+      sendBtn.disabled = true;
+    }
+  };
+
+  // Wire the overlay's action button (label/data-action change based on state).
+  cdpActionEl.addEventListener('click', () => {
+    if (!wsOpen()) return;
+    const action = cdpActionEl.dataset.action;
+    if (action === 'launch') {
+      applyCdpState('no-cdp', { launching: true });
+      ws.send(JSON.stringify({ type: 'launch-chrome', payload: { pageUrl: location.href } }));
+    } else if (action === 'focus') {
+      ws.send(JSON.stringify({ type: 'focus-debug', payload: { pageUrl: location.href } }));
+    }
+  });
 
   // Esc inside shadow → close. We listen on the shadow root, not document,
   // so a stray Esc on the host page (or AI key input) doesn't dismiss us.
@@ -1310,6 +1404,9 @@
       setStatus('connected', 'connected');
       sendBtn.disabled = running;
       textarea.disabled = running;
+      // Ask the service whether we're in the debug Chrome. Until we hear
+      // back, cdpState stays 'unknown' (overlay hidden, launcher normal).
+      sendCheckCdp();
     });
     ws.addEventListener('close', () => {
       setStatus('disconnected', 'disconnected');
@@ -1373,6 +1470,19 @@
         handleCaseCsvExists(p.slug, p.existingPath);
       } else if (msg.type === 'skills-list') {
         renderSkills(msg.payload?.skills ?? []);
+      } else if (msg.type === 'cdp-status') {
+        const p = msg.payload ?? {};
+        const launching = p.launching === true;
+        applyCdpState(p.state ?? 'unknown', { launching });
+        // After a launch attempt finishes, restore textarea/sendBtn enablement
+        // for the same-window case (the gate logic only disables; coming back
+        // to a working state needs an explicit re-enable here).
+        if (!launching && (p.state === 'same-window' || p.state === 'unknown')) {
+          if (wsOpen() && !running && !recording) {
+            sendBtn.disabled = false;
+            textarea.disabled = false;
+          }
+        }
       } else if (msg.type === 'hello') {
         // handshake — could surface agentId/model later
       }
@@ -1389,6 +1499,9 @@
   const submit = () => {
     const text = textarea.value.trim();
     if (!text || running || !ws || ws.readyState !== WebSocket.OPEN) return;
+    // Block sends when this widget isn't bound to the debug Chrome — the
+    // service can't drive a tab it can't see over CDP.
+    if (cdpState === 'wrong-window' || cdpState === 'no-cdp' || cdpLaunching) return;
     addMessage({ kind: 'user', text });
     textarea.value = '';
     setRunning(true);

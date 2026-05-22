@@ -16,6 +16,28 @@
 .launcher:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5); }
 .launcher.open { transform: rotate(45deg); }
 
+/* CDP-state launcher variants — gray when the widget is loaded in the
+   wrong Chrome (debug Chrome is up elsewhere), amber when no debug Chrome
+   exists at all, blue+pulsing while we're spinning one up. */
+.launcher.cdp-wrong-window {
+  background: linear-gradient(135deg, #9ca3af, #6b7280);
+  box-shadow: 0 4px 14px rgba(107, 114, 128, 0.35);
+}
+.launcher.cdp-wrong-window:hover { box-shadow: 0 6px 20px rgba(107, 114, 128, 0.5); }
+.launcher.cdp-no-cdp {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+}
+.launcher.cdp-no-cdp:hover { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5); }
+.launcher.cdp-launching {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  animation: hover-launching-pulse 1.4s ease-in-out infinite;
+}
+@keyframes hover-launching-pulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4); }
+  50%      { box-shadow: 0 4px 22px rgba(99, 102, 241, 0.75); }
+}
+
 .panel {
   position: fixed; bottom: 88px; right: 24px;
   width: 420px; height: 560px;
@@ -102,6 +124,43 @@ header {
 .skills-overlay .skills-empty {
   padding: 20px 16px; text-align: center;
   color: #9ca3af; font-size: 12px; line-height: 1.5;
+}
+
+/* CDP overlay covers the body+footer when the widget isn't in the debug
+   Chrome (or no debug Chrome exists). Above .skills-overlay (z-index 5)
+   because CDP issues block everything else. */
+.cdp-overlay {
+  position: absolute; top: 41px; left: 0; right: 0; bottom: 0;
+  background: #fff;
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 6;
+  padding: 24px;
+}
+.cdp-overlay.open { display: flex; }
+.cdp-card {
+  max-width: 320px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.cdp-icon { font-size: 36px; line-height: 1; }
+.cdp-title { font-weight: 600; font-size: 14px; color: #111; }
+.cdp-body  { font-size: 12px; color: #6b7280; line-height: 1.5; }
+.cdp-action {
+  margin-top: 6px;
+  padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 500;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff;
+  font-family: inherit;
+}
+.cdp-action:hover { filter: brightness(1.05); }
+.cdp-action:disabled { opacity: 0.6; cursor: default; }
+.cdp-action[hidden] { display: none; }
+.cdp-overlay.cdp-launching .cdp-icon {
+  animation: hover-cdp-spin 1.4s linear infinite;
+}
+@keyframes hover-cdp-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 .skill-row {
   padding: 10px 12px; border-radius: 8px;
