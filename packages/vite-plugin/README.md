@@ -48,7 +48,7 @@ hover({
   autoLaunchChrome?: false,    // true to launch Chrome at vite dev (widget drives it by default)
   agentId?: 'claude',          // matches @hyperyond/core's agent registry
   model?: 'sonnet',            // 'opus' costs ~5x; sonnet is fine for browser driving
-  maxBudgetUsd?: 0.5,          // per-invocation ceiling
+  maxBudgetUsd?: undefined,    // hard $ ceiling per command; default no cap (use Stop in the widget)
 });
 ```
 

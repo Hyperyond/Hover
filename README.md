@@ -226,7 +226,7 @@ hover({
   chromeDebugPort: 9222,
   agentId: 'claude',       // matches @hyperyond/core's agent registry
   model: 'sonnet',         // 'opus' costs ~5× — use sonnet for browser driving
-  maxBudgetUsd: 0.5,       // hard ceiling per agent invocation
+  maxBudgetUsd: undefined, // hard $ ceiling per agent invocation; no default — use Stop in the widget
 });
 ```
 

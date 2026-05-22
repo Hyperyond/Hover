@@ -226,7 +226,7 @@ hover({
   chromeDebugPort: 9222,
   agentId: 'claude',       // 对应 @hyperyond/core 的 agent registry
   model: 'sonnet',         // 'opus' 大约贵 5×—— 浏览器驱动用 sonnet 完全够
-  maxBudgetUsd: 0.5,       // 每次 agent 调用的硬上限
+  maxBudgetUsd: undefined, // 每次 agent 调用的 $ 硬上限；默认不设，让 widget 里的 Stop 按钮控住
 });
 ```
 

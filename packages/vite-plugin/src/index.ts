@@ -23,7 +23,9 @@ export interface HoverOptions {
   agentId?: string;
   /** Model passed to the agent (default 'sonnet'). */
   model?: string;
-  /** Hard $ ceiling per command (default 0.5). */
+  /** Hard $ ceiling per command. No default — flows can run as long as the
+   *  user lets them; the widget's running-cost chip + Stop button are the
+   *  intended control. Set a number here if you want a hard cutoff. */
   maxBudgetUsd?: number;
 }
 
@@ -39,7 +41,11 @@ export function hover(options: HoverOptions = {}): Plugin {
   const autoLaunchChrome = options.autoLaunchChrome ?? false;
   const agentId = options.agentId ?? 'claude';
   const model = options.model ?? 'sonnet';
-  const maxBudgetUsd = options.maxBudgetUsd ?? 0.5;
+  // No default cap — real flows (form filling, multi-step checkouts) used
+  // to die mid-run at the old $0.50 ceiling. The widget shows the running $
+  // counter in its header so the user can Stop when they've seen enough.
+  // Pass an explicit number here to reinstate a hard ceiling.
+  const maxBudgetUsd = options.maxBudgetUsd;
 
   let enabled = true;
   let service: ServiceHandle | null = null;
