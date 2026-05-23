@@ -1,5 +1,5 @@
 {
-  "name": "@hyperyond/core",
+  "name": "@hover-dev/core",
   "version": "0.0.0",
   "description": "Hover's local Node service: agent invocation, Playwright CDP preflight, WebSocket bridge.",
   "license": "Apache-2.0",

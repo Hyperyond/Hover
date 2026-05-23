@@ -1,23 +1,23 @@
-# @hyperyond/vite-plugin
+# vite-plugin-hover
 
-Vite plugin that injects the Hover chat widget into your dev server. The developer types a natural-language instruction; an agent on the user's PATH (`claude`, today) drives their real Chrome via CDP + Playwright MCP; verified sessions crystallize into `__vibe_tests__/<slug>.spec.ts` files for plain Playwright CI runs.
+Vite plugin that injects the Hover chat widget into your dev server. The developer types a natural-language instruction; an agent on the user's PATH (`claude`, today) drives a real (non-headless) debug Chrome that Hover launches under an isolated profile at `<tmpdir>/hover-chrome`, via CDP + Playwright MCP; verified sessions crystallize into `__vibe_tests__/<slug>.spec.ts` files for plain Playwright CI runs.
 
 Part of the [Hover](https://github.com/Hyperyond/Hover) monorepo. See the top-level README for the full pitch and architecture.
 
 ## Install
 
 ```bash
-pnpm add -D @hyperyond/vite-plugin
+pnpm add -D vite-plugin-hover
 ```
 
-No `.npmrc`, no auth tokens — `@hyperyond/*` is public on npmjs.com.
+No `.npmrc`, no auth tokens — `vite-plugin-hover` and `@hover-dev/core` are public on npmjs.com.
 
 ## Use
 
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite';
-import { hover } from '@hyperyond/vite-plugin';
+import { hover } from 'vite-plugin-hover';
 
 export default defineConfig({
   plugins: [hover()],
@@ -46,7 +46,7 @@ hover({
   enabled?: true,              // false to disable (default: only in dev mode)
   chromeDebugPort?: 9222,
   autoLaunchChrome?: false,    // true to launch Chrome at vite dev (widget drives it by default)
-  agentId?: 'claude',          // matches @hyperyond/core's agent registry
+  agentId?: 'claude',          // matches @hover-dev/core's agent registry
   model?: 'sonnet',            // 'opus' costs ~5x; sonnet is fine for browser driving
   maxBudgetUsd?: undefined,    // hard $ ceiling per command; default no cap (use Stop in the widget)
 });
@@ -56,7 +56,7 @@ hover({
 
 - `apply: 'serve'` — no-op in production builds.
 - `transformIndexHtml` (order: `'post'`) injects a single `<script type="module">` with the widget source. The widget self-isolates via Shadow DOM, marked `data-hover="true"` so Playwright runs filter it out.
-- `configureServer` boots a long-running `@hyperyond/core` WebSocket service on `127.0.0.1` and tears it down in `closeBundle`.
+- `configureServer` boots a long-running `@hover-dev/core` WebSocket service on `127.0.0.1` and tears it down in `closeBundle`.
 - Port auto-bump (51789 → 51798) so multiple example apps can run concurrently, each with its own service.
 
 ## Sandbox

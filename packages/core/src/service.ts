@@ -1,7 +1,7 @@
 /**
  * Local Hover WebSocket service.
  *
- * One process per Vite dev server. Started by @hyperyond/vite-plugin's
+ * One process per Vite dev server. Started by vite-plugin-hover's
  * configureServer hook, torn down on closeBundle. Binds to 127.0.0.1 only.
  *
  * Wire protocol (newline-free JSON over WebSocket):
@@ -118,7 +118,7 @@ function bind(host: string, port: number): Promise<WebSocketServer> {
 
 /**
  * Find a free port in [start, start+attempts) and bind a WebSocketServer to
- * it. Each example app that loads @hyperyond/vite-plugin runs its own service —
+ * it. Each example app that loads vite-plugin-hover runs its own service —
  * with auto-bump, multiple Vite dev servers can coexist (basic-app on 51789,
  * stock-registration on 51790, etc.) and each widget connects only to its
  * own service. The widget reads the actual port from window.__HOVER_PORT__.

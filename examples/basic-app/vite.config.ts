@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { hover } from '@hyperyond/vite-plugin';
+import { hover } from 'vite-plugin-hover';
 
 export default defineConfig({
   plugins: [react(), hover({ autoLaunchChrome: true })],

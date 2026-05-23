@@ -1,7 +1,7 @@
 {
-  "name": "@hyperyond/vite-plugin",
+  "name": "vite-plugin-hover",
   "version": "0.0.0",
-  "description": "Vite plugin that injects the Hover chat widget into your dev server, so AI can drive your real Chrome.",
+  "description": "Vite plugin that injects the Hover chat widget into your dev server, so AI can drive a real (non-headless) debug Chrome via CDP.",
   "license": "Apache-2.0",
   "author": "Hyperyond",
   "homepage": "https://github.com/Hyperyond/Hover#readme",
@@ -27,7 +27,7 @@
     "prepack": "pnpm run clean && pnpm run build"
   },
   "dependencies": {
-    "@hyperyond/core": "workspace:*"
+    "@hover-dev/core": "workspace:*"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"

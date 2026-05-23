@@ -2,7 +2,7 @@
  * Unit-level verification for writeSpec — writes a synthetic Playwright spec
  * to the basic-app project, prints the result, cleans up.
  *
- *   pnpm --filter @hyperyond/core verify-spec
+ *   pnpm --filter @hover-dev/core verify-spec
  */
 import { readFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';

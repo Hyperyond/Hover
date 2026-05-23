@@ -18,15 +18,15 @@ The differentiator vs. Stagehand / Midscene / Playwright codegen is the **AI exp
 
 Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*`. The repo is pnpm + ESM throughout.
 
-- `packages/core` is `@hyperyond/core` — the Node service. Owns agent invocation, Playwright CDP preflight, MCP config, and the WebSocket bridge between the injected UI and the agent process.
-- `packages/vite-plugin` is `@hyperyond/vite-plugin` — the Vite plugin that injects the floating chat widget into the user's dev server page. Must be a no-op in production builds (`apply: 'serve'`).
+- `packages/core` is `@hover-dev/core` — the Node service. Owns agent invocation, Playwright CDP preflight, MCP config, and the WebSocket bridge between the injected UI and the agent process.
+- `packages/vite-plugin` is `vite-plugin-hover` — the Vite plugin that injects the floating chat widget into the user's dev server page. Must be a no-op in production builds (`apply: 'serve'`).
 - `examples/basic-app` is the minimal Vite + React app used as the default smoke target — login + counter + todos. Vite port 5173.
 - `examples/e-commerce` is an Amazon-style e-commerce SPA: product grid (with category sidebar + search) → product detail → cart → checkout (shipping address + payment method) → success. Payment method offers an inline card form OR a "Pay with PayHover" button that opens the payment-provider in a new tab and listens for the postMessage result. Stresses long action chains, cart state, conditional UI per payment method, and cross-tab popup flows. Vite port 5174.
 - `examples/stock-registration` is a realistic brokerage account opening form (think IBKR / Schwab account application). 8 sections, ~50 fields, conditional reveals (foreign-tax fields when not US tax resident, previous address when current < 2 years, employer block when employed/self-employed, PEP/FINRA/control-person follow-ups, ACH bank fields when funding via ACH), multi-select chips, file upload, range slider, compliance acknowledgements. Stresses AI form filling on rich realistic-business controls. Vite port 5175.
 - `examples/canvas-paint` is a drawing app: `<canvas>` for the artwork, DOM toolbar for tools/color/brush size. Stresses AI's ability to find DOM controls amidst graphical content (canvas pixels are opaque to Playwright snapshots). Vite port 5176.
-- `examples/payment-provider` is a **deliberately unintegrated** mock third-party payment page used as the popup target for e-commerce's "Pay with PayHover" button. Vite port 5177. **Does NOT install `@hyperyond/vite-plugin`** — the widget must not appear on the simulated third-party origin. Stresses agent behaviour around cross-tab flows: agent must `browser_tabs(action='list')` to discover the new tab, `browser_tabs(action='select')` to switch, operate the page without a widget, and verify the original tab advances on `window.opener.postMessage` callback.
+- `examples/payment-provider` is a **deliberately unintegrated** mock third-party payment page used as the popup target for e-commerce's "Pay with PayHover" button. Vite port 5177. **Does NOT install `vite-plugin-hover`** — the widget must not appear on the simulated third-party origin. Stresses agent behaviour around cross-tab flows: agent must `browser_tabs(action='list')` to discover the new tab, `browser_tabs(action='select')` to switch, operate the page without a widget, and verify the original tab advances on `window.opener.postMessage` callback.
 
-Each example's `@hyperyond/vite-plugin` instance starts its own Hover service. The first one to boot binds `127.0.0.1:51789`; subsequent ones auto-bump (51790, 51791, …, up to 51798). The injected widget reads `window.__HOVER_PORT__` so each example's widget connects only to its own service — running multiple examples concurrently is supported and each writes skills + specs into its own `devRoot`. `payment-provider` has no service at all.
+Each example's `vite-plugin-hover` instance starts its own Hover service. The first one to boot binds `127.0.0.1:51789`; subsequent ones auto-bump (51790, 51791, …, up to 51798). The injected widget reads `window.__HOVER_PORT__` so each example's widget connects only to its own service — running multiple examples concurrently is supported and each writes skills + specs into its own `devRoot`. `payment-provider` has no service at all.
 
 ## Inactive or placeholder directories
 
@@ -36,7 +36,7 @@ Each example's `@hyperyond/vite-plugin` instance starts its own Hover service. T
 
 Phase 0 (end-to-end feasibility) is verified — a `claude -p` invocation, sandboxed to only the Playwright MCP server, successfully drives the user's Chrome through a multi-step task in `examples/basic-app`. Phase 1 (Vite plugin + chat UI + persistent Node service) is the active work.
 
-Development order is Phase 0 → 1 → 2 → 3. Phase 1 work order: WebSocket server in `@hyperyond/core` → real Vite plugin injection (`transformIndexHtml` + Shadow DOM widget) → "save as Playwright spec" file emission.
+Development order is Phase 0 → 1 → 2 → 3. Phase 1 work order: WebSocket server in `@hover-dev/core` → real Vite plugin injection (`transformIndexHtml` + Shadow DOM widget) → "save as Playwright spec" file emission.
 
 # Architecture
 
@@ -56,7 +56,7 @@ Five files in `packages/core/src/agents/`:
 
 Per-agent strategy lives in its own file (currently just `claude.ts`). To add a new agent: write its `AgentDescriptor` and register it in `registry.ts` — nothing else changes.
 
-The full flow for one command: page UI → WebSocket → `@hyperyond/core` → spawn agent → MCP → Playwright → CDP → user's Chrome. Step events flow back the same path in reverse.
+The full flow for one command: page UI → WebSocket → `@hover-dev/core` → spawn agent → MCP → Playwright → CDP → user's Chrome. Step events flow back the same path in reverse.
 
 ## Widget-driven Chrome lifecycle
 
@@ -83,7 +83,7 @@ These are load-bearing — several are non-obvious:
 - Strict sandboxing. The smoke test passes `--strict-mcp-config`, `--permission-mode dontAsk`, `--allowedTools mcp__playwright`, `--disallowedTools "Bash Edit Write Read Grep Glob Task WebFetch WebSearch"`, and `--max-budget-usd 0.50`. The Playwright MCP server is the only tool Claude can reach. Filesystem access (other than the eventual `__vibe_tests__/` write path) is forbidden.
 - Default model is `sonnet`, not `opus`. Opus is ~5× more expensive per browser-driving session. Override with `HOVER_MODEL=opus` if needed for harder tasks.
 - The injected UI lives in a Shadow DOM and marks itself with `data-vibe-test="true"` so Playwright can skip it. Tailwind's default scan does not work inside Shadow DOM — use inline styles or CSS-in-JS.
-- The local Node service binds to `127.0.0.1` only. The Vite plugin must be a no-op in production builds (`apply: 'serve'` in `@hyperyond/vite-plugin`).
+- The local Node service binds to `127.0.0.1` only. The Vite plugin must be a no-op in production builds (`apply: 'serve'` in `vite-plugin-hover`).
 - Generated Playwright code prefers `page.getByRole` / `page.getByText` over CSS/XPath selectors.
 - Cookies / localStorage never transit the Node service; auth state stays inside the browser and is handled by Playwright in-process.
 - Child-process stdio must be drained, or the spawned agent deadlocks.
@@ -153,7 +153,7 @@ Tag versions at meaningful milestones so the history has anchor points:
 
 ## Test strategy
 
-- Unit tests: **Vitest**, per-package, in `packages/*/tests/` sibling to `src/`. Run with `pnpm --filter @hyperyond/core test` or `pnpm test` at the root (which fans out across the workspace). Keep `src/` source-only; do not place `*.test.ts` inside `src/`. Current coverage: `packages/core/tests/agents/` (argv dispatcher, claude descriptor, registry).
+- Unit tests: **Vitest**, per-package, in `packages/*/tests/` sibling to `src/`. Run with `pnpm --filter @hover-dev/core test` or `pnpm test` at the root (which fans out across the workspace). Keep `src/` source-only; do not place `*.test.ts` inside `src/`. Current coverage: `packages/core/tests/agents/` (argv dispatcher, claude descriptor, registry).
 - Integration / e2e: **Playwright dogfooding**. Crystallized specs land under `examples/basic-app/__vibe_tests__/` and run with standard `@playwright/test`. The agent must not be involved at CI time — only the Playwright script runs. Bootstrap on a fresh machine: `pnpm --filter basic-app exec playwright install chromium`. Run with `pnpm test:e2e`.
 - Smoke-level end-to-end (agent in the loop): `pnpm smoke`. This requires a running debug Chrome and the example frontend; it is not part of CI.
 
@@ -181,13 +181,13 @@ pnpm smoke:chrome         # launch debug-mode Chrome (--remote-debugging-port=92
 pnpm smoke                # end-to-end: detect agents → CDP preflight → invoke claude
 pnpm detect               # list installed coding agents
 pnpm verify-widget        # validate that the injected widget reports `data-vibe-test`
-pnpm ws-smoke             # exercise the @hyperyond/core WebSocket bridge in isolation
+pnpm ws-smoke             # exercise the @hover-dev/core WebSocket bridge in isolation
 ```
 
 ```bash
-pnpm --filter @hyperyond/core test
-pnpm --filter @hyperyond/core typecheck
-pnpm --filter @hyperyond/vite-plugin typecheck
+pnpm --filter @hover-dev/core test
+pnpm --filter @hover-dev/core typecheck
+pnpm --filter vite-plugin-hover typecheck
 pnpm --filter basic-app dev
 ```
 
@@ -197,9 +197,11 @@ pnpm --filter basic-app dev
 
 A typical browser-driving session with `opus` costs ~5× the equivalent `sonnet` session. Hover is meant to run continuously during dev; default to `sonnet`. Set `HOVER_MODEL=opus` per-invocation when you need it.
 
-## Why does Hover never launch its own Chrome?
+## Why does Hover use an isolated debug Chrome instead of attaching to the user's normal browser?
 
-The user is logged into their dev env, has dev-tools state, has cookies, has the page in the state they were debugging. Launching a fresh Chrome throws all of that away. Hover connects to an existing Chrome over CDP (`connectOverCDP`) and picks the tab whose URL matches the dev-server origin.
+Hover launches its own debug Chrome under `<tmpdir>/hover-chrome` (a persistent user-data-dir, reused across runs) and connects to it over CDP. It deliberately does *not* attach to the user's primary Chrome profile: doing so would require the user to relaunch their everyday browser with `--remote-debugging-port` and would expose every tab, cookie, and extension on their main session to whatever the agent does. The trade-off is honest: the user has to log into the app once inside the debug Chrome, but from that point on the profile dir persists session state across Hover commands and dev-server restarts.
+
+The CDP entry point (`connectOverCDP` against an *already-running* debug Chrome) is still load-bearing: the agent never spawns its own Chromium, never operates a fresh headless context, and always lands on the existing tab whose URL matches the dev-server origin.
 
 ## Why is filesystem access disallowed on the agent?
 

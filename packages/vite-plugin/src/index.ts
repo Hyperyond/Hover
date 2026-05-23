@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { launchDebugChrome } from '@hyperyond/core/launch-chrome';
-import { startService, type ServiceHandle } from '@hyperyond/core/service';
+import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
+import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import type { Plugin } from 'vite';
 
 export interface HoverOptions {
@@ -19,7 +19,7 @@ export interface HoverOptions {
    *  startup (matches the old behaviour). Idempotent — reuses an existing
    *  debug Chrome if `chromeDebugPort` is already alive. */
   autoLaunchChrome?: boolean;
-  /** Agent id from @hyperyond/core's registry (default 'claude'). */
+  /** Agent id from @hover-dev/core's registry (default 'claude'). */
   agentId?: string;
   /** Model passed to the agent (default 'sonnet'). */
   model?: string;

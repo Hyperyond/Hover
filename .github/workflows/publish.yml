@@ -1,29 +1,31 @@
 name: Publish
 
-# Auto-publishes @hyperyond/* packages to the public npm.org registry
+# Auto-publishes the Hover packages to the public npm.org registry
 # (https://registry.npmjs.org) when a v* tag is pushed. The same tarballs
 # are also attached to a GitHub Release for archival.
 #
 # Trigger:    git tag -a v0.1.5 -m "..." && git push --tags
 # Auth:       NPM_TOKEN repo secret (a granular automation token from
 #             https://www.npmjs.com/settings/<user>/tokens with read+write
-#             on @hyperyond/*) — must be added before the first run.
-#             GITHUB_TOKEN is auto-injected (used for the Release).
-# Scope:      packages are @hyperyond/* — the org must exist on npm.org
-#             (https://www.npmjs.com/settings/hyperyond).
+#             on @hover-dev/* and vite-plugin-hover) — must be added before
+#             the first run. GITHUB_TOKEN is auto-injected (used for the
+#             Release).
+# Packages:   @hover-dev/core (scoped — org must exist on npm.org,
+#             https://www.npmjs.com/settings/hover-dev) and vite-plugin-hover
+#             (unscoped, follows the community vite-plugin-* convention).
 #
 # What it does:
 #   1. Checkout, install pnpm + Node 24, restore pnpm cache
 #   2. Rewrite package.json versions from the tag (v0.1.5 → "0.1.5")
 #      so we don't have to remember to bump package.json in lockstep
 #   3. Typecheck + unit tests as a release gate
-#   4. Build each @hyperyond/* package (tsc + asset copy for vite-plugin)
+#   4. Build each package (tsc + asset copy for vite-plugin-hover)
 #   5. pnpm publish each one to https://registry.npmjs.org
 #   6. Pack the same tarballs and attach to a GitHub Release
 #
 # Consumers can then install with no .npmrc and no auth — same shape as any
 # other public npm package:
-#   pnpm add -D @hyperyond/vite-plugin
+#   pnpm add -D vite-plugin-hover
 
 on:
   push:
@@ -58,7 +60,7 @@ jobs:
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
-          scope: '@hyperyond'
+          scope: '@hover-dev'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -82,11 +84,11 @@ jobs:
 
       - name: Bump package versions in-place
         run: |
-          # Rewrite each @hyperyond/* package.json's version field without
+          # Rewrite each publishable package.json's version field without
           # committing or git-tagging (the tag already exists, that's why
           # we're here). --allow-same-version is a safety net if someone
           # already bumped manually before tagging.
-          pnpm -r --filter '@hyperyond/*' exec npm version \
+          pnpm --filter @hover-dev/core --filter vite-plugin-hover exec npm version \
             "${{ steps.version.outputs.version }}" \
             --no-git-tag-version \
             --allow-same-version
@@ -95,11 +97,11 @@ jobs:
         run: pnpm typecheck
 
       - name: Unit tests
-        # Only the @hyperyond/* packages — `pnpm test` at the root also
+        # Only the publishable packages — `pnpm test` at the root also
         # fans out to examples/basic-app whose tests are Playwright e2e
         # against an actual dev server (not appropriate as a publish gate,
         # and would need a chromium install in CI).
-        run: pnpm -r --filter '@hyperyond/*' --if-present test
+        run: pnpm --filter @hover-dev/core --filter vite-plugin-hover --if-present test
 
       - name: Build
         run: pnpm build
@@ -113,14 +115,14 @@ jobs:
         # --access public: required on the first publish of a scoped
         # package; npm.org defaults scoped packages to restricted/private
         # unless you say otherwise.
-        run: pnpm -r --filter '@hyperyond/*' publish --no-git-checks --access public
+        run: pnpm --filter @hover-dev/core --filter vite-plugin-hover publish --no-git-checks --access public
 
       - name: Pack tarballs for release assets
         # Re-pack so the GitHub Release has the same tarballs we just
         # published — useful for archival / offline mirroring.
         run: |
           mkdir -p release-tarballs
-          pnpm -r --filter '@hyperyond/*' exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release-tarballs"
+          pnpm --filter @hover-dev/core --filter vite-plugin-hover exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release-tarballs"
 
       - name: Create GitHub Release
         # Only on real tag pushes; manual workflow_dispatch reuses an

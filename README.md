@@ -10,6 +10,8 @@
 
 <p>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/vite-plugin-hover"><img alt="vite-plugin-hover on npm" src="https://img.shields.io/npm/v/vite-plugin-hover?style=flat-square&label=vite-plugin-hover&color=cb3837&logo=npm&logoColor=white" /></a>
+  <a href="https://www.npmjs.com/package/@hover-dev/core"><img alt="@hover-dev/core on npm" src="https://img.shields.io/npm/v/@hover-dev/core?style=flat-square&label=%40hover-dev%2Fcore&color=cb3837&logo=npm&logoColor=white" /></a>
   <a href="https://github.com/Hyperyond/Hover/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Hyperyond/Hover?style=flat-square&label=release&color=blueviolet" /></a>
   <a href="#roadmap"><img alt="Phase 1 shipped" src="https://img.shields.io/badge/phase-1%20shipped-22c55e?style=flat-square" /></a>
   <a href="https://github.com/Hyperyond/Hover/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Hyperyond/Hover?style=flat-square&color=ffd700" /></a>
@@ -114,7 +116,7 @@ Pick one or pick all three. Spec for CI, Skill for the next exploration, Case fo
 All three files check into the same git repo as the rest of your code. The moment a frontend developer saves a flow, everyone else can use it — **no Hover required, no agent, no token**:
 
 - **QA / dedicated testers** clone the repo and run `pnpm test:e2e` for the deterministic specs, *or* drag the matching `.case.csv` into Xray / Zephyr Scale / Jira and run the same flow as a tracked Manual Test session. They don't need to install Hover, configure Chrome, or know what an "agent" is.
-- **Other frontends** invoke a saved skill from their own Hover widget — *"execute login-as-claude"* skips the login dance and drops them straight into the screen they're actually working on. Skills become reusable "macros" the whole team builds up over time.
+- **Other frontends** invoke a saved skill from their own Hover widget — *"execute login-as-claude"* replays the recorded steps in their own browser session. Skills work best for flows that don't depend on user-specific data or dynamic element IDs — think navigation sequences, form patterns, and UI explorations rather than session-bound state.
 - **PR review** treats every saved spec as plain code — diff-able, blame-able, `requestChanges`-able. There's no proprietary file format, no SaaS dashboard, no "the test passed but we can't see how it got there".
 - **Sprint planning / PM tracking** — `.case.csv` imports into Jira as a real test issue, linkable to a story, assignable to a tester, runnable as a Manual Test session. The Jira board now reflects what your app *can* do, not just what's planned.
 - **Onboarding** is `git clone && pnpm install && pnpm test:e2e`. The test suite doubles as living documentation of how every important flow in the app works — new hires watch real browsers walk through real scenarios.
@@ -125,7 +127,7 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
 
 - **Vite plugin** that injects a Shadow-DOM widget into your dev page. No-op in production. Marked `data-hover="true"` so your own Playwright runs can skip it.
 - **Local Node service** on `127.0.0.1` that bridges the widget to a coding-agent CLI on your PATH (`claude` today; `codex` / `cursor` / `aider` are a one-file addition).
-- **CDP-attached browser driving** — Hover talks to *your* Chrome (the one you're already debugging in), never spawns a fresh Chromium. Cookies, dev-tools state, the page you were inspecting — all preserved.
+- **CDP-attached browser driving** — Hover drives a debug Chrome it launches under an isolated profile at `<tmpdir>/hover-chrome`, never a fresh headless Chromium. Your main Chrome profile is untouched (no cookie / extension / devtools-state sharing — log in once inside the debug Chrome and that session persists across Hover commands and dev-server restarts, because the profile dir is reused).
 - **Save as Playwright spec** → `__vibe_tests__/<slug>.spec.ts`, uses `getByRole / getByLabel / getByTestId` semantic selectors. JSDoc header carries plain-English Steps + Expected blocks so non-coders can review.
 - **Save as Skill** → `.claude/skills/<slug>/SKILL.md`, replayable by saying *"execute login-as-claude"* in a future conversation.
 - **Save as Jira case** → `__vibe_tests__/<slug>.case.csv`, an Xray-compatible multi-row CSV that imports straight into Jira / Xray / Zephyr Scale as a Manual Test issue.
@@ -164,12 +166,12 @@ Or just open `http://localhost:5173/` in the debug Chrome, click the ✨ floatin
 ## Install
 
 ```bash
-pnpm add -D @hyperyond/vite-plugin
-# or:  npm install -D @hyperyond/vite-plugin
-# or:  yarn add -D @hyperyond/vite-plugin
+pnpm add -D vite-plugin-hover
+# or:  npm install -D vite-plugin-hover
+# or:  yarn add -D vite-plugin-hover
 ```
 
-That's it — no `.npmrc`, no auth tokens. The `@hyperyond/*` packages are public on npmjs.com.
+That's it — no `.npmrc`, no auth tokens. The `vite-plugin-hover` and `@hover-dev/core` packages are public on npmjs.com.
 
 Then just run your dev server:
 
@@ -191,7 +193,7 @@ Prefer it to pre-warm Chrome at `vite dev`? `hover({ autoLaunchChrome: true })`.
 // vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { hover } from '@hyperyond/vite-plugin';
+import { hover } from 'vite-plugin-hover';
 
 export default defineConfig({
   plugins: [
@@ -211,7 +213,7 @@ That's the whole integration. `vite dev` as usual; open your app; click ✨. The
 // vite.config.ts
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
-import { hover } from '@hyperyond/vite-plugin';
+import { hover } from 'vite-plugin-hover';
 
 export default defineConfig({
   plugins: [
@@ -232,7 +234,7 @@ hover({
   port: 51789,             // local WebSocket port; auto-bumps if taken
   enabled: true,           // false to disable (default: only in dev mode)
   chromeDebugPort: 9222,
-  agentId: 'claude',       // matches @hyperyond/core's agent registry
+  agentId: 'claude',       // matches @hover-dev/core's agent registry
   model: 'sonnet',         // 'opus' costs ~5× — use sonnet for browser driving
   maxBudgetUsd: undefined, // hard $ ceiling per agent invocation; no default — use Stop in the widget
 });

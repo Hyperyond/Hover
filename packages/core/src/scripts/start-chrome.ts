@@ -5,7 +5,7 @@
  * Two entry points:
  *   - Repo dev:    `pnpm smoke:chrome`           → tsx src/scripts/start-chrome.ts
  *   - npm consumer: `pnpm exec hover-chrome`     → dist/scripts/start-chrome.js
- *                  (or `npx hover-chrome`, bin exposed by @hyperyond/vite-plugin)
+ *                  (or `npx hover-chrome`, bin exposed by vite-plugin-hover)
  *
  * All actual launch logic lives in ../playwright/launchChrome.ts.
  */

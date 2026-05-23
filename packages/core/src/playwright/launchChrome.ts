@@ -3,7 +3,7 @@
  *
  * Idempotent — if the port already responds, returns immediately. Used by:
  *   - `pnpm smoke:chrome` (monorepo) via src/scripts/start-chrome.ts
- *   - `pnpm exec hover-chrome` (npm consumers) via @hyperyond/vite-plugin's bin
+ *   - `pnpm exec hover-chrome` (npm consumers) via vite-plugin-hover's bin
  *
  * The user-data-dir is isolated under tmpdir so we never touch the user's
  * primary Chrome profile.

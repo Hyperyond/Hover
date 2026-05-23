@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * `hover-chrome` bin re-exposed from @hyperyond/vite-plugin so npm consumers
+ * `hover-chrome` bin re-exposed from vite-plugin-hover so npm consumers
  * who only install the plugin can run `pnpm exec hover-chrome` / `npx
- * hover-chrome` without also adding @hyperyond/core to their dependencies.
+ * hover-chrome` without also adding @hover-dev/core to their dependencies.
  *
  * pnpm doesn't symlink transitive-dependency bins into node_modules/.bin/, so
  * the bin has to live on the user's direct dependency. Implementation lives
- * in @hyperyond/core/launch-chrome.
+ * in @hover-dev/core/launch-chrome.
  */
-import { launchDebugChrome } from '@hyperyond/core/launch-chrome';
+import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 
 const result = await launchDebugChrome();
 if (!result.ok) {

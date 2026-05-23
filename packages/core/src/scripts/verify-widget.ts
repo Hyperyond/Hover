@@ -1,8 +1,8 @@
 /**
- * Programmatic verification that @hyperyond/vite-plugin actually injects a working
+ * Programmatic verification that vite-plugin-hover actually injects a working
  * widget into the user's dev page. Run after `pnpm dev:example`:
  *
- *     pnpm --filter @hyperyond/core verify-widget
+ *     pnpm --filter @hover-dev/core verify-widget
  *
  * Loads http://localhost:5173/ in the user's Chrome (via CDP), then asserts
  * the Shadow-DOM widget exists and opens on click.

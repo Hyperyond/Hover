@@ -14,9 +14,9 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ### Added
 
-- **Local CLI Agent First architecture** (`@hyperyond/core/agents`) — Hover bundles no AI runtime. It detects whichever coding-agent CLI the user already has on `PATH` (`claude` today; `codex` / `cursor` / `aider` are one-file additions to the registry) and normalises its output to a single `InvokeEvent` stream.
-- **Vite plugin with Shadow-DOM widget** (`@hyperyond/vite-plugin`) — `transformIndexHtml` injects a floating launcher + dialog into the dev page on `apply: 'serve'`. Marked with `data-hover="true"` so future Playwright runs can skip it.
-- **Long-running WebSocket service** (`@hyperyond/core/service`) — Started by the plugin's `configureServer` hook, bound to `127.0.0.1`. Streams normalised agent events to the widget; accepts `command`, `cancel`, `save-skill`, and `list-skills` messages from it.
+- **Local CLI Agent First architecture** (`@hover-dev/core/agents`) — Hover bundles no AI runtime. It detects whichever coding-agent CLI the user already has on `PATH` (`claude` today; `codex` / `cursor` / `aider` are one-file additions to the registry) and normalises its output to a single `InvokeEvent` stream.
+- **Vite plugin with Shadow-DOM widget** (`vite-plugin-hover`) — `transformIndexHtml` injects a floating launcher + dialog into the dev page on `apply: 'serve'`. Marked with `data-hover="true"` so future Playwright runs can skip it.
+- **Long-running WebSocket service** (`@hover-dev/core/service`) — Started by the plugin's `configureServer` hook, bound to `127.0.0.1`. Streams normalised agent events to the widget; accepts `command`, `cancel`, `save-skill`, and `list-skills` messages from it.
 - **Session persistence + resume** — Widget messages, session id, and panel open-state survive page reload via `localStorage` (`hover:state:v1`). New commands optionally pass `sessionId` so `claude` resumes the prior conversation via `--resume <uuid>`.
 - **In-flight cancel** — The Send button turns red ("Stop") while the agent runs. Cancel aborts the in-flight `AbortController`, kills the spawned `claude` child, and surfaces a synthetic `session_end` to the widget immediately.
 - **Save as Claude Code skill** — Save-as-Skill button on every successful done card. Writes `<devRoot>/.claude/skills/<slug>/SKILL.md` (YAML frontmatter + original prompt + numbered tool-call list + outcome). Subsequent natural-language commands like "execute login-as-claude" make the agent auto-discover and replay it.
@@ -30,12 +30,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
   - `e-commerce` (5174) — Amazon-style storefront, product list → cart → checkout. Refined boutique.
   - `stock-registration` (5175) — IBKR-style 7-step brokerage account opening wizard. Editorial financial publication.
   - `canvas-paint` (5176) — 9-tool drawing app: pencil/eraser/line/rect/ellipse/triangle/text/bucket/eyedropper, opacity, fill-vs-stroke, zoom, image background, recent colors, keyboard shortcuts. Atmospheric studio.
-  - `payment-provider` (5177) — mock third-party payment popup for the e-commerce cross-tab flow. **Does not install `@hyperyond/vite-plugin`** on purpose — widget must not appear on a simulated third-party origin. Fintech glass.
+  - `payment-provider` (5177) — mock third-party payment popup for the e-commerce cross-tab flow. **Does not install `vite-plugin-hover`** on purpose — widget must not appear on a simulated third-party origin. Fintech glass.
 
 ### Architecture
 
 - Repository is a pnpm workspace (`packages/*`, `examples/*`), ESM throughout, TypeScript with `moduleResolution: Bundler`.
-- Three packages: `@hyperyond/core` (agents, service, Playwright preflight, skill IO), `@hyperyond/vite-plugin` (injection + service lifecycle), and the example apps.
+- Three packages: `@hover-dev/core` (agents, service, Playwright preflight, skill IO), `vite-plugin-hover` (injection + service lifecycle), and the example apps.
 - Hover service binds to `127.0.0.1` only; widget is in a Shadow DOM with `z-index: 2147483647` so host-page CSS cannot affect it and host-page DOM does not interfere with it.
 
 ### Reliability
