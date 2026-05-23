@@ -13,7 +13,7 @@
   <a href="https://www.npmjs.com/package/vite-plugin-hover"><img alt="vite-plugin-hover on npm" src="https://img.shields.io/npm/v/vite-plugin-hover?style=flat-square&label=vite-plugin-hover&color=cb3837&logo=npm&logoColor=white" /></a>
   <a href="https://www.npmjs.com/package/@hover-dev/core"><img alt="@hover-dev/core on npm" src="https://img.shields.io/npm/v/@hover-dev/core?style=flat-square&label=%40hover-dev%2Fcore&color=cb3837&logo=npm&logoColor=white" /></a>
   <a href="https://github.com/Hyperyond/Hover/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Hyperyond/Hover?style=flat-square&label=release&color=blueviolet" /></a>
-  <a href="#roadmap"><img alt="Phase 1 shipped" src="https://img.shields.io/badge/phase-1%20shipped-22c55e?style=flat-square" /></a>
+  <a href="#roadmap"><img alt="Phase 2 shipped" src="https://img.shields.io/badge/phase-2%20shipped-22c55e?style=flat-square" /></a>
   <a href="https://github.com/Hyperyond/Hover/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Hyperyond/Hover?style=flat-square&color=ffd700" /></a>
   <a href="https://github.com/Hyperyond/Hover/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Hyperyond/Hover?style=flat-square&color=2ecc71" /></a>
   <a href="https://github.com/Hyperyond/Hover/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/Hyperyond/Hover?style=flat-square&color=8e44ad" /></a>
@@ -25,6 +25,8 @@
 ---
 
 Open the floating chat in your dev page, describe what you want to verify in plain English, watch AI operate your app for real. When the run is clean, click **Save as spec** — Hover writes a standard `@playwright/test` file you can run in CI without an agent in the loop, forever.
+
+**No API key, no per-token billing.** Hover spawns the coding-agent CLI already on your `PATH` (claude / codex) and rides on the subscription you already pay for.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -78,15 +80,17 @@ Four real example apps under [`examples/`](./examples/), each stressing a differ
 
 ## Why Hover
 
-Three things in this space already exist; Hover is what falls out when you combine them honestly:
+Several good tools already exist in this space; Hover is what falls out when you optimise for a different axis — **artifact portability**.
 
-| Tool | What it does | What's missing |
+| Tool | What it does | The trade-off |
 |---|---|---|
-| **Playwright Codegen** | Records your clicks → spec | Can't think; just replay |
-| **Stagehand / Midscene** | AI drives the browser at test time | Agent stays in the loop forever — slow, flaky, $$$ |
-| **Hover** | AI drives the browser **once** to explore; saves a deterministic spec, a replayable agent skill, *and* a Jira-importable test case from the same click | The agent's job ends at "save"; CI runs plain Playwright |
+| **Playwright Codegen** | Records your clicks → `.spec.ts`. No AI, no auth | Can't think — just replays what you did literally |
+| **Stagehand / Midscene** | AI-augmented tests; both ship caches so steady-state CI runs skip the LLM on cache hits. Configure an **OpenAI / Anthropic API key** — per-token billing on cache misses | Tests still run **inside the vendor SDK** + a cache file in your repo. Not portable to a plain Playwright runner |
+| **Hover** | AI drives the browser **once** to explore; saves a deterministic spec, a replayable skill, *and* a Jira-importable case from the same click. **No API key — Hover spawns the coding-agent CLI already on your `PATH`** (claude / codex), so your existing Claude Pro/Max or ChatGPT subscription covers it | Crystallised spec is brittle to UI changes — when it breaks, re-run the agent (it doesn't self-heal at CI time) |
 
-The differentiator is the handoff. AI authors the session; the artifacts are decoupled from AI.
+What Hover is **not** trying to do: be the better test-time AI runtime. Stagehand's caching + self-healing is more sophisticated than anything we'd build, and Midscene's vision fallback handles canvas / iOS / Android targets we can't touch.
+
+What Hover IS trying to do: **make the saved artifact be plain `@playwright/test` code that runs with `npx playwright test` on a fresh machine, zero AI deps**. The agent's job ends at "save"; CI is pure Playwright. That's the handoff.
 
 ### One exploration, three audiences
 
@@ -123,18 +127,44 @@ All three files check into the same git repo as the rest of your code. The momen
 
 Everything checks into git. Nothing lives in a vendor's database. A spec written on a developer's laptop on Monday is reviewed by QA on Tuesday and runs in CI from Wednesday — same file, no export step.
 
-## What you get when Phase 1 ships (this release)
+## What you get in v0.2.x (Phase 2 shipped)
 
 - **Vite plugin** that injects a Shadow-DOM widget into your dev page. No-op in production. Marked `data-hover="true"` so your own Playwright runs can skip it.
-- **Local Node service** on `127.0.0.1` that bridges the widget to a coding-agent CLI on your PATH. **Multi-agent**: `claude` (hard sandbox, recommended) and `codex` (soft sandbox) are both wired today; the widget shows a dropdown in its header to switch on the fly. `cursor-agent` / `aider` / `gemini-cli` are one-file additions to the registry.
-- **CDP-attached browser driving** — Hover drives a debug Chrome it launches under an isolated profile at `<tmpdir>/hover-chrome`, never a fresh headless Chromium. Your main Chrome profile is untouched (no cookie / extension / devtools-state sharing — log in once inside the debug Chrome and that session persists across Hover commands and dev-server restarts, because the profile dir is reused).
-- **Save as Playwright spec** → `__vibe_tests__/<slug>.spec.ts`, uses `getByRole / getByLabel / getByTestId` semantic selectors. JSDoc header carries plain-English Steps + Expected blocks so non-coders can review.
-- **Save as Skill** → `.claude/skills/<slug>/SKILL.md`, replayable by saying *"execute login-as-claude"* in a future conversation.
-- **Save as Jira case** → `__vibe_tests__/<slug>.case.csv`, an Xray-compatible multi-row CSV that imports straight into Jira / Xray / Zephyr Scale as a Manual Test issue.
+- **No API key, no `.env`, no per-token billing.** Hover spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for (Claude Pro / Max, ChatGPT Pro). The `@hover-dev/core` package contains zero LLM SDK code — there's nothing to authenticate against. Get the most out of the agent quota you've already bought.
+- **Multi-agent.** `claude` (hard sandbox, recommended) and `codex` (soft sandbox) are both wired. Service auto-detects which one you have on PATH; the widget header shows the active agent as a pill (`claude ▾`) with a dropdown to switch on the fly. `cursor-agent` / `aider` / `gemini-cli` are one-file additions to the registry.
+- **Per-agent sandbox policy.** Hard-sandbox agents (claude) get an explicit allow/deny list so only Playwright MCP is callable; `Bash`, `Edit`, `Write`, `Read`, `WebFetch`, etc. all explicitly denied; `--max-budget-usd` ceiling supported. Soft-sandbox agents (codex) can't disable their built-in tools at the CLI level, so we use `--sandbox read-only` + a strict `developer_instructions` system prompt; the widget marks these with a ⚠ badge so you know the surface is broader.
+- **Widget v2 — info hierarchy that scales.** Conversation reads as one row per natural-language intent, not a flood of raw `browser_click` events. Tool-call detail is folded behind a chevron; the running step gets a mint left bar + spinner. Dark panel, single mint accent, custom inline-SVG icons + theme-matched tooltip — designed to sit unobtrusively over your dev page.
+- **Result & Findings cards.** At the end of a run the widget renders the agent's verification report as a dedicated Result card (markdown-stripped, plain text) with the Save-as dropdown attached. If the agent's summary contained a `## Findings` block — bugs, minor issues, observations — those land in a separate Findings card with severity-coded rows. Bug discovery is a first-class output, not buried in narration.
+- **CDP-attached browser driving.** Hover drives a debug Chrome it launches under an isolated profile at `<tmpdir>/hover-chrome`, never a fresh headless Chromium. Your main Chrome profile is untouched — log in once inside the debug Chrome and that session persists across Hover commands and dev-server restarts, because the profile dir is reused.
+- **Three crystallisation formats.**
+  - **Save as Playwright spec** → `__vibe_tests__/<slug>.spec.ts`, uses `getByRole / getByLabel / getByTestId` semantic selectors. JSDoc header carries plain-English Steps + Expected blocks so non-coders can review.
+  - **Save as Skill** → `.claude/skills/<slug>/SKILL.md`, replayable by saying *"execute login-as-claude"* in a future conversation.
+  - **Save as Jira case** → `__vibe_tests__/<slug>.case.csv`, an Xray-compatible multi-row CSV that imports straight into Jira / Xray / Zephyr Scale as a Manual Test issue.
 - **Alt-click "Assert This"** — Hold ⌥, click any element in your page, get a generated assertion (`expect(...).toHaveValue / toBeChecked / toHaveText / …`). Assertions accumulate; the next *Save as spec* bakes them in.
-- **Record mode** — Toggle 🔴 Record, do the flow manually, get the same step sequence as if the agent had driven it. The downstream save path doesn't care whether the steps came from a human or from Claude.
-- **Session persistence + resume** — Widget state survives page reload via `localStorage`; the next prompt resumes the same `claude --session-id`.
-- **Per-agent sandbox policy** — Hard-sandbox agents (`claude`) get an explicit allow/deny list so only Playwright MCP is callable; `Bash`, `Edit`, `Write`, `Read`, `WebFetch`, etc. all explicitly denied; `--max-budget-usd` ceiling supported. Soft-sandbox agents (`codex`) don't expose a built-in tool deny list at the CLI level, so we use `--sandbox read-only` + a strict `developer_instructions` system prompt; the widget marks these with a ⚠ badge so you know the surface is broader.
+- **Record mode** — Toggle Record, do the flow manually, get the same step sequence as if the agent had driven it. The downstream save path doesn't care whether the steps came from a human or from Claude.
+- **Session persistence + resume.** Widget state survives page reload via `localStorage`; the next prompt resumes the same `claude --session-id`.
+
+### Bug discovery as a first-class output
+
+The agent's verification report and any bugs it finds get their own cards at the end of the run — separate from the step-by-step timeline. The Result card holds the narrative summary (PASS / FAIL + steps the agent took); the Findings card lists every `## Bug` / `## Minor` / `## Note` the agent flagged, severity-coloured.
+
+<p align="center">
+  <img src="docs/screenshots/07-findings-card.png" alt="Findings card — bugs and minor issues the agent flagged" width="60%" />
+</p>
+
+The system prompt teaches the agent to emit this structured block at the end of every run, so QA reading the saved spec can scan the bug list without scrolling through tool calls.
+
+### Pick your agent — claude, codex, or roll your own
+
+The widget header shows the active agent as a pill. Click it for a dropdown of every agent in the registry, marked with what's installed on your PATH and what isn't (with copy-pasteable install hints). Switch on the fly without restarting the dev server.
+
+<p align="center">
+  <img src="docs/screenshots/08-agents-dropdown.png" alt="Agent picker dropdown — Claude Code installed, OpenAI Codex available" width="50%" />
+</p>
+
+`claude` is the recommended default (hard sandbox, MCP-only tool surface). `codex` is wired as the second-class citizen (soft sandbox — codex doesn't expose a built-in-tool deny list at the CLI level, so we lean on its `--sandbox read-only` flag + a strict `developer_instructions` prompt). The widget marks soft-sandbox agents with a ⚠ badge so you know the surface is broader.
+
+Adding `cursor-agent` / `aider` / `gemini-cli` / your own coding-agent CLI is one file in [`packages/core/src/agents/registry.ts`](./packages/core/src/agents/registry.ts).
 
 ## Quick start
 
@@ -172,6 +202,8 @@ pnpm add -D vite-plugin-hover
 ```
 
 That's it — no `.npmrc`, no auth tokens. The `vite-plugin-hover` and `@hover-dev/core` packages are public on npmjs.com.
+
+**No `.env` to fill out either.** Hover doesn't ship an LLM SDK; it shells out to whichever coding-agent CLI is on your `PATH` — `claude` ([install](https://docs.claude.com/claude-code)) or `codex` ([install](https://developers.openai.com/codex)). Whatever you're already logged into covers it.
 
 Then just run your dev server:
 
@@ -296,15 +328,17 @@ If your favourite agent (`codex`, `cursor-agent`, `aider`, `gemini`, `qwen-code`
 ## Roadmap
 
 - **v0.0.1-poc** — Phase 0 — end-to-end feasibility (`claude -p` drives Chrome via CDP) ✓
-- **v0.1.x** — Phase 1 — Vite plugin + chat UI + persistent service + Save as Spec ✓ (you are here)
-- **v0.2.x** — Phase 2 — multi-agent support (codex, cursor, aider), nicer step UI, error replay
-- **v0.3.x** — Chrome extension (drop the Vite-plugin dependency for non-Vite stacks)
+- **v0.1.x** — Phase 1 — Vite plugin + chat UI + persistent service + Save as Spec ✓
+- **v0.2.x** — Phase 2 — multi-agent (claude + codex), dark widget v2, Result + Findings cards, custom tooltip, code-quality pass ✓ **(you are here)**
+- **v0.3.x** — **Click → Suggest fix prompt.** Because Hover lives inside the dev page, it can read the source-location annotations Vite/framework plugins inject (React fiber `_debugSource`, Vue's `vite-plugin-vue-inspector` `data-v-inspector` attribute) and pair them with the DOM selector chain. Each row in the Findings card gets a "Suggest fix" button that copies a precise prompt — file path + line + column + component path + selector — straight into your coding-agent chat. *Caveat: React ≤18 and Vue + inspector plugin work out of the box; React 19 dropped `_debugSource` so we'll ship our own Vite transform (framework-agnostic `data-hover-source` attributes) to fill the gap.*
+- **v0.4.x** — per-step screenshot capture + a self-contained HTML report for offline review, more agents (`cursor-agent` / `aider` / `gemini-cli`)
+- **v0.5.x** — Chrome extension (drop the Vite-plugin dependency for non-Vite stacks)
 
-Phase 1 is what you can use today.
+Phase 2 is what you can use today.
 
 ## Project status
 
-🟢 **Phase 1 shipped** in v0.1.x — dogfood-ready. Use it on real Vite apps; expect some sharp edges around AI quirks (e.g., AI navigating to a same-origin URL still occasionally destroys the widget mid-stream; auto-resumes on reload).
+🟢 **Phase 2 shipped** in v0.2.x — dogfood-ready. Use it on real Vite apps; the navigation-to-same-origin quirk that occasionally destroyed the widget mid-stream is now caught up-front by a hardened system prompt (the agent is explicitly forbidden from `browser_navigate`-ing to the active origin). Auto-resumes on reload if it slips through.
 
 Tracking issues at [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues).
 

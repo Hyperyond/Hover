@@ -13,7 +13,7 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ### Added
 - **OpenAI Codex CLI support.** Service auto-detects `claude` and `codex` on PATH; the widget header shows the active agent as a pill (`claude ▾`) with a dropdown to switch. Soft-sandbox agents (codex) get a ⚠ badge — codex has no built-in-tool deny list at the CLI level, so we use `--sandbox read-only` + a strict `developer_instructions` system prompt.
-- **Widget UI v2** — dark panel (`#1a1a1a`) + mint accent (`#7CFFA8`), Midscene-style info hierarchy. Conversation reads as one row per natural-language intent; tool-call details collapsed behind a chevron. Result and bug **Findings** render as dedicated cards instead of being folded into the last step.
+- **Widget UI v2** — dark panel (`#1a1a1a`) + mint accent (`#7CFFA8`). Conversation reads as one row per natural-language intent; tool-call details collapsed behind a chevron. Result and bug **Findings** render as dedicated cards instead of being folded into the last step.
 - **Custom in-shadow-DOM tooltip** with ~120ms delay and dark/mint theming — replaces native `title=` which rendered laggy and light-themed against the dark panel.
 
 ### Changed

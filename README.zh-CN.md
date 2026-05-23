@@ -13,7 +13,7 @@
   <a href="https://www.npmjs.com/package/vite-plugin-hover"><img alt="vite-plugin-hover on npm" src="https://img.shields.io/npm/v/vite-plugin-hover?style=flat-square&label=vite-plugin-hover&color=cb3837&logo=npm&logoColor=white" /></a>
   <a href="https://www.npmjs.com/package/@hover-dev/core"><img alt="@hover-dev/core on npm" src="https://img.shields.io/npm/v/@hover-dev/core?style=flat-square&label=%40hover-dev%2Fcore&color=cb3837&logo=npm&logoColor=white" /></a>
   <a href="https://github.com/Hyperyond/Hover/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Hyperyond/Hover?style=flat-square&label=release&color=blueviolet" /></a>
-  <a href="#路线图"><img alt="Phase 1 shipped" src="https://img.shields.io/badge/phase-1%20shipped-22c55e?style=flat-square" /></a>
+  <a href="#路线图"><img alt="Phase 2 shipped" src="https://img.shields.io/badge/phase-2%20shipped-22c55e?style=flat-square" /></a>
   <a href="https://github.com/Hyperyond/Hover/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Hyperyond/Hover?style=flat-square&color=ffd700" /></a>
   <a href="https://github.com/Hyperyond/Hover/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Hyperyond/Hover?style=flat-square&color=2ecc71" /></a>
   <a href="https://github.com/Hyperyond/Hover/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/Hyperyond/Hover?style=flat-square&color=8e44ad" /></a>
@@ -25,6 +25,8 @@
 ---
 
 在你的 dev 页面打开浮动聊天框，用中文（或者你喜欢的任何语言）描述要验证什么，看着 AI 真实地操作你的应用。一遍跑通后，点 **Save as spec** —— Hover 会写出一份标准的 `@playwright/test` 文件，CI 跑它的时候**完全不需要 AI 在场**。
+
+**无需 API key，不按 token 计费。** Hover 调用你 `PATH` 上已经装好的 coding-agent CLI（claude / codex），跑在你已经付费的订阅里。
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -78,15 +80,17 @@
 
 ## 为什么是 Hover
 
-这个领域已有的三种方案，Hover 是把它们"诚实地"组合起来的产物：
+这个领域已有几个不错的工具；Hover 跟它们的差异在另一个维度：**产物的可移植性**。
 
-| 工具 | 它做什么 | 缺什么 |
+| 工具 | 它做什么 | 取舍 |
 |---|---|---|
-| **Playwright Codegen** | 录制你的点击 → spec | 不会思考；只能复读 |
-| **Stagehand / Midscene** | 让 AI 在跑测试时驱动浏览器 | AI 永远在测试链路里 —— 慢、不稳、烧钱 |
-| **Hover** | AI 只在**探索**时驱动浏览器一次；同时产出**确定性的 spec**、**可重放的 agent skill** 和**可直接导入 Jira 的测试用例** | AI 的工作在 "Save" 时结束；CI 跑的就是普通 Playwright |
+| **Playwright Codegen** | 录制你的点击 → `.spec.ts`。无 AI、无 auth | 不会思考——只能照搬你的点击 |
+| **Stagehand / Midscene** | AI 增强的测试；两家都做了缓存，稳态 CI 跑命中缓存就跳过 LLM。需要配 **OpenAI / Anthropic API key**——cache miss 时按 token 计费 | 跑测试仍然需要**它们的 SDK + 仓库里那份缓存文件**。不可移植到普通的 Playwright runner |
+| **Hover** | AI 只在**探索**时驱动浏览器一次；同时产出**确定性的 spec**、**可重放的 agent skill** 和**可直接导入 Jira 的测试用例**。**不需要 API key —— Hover 直接调用你 `PATH` 上已经装好的 coding-agent CLI**（claude / codex），跑在你已付费的 Claude Pro/Max 或 ChatGPT 订阅里 | 落盘的 spec 对 UI 改动是脆的——坏了就重跑 agent（CI 时不会自愈） |
 
-差异点在于**交接**：AI 写一次会话，但产物都跟 AI 解耦。
+Hover **不打算**做的事：当一个更好的"测试时 AI 运行时"。Stagehand 的缓存 + 自愈机制比我们能造的成熟，Midscene 的视觉 fallback 能处理 canvas / iOS / Android 目标我们碰不到。
+
+Hover **要**做的事：**让落盘的产物就是纯 `@playwright/test` 代码，在干净机器上 `npx playwright test` 就能跑、零 AI 依赖**。AI 的工作到 "Save" 为止；CI 跑的就是纯 Playwright。这是交接点。
 
 ### 一次探索，三种受众
 
@@ -123,18 +127,44 @@
 
 所有东西都进 git。没有任何东西在某个供应商的数据库里。前端周一在本地写的 spec，QA 周二 review，周三在 CI 里跑 —— 同一个文件，无导出步骤。
 
-## Phase 1 里你能拿到的（当前 release）
+## v0.2.x 里你能拿到的（Phase 2 已发布）
 
 - **Vite 插件** —— 通过 `transformIndexHtml` 往 dev 页面注入一个 Shadow DOM widget。生产构建里完全是 no-op。`data-hover="true"` 标记让你自己的 Playwright 跑测试时自动跳过它。
-- **本地 Node 服务**绑在 `127.0.0.1`，连接 widget ↔ 你 `PATH` 上的 agent CLI。**多 agent**：`claude`（硬沙箱，推荐）和 `codex`（软沙箱）都已接入；widget 头部内置下拉切换。`cursor-agent` / `aider` / `gemini-cli` 都是单文件加 registry 就能扩展。
-- **CDP 直连专用 debug Chrome** —— Hover 操作的是它在 `<tmpdir>/hover-chrome` 下启动的隔离 profile，不会动你的主 Chrome 配置，也不会启 headless Chromium。所以 Cookie、扩展、DevTools 状态都不会从主浏览器迁过来——你在 debug Chrome 里登一次，profile 目录会复用，登录态能跨 Hover 指令和 dev server 重启保持。
-- **Save as Playwright spec** → 落盘到 `__vibe_tests__/<slug>.spec.ts`，selector 用 `getByRole / getByLabel / getByTestId`。JSDoc 头部带人话 Steps + Expected 块，方便非程序员 review。
-- **Save as Skill** → 落盘到 `.claude/skills/<slug>/SKILL.md`，未来对话里说一句 *"execute login-as-claude"* 就能重放。
-- **Save as Jira case** → 落盘到 `__vibe_tests__/<slug>.case.csv`，Xray 兼容的多行 CSV，直接导入 Jira / Xray / Zephyr Scale 成为 Manual Test issue。
+- **无需 API key、无需 `.env`、不按 token 计费。** Hover 调用你 `PATH` 上已经装好的 coding-agent CLI，跑在你已经付费的订阅里（Claude Pro / Max、ChatGPT Pro）。`@hover-dev/core` 这个包里没有任何 LLM SDK 代码——没有需要 auth 的东西。把你已付费的 agent 额度榨干。
+- **多 agent。** `claude`（硬沙箱，推荐）和 `codex`（软沙箱）都已接入。服务启动时自动检测你 PATH 上装的哪个；widget 头部显示当前 agent 为 pill (`claude ▾`)，下拉可即时切换。`cursor-agent` / `aider` / `gemini-cli` 都是单文件加 registry 就能扩展。
+- **按 agent 不同的沙箱策略。** 硬沙箱 agent（claude）显式 allow/deny，只剩 Playwright MCP 能被调用；`Bash` / `Edit` / `Write` / `Read` / `WebFetch` 等全部明确 deny；支持 `--max-budget-usd` 硬上限。软沙箱 agent（codex）CLI 没有内置工具 deny list，我们用 `--sandbox read-only` + 严格 `developer_instructions` 系统提示约束；widget 会给软沙箱 agent 加 ⚠ 标，让你知道工具面更宽。
+- **Widget v2 —— 可扩展的信息层级。** 对话以每个自然语言意图为一行，而不是淹没在 `browser_click` 之类的 raw 事件里。工具调用详情折叠在 chevron 后；正在执行的 step 有 mint 左竖条 + spinner。深色面板、单一 mint accent、自定义 inline-SVG 图标 + 同主题 tooltip —— 让 widget 安静地浮在你的 dev 页面上，不抢戏。
+- **Result + Findings 卡。** 一次 run 结束后，widget 把 agent 的验证报告渲染为独立的 Result 卡（markdown 已 strip，纯文本），Save-as 下拉就挂在它上面。如果 agent 总结里包含 `## Findings` 块——bug、轻微问题、观察——会单独抽出来渲染为 Findings 卡，每行带 severity 配色。Bug 发现是一等输出，不再淹没在叙述里。
+- **CDP 直连专用 debug Chrome。** Hover 操作的是它在 `<tmpdir>/hover-chrome` 下启动的隔离 profile，不会动你的主 Chrome 配置，也不会启 headless Chromium。Cookie / 扩展 / DevTools 状态都不会从主浏览器迁过来——你在 debug Chrome 里登一次，profile 目录会复用，登录态能跨 Hover 指令和 dev server 重启保持。
+- **三种结晶格式。**
+  - **Save as Playwright spec** → 落盘到 `__vibe_tests__/<slug>.spec.ts`，selector 用 `getByRole / getByLabel / getByTestId`。JSDoc 头部带人话 Steps + Expected 块，方便非程序员 review。
+  - **Save as Skill** → 落盘到 `.claude/skills/<slug>/SKILL.md`，未来对话里说一句 *"execute login-as-claude"* 就能重放。
+  - **Save as Jira case** → 落盘到 `__vibe_tests__/<slug>.case.csv`，Xray 兼容的多行 CSV，直接导入 Jira / Xray / Zephyr Scale 成为 Manual Test issue。
 - **Alt-click "Assert This"** —— 按住 ⌥ 点页面上任何元素，生成一条 Playwright 断言（`expect(...).toHaveValue / toBeChecked / toHaveText / …`）。断言会累积，下一次 *Save as spec* 时一起烘焙进文件。
-- **录制模式** —— 切到 🔴 Record，手动跑一遍流程，得到跟 AI 驱动同样形状的 step 序列。下游 save 路径根本不关心 step 是 AI 跑出来的还是你点出来的。
+- **录制模式** —— 切到 Record，手动跑一遍流程，得到跟 AI 驱动同样形状的 step 序列。下游 save 路径根本不关心 step 是 AI 跑出来的还是你点出来的。
 - **会话持久化 + resume** —— widget 状态通过 `localStorage` 跨页面刷新存活；下次提示会接上同一个 `claude --session-id`。
-- **按 agent 不同的沙箱策略** —— 硬沙箱 agent（`claude`）显式 allow/deny，只剩 Playwright MCP 能被调用；`Bash` / `Edit` / `Write` / `Read` / `WebFetch` 等全部明确 deny；支持 `--max-budget-usd` $ 硬上限。软沙箱 agent（`codex`）CLI 没有内置工具 deny list，我们用 `--sandbox read-only` + 严格 `developer_instructions` 系统提示约束；widget 会给软沙箱 agent 加 ⚠ 标，让你知道工具面更宽。
+
+### Bug 发现是一等输出
+
+Agent 的验证报告和发现的 bug 在结束时落到独立卡片，不和 step 时间线混在一起。Result 卡里是文字总结（PASS / FAIL + 走的步骤）；Findings 卡列出 agent 标注的每个 `## Bug` / `## Minor` / `## Note`，按 severity 配色。
+
+<p align="center">
+  <img src="docs/screenshots/07-findings-card.png" alt="Findings 卡 — agent 标注的 bug 和轻微问题" width="60%" />
+</p>
+
+system prompt 教 agent 每次结束都用这种结构化块输出，QA 读 spec 时不需要在 tool calls 里翻就能扫到 bug 列表。
+
+### 自选 agent —— claude、codex，或自己加
+
+Widget 头部显示当前 agent 的 pill，点开是 registry 里所有 agent 的下拉，标注哪些在你 PATH 上、哪些没装（带可复制的安装提示）。无需重启 dev server 即切。
+
+<p align="center">
+  <img src="docs/screenshots/08-agents-dropdown.png" alt="Agent picker 下拉 — Claude Code 已安装、OpenAI Codex 待装" width="50%" />
+</p>
+
+`claude` 是推荐默认（硬沙箱，工具面仅限 MCP）。`codex` 是二等公民（软沙箱——codex CLI 没暴露内置工具 deny list，我们靠它的 `--sandbox read-only` + 严格 `developer_instructions`）。Widget 会给软沙箱 agent 加 ⚠ 标。
+
+加 `cursor-agent` / `aider` / `gemini-cli` 或你自己的 coding-agent CLI 只需要在 [`packages/core/src/agents/registry.ts`](./packages/core/src/agents/registry.ts) 加一个文件。
 
 ## 快速开始
 
@@ -172,6 +202,8 @@ pnpm add -D vite-plugin-hover
 ```
 
 就这一行 —— 不用 `.npmrc`、不用 token。`vite-plugin-hover` 和 `@hover-dev/core` 在 npmjs.com 上是公开包。
+
+**也不用填 `.env`。** Hover 不打包 LLM SDK，它会调用你 `PATH` 上已经装好的 coding-agent CLI —— `claude`（[安装](https://docs.claude.com/claude-code)）或 `codex`（[安装](https://developers.openai.com/codex)）。你已经登录的那个，直接就能跑。
 
 接着直接跑你的 dev server：
 
@@ -296,15 +328,17 @@ hover({
 ## 路线图
 
 - **v0.0.1-poc** —— Phase 0 —— 端到端可行性验证（`claude -p` 通过 CDP 驱动 Chrome）✓
-- **v0.1.x** —— Phase 1 —— Vite 插件 + 聊天 UI + 持久化服务 + Save as Spec ✓ （你在这里）
-- **v0.2.x** —— Phase 2 —— 多 agent 支持（codex、cursor、aider）、更好的 step UI、错误重放
-- **v0.3.x** —— Chrome 扩展（脱离 Vite 插件依赖，支持非 Vite 栈）
+- **v0.1.x** —— Phase 1 —— Vite 插件 + 聊天 UI + 持久化服务 + Save as Spec ✓
+- **v0.2.x** —— Phase 2 —— 多 agent（claude + codex）、深色 widget v2、Result + Findings 卡、自定义 tooltip、代码质量重构 ✓ **（你在这里）**
+- **v0.3.x** —— **点击元素 → 生成精准修复提示词。** Hover 就长在 dev 页面里，可以读取 Vite / 框架插件注入的源码位置标记（React fiber 的 `_debugSource`、Vue `vite-plugin-vue-inspector` 注入的 `data-v-inspector` 属性），结合 DOM selector chain 一起组装出"文件路径 + 行号 + 列号 + 组件路径 + 选择器"的完整修复 prompt——Findings 卡里每条 bug 都会带一个 "Suggest fix" 按钮，一键复制丢到 coding-agent 聊天框。*前提说明：React ≤18 和 Vue + inspector plugin 开箱可用；React 19 删了 `_debugSource`，我们会另起炉灶写一个框架无关的 Vite transform 注入 `data-hover-source` 属性来补这个缺口。*
+- **v0.4.x** —— 每步截图 + 自包含 HTML 报告供离线 review、更多 agent (`cursor-agent` / `aider` / `gemini-cli`)
+- **v0.5.x** —— Chrome 扩展（脱离 Vite 插件依赖，支持非 Vite 栈）
 
-Phase 1 是你今天就能用的。
+Phase 2 是你今天就能用的。
 
 ## 项目状态
 
-🟢 **Phase 1 已发布** 在 v0.1.x —— dogfood 可用。可以在真实 Vite 应用上跑；目前还有一些跟 AI 行为相关的小坑（比如 AI 偶尔会 navigate 到同源 URL 把 widget 打断；刷新后自动 resume）。
+🟢 **Phase 2 已发布** 在 v0.2.x —— dogfood 可用。可以在真实 Vite 应用上跑；之前偶尔会出现 AI navigate 到同源 URL 把 widget 打断的问题，现在系统 prompt 已加固（明确禁止 agent `browser_navigate` 到当前 origin）。万一漏掉，刷新后会自动 resume。
 
 Issue 跟踪：[github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues)。
 
