@@ -13,6 +13,7 @@
  */
 import { chromium } from 'playwright-core';
 import { preflightCDP } from './preflight.js';
+import { findCdpPid, raiseChromeWindow } from './raiseWindow.js';
 
 export type CdpState = 'same-window' | 'wrong-window' | 'no-cdp';
 
@@ -99,23 +100,46 @@ export async function focusDebugTab(
     return { ok: false, reason: `couldn't connect to CDP at ${cdpUrl}: ${msg}` };
   }
 
+  let focusedUrl: string;
   try {
     const pages = browser.contexts().flatMap(c => c.pages());
     const match = pages.find(p => originOf(p.url()) === wantOrigin);
     if (match) {
       await match.bringToFront();
-      return { ok: true, focusedUrl: match.url() };
+      focusedUrl = match.url();
+    } else {
+      // No tab on the dev origin yet — open one so the widget appears.
+      const context = browser.contexts()[0] ?? (await browser.newContext());
+      const page = await context.newPage();
+      await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
+      await page.bringToFront();
+      focusedUrl = page.url();
     }
-    // No tab on the dev origin yet — open one so the widget appears.
-    const context = browser.contexts()[0] ?? (await browser.newContext());
-    const page = await context.newPage();
-    await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
-    await page.bringToFront();
-    return { ok: true, focusedUrl: page.url() };
   } catch (err) {
+    await browser.close().catch(() => {});
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, reason: `bringToFront failed: ${msg}` };
-  } finally {
-    await browser.close().catch(() => {});
+  }
+  await browser.close().catch(() => {});
+
+  // CDP-level bringToFront only activates the tab inside the Chrome process;
+  // on macOS in particular the Chrome *window* stays buried if it wasn't
+  // foreground already. Raise the OS window too. Best-effort, never fatal.
+  const port = portFromCdpUrl(cdpUrl);
+  if (port !== null) {
+    const pid = await findCdpPid(port);
+    if (pid !== null) await raiseChromeWindow(pid);
+  }
+
+  return { ok: true, focusedUrl };
+}
+
+function portFromCdpUrl(cdpUrl: string): number | null {
+  try {
+    const u = new URL(cdpUrl);
+    const port = Number.parseInt(u.port, 10);
+    return Number.isInteger(port) && port > 0 ? port : null;
+  } catch {
+    return null;
   }
 }
