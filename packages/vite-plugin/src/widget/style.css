@@ -1,137 +1,443 @@
+/* Hover widget — Needle Inspector dark theme + Midscene-style info hierarchy.
+ *
+ * Color contract:
+ *   --bg          near-black panel background (#1a1a1a)
+ *   --bg-2        slightly raised surface for cards / hover (#222224)
+ *   --bg-3        deeper inset (input, code blocks) (#141414)
+ *   --line        subtle separator (#2a2a2c)
+ *   --text        primary foreground (#e5e7eb)
+ *   --text-mute   secondary labels (#9ca3af)
+ *   --text-dim    tertiary / placeholder (#6b7280)
+ *   --accent      mint/lime accent — running, current, success (#7CFFA8)
+ *   --accent-dim  same hue at lower opacity for backgrounds
+ *   --error       error red, used sparingly (#f87171)
+ *   --warn        amber warning, for soft-sandbox + recording (#fbbf24)
+ *   --link        cool blue for links / "click me" affordances (#7dd3fc)
+ *
+ * The launcher button and the user's page are NOT touched by the dark
+ * scheme — only the panel itself. Per design decision in the v0.2.x UI
+ * refresh discussion.
+ */
+
 :host, * { box-sizing: border-box; }
 
+/* ───────────────────────── scrollbars ─────────────────────────
+ *
+ * The OS default scrollbar (especially on macOS when "Show scroll bars"
+ * is set to "Always") is a bright gray slab on a white track — visually
+ * jarring against the dark mint palette. We theme every scrollable region
+ * inside the widget so the chrome blends in.
+ *
+ * Two declarations because Firefox and WebKit have different APIs:
+ *   - WebKit/Blink: `::-webkit-scrollbar*` pseudo-elements
+ *   - Firefox: `scrollbar-width` (thin/auto) + `scrollbar-color`
+ *
+ * Applied broadly within the shadow root via `*` so we don't have to
+ * remember to add it on every new scrollable container.
+ */
+:host *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+:host *::-webkit-scrollbar-track {
+  background: transparent;
+}
+:host *::-webkit-scrollbar-thumb {
+  background: #2a2a2c;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.15s ease;
+}
+:host *::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3c;
+  background-clip: padding-box;
+}
+:host *::-webkit-scrollbar-thumb:active {
+  background: rgba(124, 255, 168, 0.45);
+  background-clip: padding-box;
+}
+:host *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+/* Firefox */
+:host * {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2c transparent;
+}
+
+/* ───────────────────────── focus-visible (a11y) ─────────────────────────
+ *
+ * Every interactive element strips the OS default outline (which collides
+ * with our dark theme) but adds a mint ring on keyboard focus so Tab
+ * navigation remains visible. `:focus-visible` (not `:focus`) means the
+ * ring only appears for keyboard nav, never on mouse click — matches
+ * platform conventions.
+ */
+:host button:focus-visible,
+:host textarea:focus-visible,
+:host input:focus-visible,
+:host [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  /* Override any element-specific `outline: none` left over from older
+   * polish passes. */
+  outline-style: solid;
+}
+/* Inputs / textareas already get a border+shadow treatment on :focus
+ * (see .modal-field input:focus / textarea:focus). We don't want a
+ * doubled-up outline for those, so suppress the generic ring when the
+ * element-specific focus style is in play. */
+:host textarea:focus-visible,
+:host .modal-field input:focus-visible {
+  outline: none;
+}
+
+:host {
+  --bg: #1a1a1a;
+  --bg-2: #222224;
+  --bg-3: #141414;
+  --line: #2a2a2c;
+  --text: #e5e7eb;
+  --text-mute: #9ca3af;
+  --text-dim: #6b7280;
+  --accent: #7CFFA8;
+  --accent-dim: rgba(124, 255, 168, 0.16);
+  --error: #f87171;
+  --error-dim: rgba(248, 113, 113, 0.18);
+  --warn: #fbbf24;
+  --link: #7dd3fc;
+}
+
+/* ───────────────────────── launcher (unchanged colour) ───────────────────────── */
+
+/* Launcher: dark ball matching the panel theme. Same colour vocabulary as
+ * the rest of the widget (panel bg + mint accent), so the floating button
+ * feels like it belongs to Hover rather than to the host page's chrome.
+ * Slightly smaller (44px) so it pulls focus less when the user isn't
+ * actively using Hover. */
 .launcher {
   position: fixed; bottom: 24px; right: 24px;
-  width: 48px; height: 48px;
-  border-radius: 50%; border: none; cursor: pointer;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(124, 255, 168, 0.5);
+  cursor: pointer;
+  background: #1a1a1a;
+  color: #7CFFA8;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   display: flex; align-items: center; justify-content: center;
-  font-size: 22px; padding: 0;
+  font-size: 18px;
+  padding: 0;
   font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   z-index: 2147483647;
 }
-.launcher:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5); }
-.launcher.open { transform: rotate(45deg); }
+.launcher:hover {
+  transform: scale(1.06);
+  border-color: rgba(124, 255, 168, 0.9);
+  box-shadow: 0 4px 18px rgba(124, 255, 168, 0.28), 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.launcher.open {
+  /* Subtle inversion so the user sees the click registered; no rotation
+   * because the icon now reads top-down (rotation tilts it into nonsense). */
+  background: var(--accent-dim, rgba(124, 255, 168, 0.16));
+  border-color: var(--accent, #7CFFA8);
+}
 
-/* CDP-state launcher variants — gray when the widget is loaded in the
-   wrong Chrome (debug Chrome is up elsewhere), amber when no debug Chrome
-   exists at all, blue+pulsing while we're spinning one up. */
+/* CDP state variants — keep the established colour code (gray = wrong
+ * window, amber = no CDP) so users who learned the v1 palette aren't
+ * disoriented, but tone everything down to match the new dark scheme. */
 .launcher.cdp-wrong-window {
-  background: linear-gradient(135deg, #9ca3af, #6b7280);
-  box-shadow: 0 4px 14px rgba(107, 114, 128, 0.35);
+  border-color: rgba(156, 163, 175, 0.55);
+  color: #9ca3af;
 }
-.launcher.cdp-wrong-window:hover { box-shadow: 0 6px 20px rgba(107, 114, 128, 0.5); }
+.launcher.cdp-wrong-window:hover {
+  border-color: rgba(156, 163, 175, 0.9);
+  box-shadow: 0 4px 18px rgba(156, 163, 175, 0.2), 0 4px 16px rgba(0, 0, 0, 0.4);
+}
 .launcher.cdp-no-cdp {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+  border-color: rgba(251, 191, 36, 0.6);
+  color: #fbbf24;
 }
-.launcher.cdp-no-cdp:hover { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5); }
+.launcher.cdp-no-cdp:hover {
+  border-color: rgba(251, 191, 36, 0.95);
+  box-shadow: 0 4px 18px rgba(251, 191, 36, 0.25), 0 4px 16px rgba(0, 0, 0, 0.4);
+}
 .launcher.cdp-launching {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
   animation: hover-launching-pulse 1.4s ease-in-out infinite;
 }
 @keyframes hover-launching-pulse {
-  0%, 100% { box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4); }
-  50%      { box-shadow: 0 4px 22px rgba(99, 102, 241, 0.75); }
+  0%, 100% { box-shadow: 0 4px 14px rgba(124, 255, 168, 0.25), 0 4px 16px rgba(0, 0, 0, 0.4); }
+  50%      { box-shadow: 0 4px 22px rgba(124, 255, 168, 0.6),  0 4px 16px rgba(0, 0, 0, 0.4); }
 }
+
+/* The icon glyph inside the launcher button. We swap the ✨ HTML entity to
+ * an inline SVG (defined in template.html) so it doesn't get rendered with
+ * the system's colour emoji font, which would defeat the dark/mint look. */
+.launcher svg { width: 20px; height: 20px; display: block; pointer-events: none; }
+
+/* ───────────────────────── panel chrome (dark) ───────────────────────── */
 
 .panel {
   position: fixed; bottom: 88px; right: 24px;
-  width: 420px; height: 560px;
+  width: 460px; height: 640px;
   max-height: calc(100vh - 120px);
-  background: #fff; border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  /* 16px corner radius matches the Save-as menu / modals; reads as a
+   * deliberate device chrome rather than "generic box". */
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
   display: flex; flex-direction: column; overflow: hidden;
   font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
-  color: #111;
+  color: var(--text);
   opacity: 0; pointer-events: none; transform: translateY(8px);
   transition: opacity 0.15s ease, transform 0.15s ease;
   z-index: 2147483647;
+  font-size: 13px;
 }
 .panel.open { opacity: 1; pointer-events: auto; transform: translateY(0); }
 
 header {
-  padding: 10px 14px; border-bottom: 1px solid #eee;
-  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 6px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent);
 }
-.title { font-weight: 600; font-size: 14px; flex: 1; }
+/* Status pill — same hook the JS toggles between connected / disconnected / running */
 .status {
-  font-size: 11px; padding: 2px 8px;
-  border-radius: 999px; font-weight: 500;
-  background: #fef3c7; color: #92400e;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  background: var(--accent-dim);
+  color: var(--accent);
+  margin-left: auto;
 }
-.status.connected { background: #d1fae5; color: #065f46; }
-.status.disconnected { background: #fee2e2; color: #991b1b; }
-.status.running { background: #dbeafe; color: #1e40af; }
+.status.connected   { background: var(--accent-dim); color: var(--accent); }
+.status.disconnected{ background: var(--error-dim); color: var(--error); }
+.status.running     { background: var(--accent-dim); color: var(--accent); }
 
-/* Live running-cost chip in the header. Shown only while a session is
-   running (or just ended) — done card carries the canonical final cost. */
+/* Header live-cost chip. Starts opacity 0; the `.visible` class added by
+ * JS triggers a fade-in. `[hidden]` still removes from layout when the
+ * fade-out completes (set by JS after a 220ms delay). */
 .cost {
-  font-size: 11px; padding: 2px 8px;
-  border-radius: 999px; font-weight: 600;
-  background: #f3f4f6; color: #374151;
+  font-size: 11px; padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text-mute);
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  transition: background 0.2s, color 0.2s;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.18s ease, transform 0.18s ease, background 0.2s ease, color 0.2s ease;
 }
 .cost[hidden] { display: none; }
-.cost.live { background: #dbeafe; color: #1e40af; }
+.cost.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+.cost.live {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
 
+/* ───── icon buttons in header ─────
+ * Square, 24px. Icons inside are inline SVGs that inherit currentColor
+ * (NOT emoji), so the colour palette stays single-source and the buttons
+ * read correctly on the dark panel. */
 .iconbtn {
-  border: 1px solid #e5e7eb; background: #fff;
-  border-radius: 6px; width: 24px; height: 24px;
-  font-size: 13px; line-height: 1; color: #6b7280;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  border-radius: 6px;
+  width: 24px; height: 24px;
+  font-size: 12px; line-height: 1;
+  color: var(--text-mute);
   cursor: pointer; padding: 0;
   display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.iconbtn:hover { background: #f3f4f6; color: #111; }
+.iconbtn svg { width: 14px; height: 14px; display: block; pointer-events: none; }
+/* Native `title` tooltips only fire on hover targets that *have* a title.
+ * When a child element (SVG, span, etc.) is the actual hover target and it
+ * has no title of its own, the tooltip silently doesn't appear. Forcing
+ * children to be pointer-event transparent guarantees the button itself is
+ * always the hover target, so its title attribute resolves. Same pattern is
+ * applied to .agentbtn, .launcher, .save-trigger below. */
+.iconbtn > * { pointer-events: none; }
+.iconbtn:not(:disabled):hover {
+  background: var(--bg-3);
+  color: var(--text);
+  border-color: #3a3a3c;
+}
 .iconbtn:disabled { opacity: 0.4; cursor: not-allowed; }
-.iconbtn.active { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+.iconbtn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .iconbtn.assertbtn[hidden] { display: none; }
 .iconbtn.assertbtn {
   width: auto; padding: 0 8px;
-  background: #ecfdf5; border-color: #a7f3d0; color: #047857;
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
   gap: 4px; font-size: 11px; font-weight: 600;
 }
-.iconbtn.assertbtn:hover { background: #d1fae5; border-color: #6ee7b7; }
-.iconbtn.assertbtn .assert-glyph { font-size: 12px; }
-.iconbtn.assertbtn .assert-count { font-variant-numeric: tabular-nums; }
+.iconbtn.assertbtn:not(:disabled):hover { background: rgba(124, 255, 168, 0.24); }
+/* Glyph + count share the same font-size so they sit on a common baseline.
+ * (Was 12 vs 11 — visibly misaligned when the count is 1-digit.) */
+.iconbtn.assertbtn .assert-glyph { font-size: 11px; }
+.iconbtn.assertbtn .assert-count { font-size: 11px; font-variant-numeric: tabular-nums; }
 
-/* Skills overlay slides over the body+footer area. Panel itself is
-   position:fixed, so absolute children align to it. */
+/* ───── agent picker pill ───── */
+.agentbtn {
+  height: 22px;
+  padding: 0 6px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 500;
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.agentbtn:not(:disabled):hover { background: var(--bg-3); border-color: #3a3a3c; }
+.agentbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.agentbtn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.agentbtn .agent-label { font-variant-numeric: tabular-nums; }
+.agentbtn .agent-warn[hidden] { display: none; }
+.agentbtn .agent-warn { color: var(--warn); font-size: 11px; }
+.agentbtn .agent-caret {
+  color: var(--text-dim);
+  font-size: 9px;
+  transition: color 0.12s ease;
+}
+/* When the rest of the button text/border brightens on hover or focus,
+ * the caret follows so the whole pill brightens as a unit. */
+.agentbtn:not(:disabled):hover .agent-caret,
+.agentbtn:focus-visible .agent-caret {
+  color: var(--text);
+}
+/* Same hover-target rule as .iconbtn — the agent-warn child has its own
+ * `title` which would otherwise shadow the parent's, AND the SVG/text bits
+ * would intercept hover and prevent the parent title from firing. */
+.agentbtn > * { pointer-events: none; }
+
+/* ───────────────────────── skills overlay (kept light by exception) ───────────────────────── */
+
 .skills-overlay {
-  position: absolute; top: 41px; left: 0; right: 0; bottom: 0;
-  background: #fff;
+  position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
   display: none;
   flex-direction: column;
   z-index: 5;
 }
 .skills-overlay.open { display: flex; }
 .skills-overlay .skills-header {
-  padding: 10px 14px; border-bottom: 1px solid #eee;
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
   display: flex; align-items: center; gap: 8px;
-  font-size: 12px; color: #6b7280;
+  font-size: 12px; color: var(--text-mute);
 }
-.skills-overlay .skills-header .count {
-  font-weight: 600; color: #111;
-}
-.skills-overlay .skills-list-items {
-  flex: 1; overflow-y: auto; padding: 8px;
-}
+.skills-overlay .skills-header .count { font-weight: 600; color: var(--text); }
+.skills-overlay .skills-list-items { flex: 1; overflow-y: auto; padding: 8px; }
 .skills-overlay .skills-empty {
   padding: 20px 16px; text-align: center;
-  color: #9ca3af; font-size: 12px; line-height: 1.5;
+  color: var(--text-dim); font-size: 12px; line-height: 1.5;
 }
 
-/* CDP overlay covers the body+footer when the widget isn't in the debug
-   Chrome (or no debug Chrome exists). Above .skills-overlay (z-index 5)
-   because CDP issues block everything else. */
+.skill-row {
+  padding: 10px 12px; border-radius: 6px;
+  cursor: pointer; margin-bottom: 4px;
+  border: 1px solid transparent;
+}
+.skill-row:hover { background: var(--bg-2); border-color: var(--line); }
+.skill-row .skill-name { font-weight: 600; color: var(--text); font-size: 13px; }
+.skill-row .skill-desc {
+  font-size: 12px; color: var(--text-mute); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.skill-row .skill-slug {
+  font-size: 11px; color: var(--text-dim); margin-top: 2px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* ───────────────────────── agents overlay ───────────────────────── */
+
+.agents-overlay {
+  position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  display: none;
+  flex-direction: column;
+  z-index: 5;
+}
+.agents-overlay.open { display: flex; }
+.agents-overlay .agents-header {
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-mute);
+}
+.agents-overlay .agents-header .count { font-weight: 600; color: var(--text); }
+.agents-overlay .agents-list-items { flex: 1; overflow-y: auto; padding: 8px; }
+.agent-row {
+  padding: 10px 12px; border-radius: 6px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--bg-2);
+}
+.agent-row:hover { background: var(--bg-3); border-color: var(--line); }
+.agent-row.current {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  cursor: default;
+}
+.agent-row.uninstalled { cursor: default; opacity: 0.55; background: transparent; }
+.agent-row.uninstalled:hover { background: transparent; border-color: transparent; }
+.agent-row .agent-main { flex: 1; min-width: 0; }
+.agent-row .agent-rowlabel {
+  font-weight: 600; color: var(--text); font-size: 13px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.agent-row .agent-rowtag {
+  font-size: 12px; color: var(--text-mute); margin-top: 2px;
+  line-height: 1.4;
+}
+.agent-row .agent-hint {
+  font-size: 11px; color: var(--text); margin-top: 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  background: var(--bg-3); padding: 4px 6px; border-radius: 4px;
+  word-break: break-all;
+}
+.agent-row .agent-badge {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 2px 6px; border-radius: 999px;
+  text-transform: uppercase;
+}
+.agent-row .agent-badge.installed { background: var(--accent-dim); color: var(--accent); }
+.agent-row .agent-badge.missing   { background: var(--bg-3); color: var(--text-dim); }
+.agent-row .agent-badge.soft      { background: rgba(251, 191, 36, 0.16); color: var(--warn); }
+.agent-row .agent-badge.hard      { background: rgba(125, 211, 252, 0.16); color: var(--link); }
+.agent-row .agent-rowcheck {
+  width: 16px; flex-shrink: 0; color: var(--accent); font-weight: 700; text-align: center;
+}
+
+/* ───────────────────────── CDP overlay (dark) ───────────────────────── */
+
 .cdp-overlay {
-  position: absolute; top: 41px; left: 0; right: 0; bottom: 0;
-  background: #fff;
+  position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
   display: none;
   align-items: center; justify-content: center;
   z-index: 6;
@@ -143,17 +449,17 @@ header {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
 }
 .cdp-icon { font-size: 36px; line-height: 1; }
-.cdp-title { font-weight: 600; font-size: 14px; color: #111; }
-.cdp-body  { font-size: 12px; color: #6b7280; line-height: 1.5; }
+.cdp-title { font-weight: 600; font-size: 14px; color: var(--text); }
+.cdp-body  { font-size: 12px; color: var(--text-mute); line-height: 1.5; }
 .cdp-action {
   margin-top: 6px;
   padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
-  font-size: 13px; font-weight: 500;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff;
+  font-size: 13px; font-weight: 600;
+  background: var(--accent); color: #0a3a18;
   font-family: inherit;
 }
-.cdp-action:hover { filter: brightness(1.05); }
-.cdp-action:disabled { opacity: 0.6; cursor: default; }
+.cdp-action:hover { filter: brightness(0.95); }
+.cdp-action:disabled { opacity: 0.55; cursor: default; }
 .cdp-action[hidden] { display: none; }
 .cdp-overlay.cdp-launching .cdp-icon {
   animation: hover-cdp-spin 1.4s linear infinite;
@@ -162,102 +468,465 @@ header {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
-.skill-row {
-  padding: 10px 12px; border-radius: 8px;
-  cursor: pointer; margin-bottom: 4px;
-  border: 1px solid transparent;
-}
-.skill-row:hover { background: #f9fafb; border-color: #e5e7eb; }
-.skill-row .skill-name { font-weight: 600; color: #111; font-size: 13px; }
-.skill-row .skill-desc {
-  font-size: 12px; color: #6b7280; margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.skill-row .skill-slug {
-  font-size: 11px; color: #9ca3af; margin-top: 2px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-}
+
+/* ───────────────────────── body / conversation ───────────────────────── */
 
 .body {
-  flex: 1; padding: 14px; overflow-y: auto;
-  font-size: 13px; color: #333; line-height: 1.5;
-  background: #fafafa;
+  flex: 1; padding: 14px 14px 18px;
+  overflow-y: auto;
+  font-size: 12.5px; color: var(--text); line-height: 1.45;
+  background: var(--bg);
+}
+
+/* Fade-in animation for newly-appended conversation items. Because
+ * renderAll() rebuilds the body on every state change, we can't just
+ * animate `.body > *` (everything would re-animate on every tick).
+ * Instead JS marks brand-new elements with `data-fresh="1"` for the
+ * first paint after they appeared, and clears it after the animation.
+ * That way only truly new items fade in. */
+.body > [data-fresh="1"] {
+  animation: msg-enter 0.22s ease-out both;
+}
+@keyframes msg-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .body > [data-fresh="1"] { animation: none; }
 }
 .body:empty::before {
   content: "Describe what you want to verify, e.g. \"test the login flow\".";
-  color: #999;
-  font-style: italic;
+  display: block;
+  padding: 32px 16px;
+  color: var(--text-mute);
+  font-style: normal;
+  font-size: 12.5px;
+  line-height: 1.55;
+  text-align: center;
+  max-width: 280px;
+  margin: 8px auto 0;
 }
 
-.msg { margin-bottom: 10px; }
-.msg .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
-.msg.user .bubble { background: #6366f1; color: #fff; padding: 8px 12px; border-radius: 10px 10px 2px 10px; display: inline-block; max-width: 100%; word-wrap: break-word; }
-.msg.user { text-align: right; }
+/* ───── user prompt — pill, right-aligned ─────
+ * Larger padding + radius + a more pronounced gap from surrounding step
+ * rows so the user's words feel like their own utterance, not just
+ * another row in the timeline. Matches the ChatGPT Image 2 reference. */
+.msg.user {
+  display: flex; justify-content: flex-end;
+  margin: 4px 2px 12px;
+}
+.msg.user + .group,
+.msg.user + .msg.system,
+.msg.user + .msg.ai { margin-top: 4px; }
+.msg.user .bubble {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 9px 14px;
+  border-radius: 14px 14px 4px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 86%;
+  word-wrap: break-word;
+}
 
-.msg.step {
-  background: #fff; border: 1px solid #e5e7eb;
-  border-radius: 8px; padding: 8px 10px;
+/* ───── ai bubble (standalone — only for terminal summaries) ───── */
+.msg.ai {
+  margin: 4px 4px 6px;
+}
+.msg.ai .bubble {
+  background: transparent;
+  color: var(--text);
+  padding: 4px 10px 4px 14px;
+  border-left: 2px solid var(--accent);
+  font-size: 12.5px;
+  display: inline-block;
+  max-width: 100%;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.msg.ai .bubble strong { font-weight: 600; color: var(--text); }
+.msg.ai .bubble em { font-style: italic; color: var(--text-mute); }
+.msg.ai .bubble code {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 12px; color: #374151;
+  font-size: 11px; background: var(--bg-3);
+  padding: 1px 4px; border-radius: 3px;
+  color: var(--accent);
 }
-.msg.step.error { border-color: #fca5a5; background: #fef2f2; }
-.msg.step .tool { font-weight: 600; color: #6366f1; }
-.msg.step .args { color: #6b7280; word-break: break-all; }
-.msg.step .arrow { color: #9ca3af; margin-right: 4px; }
 
-.msg.ai .bubble { background: #fff; border: 1px solid #e5e7eb; padding: 8px 12px; border-radius: 10px 10px 10px 2px; display: inline-block; max-width: 100%; word-wrap: break-word; white-space: pre-wrap; }
-.msg.ai .bubble strong { font-weight: 600; }
-.msg.ai .bubble em { font-style: italic; }
-.msg.ai .bubble code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; background: #f3f4f6; padding: 1px 4px; border-radius: 3px; }
-
-.msg.system { font-size: 11px; color: #9ca3af; font-style: italic; }
-
-.msg.done {
-  background: #f0fdf4; border: 1px solid #bbf7d0;
-  border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #166534;
+.msg.system {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 8px;
+  margin: 4px 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
-.msg.done.error { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
-.msg.done .meta { font-weight: 600; margin-bottom: 4px; }
-.msg.done .summary { color: inherit; opacity: 0.9; white-space: pre-wrap; }
-.msg.done .actions { margin-top: 8px; display: flex; gap: 6px; }
-/* ───── Save dropdown — replaces three side-by-side buttons ──────
-   One primary CTA ("💾 Save as ▾") with a stacked menu that opens
-   upward so it never gets clipped by the chat scroll. Three items,
-   one per artifact format; each shows the destination path as a
-   subtitle so a fresh user can pick without reading the README. */
-.msg.done .actions .save-wrap {
+
+/* ───────────────────────── grouped step row (Midscene-style) ─────────────────────────
+ * One row per natural-language intent. Click the chevron to expand the
+ * underlying tool calls. The "running" step gets the accent ring + spinner;
+ * the closed group inherits status colours (ok / error).
+ */
+
+.group {
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  /* Step rows default to a visible elevated surface so they read as
+   * "actionable rows" at a glance. Matches the look of the ChatGPT
+   * Image 2 reference where every step is clearly a card. */
+  background: var(--bg-2);
+  transition: background 0.12s, border-color 0.12s;
+  position: relative;       /* anchor for the running-step left bar */
+  overflow: hidden;
+}
+.group + .group { margin-top: 8px; }
+.group:hover { background: #2a2a2c; }
+
+/* Running step: left mint bar + a faint moving shimmer to telegraph
+ * "this is the active row". The shimmer is a slow horizontal gradient
+ * sweep at low opacity — visible enough to be noticed, subtle enough
+ * not to feel like a UI bug. */
+.group.running {
+  background: var(--bg-2);
+  border-color: transparent;
+  box-shadow: none;
+  padding-left: 4px;
   position: relative;
-  display: inline-block;
+  overflow: hidden;
 }
+.group.running::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  z-index: 1;
+}
+.group.running::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(124, 255, 168, 0.04) 30%,
+    rgba(124, 255, 168, 0.10) 50%,
+    rgba(124, 255, 168, 0.04) 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: gr-shimmer 2.2s ease-in-out infinite;
+}
+@keyframes gr-shimmer {
+  0%   { background-position: 200% 50%; }
+  100% { background-position: -100% 50%; }
+}
+/* Children need explicit z-index so the shimmer overlay sits BEHIND
+ * them rather than over the text. */
+.group.running .group-row,
+.group.running .group-tools { position: relative; z-index: 2; }
+
+.group.error {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+.group.error::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--error);
+}
+
+.group-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.group-row .gr-chevron {
+  width: 12px; flex-shrink: 0;
+  color: var(--text-dim); font-size: 10px;
+  /* Animate both rotation AND colour so the open transition reads as one
+   * coherent motion instead of "rotate + colour pop". */
+  transition: transform 0.12s ease, color 0.12s ease;
+  text-align: center;
+}
+.group.open .group-row .gr-chevron { transform: rotate(90deg); color: var(--text-mute); }
+
+.group-row .gr-icon {
+  /* Slightly larger hit-target than just a glyph, with a faint tinted
+   * background so the status reads at a glance, like a status pill. */
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; line-height: 1;
+  border-radius: 50%;
+  font-weight: 700;
+}
+.group.ok      .gr-icon { color: var(--accent); background: rgba(124, 255, 168, 0.12); }
+.group.error   .gr-icon { color: var(--error);  background: rgba(248, 113, 113, 0.14); }
+.group.running .gr-icon { color: var(--accent); background: transparent; }
+
+.group-row .gr-title {
+  flex: 1; min-width: 0;
+  font-size: 13px; color: var(--text);
+  font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.group.running .gr-title { color: var(--accent); font-weight: 500; }
+.group.error .gr-title { color: var(--error); }
+/* Spinner: open-top ring rotating at 0.9s/turn. Conveys "actively doing
+ * something" — paired with a faint mint shimmer on the row background
+ * (see .group.running below) to anchor activity. */
+.group-row .gr-icon.gr-ring {
+  width: 12px; height: 12px;
+  border: 1.5px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  background: transparent;
+  animation: gr-spin 0.9s linear infinite;
+  font-size: 0;
+}
+@keyframes gr-spin {
+  to { transform: rotate(360deg); }
+}
+
+.group-row .gr-meta {
+  flex-shrink: 0;
+  font-size: 10.5px; color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.group-row .gr-meta .gr-cost { color: var(--accent); }
+.group.error .gr-meta .gr-cost { color: var(--error); }
+
+/* tools list — hidden by default, shown when group has .open */
+.group-tools {
+  display: none;
+  padding: 0 10px 8px 34px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-mute);
+}
+.group.open .group-tools { display: block; }
+.group-tool {
+  display: flex; gap: 6px;
+  padding: 2px 0;
+  /* No word-break on the row itself — that would chop tool *names* like
+   * "browser_take_screenshot" into "Sk\nil\nl" because their underscores
+   * are valid break points. We want a tight column: the name stays whole
+   * and the args (which are arbitrary JSON, often long) get the break. */
+  align-items: flex-start;
+}
+.group-tool .gt-dot {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.group-tool .gt-name {
+  color: var(--link);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.group-tool.error .gt-name { color: var(--error); }
+.group-tool .gt-args {
+  color: var(--text-dim);
+  min-width: 0;       /* allow flex child to actually shrink */
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+/* ───────────────────────── report card ─────────────────────────
+ *
+ * Rendered AFTER the last group of a session when the agent emitted a
+ * verification narrative. Holds:
+ *   - status header (✓ Result / ✗ Failed) + turns + cost meta
+ *   - plain-text body (the agent's report, markdown-stripped)
+ *   - Save-as dropdown — primary action after a successful run
+ *
+ * Visually adjacent to but distinct from group rows: more weight, mint
+ * left border on success, red on error. Sits between the groups and the
+ * (optional) findings card.
+ */
+.report {
+  margin: 16px 0 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.report.ok    { border-left: 3px solid var(--accent); }
+.report.error { border-left: 3px solid var(--error); }
+
+.report-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.report.ok    .report-header { background: rgba(124, 255, 168, 0.06); }
+.report.error .report-header { background: rgba(248, 113, 113, 0.06); }
+
+.report-header-icon {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  flex-shrink: 0;
+}
+.report.ok    .report-header-icon { background: rgba(124, 255, 168, 0.18); color: var(--accent); }
+.report.error .report-header-icon { background: rgba(248, 113, 113, 0.18); color: var(--error); }
+
+.report-header-label {
+  font-weight: 600; font-size: 12px;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.report-header-meta {
+  margin-left: auto;
+  font-size: 10.5px; color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.report-body {
+  padding: 10px 14px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.55;
+  /* Preserve agent's newlines but allow long lines to wrap. */
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  /* Cap height so a very long report doesn't blow up the panel — user
+   * can scroll inside if it overflows. */
+  max-height: 260px;
+  overflow-y: auto;
+}
+.report-actions {
+  padding: 8px 12px 10px;
+  display: flex; gap: 8px;
+}
+
+/* ───────────────────────── findings card ─────────────────────────
+ *
+ * Rendered AFTER a done group when the agent's final summary contains a
+ * `## Findings` block. Lives outside the conversation timeline visually —
+ * different background, prominent header, severity-coloured rows — so the
+ * user's eye is drawn to "what bugs did we find?" rather than to the
+ * step-by-step process.
+ */
+.findings {
+  margin: 16px 0 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.findings-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.06);
+  border-bottom: 1px solid var(--line);
+}
+.findings-header-icon {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: rgba(251, 191, 36, 0.18);
+  color: var(--warn);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  flex-shrink: 0;
+}
+.findings-header-label {
+  font-weight: 600; font-size: 12px;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.findings-header-count {
+  margin-left: auto;
+  font-size: 10.5px; color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-3);
+  border-radius: 999px;
+  padding: 2px 7px;
+  min-width: 18px; text-align: center;
+}
+.findings-list { padding: 6px; }
+.finding-row {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  font-size: 12px; line-height: 1.5;
+  color: var(--text);
+}
+.finding-row:hover { background: var(--bg-3); }
+.finding-severity {
+  flex-shrink: 0;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: nowrap;
+}
+.finding-text {
+  flex: 1; min-width: 0;
+  word-wrap: break-word;
+}
+.finding-text strong { color: var(--text); font-weight: 600; }
+.finding-text em { color: var(--text-mute); font-style: italic; }
+.finding-text code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  background: var(--bg-3);
+  padding: 1px 4px; border-radius: 3px;
+  color: var(--accent);
+}
+
+.finding-bug .finding-severity { background: rgba(248, 113, 113, 0.16); color: var(--error); }
+.finding-minor .finding-severity { background: rgba(251, 191, 36, 0.16); color: var(--warn); }
+.finding-info .finding-severity { background: var(--bg-3); color: var(--text-mute); }
+
+/* ───────────────────────── Save-as dropdown (re-themed dark) ───────────────────────── */
+
+.save-wrap { position: relative; display: inline-block; }
 .save-trigger {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 7px 12px;
-  border-radius: 7px;
-  border: 1px solid #166534;
-  background: #166534;
-  color: #fff;
-  font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 8px 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 11px; font-weight: 600;
   cursor: pointer; font-family: inherit;
-  transition: background 0.12s, transform 0.06s;
+  transition: background 0.12s, transform 0.06s, color 0.12s, border-color 0.12s;
 }
-.save-trigger:hover:not(:disabled) { background: #14532d; }
-.save-trigger:active:not(:disabled) { transform: translateY(1px); }
-.save-trigger:disabled { opacity: 0.6; cursor: not-allowed; }
-.save-trigger[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.save-trigger .trigger-icon,
 .save-trigger .caret {
-  font-size: 10px; opacity: 0.85;
-  transition: transform 0.15s ease;
-  display: inline-block;
+  display: inline-flex; align-items: center;
 }
+.save-trigger .trigger-icon svg { width: 12px; height: 12px; display: block; }
+.save-trigger .caret svg { width: 10px; height: 10px; display: block; }
+.save-trigger:hover:not(:disabled) { background: rgba(124, 255, 168, 0.24); }
+.save-trigger:active:not(:disabled) { transform: translateY(1px); }
+.save-trigger:disabled { opacity: 0.55; cursor: not-allowed; }
+.save-trigger[aria-expanded="true"] .caret {
+  transform: rotate(180deg);
+}
+.save-trigger .caret { transition: transform 0.15s ease; }
+.save-trigger > * { pointer-events: none; }
 
 .save-menu {
   position: absolute;
   bottom: calc(100% + 6px); left: 0;
   min-width: 280px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
   padding: 4px;
   z-index: 15;
   display: flex; flex-direction: column;
@@ -275,116 +944,133 @@ header {
   padding: 8px 10px;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
   text-align: left;
   font-family: inherit;
+  color: var(--text);
   transition: background 0.1s;
 }
-.save-menu-item:hover { background: #f9fafb; }
-.save-menu-item:active { background: #f3f4f6; }
+.save-menu-item:hover { background: var(--bg-3); }
 .save-menu-item .i-icon {
-  font-size: 18px; line-height: 1;
   flex-shrink: 0;
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
   margin-top: 1px;
 }
-.save-menu-item .i-text {
-  display: flex; flex-direction: column; gap: 2px;
-  min-width: 0;
-}
-.save-menu-item .i-label {
-  font-weight: 600; font-size: 13px;
-}
+.save-menu-item .i-icon svg { width: 16px; height: 16px; display: block; }
+.save-menu-item.item-spec .i-icon  { color: var(--accent); }
+.save-menu-item.item-skill .i-icon { color: var(--link); }
+.save-menu-item.item-case .i-icon  { color: var(--warn); }
+.save-menu-item .i-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.save-menu-item .i-label { font-weight: 600; font-size: 12.5px; color: var(--text); }
 .save-menu-item .i-sub {
-  font-size: 11px; color: #6b7280;
+  font-size: 10.5px; color: var(--text-dim);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   word-break: break-all;
 }
-/* Accent the label colour by format, mirroring the per-format theme
-   we used when the three buttons were laid out side-by-side. */
-.save-menu-item.item-spec .i-label  { color: #166534; }
-.save-menu-item.item-skill .i-label { color: #047857; }
-.save-menu-item.item-case .i-label  { color: #1d4ed8; }
+.save-menu-item.item-spec .i-label  { color: var(--accent); }
+.save-menu-item.item-skill .i-label { color: var(--link); }
+.save-menu-item.item-case .i-label  { color: var(--warn); }
+
+/* ───────────────────────── footer (input area) ───────────────────────── */
 
 footer {
-  border-top: 1px solid #eee; padding: 10px;
+  border-top: 1px solid var(--line);
+  padding: 10px;
   display: flex; flex-direction: column; gap: 8px;
-  background: #fff;
+  background: var(--bg);
 }
 textarea {
   width: 100%; resize: none;
-  border: 1px solid #ddd; border-radius: 6px;
-  padding: 8px; font-family: inherit; font-size: 13px;
-  outline: none; color: #111;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-family: inherit; font-size: 12.5px;
+  outline: none;
+  background: var(--bg-3);
+  color: var(--text);
 }
-textarea:focus { border-color: #6366f1; }
-textarea:disabled { background: #fafafa; color: #999; cursor: not-allowed; }
+textarea::placeholder { color: var(--text-dim); }
+textarea:focus { border-color: var(--accent); }
+textarea:disabled { background: var(--bg-2); color: var(--text-dim); cursor: not-allowed; }
 
 .footer-actions {
   display: flex; align-items: center; gap: 8px;
 }
 .footer-actions .hint {
   flex: 1;
-  font-size: 11px; color: #9ca3af;
+  font-size: 11px; color: var(--text-dim);
   text-align: right;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .send {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 10px 6px 14px;
-  border-radius: 8px; border: none;
-  background: #6366f1; color: #fff;
-  font-size: 13px; font-weight: 600;
+  padding: 5px 10px 5px 12px;
+  border-radius: 7px; border: 1px solid var(--accent);
+  background: var(--accent); color: #0a3a18;
+  font-size: 12px; font-weight: 700;
   cursor: pointer; font-family: inherit;
-  transition: background 0.12s, transform 0.06s;
+  transition: background 0.12s, transform 0.06s, color 0.12s;
 }
-.send:hover:not(:disabled) { background: #4f46e5; }
-.send:disabled { background: #cbd5e1; cursor: not-allowed; }
+.send:hover:not(:disabled) { background: #5cf094; }
+.send:disabled { background: var(--bg-2); color: var(--text-dim); border-color: var(--line); cursor: not-allowed; }
 .send:active:not(:disabled) { transform: translateY(1px); }
-.send.stop { background: #dc2626; }
-.send.stop:hover:not(:disabled) { background: #b91c1c; }
-.send.stop:disabled { background: #cbd5e1; cursor: not-allowed; }
+.send.stop { background: var(--error); color: #2a0606; border-color: var(--error); }
+.send.stop:hover:not(:disabled) { background: #fa9494; }
+.send.stop:disabled { background: var(--bg-2); color: var(--text-dim); border-color: var(--line); cursor: not-allowed; }
 .send .chord {
   font-size: 10px; opacity: 0.75;
   padding: 1px 5px;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(10, 58, 24, 0.22);
   border-radius: 4px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
 .send.stop .chord { display: none; }
+.send > * { pointer-events: none; }
 
 .record-btn {
-  background: transparent;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: #6b7280;
+  padding: 5px 9px;
+  font-size: 11px;
+  color: var(--text-mute);
   cursor: pointer;
   font-family: inherit;
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
+  /* Slightly longer transition so the flip into .recording reads as a
+   * smooth state change instead of a flash. */
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
-.record-btn:hover { color: #dc2626; border-color: #fca5a5; background: #fef2f2; }
+.record-btn > * { pointer-events: none; }
+.record-btn:not(:disabled):hover {
+  color: var(--error);
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.08);
+}
+.record-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .record-btn .rec-dot {
   display: inline-block;
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: #dc2626;
+  background: var(--error);
 }
 .record-btn.recording {
-  background: #fee2e2;
-  color: #dc2626;
-  border-color: #fca5a5;
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--error);
+  border-color: rgba(248, 113, 113, 0.5);
   font-weight: 600;
 }
 .record-btn.recording .rec-dot { animation: rec-pulse 1.2s ease-in-out infinite; }
 @keyframes rec-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.7); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
 }
 
-/* ───── modal: replaces native prompt() and confirm() ───── */
+/* ───────────────────────── modal (dark) ───────────────────────── */
+
 .modal {
   position: absolute; inset: 0;
   display: none; align-items: center; justify-content: center;
@@ -393,7 +1079,7 @@ textarea:disabled { background: #fafafa; color: #999; cursor: not-allowed; }
 .modal.open { display: flex; }
 .modal-backdrop {
   position: absolute; inset: 0;
-  background: rgba(15, 23, 42, 0.42);
+  background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   animation: modal-fade-in 0.16s ease;
@@ -402,64 +1088,63 @@ textarea:disabled { background: #fafafa; color: #999; cursor: not-allowed; }
 .modal-card {
   position: relative;
   width: calc(100% - 28px);
-  max-width: 340px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+  max-width: 360px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
   display: flex; flex-direction: column;
   overflow: hidden;
   animation: modal-card-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes modal-card-in {
   from { transform: translateY(10px) scale(0.96); opacity: 0; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
 }
 .modal-head {
   display: flex; align-items: center; gap: 8px;
   padding: 14px 14px 4px;
 }
 .modal-title {
-  flex: 1;
-  font-weight: 600; font-size: 14px; color: #111;
+  flex: 1; font-weight: 600; font-size: 13.5px; color: var(--text);
 }
 .modal-close {
   border: none; background: transparent;
-  font-size: 20px; line-height: 1; color: #9ca3af;
+  font-size: 18px; line-height: 1; color: var(--text-dim);
   cursor: pointer; padding: 0;
-  width: 24px; height: 24px;
-  border-radius: 6px;
+  width: 24px; height: 24px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
 }
-.modal-close:hover { background: #f3f4f6; color: #111; }
+.modal-close:hover { background: var(--bg-3); color: var(--text); }
 .modal-body {
   padding: 8px 14px 4px;
   display: flex; flex-direction: column; gap: 12px;
-  color: #374151; font-size: 13px; line-height: 1.5;
+  color: var(--text); font-size: 12.5px; line-height: 1.5;
 }
 .modal-field { display: flex; flex-direction: column; gap: 5px; }
 .modal-field label {
-  font-size: 11px; color: #6b7280;
+  font-size: 10px; color: var(--text-mute);
   text-transform: uppercase; letter-spacing: 0.04em;
   font-weight: 600;
 }
 .modal-field input {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
   padding: 8px 10px;
-  font-size: 13px; color: #111;
+  font-size: 12.5px; color: var(--text);
   font-family: inherit;
   outline: none;
   transition: border-color 0.12s, box-shadow 0.12s;
-  background: #fff;
+  background: var(--bg-3);
 }
-.modal-field input::placeholder { color: #c1c7d0; }
+.modal-field input::placeholder { color: var(--text-dim); }
 .modal-field input:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 .modal-field input.error {
-  border-color: #ef4444;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px var(--error-dim);
   animation: modal-shake 0.22s;
 }
 @keyframes modal-shake {
@@ -468,9 +1153,9 @@ textarea:disabled { background: #fafafa; color: #999; cursor: not-allowed; }
   75% { transform: translateX(4px); }
 }
 .modal-context {
-  font-size: 12px; color: #6b7280;
-  background: #f9fafb;
-  border: 1px solid #f3f4f6;
+  font-size: 11.5px; color: var(--text-mute);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 6px 8px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -481,9 +1166,9 @@ textarea:disabled { background: #fafafa; color: #999; cursor: not-allowed; }
   display: flex; gap: 8px; justify-content: flex-end;
 }
 .modal-actions button {
-  font-size: 13px; font-weight: 600;
-  padding: 7px 14px;
-  border-radius: 7px;
+  font-size: 12px; font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
   border: 1px solid transparent;
@@ -491,15 +1176,84 @@ textarea:disabled { background: #fafafa; color: #999; cursor: not-allowed; }
 }
 .modal-actions button:active:not(:disabled) { transform: translateY(1px); }
 .modal-actions .m-ghost {
-  background: #fff; color: #4b5563;
-  border-color: #e5e7eb;
+  background: var(--bg-3); color: var(--text);
+  border-color: var(--line);
 }
-.modal-actions .m-ghost:hover { background: #f9fafb; border-color: #d1d5db; }
+.modal-actions .m-ghost:hover { background: var(--bg); border-color: #3a3a3c; }
 .modal-actions .m-primary {
-  background: #6366f1; color: #fff;
+  background: var(--accent); color: #0a3a18;
 }
-.modal-actions .m-primary:hover { background: #4f46e5; }
+.modal-actions .m-primary:hover { background: #5cf094; }
 .modal-actions .m-danger {
-  background: #dc2626; color: #fff;
+  background: var(--error); color: #2a0606;
 }
-.modal-actions .m-danger:hover { background: #b91c1c; }
+.modal-actions .m-danger:hover { background: #fa9494; }
+
+/* ───────────────────────── custom tooltip ─────────────────────────
+ * One floating bubble shared by every [data-tooltip] target. The script
+ * positions it absolutely relative to the host (NOT relative to the panel)
+ * so it can label the launcher as well as in-panel buttons.
+ *
+ * Why we don't use native `title=`: inside a Shadow DOM the system tooltip
+ * still appears, but with the OS default delay (~500ms-1s) and light theme.
+ * It clashes with the dark panel and feels laggy. This custom one shows in
+ * ~120ms and matches the mint/dark palette.
+ */
+.hover-tip {
+  position: fixed;
+  z-index: 2147483647;
+  background: #0e0e0e;
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.1s ease, transform 0.1s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  font-family: inherit;
+  max-width: 280px;
+}
+.hover-tip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.hover-tip-text {
+  display: inline-block;
+  white-space: normal;
+  line-height: 1.35;
+}
+/* Arrow — a small square rotated 45°, half buried under the bubble. The
+ * script flips its `data-side` to position it on the right side or below.
+ */
+.hover-tip-arrow {
+  position: absolute;
+  width: 6px; height: 6px;
+  background: #0e0e0e;
+  border-right: 1px solid var(--accent);
+  border-bottom: 1px solid var(--accent);
+  transform: rotate(45deg);
+}
+.hover-tip[data-side="above"] .hover-tip-arrow {
+  bottom: -4px; left: 50%; margin-left: -3px;
+}
+.hover-tip[data-side="below"] .hover-tip-arrow {
+  top: -4px; left: 50%; margin-left: -3px;
+  border-right: none; border-bottom: none;
+  border-left: 1px solid var(--accent);
+  border-top: 1px solid var(--accent);
+}
+.hover-tip[data-side="left"] .hover-tip-arrow {
+  right: -4px; top: 50%; margin-top: -3px;
+  border-right: 1px solid var(--accent); border-bottom: none;
+  border-top: 1px solid var(--accent); border-left: none;
+}
+.hover-tip[data-side="right"] .hover-tip-arrow {
+  left: -4px; top: 50%; margin-top: -3px;
+  border-right: none; border-bottom: 1px solid var(--accent);
+  border-top: none; border-left: 1px solid var(--accent);
+}

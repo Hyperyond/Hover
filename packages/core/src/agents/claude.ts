@@ -1,4 +1,4 @@
-import type { AgentDescriptor, InvokeOptions, InvokeEvent } from './types.js';
+import type { AgentDescriptor, InvokeOptions, InvokeEvent, ParserState } from './types.js';
 
 type ContentBlock =
   | { type: 'text'; text?: string }
@@ -64,20 +64,38 @@ function estimateCostUsd(modelHint: string | undefined, usage: ClaudeUsage): num
 }
 
 /**
- * Per-session running totals. Reset on every `system/init` event (one per
- * agent invocation). Safe as module-level state because service.ts enforces
- * one in-flight invocation per Hover service via its `busy` lock, and each
- * Vite dev server spawns its own Node process with its own module instance.
+ * Per-invocation running totals. Stored on the ParserState object that
+ * invokeAgent threads through parseEvent / onStreamEnd so two concurrent
+ * runs can't smear their accumulators together.
  */
-let runningCost = 0;
-let runningTurns = 0;
-let runningModel: string | undefined;
+interface ClaudeParserState extends ParserState {
+  runningCost: number;
+  runningTurns: number;
+  runningModel: string | undefined;
+}
+
+function claudeState(state: ParserState): ClaudeParserState {
+  // First touch on this state object — seed the keys we read below.
+  if (typeof state.runningCost !== 'number') {
+    state.runningCost = 0;
+    state.runningTurns = 0;
+    state.runningModel = undefined;
+  }
+  return state as ClaudeParserState;
+}
 
 export const claudeAgent: AgentDescriptor = {
   id: 'claude',
   binName: 'claude',
   protocol: 'argv',
   streamFormat: 'stream-json',
+  sandboxStrength: 'hard',
+  display: {
+    label: 'Claude Code',
+    tagline: 'Anthropic — best-in-class browser driving, hard tool sandbox',
+    homepage: 'https://docs.claude.com/claude-code',
+    installHint: 'npm install -g @anthropic-ai/claude-code',
+  },
 
   buildArgs(opts: InvokeOptions): string[] {
     const args: string[] = ['-p', opts.prompt];
@@ -107,7 +125,7 @@ export const claudeAgent: AgentDescriptor = {
     return args;
   },
 
-  parseEvent(line: string): InvokeEvent[] {
+  parseEvent(line: string, state: ParserState = {}): InvokeEvent[] {
     if (!line.trim()) return [];
 
     let ev: ClaudeStreamEvent;
@@ -117,13 +135,14 @@ export const claudeAgent: AgentDescriptor = {
       return [{ kind: 'raw', line }];
     }
 
+    const s = claudeState(state);
     const out: InvokeEvent[] = [];
 
     if (ev.type === 'system' && ev.subtype === 'init') {
       // Fresh session — reset the cost/turn accumulator.
-      runningCost = 0;
-      runningTurns = 0;
-      runningModel = ev.model;
+      s.runningCost = 0;
+      s.runningTurns = 0;
+      s.runningModel = ev.model;
       if (ev.session_id) {
         out.push({ kind: 'session_start', sessionId: ev.session_id, model: ev.model });
       }
@@ -134,17 +153,17 @@ export const claudeAgent: AgentDescriptor = {
     }
 
     if (ev.type === 'assistant') {
-      runningTurns += 1;
+      s.runningTurns += 1;
       // Claude Code sometimes carries `total_cost_usd` on intermediate events;
       // when present it's authoritative (server-computed, includes anything
       // we'd miss). When absent, estimate from this turn's usage so the widget
       // still shows a growing $ counter on long runs.
       if (typeof ev.total_cost_usd === 'number') {
-        runningCost = ev.total_cost_usd;
+        s.runningCost = ev.total_cost_usd;
       } else if (ev.message?.usage) {
-        runningCost += estimateCostUsd(runningModel ?? ev.message.model, ev.message.usage);
+        s.runningCost += estimateCostUsd(s.runningModel ?? ev.message.model, ev.message.usage);
       }
-      out.push({ kind: 'usage', costUsd: runningCost, turns: runningTurns });
+      out.push({ kind: 'usage', costUsd: s.runningCost, turns: s.runningTurns });
 
       for (const block of ev.message?.content ?? []) {
         if (block.type === 'tool_use') {

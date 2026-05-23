@@ -42,19 +42,25 @@ Development order is Phase 0 → 1 → 2 → 3. Phase 1 work order: WebSocket se
 
 ## Local CLI Agent First
 
-Hover bundles no AI runtime. It spawns whatever coding-agent CLI the user already has on PATH (`claude`, `codex`, `cursor`, `aider`, ...) and normalizes its output into a single event stream.
+Hover bundles no AI runtime. It spawns whatever coding-agent CLI the user already has on PATH (`claude`, `codex`, ...) and normalizes its output into a single event stream.
 
-Five files in `packages/core/src/agents/`:
+Supported agents today: `claude` (Claude Code, hard sandbox) and `codex` (OpenAI Codex CLI, soft sandbox). Service auto-detects the primary at startup — first installed in registry order — so a user with only `codex` installed gets Hover working without env vars. The widget shows the current agent as a pill in its header and lets the user pick another from a dropdown that also lists registered-but-not-installed agents (greyed out, with an install hint copy-pasteable from the row).
+
+Files in `packages/core/src/agents/`:
 
 | File | Purpose |
 |---|---|
-| `types.ts` | `AgentDescriptor`, `InvokeOptions`, normalized `InvokeEvent`, protocol/format enums, error classes |
-| `registry.ts` | `AGENTS` constant — single source of truth for supported agents |
-| `detect.ts` | `detectAgents()`, `resolveBinForAgent()`, `resolveOnPath()` — PATH scanning |
+| `types.ts` | `AgentDescriptor`, `InvokeOptions`, normalized `InvokeEvent`, `SandboxStrength`, `AgentDisplay`, protocol/format enums, error classes |
+| `registry.ts` | `AGENTS` constant + `listAgents()` — single source of truth for supported agents |
+| `detect.ts` | `detectAgents()`, `pickPrimaryAgent()`, `listAgentAvailability()`, `resolveBinForAgent()`, `resolveOnPath()` — PATH scanning + selection |
 | `argv.ts` | `buildArgv()` — protocol-aware argv construction |
-| `invoke.ts` | `invokeAgent()` — async-iterable: spawn child, parse stream, yield normalized events |
+| `invoke.ts` | `invokeAgent()` — async-iterable: spawn child, parse stream, yield normalized events; calls descriptor's optional `onStreamEnd` to synthesize `session_end` for agents whose protocol lacks an explicit terminator (codex) |
+| `claude.ts` | Claude Code descriptor — `claude -p`, stream-json parser, hard sandbox via `--strict-mcp-config` + `--allowedTools` + `--disallowedTools` |
+| `codex.ts` | OpenAI Codex descriptor — `codex exec --json`, JSONL parser, soft sandbox via `--sandbox read-only` + `developer_instructions` system prompt (codex has no built-in-tool deny list at the CLI level) |
 
-Per-agent strategy lives in its own file (currently just `claude.ts`). To add a new agent: write its `AgentDescriptor` and register it in `registry.ts` — nothing else changes.
+Per-agent strategy lives in its own file. To add a new agent: write its `AgentDescriptor` and register it in `registry.ts` — nothing else changes.
+
+`AgentDescriptor.sandboxStrength` (`'hard' | 'soft'`) is the load-bearing field that lets `service.ts` decide whether to pass the claude-style allow/disallow lists (no-op for codex, but cleaner to gate at the service layer). A `'soft'` agent gets a ⚠ badge in the widget dropdown so the user knows the built-in tool surface (`shell`, `fs_edit`, etc.) is broader than the MCP-only locked-down `'hard'` agents.
 
 The full flow for one command: page UI → WebSocket → `@hover-dev/core` → spawn agent → MCP → Playwright → CDP → user's Chrome. Step events flow back the same path in reverse.
 
@@ -80,7 +86,7 @@ These are load-bearing — several are non-obvious:
 
 - The **agent** never launches its own Chromium — it connects to whatever debug Chrome is on `chromeDebugPort` via `connectOverCDP` and picks the existing context/page whose URL matches the dev-server origin. The agent's Playwright MCP is sandboxed to a CDP target it can't change.
 - The **service** is allowed to spawn one specific Chrome: the isolated debug Chrome under `<tmpdir>/hover-chrome` via `launchDebugChrome()` (in `playwright/launchChrome.ts`). This happens either at Vite startup (when `autoLaunchChrome: true`) or on widget demand (when the user clicks an amber ✨). It is *not* the user's primary Chrome profile.
-- Strict sandboxing. The smoke test passes `--strict-mcp-config`, `--permission-mode dontAsk`, `--allowedTools mcp__playwright`, `--disallowedTools "Bash Edit Write Read Grep Glob Task WebFetch WebSearch"`, and `--max-budget-usd 0.50`. The Playwright MCP server is the only tool Claude can reach. Filesystem access (other than the eventual `__vibe_tests__/` write path) is forbidden.
+- Sandboxing is per-agent. For `claude` (hard sandbox), the service passes `--strict-mcp-config`, `--permission-mode dontAsk`, `--allowedTools mcp__playwright`, `--disallowedTools "Bash Edit Write Read Grep Glob Task WebFetch WebSearch …"`. The Playwright MCP server is the only tool Claude can reach; filesystem access (other than the `__vibe_tests__/` write path) is forbidden. For `codex` (soft sandbox), there is no equivalent CLI flag to disable built-in tools — we pass `--sandbox read-only --ask-for-approval never` and inject a strict `developer_instructions` system prompt telling the agent to use only `mcp__playwright__*`. The widget marks soft-sandbox agents with a ⚠ badge so users know the surface is broader.
 - Default model is `sonnet`, not `opus`. Opus is ~5× more expensive per browser-driving session. Override with `HOVER_MODEL=opus` if needed for harder tasks.
 - The injected UI lives in a Shadow DOM and marks itself with `data-vibe-test="true"` so Playwright can skip it. Tailwind's default scan does not work inside Shadow DOM — use inline styles or CSS-in-JS.
 - The local Node service binds to `127.0.0.1` only. The Vite plugin must be a no-op in production builds (`apply: 'serve'` in `vite-plugin-hover`).
@@ -94,8 +100,8 @@ These are load-bearing — several are non-obvious:
 
 Starting **2026-06-15**, `claude -p` calls draw from a new monthly Agent SDK credit pool separate from interactive limits. Pro: $20, Max 5x: $100, Max 20x: $200. Overage flows to API rates if usage credits are enabled, otherwise hard cutoff until refresh. Two mitigations are already in place:
 
-1. `--max-budget-usd` ceiling per invocation (currently $0.50 in `smoke.ts`).
-2. Local CLI Agent First — adding `codex`, `cursor-agent`, etc. is a one-file change, so users can switch agents if `claude` becomes expensive for them.
+1. `--max-budget-usd` ceiling per invocation (currently $0.50 in `smoke.ts`). Claude-only — codex doesn't accept this flag.
+2. Local CLI Agent First — `codex` is wired (v0.3.0). Users can switch agents from the widget dropdown if `claude` becomes expensive for them, with no env-var dance. `cursor-agent`, `aider`, `gemini-cli` etc. remain one-file additions to `registry.ts`.
 
 # Development workflow
 

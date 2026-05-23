@@ -1,0 +1,84 @@
+/**
+ * System-prompt addendum sent to the agent on every command.
+ *
+ * Two roles:
+ *   1. Navigation rules — the most failure-prone agent behaviours are
+ *      `browser_navigate` to same-origin paths (kills the widget) and
+ *      reading the JS bundle for credentials. We tell the agent both
+ *      mistakes by name, including the actual origin to forbid.
+ *   2. Narration format — how the widget renders the run depends on the
+ *      agent emitting short imperative one-liners before each logical
+ *      step. The good/bad examples are present-tense and 3–8 words.
+ *
+ * Lives in its own file because this string is the most-tuned text in the
+ * repo and the easiest to break with a typo. Tests can import directly.
+ */
+
+export function buildCdpHint(tabs: { url: string; title?: string }[]): string {
+  if (tabs.length === 0) return '';
+  // Prefer the localhost tab if we have multiple — that's almost always the
+  // dev server the user is testing against.
+  const localhost = tabs.find(t => /localhost|127\.0\.0\.1/.test(t.url));
+  const active = localhost ?? tabs[0];
+  let activeOrigin = '';
+  try { activeOrigin = new URL(active.url).origin; } catch { /* malformed url — fall back to no-origin guard */ }
+
+  return [
+    `The user's Chrome currently has these tabs open:`,
+    ...tabs.map(t => `  - ${t.url}${t.title ? `  (${t.title})` : ''}`),
+    ``,
+    `The likely active dev tab is: ${active.url}`,
+    ``,
+    `Navigation rules — read carefully, these mistakes are the #1 cause of failed`,
+    `runs:`,
+    ``,
+    `  1. Do NOT call browser_navigate to a URL that is already the active tab.`,
+    `     The widget that hosts this session lives inside the page; reloading the`,
+    `     page kills the WebSocket connection and your run gets aborted mid-flight.`,
+    ``,
+    activeOrigin
+      ? `  2. Do NOT call browser_navigate to ANY path on origin ${activeOrigin}`
+      : `  2. Do NOT call browser_navigate to source-file paths on the dev server`,
+    `     just to "read source code for hints" — paths like /src/Login.tsx,`,
+    `     /@vite/client, /node_modules/* are served by Vite as JS modules and`,
+    `     loading them triggers the same widget-killing reload. To inspect the`,
+    `     page, use browser_snapshot — the accessibility tree already exposes`,
+    `     labels, placeholders, and roles.`,
+    ``,
+    `  3. Do NOT read the JS bundle, evaluate page source, or scrape DOM for`,
+    `     hardcoded credentials, API keys, or secrets. If the task needs login,`,
+    `     the user must provide credentials in their prompt; if they didn't,`,
+    `     report "no credentials provided" and stop — do not guess.`,
+    ``,
+    `  4. To see the current page state, call browser_snapshot first. Only`,
+    `     navigate if you actually need a different URL.`,
+    ``,
+    `Narration format — affects how the widget renders your run for the user:`,
+    ``,
+    `  Before each LOGICAL STEP (a coherent unit of work like "Open the login`,
+    `  form", "Fill credentials", "Verify the welcome message"), emit ONE short`,
+    `  imperative sentence describing what you're about to do — present tense,`,
+    `  3–8 words, no markdown. The widget uses that sentence as the step's title.`,
+    ``,
+    `  Good examples:`,
+    `    "Open the login form."`,
+    `    "Fill credentials and submit."`,
+    `    "Verify the welcome message."`,
+    `    "Now testing the Counter section."`,
+    ``,
+    `  Bad examples (too verbose / too vague):`,
+    `    "Let me check the current state of the app and then drive the login flow."`,
+    `    "First, I'll take a snapshot, then I'll look at the page structure, and..."`,
+    ``,
+    `  After the run, if you discovered bugs or unexpected behavior, summarize`,
+    `  them in the FINAL message using these markers so the widget can extract`,
+    `  them into a Findings card:`,
+    ``,
+    `    ## Findings`,
+    `    - **Bug** — <one-line summary>`,
+    `    - **Minor** — <one-line summary>`,
+    ``,
+    `  Do NOT spread bug discoveries across mid-run narration — keep them in the`,
+    `  final summary so they group cleanly. Mid-run, just narrate the next step.`,
+  ].join('\n');
+}

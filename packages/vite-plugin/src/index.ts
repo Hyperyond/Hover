@@ -34,6 +34,10 @@ const WIDGET_DIR = resolve(PLUGIN_DIR, 'widget');
 const WIDGET_HTML = resolve(WIDGET_DIR, 'template.html');
 const WIDGET_CSS = resolve(WIDGET_DIR, 'style.css');
 const WIDGET_JS = resolve(WIDGET_DIR, 'client.js');
+// Extracted pure-function module (reducer + helpers). Authored as a real
+// ES module with `export` so it can be unit-tested from vitest; the export
+// keywords are stripped during concatenation into the browser widget IIFE.
+const WIDGET_REDUCER = resolve(WIDGET_DIR, 'reducer.js');
 
 export function hover(options: HoverOptions = {}): Plugin {
   const port = options.port ?? 51789;
@@ -139,7 +143,17 @@ export function hover(options: HoverOptions = {}): Plugin {
         // for CSS / HTML, and CSS reads from a single source of truth.
         const html = readFileSync(WIDGET_HTML, 'utf-8');
         const css = readFileSync(WIDGET_CSS, 'utf-8');
+        const reducerSource = readFileSync(WIDGET_REDUCER, 'utf-8');
         const js = readFileSync(WIDGET_JS, 'utf-8');
+        // Strip ESM keywords from the reducer so it concatenates cleanly
+        // into the browser IIFE alongside client.js. The reducer module's
+        // top-level `export function …` declarations become plain
+        // function declarations whose names are then visible inside the
+        // IIFE's closure. Vitest still imports the same file via real ESM
+        // semantics for the unit tests.
+        const reducerInlined = reducerSource
+          .replace(/^\s*export\s+(function|const|let|var)\b/gm, '$1')
+          .replace(/^\s*export\s+\{[^}]*\};?\s*$/gm, '');
         // Inject the ACTUAL port the service bound to (not the requested
         // one) so the widget connects to its own example's service even if
         // a sibling Vite already took 51789. CSS / HTML are stringified
@@ -154,7 +168,7 @@ export function hover(options: HoverOptions = {}): Plugin {
           {
             tag: 'script',
             attrs: { type: 'module' },
-            children: `${preamble}\n${js}`,
+            children: `${preamble}\n${reducerInlined}\n${js}`,
             injectTo: 'body',
           },
         ];

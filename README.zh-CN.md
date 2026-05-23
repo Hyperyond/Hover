@@ -126,7 +126,7 @@
 ## Phase 1 里你能拿到的（当前 release）
 
 - **Vite 插件** —— 通过 `transformIndexHtml` 往 dev 页面注入一个 Shadow DOM widget。生产构建里完全是 no-op。`data-hover="true"` 标记让你自己的 Playwright 跑测试时自动跳过它。
-- **本地 Node 服务**绑在 `127.0.0.1`，连接 widget ↔ 你 `PATH` 上的 agent CLI（当前是 `claude`；`codex` / `cursor` / `aider` 都是一个文件就能加上）。
+- **本地 Node 服务**绑在 `127.0.0.1`，连接 widget ↔ 你 `PATH` 上的 agent CLI。**多 agent**：`claude`（硬沙箱，推荐）和 `codex`（软沙箱）都已接入；widget 头部内置下拉切换。`cursor-agent` / `aider` / `gemini-cli` 都是单文件加 registry 就能扩展。
 - **CDP 直连专用 debug Chrome** —— Hover 操作的是它在 `<tmpdir>/hover-chrome` 下启动的隔离 profile，不会动你的主 Chrome 配置，也不会启 headless Chromium。所以 Cookie、扩展、DevTools 状态都不会从主浏览器迁过来——你在 debug Chrome 里登一次，profile 目录会复用，登录态能跨 Hover 指令和 dev server 重启保持。
 - **Save as Playwright spec** → 落盘到 `__vibe_tests__/<slug>.spec.ts`，selector 用 `getByRole / getByLabel / getByTestId`。JSDoc 头部带人话 Steps + Expected 块，方便非程序员 review。
 - **Save as Skill** → 落盘到 `.claude/skills/<slug>/SKILL.md`，未来对话里说一句 *"execute login-as-claude"* 就能重放。
@@ -134,7 +134,7 @@
 - **Alt-click "Assert This"** —— 按住 ⌥ 点页面上任何元素，生成一条 Playwright 断言（`expect(...).toHaveValue / toBeChecked / toHaveText / …`）。断言会累积，下一次 *Save as spec* 时一起烘焙进文件。
 - **录制模式** —— 切到 🔴 Record，手动跑一遍流程，得到跟 AI 驱动同样形状的 step 序列。下游 save 路径根本不关心 step 是 AI 跑出来的还是你点出来的。
 - **会话持久化 + resume** —— widget 状态通过 `localStorage` 跨页面刷新存活；下次提示会接上同一个 `claude --session-id`。
-- **严格的 agent 沙箱** —— 只有 Playwright MCP server 能被调用。`Bash`、`Edit`、`Write`、`Read`、`WebFetch` 等全部明确 deny。每次调用硬上限 `--max-budget-usd 0.50`。
+- **按 agent 不同的沙箱策略** —— 硬沙箱 agent（`claude`）显式 allow/deny，只剩 Playwright MCP 能被调用；`Bash` / `Edit` / `Write` / `Read` / `WebFetch` 等全部明确 deny；支持 `--max-budget-usd` $ 硬上限。软沙箱 agent（`codex`）CLI 没有内置工具 deny list，我们用 `--sandbox read-only` + 严格 `developer_instructions` 系统提示约束；widget 会给软沙箱 agent 加 ⚠ 标，让你知道工具面更宽。
 
 ## 快速开始
 

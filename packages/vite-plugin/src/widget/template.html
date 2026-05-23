@@ -1,14 +1,52 @@
-<button class="launcher" type="button" aria-label="Open Hover" aria-expanded="false">&#x2728;</button>
+<!--
+  Launcher: 44px round button in panel-matched dark + mint. Icon is a
+  custom "H + cursor" mark — single-stroke SVG that inherits currentColor
+  so the launcher's state classes (cdp-wrong-window, cdp-no-cdp) recolour
+  it without needing per-state markup.
+
+  Tooltips: we use a custom `data-tooltip` attribute (not native `title`)
+  because native tooltips inside a Shadow DOM render in the OS chrome —
+  delayed (~1 s in some Chromes), light-themed, and visually clashing with
+  the dark panel. Hover's tooltip script reads `data-tooltip` on hover/focus
+  and renders a single shared bubble inside the shadow root.
+-->
+<button class="launcher" type="button" aria-label="Open Hover" aria-expanded="false" data-tooltip="Open Hover" data-tooltip-side="left">
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <!-- four-point sparkle: two perpendicular tapered strokes -->
+    <path d="M10 2v6M10 12v6M2 10h6M12 10h6"/>
+    <!-- diagonal glints — short, half opacity to make the spark read -->
+    <path d="M4.5 4.5l2 2M13.5 13.5l2 2M4.5 15.5l2-2M13.5 6.5l2-2" opacity="0.55"/>
+  </svg>
+</button>
 
 <div class="panel" role="dialog" aria-label="Hover">
   <header>
-    <span class="title">Hover</span>
-    <button class="iconbtn skillsbtn" type="button" aria-label="Skills" title="Saved skills">📚</button>
-    <button class="iconbtn assertbtn" type="button" hidden aria-label="Pending assertions" title="Pending assertions — click to clear">
+    <!-- The agent pill itself ("claude ▾") effectively brands the panel —
+         showing the current agent is more useful than redundantly labelling
+         it "Hover". The dialog still has aria-label="Hover" on the .panel
+         root for screen-reader context. -->
+    <button class="agentbtn" type="button" aria-label="Switch agent" data-tooltip="Switch coding agent">
+      <span class="agent-label">claude</span>
+      <span class="agent-warn" hidden aria-label="Soft sandbox">⚠</span>
+      <span class="agent-caret" aria-hidden="true">▾</span>
+    </button>
+    <button class="iconbtn skillsbtn" type="button" aria-label="Skills" data-tooltip="Saved skills">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <!-- stack of two books, viewed edge-on -->
+        <path d="M2 4h6a1 1 0 0 1 1 1v7H3a1 1 0 0 1-1-1V4Z"/>
+        <path d="M9 5a1 1 0 0 1 1-1h4v8H10a1 1 0 0 0-1 1V5Z"/>
+        <path d="M2 4l1.2-1.2A1 1 0 0 1 4 2.5h3.4"/>
+      </svg>
+    </button>
+    <button class="iconbtn assertbtn" type="button" hidden aria-label="Pending assertions" data-tooltip="Pending assertions — click to clear">
       <span class="assert-glyph">✓</span><span class="assert-count">0</span>
     </button>
-    <button class="iconbtn newbtn" type="button" aria-label="New conversation" title="New conversation (clears history)">+</button>
-    <span class="cost" hidden aria-label="Running cost of this session" title="Running cost of this session">$0.0000</span>
+    <button class="iconbtn newbtn" type="button" aria-label="New conversation" data-tooltip="New conversation (clears history)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M8 3.5v9M3.5 8h9"/>
+      </svg>
+    </button>
+    <span class="cost" hidden aria-label="Running cost of this session" data-tooltip="Running cost of this session">$0.0000</span>
     <span class="status disconnected">connecting…</span>
   </header>
 
@@ -18,9 +56,18 @@
     <div class="skills-header">
       Saved skills · <span class="count">0</span>
       <span style="flex:1"></span>
-      <button class="iconbtn skills-close" type="button" aria-label="Close skills">×</button>
+      <button class="iconbtn skills-close" type="button" aria-label="Close skills" data-tooltip="Close">×</button>
     </div>
     <div class="skills-list-items"></div>
+  </div>
+
+  <div class="agents-overlay" aria-hidden="true">
+    <div class="agents-header">
+      Agents · <span class="count">0</span>
+      <span style="flex:1"></span>
+      <button class="iconbtn agents-close" type="button" aria-label="Close agents" data-tooltip="Close">×</button>
+    </div>
+    <div class="agents-list-items"></div>
   </div>
 
   <div class="cdp-overlay" aria-hidden="true">
@@ -35,7 +82,7 @@
   <footer>
     <textarea placeholder="e.g. test the login flow" rows="3" disabled aria-label="instruction"></textarea>
     <div class="footer-actions">
-      <button type="button" class="record-btn" aria-label="record manual interactions" title="Record your own clicks/typing on the page">
+      <button type="button" class="record-btn" aria-label="record manual interactions" data-tooltip="Record your own clicks/typing on the page">
         <span class="rec-dot"></span><span class="rec-label">Record</span>
       </button>
       <span class="hint">⌥ + click element to assert</span>
@@ -51,10 +98,20 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="hover-modal-title">
       <div class="modal-head">
         <span class="modal-title" id="hover-modal-title"></span>
-        <button class="modal-close" type="button" aria-label="Close">×</button>
+        <button class="modal-close" type="button" aria-label="Close" data-tooltip="Close">×</button>
       </div>
       <div class="modal-body"></div>
       <div class="modal-actions"></div>
     </div>
   </div>
+</div>
+
+<!--
+  Tooltip bubble — single shared element positioned absolutely. Hover JS
+  reads `data-tooltip` on any element under the shadow root and reuses
+  this node. Outside the .panel so it can also show for the launcher.
+-->
+<div class="hover-tip" role="tooltip" aria-hidden="true">
+  <span class="hover-tip-text"></span>
+  <span class="hover-tip-arrow" aria-hidden="true"></span>
 </div>

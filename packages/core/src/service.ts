@@ -29,23 +29,38 @@
  *     { type: 'save-spec',     payload: { name, description, steps, assertions?, overwrite? } }
  *     { type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
  *     { type: 'list-skills' }
+ *     { type: 'list-agents' }                                          // ask for the full agent registry + install status
+ *     { type: 'switch-agent',  payload: { agentId } }                  // set the service's current agent; broadcasts to all connections
+ *
+ *   server → client (in addition to those documented in the file body):
+ *     { type: 'agents',        payload: { current: string, available: AgentAvailability[] } }
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
-import type { InvokeEvent } from './agents/types.js';
-import { checkCdpStatus, focusDebugTab } from './playwright/cdpStatus.js';
-import { launchDebugChrome } from './playwright/launchChrome.js';
-import { preflightCDP } from './playwright/preflight.js';
 import {
-  writeSkill,
-  listSkills,
-  SkillExistsError,
-  type SkillStep,
-} from './skills/writeSkill.js';
-import { writeSpec, SpecExistsError, type SpecAssertion } from './specs/writeSpec.js';
-import { writeCaseCsv, CaseCsvExistsError } from './specs/writeCaseCsv.js';
+  listAgentAvailability,
+  pickPrimaryAgent,
+  type AgentAvailability,
+} from './agents/detect.js';
+import { getAgent } from './agents/registry.js';
+import type { InvokeEvent } from './agents/types.js';
+import { preflightCDP } from './playwright/preflight.js';
+import { listSkills } from './skills/writeSkill.js';
+import { send, type ClientMessage } from './service/types.js';
+import { buildCdpHint } from './service/cdpHint.js';
+import {
+  handleCheckCdp,
+  handleLaunchChrome,
+  handleFocusDebug,
+} from './service/cdpHandlers.js';
+import {
+  handleSaveArtifact,
+  SKILL_CONFIG,
+  SPEC_CONFIG,
+  CASE_CSV_CONFIG,
+} from './service/saveHandlers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
@@ -72,26 +87,9 @@ export interface ServiceHandle {
   close(): Promise<void>;
 }
 
-interface ClientMessage {
-  type: string;
-  payload?: {
-    text?: string;
-    sessionId?: string;
-    name?: string;
-    description?: string;
-    steps?: SkillStep[];
-    assertions?: SpecAssertion[];
-    overwrite?: boolean;
-    /** save-case-csv only — passed through to writeCaseCsv as extra
-     *  fields on the test case's Labels column. */
-    jiraProjectKey?: string;
-    labels?: string;
-    /** check-cdp / launch-chrome / focus-debug — the widget's
-     *  window.location.href so service can compare origins or navigate the
-     *  newly-launched debug Chrome to the same URL. */
-    pageUrl?: string;
-  };
-}
+// ClientMessage + send moved to ./service/types.ts so the cdp + save
+// handler modules can share them. See those files for the wire shape.
+
 
 const PROTOCOL_VERSION = 1;
 const PORT_RETRIES = 10;
@@ -138,7 +136,29 @@ async function pickAndBind(host: string, start: number, attempts: number): Promi
 
 export async function startService(opts: ServiceOptions): Promise<ServiceHandle> {
   const requestedPort = opts.port;
-  const agentId = opts.agentId ?? 'claude';
+  // Resolve the primary agent. Honor an explicit opts.agentId (or HOVER_AGENT
+  // env var) when set AND installed; otherwise fall back to whichever
+  // registered agent the user actually has on PATH, in registry order. This
+  // is what lets a user with only codex installed open a Hover dev server
+  // without needing to set HOVER_AGENT=codex.
+  const preferred = opts.agentId ?? process.env.HOVER_AGENT;
+  const primary = await pickPrimaryAgent(preferred);
+  let currentAgentId: string =
+    primary?.descriptor.id ?? preferred ?? 'claude';
+  if (!primary) {
+    // Nothing installed — still bind so the widget can show a helpful
+    // "install one of these" dialog. Commands will fail with
+    // AgentNotInstalledError at invoke time.
+    process.stderr.write(
+      `[hover] no supported agent CLI found on PATH (looked for: ` +
+      `${(await listAgentAvailability()).map(a => a.id).join(', ')}). ` +
+      `The widget will open but commands will fail until you install one.\n`,
+    );
+  } else if (preferred && preferred !== primary.descriptor.id) {
+    process.stderr.write(
+      `[hover] requested agent "${preferred}" is not installed; falling back to "${primary.descriptor.id}".\n`,
+    );
+  }
   const model = opts.model ?? 'sonnet';
   // No default budget cap — long real-world flows (form filling, multi-step
   // checkouts) routinely run past the old $0.50 ceiling and got cut off
@@ -158,8 +178,38 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     process.stderr.write(`[hover] WebSocketServer error: ${err.message}\n`);
   });
 
+  // Cache the agent-availability list. The PATH scan is cheap (one `which`
+  // per registered agent) but we still don't want to re-run it on every
+  // hello; a single Vite dev server typically sees the widget connect and
+  // reconnect dozens of times during HMR.
+  let agentAvailabilityCache: AgentAvailability[] | null = null;
+  const getAvailability = async (refresh: boolean): Promise<AgentAvailability[]> => {
+    if (refresh || agentAvailabilityCache === null) {
+      agentAvailabilityCache = await listAgentAvailability();
+    }
+    return agentAvailabilityCache;
+  };
+
+  const broadcastAgents = async (): Promise<void> => {
+    const available = await getAvailability(false);
+    const payload = { current: currentAgentId, available };
+    for (const client of wss.clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        send(client, { type: 'agents', payload });
+      }
+    }
+  };
+
   wss.on('connection', ws => {
-    send(ws, { type: 'hello', payload: { agentId, model, version: PROTOCOL_VERSION } });
+    send(ws, {
+      type: 'hello',
+      payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION },
+    });
+    // Send the agent list as a follow-up event so the widget can render the
+    // dropdown immediately on connect / reconnect (e.g. after HMR).
+    void getAvailability(false).then(available => {
+      send(ws, { type: 'agents', payload: { current: currentAgentId, available } });
+    });
 
     let busy = false;
     let inflight: AbortController | null = null;
@@ -200,8 +250,50 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         cancel();
         return;
       }
+      if (msg.type === 'list-agents') {
+        // Force a refresh — the user may have just installed a new CLI
+        // and clicked the dropdown to see the change.
+        const available = await getAvailability(true);
+        send(ws, { type: 'agents', payload: { current: currentAgentId, available } });
+        return;
+      }
+      if (msg.type === 'switch-agent') {
+        const wanted = msg.payload?.agentId;
+        if (typeof wanted !== 'string' || !wanted) {
+          send(ws, { type: 'error', payload: { message: 'switch-agent: agentId is required' } });
+          return;
+        }
+        if (!getAgent(wanted)) {
+          send(ws, { type: 'error', payload: { message: `switch-agent: unknown agent "${wanted}"` } });
+          return;
+        }
+        // Refuse to switch mid-flight; the user's running command would
+        // otherwise outlive its own descriptor and the events it produces
+        // would be parsed against the wrong wire format.
+        if (busy) {
+          send(ws, {
+            type: 'error',
+            payload: { message: 'switch-agent: a command is already running; stop it first' },
+          });
+          return;
+        }
+        const available = await getAvailability(false);
+        const entry = available.find(a => a.id === wanted);
+        if (!entry?.installed) {
+          send(ws, {
+            type: 'error',
+            payload: {
+              message: `switch-agent: "${wanted}" is not installed. ${entry?.installHint ? `Install: ${entry.installHint}` : ''}`.trim(),
+            },
+          });
+          return;
+        }
+        currentAgentId = wanted;
+        await broadcastAgents();
+        return;
+      }
       if (msg.type === 'save-skill') {
-        await handleSaveSkill(ws, msg, devRoot);
+        await handleSaveArtifact(ws, msg, devRoot, SKILL_CONFIG);
         return;
       }
       if (msg.type === 'list-skills') {
@@ -210,11 +302,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         return;
       }
       if (msg.type === 'save-spec') {
-        await handleSaveSpec(ws, msg, devRoot);
+        await handleSaveArtifact(ws, msg, devRoot, SPEC_CONFIG);
         return;
       }
       if (msg.type === 'save-case-csv') {
-        await handleSaveCaseCsv(ws, msg, devRoot);
+        await handleSaveArtifact(ws, msg, devRoot, CASE_CSV_CONFIG);
         return;
       }
       if (msg.type === 'check-cdp') {
@@ -273,8 +365,20 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // own session sometimes gets confused).
         const appendSystemPrompt = buildCdpHint(cdp.tabs);
 
+        // Snapshot the agent id so a switch-agent message during the run
+        // can't smear two agents across one invocation. (We also gate
+        // switch-agent on `busy`, but defense in depth.)
+        const invokedAgentId = currentAgentId;
+        const invokedDescriptor = getAgent(invokedAgentId);
+        // Only Claude's `--allowedTools`/`--disallowedTools` flags are
+        // honoured — passing them to a soft-sandbox agent like codex is a
+        // no-op (its buildArgs ignores them). We still gate at the service
+        // layer for clarity: a hard-sandbox agent gets the tight allowlist,
+        // a soft one gets nothing and relies on its descriptor's built-in
+        // sandbox flags + developer_instructions.
+        const isHardSandbox = invokedDescriptor?.sandboxStrength === 'hard';
         for await (const ev of invokeAgent({
-          agentId,
+          agentId: invokedAgentId,
           prompt: text,
           sessionId: resumeSessionId,
           mcpConfig,
@@ -285,25 +389,27 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           // Skill stays in the allow list so saved skills under
           // <devRoot>/.claude/skills/ can be invoked. mcp__playwright covers
           // every browser tool.
-          allowedTools: ['mcp__playwright', 'Skill'],
-          disallowedTools: [
-            // file / shell / data access — never appropriate for browser driving
-            'Bash', 'BashOutput', 'KillBash',
-            'Edit', 'MultiEdit', 'Write', 'Read', 'NotebookEdit',
-            'Grep', 'Glob', 'Task', 'TodoWrite',
-            'WebFetch', 'WebSearch',
-            // plan / worktree / cron / notification — irrelevant in -p mode
-            'EnterPlanMode', 'ExitPlanMode',
-            'EnterWorktree', 'ExitWorktree',
-            'CronCreate', 'CronDelete', 'CronList',
-            'PushNotification', 'RemoteTrigger',
-            // task & tool introspection added in claude 2.1.x — let through and
-            // the agent will burn turns exploring instead of executing
-            'ToolSearch',
-            'Monitor', 'TaskOutput', 'TaskStop',
-            'AskUserQuestion',
-            'ShareOnboardingGuide',
-          ],
+          allowedTools: isHardSandbox ? ['mcp__playwright', 'Skill'] : undefined,
+          disallowedTools: isHardSandbox
+            ? [
+                // file / shell / data access — never appropriate for browser driving
+                'Bash', 'BashOutput', 'KillBash',
+                'Edit', 'MultiEdit', 'Write', 'Read', 'NotebookEdit',
+                'Grep', 'Glob', 'Task', 'TodoWrite',
+                'WebFetch', 'WebSearch',
+                // plan / worktree / cron / notification — irrelevant in -p mode
+                'EnterPlanMode', 'ExitPlanMode',
+                'EnterWorktree', 'ExitWorktree',
+                'CronCreate', 'CronDelete', 'CronList',
+                'PushNotification', 'RemoteTrigger',
+                // task & tool introspection added in claude 2.1.x — let through and
+                // the agent will burn turns exploring instead of executing
+                'ToolSearch',
+                'Monitor', 'TaskOutput', 'TaskStop',
+                'AskUserQuestion',
+                'ShareOnboardingGuide',
+              ]
+            : undefined,
           maxBudgetUsd,
           model,
           signal: inflight.signal,
@@ -335,244 +441,4 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         wss.close(err => (err ? rej(err) : res()));
       }),
   };
-}
-
-function send(ws: WebSocket, message: { type: string; payload?: unknown }): void {
-  ws.send(JSON.stringify(message));
-}
-
-function buildCdpHint(tabs: { url: string; title?: string }[]): string {
-  if (tabs.length === 0) return '';
-  // Prefer the localhost tab if we have multiple — that's almost always the
-  // dev server the user is testing against.
-  const localhost = tabs.find(t => /localhost|127\.0\.0\.1/.test(t.url));
-  const active = localhost ?? tabs[0];
-  return [
-    `The user's Chrome currently has these tabs open:`,
-    ...tabs.map(t => `  - ${t.url}${t.title ? `  (${t.title})` : ''}`),
-    ``,
-    `The likely active dev tab is: ${active.url}`,
-    ``,
-    `Important: do NOT call browser_navigate to a URL that is already the active tab.`,
-    `That triggers an unnecessary full page reload. Instead, call browser_snapshot`,
-    `first to see the current page state, and only navigate if you actually need a`,
-    `different URL.`,
-  ].join('\n');
-}
-
-/**
- * "Is this widget running inside the debug Chrome?" The widget asks this on
- * connect (and after every status-changing event) so it can render itself as
- * either:
- *   - same-window  → normal, drives the page
- *   - wrong-window → disabled, with a "use the other window" notice
- *   - no-cdp       → enabled but click triggers launch-chrome instead
- */
-async function handleCheckCdp(
-  ws: WebSocket,
-  msg: ClientMessage,
-  cdpUrl: string,
-): Promise<void> {
-  const pageUrl = msg.payload?.pageUrl;
-  if (typeof pageUrl !== 'string' || !pageUrl) {
-    send(ws, { type: 'error', payload: { message: 'check-cdp: pageUrl is required' } });
-    return;
-  }
-  const status = await checkCdpStatus(cdpUrl, pageUrl);
-  send(ws, { type: 'cdp-status', payload: status });
-}
-
-/**
- * Launch a debug Chrome navigated to `pageUrl`, then re-check status. The
- * re-check usually returns 'wrong-window' (because the widget asking is in
- * the user's regular Chrome, not the freshly-launched one) — the widget then
- * displays the "use the other window" state.
- */
-async function handleLaunchChrome(
-  ws: WebSocket,
-  msg: ClientMessage,
-  cdpUrl: string,
-): Promise<void> {
-  const pageUrl = msg.payload?.pageUrl;
-  if (typeof pageUrl !== 'string' || !pageUrl) {
-    send(ws, { type: 'error', payload: { message: 'launch-chrome: pageUrl is required' } });
-    return;
-  }
-  // Tell the widget we're launching so it can render a spinner immediately —
-  // findChromeBinary + spawn + ready-poll can take a few seconds.
-  send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', launching: true } });
-
-  const port = (() => {
-    try {
-      return Number(new URL(cdpUrl).port) || 9222;
-    } catch {
-      return 9222;
-    }
-  })();
-  const result = await launchDebugChrome({ url: pageUrl, port });
-  if (!result.ok) {
-    send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', reason: result.reason } });
-    return;
-  }
-  // Re-check after launch so the widget gets the real status.
-  const status = await checkCdpStatus(cdpUrl, pageUrl);
-  send(ws, { type: 'cdp-status', payload: status });
-}
-
-/**
- * bringToFront the debug-Chrome tab matching `pageUrl`'s origin (or open one
- * if none exists). Used by the wrong-window UI's "switch to debug Chrome"
- * button. Doesn't return cdp-status — bringToFront doesn't change anything
- * the widget cares about, and the widget the user is about to focus is a
- * different page (and will run its own check-cdp on its own ws connection).
- */
-async function handleFocusDebug(
-  ws: WebSocket,
-  msg: ClientMessage,
-  cdpUrl: string,
-): Promise<void> {
-  const pageUrl = msg.payload?.pageUrl;
-  if (typeof pageUrl !== 'string' || !pageUrl) {
-    send(ws, { type: 'error', payload: { message: 'focus-debug: pageUrl is required' } });
-    return;
-  }
-  const result = await focusDebugTab(cdpUrl, pageUrl);
-  if (!result.ok) {
-    send(ws, { type: 'error', payload: { message: `focus-debug: ${result.reason}` } });
-  }
-}
-
-async function handleSaveSpec(
-  ws: WebSocket,
-  msg: ClientMessage,
-  devRoot: string,
-): Promise<void> {
-  const name = msg.payload?.name;
-  const description = msg.payload?.description ?? '';
-  const steps = msg.payload?.steps;
-  const assertions = msg.payload?.assertions ?? [];
-
-  if (typeof name !== 'string' || !name.trim()) {
-    send(ws, { type: 'error', payload: { message: 'save-spec: name is required' } });
-    return;
-  }
-  if (!Array.isArray(steps) || steps.length === 0) {
-    send(ws, { type: 'error', payload: { message: 'save-spec: no steps to save' } });
-    return;
-  }
-  const overwrite = msg.payload?.overwrite === true;
-
-  try {
-    const result = await writeSpec({ devRoot, name, description, steps, assertions, overwrite });
-    send(ws, {
-      type: 'spec-saved',
-      payload: { name: result.slug, path: result.path },
-    });
-  } catch (err) {
-    if (err instanceof SpecExistsError) {
-      send(ws, {
-        type: 'spec-exists',
-        payload: { slug: err.slug, existingPath: err.path },
-      });
-      return;
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    send(ws, {
-      type: 'error',
-      payload: { message: `save-spec failed: ${message}` },
-    });
-  }
-}
-
-async function handleSaveCaseCsv(
-  ws: WebSocket,
-  msg: ClientMessage,
-  devRoot: string,
-): Promise<void> {
-  const name = msg.payload?.name;
-  const description = msg.payload?.description ?? '';
-  const steps = msg.payload?.steps;
-  const assertions = msg.payload?.assertions ?? [];
-  const jiraProjectKey = msg.payload?.jiraProjectKey;
-  const labels = msg.payload?.labels;
-
-  if (typeof name !== 'string' || !name.trim()) {
-    send(ws, { type: 'error', payload: { message: 'save-case-csv: name is required' } });
-    return;
-  }
-  if (!Array.isArray(steps) || steps.length === 0) {
-    send(ws, { type: 'error', payload: { message: 'save-case-csv: no steps to save' } });
-    return;
-  }
-  const overwrite = msg.payload?.overwrite === true;
-
-  try {
-    const result = await writeCaseCsv({
-      devRoot, name, description, steps, assertions,
-      jiraProjectKey, labels, overwrite,
-    });
-    send(ws, {
-      type: 'case-csv-saved',
-      payload: { name: result.slug, path: result.path },
-    });
-  } catch (err) {
-    if (err instanceof CaseCsvExistsError) {
-      send(ws, {
-        type: 'case-csv-exists',
-        payload: { slug: err.slug, existingPath: err.path },
-      });
-      return;
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    send(ws, {
-      type: 'error',
-      payload: { message: `save-case-csv failed: ${message}` },
-    });
-  }
-}
-
-async function handleSaveSkill(
-  ws: WebSocket,
-  msg: ClientMessage,
-  devRoot: string,
-): Promise<void> {
-  const name = msg.payload?.name;
-  const description = msg.payload?.description ?? '';
-  const steps = msg.payload?.steps;
-
-  if (typeof name !== 'string' || !name.trim()) {
-    send(ws, { type: 'error', payload: { message: 'save-skill: name is required' } });
-    return;
-  }
-  if (!Array.isArray(steps) || steps.length === 0) {
-    send(ws, { type: 'error', payload: { message: 'save-skill: no steps to save' } });
-    return;
-  }
-
-  const overwrite = msg.payload?.overwrite === true;
-
-  try {
-    const result = await writeSkill({ devRoot, name, description, steps, overwrite });
-    send(ws, {
-      type: 'skill-saved',
-      payload: { name: result.slug, path: result.path },
-    });
-    // Push a fresh list so the widget's skills overlay updates without a
-    // round-trip — most relevant right after the save.
-    const skills = await listSkills(devRoot);
-    send(ws, { type: 'skills-list', payload: { skills } });
-  } catch (err) {
-    if (err instanceof SkillExistsError) {
-      send(ws, {
-        type: 'skill-exists',
-        payload: { slug: err.slug, existingPath: err.path },
-      });
-      return;
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    send(ws, {
-      type: 'error',
-      payload: { message: `save-skill failed: ${message}` },
-    });
-  }
 }

@@ -126,7 +126,7 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
 ## What you get when Phase 1 ships (this release)
 
 - **Vite plugin** that injects a Shadow-DOM widget into your dev page. No-op in production. Marked `data-hover="true"` so your own Playwright runs can skip it.
-- **Local Node service** on `127.0.0.1` that bridges the widget to a coding-agent CLI on your PATH (`claude` today; `codex` / `cursor` / `aider` are a one-file addition).
+- **Local Node service** on `127.0.0.1` that bridges the widget to a coding-agent CLI on your PATH. **Multi-agent**: `claude` (hard sandbox, recommended) and `codex` (soft sandbox) are both wired today; the widget shows a dropdown in its header to switch on the fly. `cursor-agent` / `aider` / `gemini-cli` are one-file additions to the registry.
 - **CDP-attached browser driving** — Hover drives a debug Chrome it launches under an isolated profile at `<tmpdir>/hover-chrome`, never a fresh headless Chromium. Your main Chrome profile is untouched (no cookie / extension / devtools-state sharing — log in once inside the debug Chrome and that session persists across Hover commands and dev-server restarts, because the profile dir is reused).
 - **Save as Playwright spec** → `__vibe_tests__/<slug>.spec.ts`, uses `getByRole / getByLabel / getByTestId` semantic selectors. JSDoc header carries plain-English Steps + Expected blocks so non-coders can review.
 - **Save as Skill** → `.claude/skills/<slug>/SKILL.md`, replayable by saying *"execute login-as-claude"* in a future conversation.
@@ -134,7 +134,7 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
 - **Alt-click "Assert This"** — Hold ⌥, click any element in your page, get a generated assertion (`expect(...).toHaveValue / toBeChecked / toHaveText / …`). Assertions accumulate; the next *Save as spec* bakes them in.
 - **Record mode** — Toggle 🔴 Record, do the flow manually, get the same step sequence as if the agent had driven it. The downstream save path doesn't care whether the steps came from a human or from Claude.
 - **Session persistence + resume** — Widget state survives page reload via `localStorage`; the next prompt resumes the same `claude --session-id`.
-- **Strict agent sandbox** — Only the Playwright MCP server is callable. `Bash`, `Edit`, `Write`, `Read`, `WebFetch`, etc. all explicitly denied. `--max-budget-usd 0.50` hard ceiling per session.
+- **Per-agent sandbox policy** — Hard-sandbox agents (`claude`) get an explicit allow/deny list so only Playwright MCP is callable; `Bash`, `Edit`, `Write`, `Read`, `WebFetch`, etc. all explicitly denied; `--max-budget-usd` ceiling supported. Soft-sandbox agents (`codex`) don't expose a built-in tool deny list at the CLI level, so we use `--sandbox read-only` + a strict `developer_instructions` system prompt; the widget marks these with a ⚠ badge so you know the surface is broader.
 
 ## Quick start
 

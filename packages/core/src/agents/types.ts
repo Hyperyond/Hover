@@ -72,11 +72,84 @@ export type InvokeEvent =
   | { kind: 'session_end'; turns?: number; costUsd?: number; isError?: boolean; summary?: string }
   | { kind: 'raw'; line: string };
 
+/**
+ * How tightly the agent's tool surface can be locked down per invocation.
+ *
+ *   'hard' — the agent CLI accepts a deny-list / allow-list that effectively
+ *            removes built-in tools (shell, file edit, etc.) so the only
+ *            callable surface is whatever MCP servers we configure. Claude
+ *            Code's `--strict-mcp-config` + `--allowedTools mcp__playwright`
+ *            + `--disallowedTools <every built-in>` is the canonical example.
+ *
+ *   'soft' — the agent CLI does not expose a way to disable its built-in
+ *            tools (shell, fs). We can constrain side-effects via OS-level
+ *            sandbox flags (e.g. codex's `--sandbox read-only`) and we lean
+ *            on a strict `developer_instructions` system-prompt to nudge the
+ *            agent toward MCP-only behavior, but a determined / hallucinating
+ *            agent COULD still try a built-in shell call. The widget should
+ *            mark this agent with a warning indicator.
+ */
+export type SandboxStrength = 'hard' | 'soft';
+
+/**
+ * Human-facing metadata for the widget's agent picker. None of these affect
+ * agent invocation — they only shape how the agent is presented in the UI.
+ */
+export interface AgentDisplay {
+  /** Pretty name for the dropdown ("Claude Code", "OpenAI Codex"). */
+  label: string;
+  /** One-line tagline shown under the label. */
+  tagline?: string;
+  /** Vendor / source URL — clicking the agent name in the widget can open
+   *  this in a new tab when the agent isn't installed. */
+  homepage?: string;
+  /** Shell command the user can run to install (copy-paste from a tooltip
+   *  in the widget when the agent is listed but not on PATH). */
+  installHint?: string;
+}
+
+/**
+ * Per-invocation parser state. A fresh object is created by `invokeAgent`
+ * for each spawn and passed to both `parseEvent` and `onStreamEnd`.
+ *
+ * Descriptors that need to accumulate state across lines (cost, turn count,
+ * last agent message for synthesized session_end, etc.) read and write
+ * their own keys on this object. There is no shared shape — each agent
+ * uses whatever fields it needs.
+ *
+ * Why: module-level state in claude.ts / codex.ts worked only because the
+ * service enforces one in-flight invocation per Node process. Two concurrent
+ * agent runs (future: tests in parallel, in-process workers) would silently
+ * smear their cost accumulators together. Threading the state object per
+ * invocation removes that hazard at zero runtime cost.
+ */
+export type ParserState = Record<string, unknown>;
+
 export interface AgentDescriptor {
   id: string;
   binName: string;
   protocol: AgentProtocol;
   streamFormat: StreamFormat;
+  sandboxStrength: SandboxStrength;
+  display: AgentDisplay;
   buildArgs(opts: InvokeOptions): string[];
-  parseEvent(line: string): InvokeEvent[];
+  /**
+   * Parse a single line of agent stdout into normalised InvokeEvents.
+   * `state` is a per-invocation scratch pad (see ParserState). Optional
+   * for callers that don't accumulate across lines (and for unit tests
+   * that don't care about cost / turn carry-over) — descriptors that
+   * DO accumulate must check / initialise the state object themselves.
+   */
+  parseEvent(line: string, state?: ParserState): InvokeEvent[];
+  /**
+   * Optional. Called once after the agent's stream closes, with the child's
+   * exit code (or null if it was aborted). Lets agents whose protocol does
+   * NOT emit an explicit session-terminating event synthesize one from
+   * accumulated parser state. Returns `null` if the agent's own `parseEvent`
+   * already emitted a `session_end` and nothing further is needed.
+   *
+   * Used by codex.ts (no native session_end). Claude does not implement
+   * this — `result` events terminate naturally.
+   */
+  onStreamEnd?(exitCode: number | null, state?: ParserState): InvokeEvent | null;
 }

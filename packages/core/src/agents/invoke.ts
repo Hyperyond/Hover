@@ -10,7 +10,7 @@ import {
   AgentNotInstalledError,
   UnsupportedAgentProtocolError,
 } from './types.js';
-import type { InvokeEvent, InvokeOptions } from './types.js';
+import type { InvokeEvent, InvokeOptions, ParserState } from './types.js';
 
 /**
  * Spawn an agent and yield normalized InvokeEvents as they arrive.
@@ -58,9 +58,14 @@ export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEve
   const rl = createInterface({ input: child.stdout! });
   const exitPromise = new Promise<number>(res => child.on('exit', c => res(c ?? -1)));
 
+  // Fresh parser state per invocation. Threaded into both parseEvent and
+  // onStreamEnd so descriptors don't have to reach for module globals
+  // (which would smear across concurrent invocations).
+  const state: ParserState = {};
+
   let sawSessionEnd = false;
   for await (const line of rl) {
-    for (const ev of descriptor.parseEvent(line)) {
+    for (const ev of descriptor.parseEvent(line, state)) {
       if (ev.kind === 'session_end') sawSessionEnd = true;
       yield ev;
     }
@@ -68,11 +73,21 @@ export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEve
 
   const code = await exitPromise;
   opts.signal?.removeEventListener('abort', onAbort);
-  if (!sawSessionEnd && code !== 0 && !opts.signal?.aborted) {
-    yield {
-      kind: 'session_end',
-      isError: true,
-      summary: `agent exited with code ${code}`,
-    };
+
+  if (!sawSessionEnd && !opts.signal?.aborted) {
+    // Give the descriptor a chance to synthesize its own terminator from
+    // accumulated state (codex does this — its stream never emits a
+    // session_end). Falls back to a generic error session_end if the
+    // descriptor declines and the child exited non-zero.
+    const synthetic = descriptor.onStreamEnd?.(code, state);
+    if (synthetic) {
+      yield synthetic;
+    } else if (code !== 0) {
+      yield {
+        kind: 'session_end',
+        isError: true,
+        summary: `agent exited with code ${code}`,
+      };
+    }
   }
 }

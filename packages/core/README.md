@@ -43,7 +43,7 @@ pnpm smoke http://localhost:5173/ "log in then add a todo named 'verify hover'"
 Environment variables:
 
 - `HOVER_CDP` — CDP URL (default `http://localhost:9222`)
-- `HOVER_AGENT` — agent id (default `claude`)
+- `HOVER_AGENT` — agent id (omit to auto-detect; tries the user's stated preference, then the first installed agent in registry order — `claude` → `codex` today)
 - `HOVER_MODEL` — model for the agent (default `sonnet`, much cheaper than opus)
 
 ## Sandboxing (what the smoke test enforces)

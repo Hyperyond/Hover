@@ -24,7 +24,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/widget','dist/widget',{recursive:true})\"",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "prepack": "pnpm run clean && pnpm run build"
+    "prepack": "pnpm run clean && pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hover-dev/core": "workspace:*"
@@ -33,7 +35,8 @@
     "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
   "devDependencies": {
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "^3.0.0"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",

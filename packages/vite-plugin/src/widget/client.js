@@ -51,6 +51,13 @@
   const cdpTitleEl = $('.cdp-title');
   const cdpBodyEl = $('.cdp-body');
   const cdpActionEl = $('.cdp-action');
+  const agentBtn = $('.agentbtn');
+  const agentLabelEl = $('.agent-label');
+  const agentWarnEl = $('.agent-warn');
+  const agentsOverlay = $('.agents-overlay');
+  const agentsListEl = $('.agents-list-items');
+  const agentsCountEl = $('.agents-overlay .count');
+  const agentsCloseBtn = $('.agents-close');
 
   // ───────────────────────── persistent state ─────────────────────────
   // Survives panel close, page reload, and AI-driven navigations within
@@ -59,8 +66,28 @@
   //   messages: ordered list of semantic messages (not HTML)
   //   sessionId: most recent agent session id, used to --resume on next send
 
-  const state = { messages: [], sessionId: null, open: false, assertions: [] };
+  const state = {
+    messages: [], sessionId: null, open: false, assertions: [],
+    // Multi-agent: server sends `agents` after `hello`. Until then these are
+    // best-effort placeholders so the button has something to show.
+    currentAgent: 'claude',
+    availableAgents: [],
+  };
 
+  // Whether an agent is currently running. The renderer reads this to decide
+  // "is the trailing open group still live?" — moved up here from the WS
+  // handler block so `renderAll` (defined ~600 lines earlier than setRunning)
+  // closes over the same binding.
+  let running = false;
+
+  // Step aggregation: see packages/vite-plugin/src/widget/reducer.js for the
+  // pure transforms (groupMessages, extractFindings, stripMarkdown,
+  // classifySeverity, plus the NOTEWORTHY_AI / HIDDEN_TOOLS / BOUNDARY_TOOLS /
+  // MAX_TOOLS_PER_GROUP constants). That file is concatenated into this
+  // widget at plugin build time (with `export` keywords stripped) so its
+  // declarations are visible in this closure as plain bindings. Unit tests
+  // live in packages/vite-plugin/tests/reducer.test.js — keep this file
+  // free of grouping logic, edit reducer.js instead.
   const saveState = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -85,6 +112,9 @@
       }
       if (Array.isArray(parsed.assertions)) {
         state.assertions = parsed.assertions.slice(-100);
+      }
+      if (typeof parsed.currentAgent === 'string' && parsed.currentAgent) {
+        state.currentAgent = parsed.currentAgent;
       }
     } catch {
       /* corrupt — start fresh */
@@ -379,42 +409,6 @@
     bodyEl.scrollTop = bodyEl.scrollHeight;
   };
 
-  const renderUser = (text) => {
-    const div = document.createElement('div');
-    div.className = 'msg user';
-    const b = document.createElement('div');
-    b.className = 'bubble';
-    b.textContent = text;
-    div.appendChild(b);
-    bodyEl.appendChild(div);
-    scrollToBottom();
-  };
-
-  const renderSystem = (text) => {
-    const div = document.createElement('div');
-    div.className = 'msg system';
-    div.textContent = text;
-    bodyEl.appendChild(div);
-    scrollToBottom();
-  };
-
-  let lastStepDiv = null;
-  const renderStep = (msg) => {
-    const div = document.createElement('div');
-    div.className = 'msg step' + (msg.isError ? ' error' : '');
-    const argStr = JSON.stringify(msg.input ?? {});
-    const short = argStr.length > 80 ? argStr.slice(0, 77) + '…' : argStr;
-    const arrow = document.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '→';
-    const tool = document.createElement('span'); tool.className = 'tool'; tool.textContent = msg.tool;
-    const args = document.createElement('span'); args.className = 'args'; args.textContent = ' ' + short;
-    div.appendChild(arrow);
-    div.appendChild(tool);
-    div.appendChild(args);
-    bodyEl.appendChild(div);
-    lastStepDiv = div;
-    scrollToBottom();
-  };
-
   // Minimal markdown renderer: bold, italic, inline code. Escapes HTML first
   // so AI-controlled text can never inject markup; then applies the three
   // patterns. Anything else (lists, links, headings) renders as-is — fine,
@@ -431,71 +425,263 @@
       .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
 
-  const renderAi = (text) => {
+  // Truncate JSON-like input args for the expanded tool-call lines.
+  const shortJson = (input) => {
+    const s = JSON.stringify(input ?? {});
+    return s.length > 90 ? s.slice(0, 87) + '…' : s;
+  };
+
+  const formatCost = (usd) => (usd == null ? '' : `$${usd.toFixed(4)}`);
+  const formatTurns = (n) => (n == null ? '' : `${n} turn${n === 1 ? '' : 's'}`);
+
+  const renderUserRow = (text) => {
+    const div = document.createElement('div');
+    div.className = 'msg user';
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    b.textContent = text;
+    div.appendChild(b);
+    return div;
+  };
+
+  const renderSystemRow = (text) => {
+    const div = document.createElement('div');
+    div.className = 'msg system';
+    div.textContent = text;
+    return div;
+  };
+
+  const renderAiRow = (text) => {
     const div = document.createElement('div');
     div.className = 'msg ai';
     const b = document.createElement('div');
     b.className = 'bubble';
     b.innerHTML = renderMarkdownLite(text);
     div.appendChild(b);
-    bodyEl.appendChild(div);
-    scrollToBottom();
+    return div;
   };
 
-  const renderDone = (msg) => {
-    const div = document.createElement('div');
-    div.className = 'msg done' + (msg.isError ? ' error' : '');
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    const turns = msg.turns != null ? `${msg.turns} turn${msg.turns === 1 ? '' : 's'}` : 'done';
-    const cost = msg.costUsd != null ? ` · $${msg.costUsd.toFixed(4)}` : '';
-    meta.textContent = (msg.isError ? '✗ ' : '✓ ') + turns + cost;
-    div.appendChild(meta);
-    if (msg.summary) {
-      const s = document.createElement('div');
-      s.className = 'summary';
-      s.textContent = msg.summary;
-      div.appendChild(s);
+  // Render a grouped step row — Midscene-style: one row per natural-language
+  // intent. Click anywhere on the row to toggle the tool-call detail
+  // disclosure. The currently-running group auto-expands so the user sees
+  // tool calls in real time; finished groups default to collapsed.
+  // Report card — the agent's natural-language verification report at the
+  // end of a session. Plain-text body (markdown stripped) so headings and
+  // bullets don't show literal "##" / "-" characters. Only this card hosts
+  // the Save-as dropdown — that's the primary action after a successful
+  // run, and tying it to the report (rather than the last step) makes the
+  // intent obvious.
+  const renderReport = (g) => {
+    const root = document.createElement('div');
+    root.className = 'report ' + (g.isError ? 'error' : 'ok');
+
+    const header = document.createElement('div');
+    header.className = 'report-header';
+    const icon = document.createElement('span');
+    icon.className = 'report-header-icon';
+    icon.textContent = g.isError ? '✗' : '✓';
+    const label = document.createElement('span');
+    label.className = 'report-header-label';
+    label.textContent = g.isError ? 'Failed' : 'Result';
+    const meta = document.createElement('span');
+    meta.className = 'report-header-meta';
+    const parts = [];
+    if (g.turns != null) parts.push(`${g.turns} turn${g.turns === 1 ? '' : 's'}`);
+    if (g.costUsd != null) parts.push(`$${g.costUsd.toFixed(4)}`);
+    meta.textContent = parts.join(' · ');
+    header.appendChild(icon);
+    header.appendChild(label);
+    header.appendChild(meta);
+    root.appendChild(header);
+
+    if (g.text) {
+      const body = document.createElement('div');
+      body.className = 'report-body';
+      // Plain text → preserve newlines but DON'T render markdown.
+      body.textContent = g.text;
+      root.appendChild(body);
     }
 
-    // Save dropdown on successful runs. One trigger button, three menu
-    // items — one per artifact format the saved session can crystallise
-    // into. Always saves the most recent session (last 'user' → end of
-    // state.messages), regardless of which done card it lives on.
-    if (!msg.isError) {
+    if (g.saveable) {
       const actions = document.createElement('div');
-      actions.className = 'actions';
+      actions.className = 'report-actions';
       actions.appendChild(buildSaveDropdown());
-      div.appendChild(actions);
+      root.appendChild(actions);
     }
 
-    bodyEl.appendChild(div);
-    scrollToBottom();
+    return root;
   };
 
-  const renderMessage = (msg) => {
-    switch (msg.kind) {
-      case 'user':   return renderUser(msg.text);
-      case 'system': return renderSystem(msg.text);
-      case 'step':   return renderStep(msg);
-      case 'ai':     return renderAi(msg.text);
-      case 'done':   return renderDone(msg);
+  // Findings card — dedicated visual for "the agent's bug report at the end
+  // of a run". Sits separate from the conversation timeline so it doesn't
+  // get lost in the step list. Bugs / minor severities each get their own
+  // colour-coded row.
+  const renderFindings = (g) => {
+    const root = document.createElement('div');
+    root.className = 'findings';
+
+    const header = document.createElement('div');
+    header.className = 'findings-header';
+    const icon = document.createElement('span');
+    icon.className = 'findings-header-icon';
+    icon.textContent = '!';
+    const label = document.createElement('span');
+    label.className = 'findings-header-label';
+    label.textContent = 'Findings';
+    const count = document.createElement('span');
+    count.className = 'findings-header-count';
+    count.textContent = String(g.findings.length);
+    header.appendChild(icon);
+    header.appendChild(label);
+    header.appendChild(count);
+    root.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'findings-list';
+    for (const f of g.findings) {
+      const row = document.createElement('div');
+      row.className = 'finding-row finding-' + f.severity;
+      const sev = document.createElement('span');
+      sev.className = 'finding-severity';
+      sev.textContent = f.marker || (f.severity === 'bug' ? 'Bug' : f.severity === 'minor' ? 'Minor' : 'Note');
+      const txt = document.createElement('span');
+      txt.className = 'finding-text';
+      txt.innerHTML = renderMarkdownLite(f.text);
+      row.appendChild(sev);
+      row.appendChild(txt);
+      list.appendChild(row);
     }
+    root.appendChild(list);
+    return root;
   };
 
-  // Append a serialized message: push to state + render + persist.
+  const renderGroup = (g, isLastGroup, isLiveRun) => {
+    const root = document.createElement('div');
+    root.className = 'group ' + g.status;
+    // No auto-expand — even the running group stays collapsed. The user
+    // chooses when to drill in. This keeps the timeline scannable; details
+    // are one click away.
+
+    const row = document.createElement('div');
+    row.className = 'group-row';
+
+    const chevron = document.createElement('span');
+    chevron.className = 'gr-chevron';
+    chevron.textContent = '▶';
+
+    // Status indicator. For 'running', render an outlined ring (the gentle
+    // mint pulse on it comes from CSS); the ✓ / ✗ are for closed steps.
+    const icon = document.createElement('span');
+    icon.className = 'gr-icon';
+    if (g.status === 'running') {
+      icon.classList.add('gr-ring');
+    } else {
+      icon.textContent = g.status === 'error' ? '✗' : '✓';
+    }
+
+    const title = document.createElement('span');
+    title.className = 'gr-title';
+    title.textContent = g.title;
+
+    row.appendChild(chevron);
+    row.appendChild(icon);
+    row.appendChild(title);
+
+    const meta = document.createElement('span');
+    meta.className = 'gr-meta';
+    const parts = [];
+    if (g.turns != null) parts.push(formatTurns(g.turns));
+    if (g.costUsd != null) parts.push(`<span class="gr-cost">${formatCost(g.costUsd)}</span>`);
+    if (parts.length === 0 && g.steps && g.steps.length > 0) {
+      parts.push(`${g.steps.length} step${g.steps.length === 1 ? '' : 's'}`);
+    }
+    if (parts.length) meta.innerHTML = parts.join(' · ');
+    row.appendChild(meta);
+
+    row.addEventListener('click', () => {
+      root.classList.toggle('open');
+    });
+
+    root.appendChild(row);
+
+    if (g.steps && g.steps.length > 0) {
+      const tools = document.createElement('div');
+      tools.className = 'group-tools';
+      for (const s of g.steps) {
+        const line = document.createElement('div');
+        line.className = 'group-tool' + (s.isError ? ' error' : '');
+        const dot = document.createElement('span');
+        dot.className = 'gt-dot'; dot.textContent = '·';
+        const name = document.createElement('span');
+        name.className = 'gt-name'; name.textContent = s.tool;
+        const args = document.createElement('span');
+        args.className = 'gt-args'; args.textContent = ' ' + shortJson(s.input);
+        line.appendChild(dot);
+        line.appendChild(name);
+        line.appendChild(args);
+        tools.appendChild(line);
+      }
+      root.appendChild(tools);
+    }
+
+    // Note: closed groups used to render a summary line + Save-as chip
+    // here. Both moved to the dedicated `renderReport` card emitted by
+    // the reducer's done branch. Steps are pure now: row + collapsed
+    // tool detail, nothing else.
+
+    return root;
+  };
+
+  // Full re-render from state.messages. Cheap enough for the message volumes
+  // we expect (a single session is rarely more than ~80 raw messages even on
+  // long flows). If we ever hit the MESSAGE_CAP limit and re-render starts to
+  // jank, switch to incremental DOM diffing — but premature.
+  //
+  // To support the "new message fades in" animation without re-animating
+  // every existing message on every renderAll(), we track how many groups
+  // we rendered last time. Anything beyond that index is a fresh arrival
+  // and gets `data-fresh="1"`, which the CSS keyframe targets.
+  let lastRenderedGroupCount = 0;
+  const renderAll = () => {
+    const wasAtBottom = bodyEl.scrollHeight - bodyEl.scrollTop - bodyEl.clientHeight < 80;
+    bodyEl.innerHTML = '';
+    const groups = groupMessages(state.messages, running);
+    const previousCount = lastRenderedGroupCount;
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i];
+      const isLast = i === groups.length - 1;
+      let node;
+      if (g.kind === 'user') node = renderUserRow(g.text);
+      else if (g.kind === 'system') node = renderSystemRow(g.text);
+      else if (g.kind === 'ai') node = renderAiRow(g.text);
+      else if (g.kind === 'group') node = renderGroup(g, isLast, running);
+      else if (g.kind === 'report') node = renderReport(g);
+      else if (g.kind === 'findings') node = renderFindings(g);
+      if (node) {
+        if (i >= previousCount) node.setAttribute('data-fresh', '1');
+        bodyEl.appendChild(node);
+      }
+    }
+    lastRenderedGroupCount = groups.length;
+    if (wasAtBottom) scrollToBottom();
+  };
+
+  // Reset the freshness tracker when the conversation is cleared so the
+  // first re-render after "+" doesn't think everything is brand new.
+  // (Replay from localStorage on boot intentionally animates the restored
+  // messages once — feels like the panel "wakes up".)
+
+  // Append a serialized message: push to state + persist + re-render.
   const addMessage = (msg) => {
     state.messages.push(msg);
     if (state.messages.length > MESSAGE_CAP) state.messages.shift();
     saveState();
-    renderMessage(msg);
+    renderAll();
   };
 
-  // Restore all stored messages on init (no re-persist, no DOM re-flow).
+  // Restore all stored messages on init.
   const replayState = () => {
-    bodyEl.innerHTML = '';
-    lastStepDiv = null;
-    for (const m of state.messages) renderMessage(m);
+    renderAll();
   };
 
   // ───────────────────────── save dropdown ─────────────────────────
@@ -505,7 +691,15 @@
   // used to be wired to its own button, passing the trigger so the
   // Saving…/restore flow has something to update.
 
-  const TRIGGER_LABEL_HTML = '<span class="trigger-label">💾 Save as</span><span class="caret">▾</span>';
+  // Single-stroke inline SVGs that inherit currentColor — same vocabulary
+  // as the header icons. Defined once at the top of the dropdown so swapping
+  // visual treatment later is a one-line edit per glyph.
+  const SAVE_ICON_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h7l3 3v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M4 3v3.5a.5.5 0 0 0 .5.5h5a.5.5 0 0 0 .5-.5V3"/><path d="M4 13v-3.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5V13"/></svg>';
+  const SPEC_ICON_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h5l3 3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z"/><path d="M9 2v3h3"/><path d="M5.5 8.5h5M5.5 10.5h5M5.5 12.5h3"/></svg>';
+  const CSV_ICON_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M2.5 6.5h11M2.5 9.5h11M6 6.5v6.5M10 6.5v6.5"/></svg>';
+  const CARET_DOWN_SVG = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5l3 3 3-3"/></svg>';
+
+  const TRIGGER_LABEL_HTML = `<span class="trigger-icon">${SAVE_ICON_SVG}</span><span class="trigger-label">Save as</span><span class="caret">${CARET_DOWN_SVG}</span>`;
 
   const restoreTrigger = (b) => {
     b.disabled = false;
@@ -530,22 +724,22 @@
 
     const items = [
       {
-        icon: '📜', label: 'Playwright spec',
+        icon: SPEC_ICON_SVG, label: 'Playwright spec',
         sub: '__vibe_tests__/<slug>.spec.ts · for CI',
         cls: 'item-spec',
-        run: () => saveSpecFromLastSession(trigger),
+        run: () => saveAsArtifact('spec', trigger),
       },
       {
-        icon: '💾', label: 'Claude Code Skill',
+        icon: SAVE_ICON_SVG, label: 'Claude Code Skill',
         sub: '.claude/skills/<slug>/SKILL.md · for future agent replay',
         cls: 'item-skill',
-        run: () => saveSkillFromLastSession(trigger),
+        run: () => saveAsArtifact('skill', trigger),
       },
       {
-        icon: '📋', label: 'Jira test case (CSV)',
+        icon: CSV_ICON_SVG, label: 'Jira test case (CSV)',
         sub: '__vibe_tests__/<slug>.case.csv · for Xray / Zephyr / Jira',
         cls: 'item-case',
-        run: () => saveCaseCsvFromLastSession(trigger),
+        run: () => saveAsArtifact('case-csv', trigger),
       },
     ];
     for (const it of items) {
@@ -554,7 +748,7 @@
       btn.className = 'save-menu-item ' + it.cls;
       btn.setAttribute('role', 'menuitem');
       const icon = document.createElement('span');
-      icon.className = 'i-icon'; icon.textContent = it.icon;
+      icon.className = 'i-icon'; icon.innerHTML = it.icon;
       const text = document.createElement('span'); text.className = 'i-text';
       const label = document.createElement('span'); label.className = 'i-label'; label.textContent = it.label;
       const sub = document.createElement('span'); sub.className = 'i-sub'; sub.textContent = it.sub;
@@ -619,11 +813,119 @@
   // Pending save state — remembered so a confirm-overwrite reply can re-send
   // with overwrite=true without re-prompting the user for name/description.
   // Two slots, one per output format (skill vs spec).
-  let pendingSave = null;
-  let pendingSpec = null;
-  let pendingCase = null;
+  // ───── save-as-artifact flow (skill / spec / jira case CSV) ─────
+  //
+  // All three save flows share the same shape: confirm a name+description
+  // in a modal, send a save-X request, await save-X-saved / save-X-exists,
+  // optionally re-prompt for overwrite on exists, on success surface a
+  // system message + restore the trigger button. The ARTIFACTS table holds
+  // the per-kind differences (modal fields, WS message names, success text,
+  // optional pre/post hooks); `saveAsArtifact` and `handleArtifactExists`
+  // are the two shared helpers.
+  const pending = new Map();   // kind -> { name, description, steps, assertions, button, extras }
 
-  const saveSkillFromLastSession = async (button) => {
+  const ARTIFACTS = {
+    skill: {
+      saveType: 'save-skill',
+      existsType: 'skill-exists',
+      savedType: 'skill-saved',
+      promptOpts: () => ({
+        title: 'Save as Skill',
+        fields: [
+          { id: 'name', label: 'Skill name', placeholder: 'login-as-claude', required: true },
+          { id: 'description', label: 'Description', placeholder: 'optional · one line' },
+        ],
+        confirmLabel: 'Save skill',
+      }),
+      buildPayload: (form, ctx) => ({
+        name: form.name,
+        description: form.description,
+        steps: ctx.steps,
+      }),
+      successMsg: (p) =>
+        `✓ saved skill "${p.name}" → ${p.path}\n  try: "execute ${p.name}" in a new conversation`,
+      overwriteOpts: (slug) => ({
+        title: 'Overwrite existing skill?',
+        body: `A skill named "${slug}" already exists.`,
+      }),
+    },
+    spec: {
+      saveType: 'save-spec',
+      existsType: 'spec-exists',
+      savedType: 'spec-saved',
+      promptOpts: (ctx) => ({
+        title: 'Save as Playwright spec',
+        fields: [
+          { id: 'name', label: 'Spec name', placeholder: 'login-flow', required: true },
+          { id: 'description', label: 'Description', placeholder: 'optional · one line' },
+        ],
+        context: ctx.assertions.length > 0
+          ? `+ ${ctx.assertions.length} pending assertion${ctx.assertions.length === 1 ? '' : 's'} will be baked in`
+          : undefined,
+        confirmLabel: 'Save spec',
+      }),
+      buildPayload: (form, ctx) => ({
+        name: form.name,
+        description: form.description,
+        steps: ctx.steps,
+        assertions: ctx.assertions,
+      }),
+      successMsg: (p, entry) => {
+        const n = entry?.assertions?.length ?? 0;
+        const tail = n > 0 ? ` (+${n} assertion${n === 1 ? '' : 's'})` : '';
+        return `✓ saved Playwright spec "${p.name}"${tail} → ${p.path}\n  run it: pnpm test:e2e`;
+      },
+      overwriteOpts: (slug) => ({
+        title: 'Overwrite existing spec?',
+        body: `A Playwright spec named "${slug}" already exists.`,
+      }),
+      // After a successful spec save, the assertions are baked into the
+      // file — clear them from the live widget state so the next session
+      // doesn't accidentally re-emit them.
+      onSuccess: () => {
+        state.assertions = [];
+        saveState();
+        updateAssertBadge();
+      },
+    },
+    'case-csv': {
+      saveType: 'save-case-csv',
+      existsType: 'case-csv-exists',
+      savedType: 'case-csv-saved',
+      promptOpts: (ctx) => ({
+        title: 'Save as Jira test case (Xray CSV)',
+        fields: [
+          { id: 'name', label: 'Test case name', placeholder: 'login-flow', required: true },
+          { id: 'description', label: 'Summary', placeholder: 'optional · used as the test case Summary in Jira' },
+          { id: 'jiraProjectKey', label: 'Jira project key', placeholder: 'optional · e.g. PROJ — added as a label' },
+          { id: 'labels', label: 'Labels', placeholder: 'optional · space- or comma-separated' },
+        ],
+        context: ctx.assertions.length > 0
+          ? `+ ${ctx.assertions.length} pending assertion${ctx.assertions.length === 1 ? '' : 's'} will become the Expected Result`
+          : 'Imports into Xray, Zephyr Scale, or the generic Jira issue importer.',
+        confirmLabel: 'Save Jira case',
+      }),
+      buildPayload: (form, ctx) => ({
+        name: form.name,
+        description: form.description,
+        jiraProjectKey: form.jiraProjectKey,
+        labels: form.labels,
+        steps: ctx.steps,
+        assertions: ctx.assertions,
+      }),
+      successMsg: (p) =>
+        `✓ saved Jira test case "${p.name}" → ${p.path}\n  import via Xray Test Case Importer · or Zephyr Scale · or Jira issue importer (CSV).`,
+      overwriteOpts: (slug) => ({
+        title: 'Overwrite existing Jira case CSV?',
+        body: `A test case CSV named "${slug}" already exists.`,
+      }),
+    },
+  };
+
+  const saveAsArtifact = async (kind, button) => {
+    const cfg = ARTIFACTS[kind];
+    if (!cfg) return;
+
     const steps = lastSessionSlice();
     if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
       addMessage({ kind: 'system', text: 'Nothing to save (no tool steps in the last session).' });
@@ -634,28 +936,58 @@
       return;
     }
 
-    const result = await hoverPrompt({
-      title: 'Save as Skill',
-      fields: [
-        { id: 'name', label: 'Skill name', placeholder: 'login-as-claude', required: true },
-        { id: 'description', label: 'Description', placeholder: 'optional · one line' },
-      ],
-      confirmLabel: 'Save skill',
-    });
-    if (!result) return;
+    const ctx = { steps, assertions: state.assertions.slice() };
+    const form = await hoverPrompt(cfg.promptOpts(ctx));
+    if (!form) return;
 
-    pendingSave = { name: result.name, description: result.description, steps, button };
+    const entry = { ...form, ...ctx, button };
+    pending.set(kind, entry);
 
     button.disabled = true;
     button.textContent = 'Saving…';
-    ws.send(JSON.stringify({
-      type: 'save-skill',
-      payload: { name: pendingSave.name, description: pendingSave.description, steps },
-    }));
+    ws.send(JSON.stringify({ type: cfg.saveType, payload: cfg.buildPayload(form, ctx) }));
 
+    // Failsafe: if no reply within 8s (server crashed mid-write, network
+    // dropped, etc.) re-enable the trigger so the user isn't stuck.
     setTimeout(() => {
       if (button.textContent === 'Saving…') restoreTrigger(button);
     }, 8000);
+  };
+
+  const handleArtifactExists = async (kind, slug, existingPath) => {
+    const cfg = ARTIFACTS[kind];
+    const entry = pending.get(kind);
+    if (!cfg || !entry) return;
+    const overwrite = await hoverConfirm({
+      ...cfg.overwriteOpts(slug),
+      context: existingPath,
+      confirmLabel: 'Overwrite',
+      danger: true,
+    });
+    if (overwrite) {
+      ws.send(JSON.stringify({
+        type: cfg.saveType,
+        payload: { ...cfg.buildPayload(entry, entry), overwrite: true },
+      }));
+      return;
+    }
+    if (entry.button) restoreTrigger(entry.button);
+    addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
+    pending.delete(kind);
+  };
+
+  const handleArtifactSaved = (kind, payload) => {
+    const cfg = ARTIFACTS[kind];
+    if (!cfg) return;
+    const entry = pending.get(kind);
+    addMessage({ kind: 'system', text: cfg.successMsg(payload, entry) });
+    // Re-arm any "Saving…" save-trigger in the panel. Only one should ever
+    // be live at a time, but the selector is defensive.
+    root.querySelectorAll('.save-trigger').forEach((b) => {
+      if (b.textContent.includes('Saving')) restoreTrigger(b);
+    });
+    cfg.onSuccess?.(entry);
+    pending.delete(kind);
   };
 
   // ───────────────────────── skills overlay ─────────────────────────
@@ -672,7 +1004,7 @@
     if (skills.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'skills-empty';
-      empty.textContent = 'No saved skills yet. Run a session, then click 💾 Save as Skill on the result card.';
+      empty.textContent = 'No saved skills yet. Run a session, then click "Save as → Claude Code Skill" on the result card.';
       skillsListEl.appendChild(empty);
       return;
     }
@@ -733,189 +1065,289 @@
   });
   skillsCloseBtn.addEventListener('click', closeSkillsOverlay);
 
-  const saveSpecFromLastSession = async (button) => {
-    const steps = lastSessionSlice();
-    if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
-      addMessage({ kind: 'system', text: 'Nothing to save (no tool steps in the last session).' });
-      return;
-    }
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      addMessage({ kind: 'system', text: 'Cannot save: service disconnected.' });
-      return;
-    }
-    const nAssert = state.assertions.length;
-    const result = await hoverPrompt({
-      title: 'Save as Playwright spec',
-      fields: [
-        { id: 'name', label: 'Spec name', placeholder: 'login-flow', required: true },
-        { id: 'description', label: 'Description', placeholder: 'optional · one line' },
-      ],
-      context: nAssert > 0 ? `+ ${nAssert} pending assertion${nAssert === 1 ? '' : 's'} will be baked in` : undefined,
-      confirmLabel: 'Save spec',
-    });
-    if (!result) return;
+  // ───────────────────────── agents overlay ─────────────────────────
+  //
+  // Lifecycle: on `hello` we have the server's currently-selected agent and
+  // know nothing about availability; a `agents` follow-up event ships the
+  // full availability list (installed + not-installed). Subsequent
+  // switch-agent requests echo a new `agents` event back to all connected
+  // widgets so multiple browser windows stay in sync.
 
-    pendingSpec = {
-      name: result.name,
-      description: result.description,
-      steps,
-      assertions: state.assertions.slice(),
-      button,
+  const findAgent = (id) =>
+    state.availableAgents.find((a) => a.id === id) || null;
+
+  const renderAgentButton = () => {
+    const a = findAgent(state.currentAgent);
+    const label = a?.label || state.currentAgent || 'agent';
+    agentLabelEl.textContent = label;
+    const showWarn = a?.sandboxStrength === 'soft';
+    agentWarnEl.hidden = !showWarn;
+    agentBtn.title = showWarn
+      ? `${label} — soft sandbox (no built-in-tool deny list)`
+      : `Switch coding agent (${label})`;
+  };
+
+  const renderAgentsOverlay = () => {
+    agentsCountEl.textContent = String(state.availableAgents.length);
+    agentsListEl.innerHTML = '';
+    if (state.availableAgents.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'skills-empty';
+      empty.textContent = 'No agents registered.';
+      agentsListEl.appendChild(empty);
+      return;
+    }
+    for (const a of state.availableAgents) {
+      const row = document.createElement('div');
+      row.className = 'agent-row';
+      const isCurrent = a.id === state.currentAgent;
+      if (isCurrent) row.classList.add('current');
+      if (!a.installed) row.classList.add('uninstalled');
+
+      const main = document.createElement('div');
+      main.className = 'agent-main';
+
+      const labelRow = document.createElement('div');
+      labelRow.className = 'agent-rowlabel';
+      labelRow.textContent = a.label;
+
+      const installedBadge = document.createElement('span');
+      installedBadge.className = `agent-badge ${a.installed ? 'installed' : 'missing'}`;
+      installedBadge.textContent = a.installed ? 'installed' : 'not installed';
+      labelRow.appendChild(installedBadge);
+
+      const sandboxBadge = document.createElement('span');
+      sandboxBadge.className = `agent-badge ${a.sandboxStrength}`;
+      sandboxBadge.textContent = a.sandboxStrength === 'hard' ? 'hard sandbox' : 'soft sandbox';
+      labelRow.appendChild(sandboxBadge);
+
+      main.appendChild(labelRow);
+
+      if (a.tagline) {
+        const tag = document.createElement('div');
+        tag.className = 'agent-rowtag';
+        tag.textContent = a.tagline;
+        main.appendChild(tag);
+      }
+
+      if (!a.installed && a.installHint) {
+        const hint = document.createElement('div');
+        hint.className = 'agent-hint';
+        hint.textContent = a.installHint;
+        main.appendChild(hint);
+      }
+
+      const check = document.createElement('div');
+      check.className = 'agent-rowcheck';
+      check.textContent = isCurrent ? '✓' : '';
+
+      row.appendChild(main);
+      row.appendChild(check);
+
+      if (a.installed && !isCurrent) {
+        row.addEventListener('click', () => switchAgent(a.id));
+      } else if (!a.installed) {
+        row.title = 'Run the install command below, then reopen this menu.';
+      }
+
+      agentsListEl.appendChild(row);
+    }
+  };
+
+  const switchAgent = (id) => {
+    if (running) {
+      // The server also rejects this case; we mirror locally so the user
+      // gets immediate feedback without a round-trip.
+      addMessage({ kind: 'system', text: 'Stop the running command first, then switch agent.' });
+      return;
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'switch-agent', payload: { agentId: id } }));
+    closeAgentsOverlay();
+  };
+
+  const requestAgentsList = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'list-agents' }));
+    }
+  };
+
+  const openAgentsOverlay = () => {
+    agentsOverlay.classList.add('open');
+    agentsOverlay.setAttribute('aria-hidden', 'false');
+    agentBtn.classList.add('active');
+    // Re-fetch on each open so we surface newly installed CLIs.
+    requestAgentsList();
+    renderAgentsOverlay();
+  };
+
+  const closeAgentsOverlay = () => {
+    agentsOverlay.classList.remove('open');
+    agentsOverlay.setAttribute('aria-hidden', 'true');
+    agentBtn.classList.remove('active');
+  };
+
+  agentBtn.addEventListener('click', () => {
+    if (agentsOverlay.classList.contains('open')) closeAgentsOverlay();
+    else openAgentsOverlay();
+  });
+  agentsCloseBtn.addEventListener('click', closeAgentsOverlay);
+
+  // Initial render so the button has something before the server replies.
+  renderAgentButton();
+
+  // ───────────────────────── custom tooltip ─────────────────────────
+  //
+  // Replaces the native `title=` tooltip which (a) renders in OS chrome
+  // with a noticeable delay (~500-1000ms) and a light theme that clashes
+  // with the dark panel, and (b) doesn't appear on keyboard focus, only
+  // mouse hover. Targets are any element under the shadow root with a
+  // non-empty `data-tooltip` attribute. Shows ~120ms after enter/focus,
+  // hides immediately on leave/blur/scroll/Esc.
+  //
+  // Side selection:
+  //   - default: above (or below if not enough space)
+  //   - opt-in: data-tooltip-side="left" | "right" | "below"
+  //   - the launcher uses side="left" so the bubble sits left of the
+  //     floating ball instead of off-screen above the viewport.
+  const tipEl = $('.hover-tip');
+  const tipText = $('.hover-tip-text');
+  let tipTarget = null;
+  let tipShowTimer = 0;
+  let tipHideTimer = 0;
+  const TIP_OPEN_DELAY = 120;
+  const TIP_CLOSE_GRACE = 40;
+  const TIP_GAP = 6;          // px between target and bubble
+  const TIP_VIEWPORT_PAD = 8; // px to keep bubble inside viewport
+
+  const positionTip = (target) => {
+    const r = target.getBoundingClientRect();
+    const tr = tipEl.getBoundingClientRect();
+    const requested = target.getAttribute('data-tooltip-side') || 'above';
+    // Pick a final side, falling back when the requested one would clip.
+    const fits = {
+      above: r.top >= tr.height + TIP_GAP + TIP_VIEWPORT_PAD,
+      below: window.innerHeight - r.bottom >= tr.height + TIP_GAP + TIP_VIEWPORT_PAD,
+      left:  r.left >= tr.width + TIP_GAP + TIP_VIEWPORT_PAD,
+      right: window.innerWidth - r.right >= tr.width + TIP_GAP + TIP_VIEWPORT_PAD,
     };
-    button.disabled = true;
-    button.textContent = 'Saving…';
-    ws.send(JSON.stringify({
-      type: 'save-spec',
-      payload: {
-        name: pendingSpec.name,
-        description: pendingSpec.description,
-        steps,
-        assertions: pendingSpec.assertions,
-      },
-    }));
+    const fallback = ['above', 'below', 'left', 'right'];
+    let side = fits[requested] ? requested : (fallback.find(s => fits[s]) || requested);
+    tipEl.setAttribute('data-side', side);
 
-    setTimeout(() => {
-      if (button.textContent === 'Saving…') restoreTrigger(button);
-    }, 8000);
+    let top, left;
+    if (side === 'above') {
+      top = r.top - tr.height - TIP_GAP;
+      left = r.left + (r.width - tr.width) / 2;
+    } else if (side === 'below') {
+      top = r.bottom + TIP_GAP;
+      left = r.left + (r.width - tr.width) / 2;
+    } else if (side === 'left') {
+      top = r.top + (r.height - tr.height) / 2;
+      left = r.left - tr.width - TIP_GAP;
+    } else { // right
+      top = r.top + (r.height - tr.height) / 2;
+      left = r.right + TIP_GAP;
+    }
+    // Clamp to viewport so the bubble doesn't slide off the edge.
+    left = Math.max(TIP_VIEWPORT_PAD, Math.min(left, window.innerWidth - tr.width - TIP_VIEWPORT_PAD));
+    top  = Math.max(TIP_VIEWPORT_PAD, Math.min(top, window.innerHeight - tr.height - TIP_VIEWPORT_PAD));
+    tipEl.style.top  = `${top}px`;
+    tipEl.style.left = `${left}px`;
   };
 
-  const saveCaseCsvFromLastSession = async (button) => {
-    const steps = lastSessionSlice();
-    if (steps.length === 0 || !steps.some((s) => s.kind === 'step')) {
-      addMessage({ kind: 'system', text: 'Nothing to save (no tool steps in the last session).' });
-      return;
-    }
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      addMessage({ kind: 'system', text: 'Cannot save: service disconnected.' });
-      return;
-    }
-    const nAssert = state.assertions.length;
-    const result = await hoverPrompt({
-      title: 'Save as Jira test case (Xray CSV)',
-      fields: [
-        { id: 'name', label: 'Test case name', placeholder: 'login-flow', required: true },
-        { id: 'description', label: 'Summary', placeholder: 'optional · used as the test case Summary in Jira' },
-        { id: 'jiraProjectKey', label: 'Jira project key', placeholder: 'optional · e.g. PROJ — added as a label' },
-        { id: 'labels', label: 'Labels', placeholder: 'optional · space- or comma-separated' },
-      ],
-      context: nAssert > 0
-        ? `+ ${nAssert} pending assertion${nAssert === 1 ? '' : 's'} will become the Expected Result`
-        : 'Imports into Xray, Zephyr Scale, or the generic Jira issue importer.',
-      confirmLabel: 'Save Jira case',
-    });
-    if (!result) return;
-
-    pendingCase = {
-      name: result.name,
-      description: result.description,
-      jiraProjectKey: result.jiraProjectKey,
-      labels: result.labels,
-      steps,
-      assertions: state.assertions.slice(),
-      button,
-    };
-    button.disabled = true;
-    button.textContent = 'Saving…';
-    ws.send(JSON.stringify({
-      type: 'save-case-csv',
-      payload: {
-        name: pendingCase.name,
-        description: pendingCase.description,
-        jiraProjectKey: pendingCase.jiraProjectKey,
-        labels: pendingCase.labels,
-        steps,
-        assertions: pendingCase.assertions,
-      },
-    }));
-
-    setTimeout(() => {
-      if (button.textContent === 'Saving…') restoreTrigger(button);
-    }, 8000);
+  const showTip = (target) => {
+    const text = target.getAttribute('data-tooltip');
+    if (!text) return;
+    tipTarget = target;
+    tipText.textContent = text;
+    tipEl.setAttribute('aria-hidden', 'false');
+    // First make the bubble measurable (CSS sets opacity 0 so it's not visible
+    // yet), then position, then add the .visible class to fade in.
+    tipEl.style.top = '-1000px';
+    tipEl.style.left = '-1000px';
+    tipEl.classList.add('visible'); // forces layout so getBoundingClientRect is meaningful
+    positionTip(target);
   };
 
-  const handleCaseCsvExists = async (slug, existingPath) => {
-    if (!pendingCase) return;
-    const overwrite = await hoverConfirm({
-      title: 'Overwrite existing Jira case CSV?',
-      body: `A test case CSV named "${slug}" already exists.`,
-      context: existingPath,
-      confirmLabel: 'Overwrite',
-      danger: true,
-    });
-    if (overwrite) {
-      ws.send(JSON.stringify({
-        type: 'save-case-csv',
-        payload: {
-          name: pendingCase.name,
-          description: pendingCase.description,
-          jiraProjectKey: pendingCase.jiraProjectKey,
-          labels: pendingCase.labels,
-          steps: pendingCase.steps,
-          assertions: pendingCase.assertions,
-          overwrite: true,
-        },
-      }));
-      return;
-    }
-    if (pendingCase.button) restoreTrigger(pendingCase.button);
-    addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
-    pendingCase = null;
+  const hideTip = () => {
+    tipTarget = null;
+    tipEl.classList.remove('visible');
+    tipEl.setAttribute('aria-hidden', 'true');
   };
 
-  const handleSpecExists = async (slug, existingPath) => {
-    if (!pendingSpec) return;
-    const overwrite = await hoverConfirm({
-      title: 'Overwrite existing spec?',
-      body: `A Playwright spec named "${slug}" already exists.`,
-      context: existingPath,
-      confirmLabel: 'Overwrite',
-      danger: true,
-    });
-    if (overwrite) {
-      ws.send(JSON.stringify({
-        type: 'save-spec',
-        payload: {
-          name: pendingSpec.name,
-          description: pendingSpec.description,
-          steps: pendingSpec.steps,
-          assertions: pendingSpec.assertions,
-          overwrite: true,
-        },
-      }));
-      return;
-    }
-    if (pendingSpec.button) restoreTrigger(pendingSpec.button);
-    addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
-    pendingSpec = null;
+  const cancelShowTimer = () => {
+    if (tipShowTimer) { clearTimeout(tipShowTimer); tipShowTimer = 0; }
+  };
+  const cancelHideTimer = () => {
+    if (tipHideTimer) { clearTimeout(tipHideTimer); tipHideTimer = 0; }
   };
 
-  const handleSkillExists = async (slug, existingPath) => {
-    if (!pendingSave) return;
-    const overwrite = await hoverConfirm({
-      title: 'Overwrite existing skill?',
-      body: `A skill named "${slug}" already exists.`,
-      context: existingPath,
-      confirmLabel: 'Overwrite',
-      danger: true,
-    });
-    if (overwrite) {
-      ws.send(JSON.stringify({
-        type: 'save-skill',
-        payload: {
-          name: pendingSave.name,
-          description: pendingSave.description,
-          steps: pendingSave.steps,
-          overwrite: true,
-        },
-      }));
-      // Keep pendingSave so the eventual skill-saved ack hits the same button.
-      return;
+  const findTipTarget = (ev) => {
+    // event.composedPath() crosses the shadow boundary so the launcher
+    // (sibling of .panel) is reachable too.
+    for (const node of ev.composedPath()) {
+      if (node && node.nodeType === 1 && node.hasAttribute && node.hasAttribute('data-tooltip')) {
+        return node;
+      }
+      if (node === host) break;
     }
-    // Cancelled — restore the button and clear pending state
-    if (pendingSave.button) restoreTrigger(pendingSave.button);
-    addMessage({ kind: 'system', text: `Skipped overwrite of "${slug}".` });
-    pendingSave = null;
+    return null;
   };
+
+  root.addEventListener('mouseover', (ev) => {
+    const target = findTipTarget(ev);
+    if (!target || target === tipTarget) return;
+    cancelHideTimer();
+    cancelShowTimer();
+    tipShowTimer = setTimeout(() => showTip(target), TIP_OPEN_DELAY);
+  });
+
+  root.addEventListener('mouseout', (ev) => {
+    // Only hide if we're actually leaving the current target (and not just
+    // moving across one of its children with pointer-events on).
+    if (!tipTarget) return;
+    const related = ev.relatedTarget;
+    if (related && tipTarget.contains(related)) return;
+    cancelShowTimer();
+    cancelHideTimer();
+    tipHideTimer = setTimeout(hideTip, TIP_CLOSE_GRACE);
+  });
+
+  // Keyboard accessibility — also makes the launcher discoverable for users
+  // who tab into the page.
+  root.addEventListener('focusin', (ev) => {
+    const t = ev.target;
+    if (t && t.hasAttribute && t.hasAttribute('data-tooltip')) {
+      cancelHideTimer();
+      cancelShowTimer();
+      tipShowTimer = setTimeout(() => showTip(t), TIP_OPEN_DELAY);
+    }
+  });
+  root.addEventListener('focusout', () => {
+    cancelShowTimer();
+    hideTip();
+  });
+
+  // Any scroll inside the panel invalidates the cached position; hide.
+  // (Repositioning would be cleaner but for header buttons scrolling never
+  // moves them, so the simple "hide" rule is fine.)
+  root.addEventListener('scroll', hideTip, true);
+
+  // Esc dismisses the tooltip without closing the panel.
+  root.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && tipTarget) {
+      hideTip();
+      // Don't stopPropagation — modal/overlay Esc handlers still run.
+    }
+  });
+
+  // Mouse click on the target hides the bubble too — otherwise it lingers
+  // after the user has already acted on the affordance.
+  root.addEventListener('mousedown', () => {
+    cancelShowTimer();
+    hideTip();
+  }, true);
 
   // ───────────────────────── status + new conversation ─────────────────────────
 
@@ -936,9 +1368,10 @@
     state.messages = [];
     state.sessionId = null;
     state.assertions = [];
+    // Don't animate the empty state as if it were fresh content.
+    lastRenderedGroupCount = 0;
     saveState();
-    bodyEl.innerHTML = '';
-    lastStepDiv = null;
+    renderAll();
     updateAssertBadge();
     hideCost();
   });
@@ -1298,14 +1731,22 @@
   // server-side budget cap any more — the cost chip is the user's signal.
 
   const fmtCost = (n) => '$' + (Number(n) || 0).toFixed(4);
+  // Use a class instead of the `hidden` attribute so CSS can transition
+  // the chip's opacity / transform on appear / disappear (instead of
+  // popping in via display: none).
   const showCost = (costUsd, live) => {
     costEl.textContent = fmtCost(costUsd);
     costEl.hidden = false;
+    costEl.classList.add('visible');
     costEl.classList.toggle('live', !!live);
   };
   const hideCost = () => {
-    costEl.hidden = true;
-    costEl.classList.remove('live');
+    costEl.classList.remove('visible', 'live');
+    // Defer removal from the layout so the fade-out transition is visible;
+    // 220ms matches the CSS opacity transition + a small buffer.
+    setTimeout(() => {
+      if (!costEl.classList.contains('visible')) costEl.hidden = true;
+    }, 220);
   };
 
   const handleServerEvent = (ev) => {
@@ -1330,18 +1771,20 @@
         addMessage({ kind: 'step', tool: ev.tool, input: ev.input });
         return;
       case 'tool_result':
-        if (ev.isError && lastStepDiv) {
-          lastStepDiv.classList.add('error');
-          // also mutate the persisted step so reload reflects the error state
+        // On error, retroactively mark the most recent step in state.messages
+        // so the grouped renderer picks it up. We don't render here; the next
+        // event-driven addMessage (or the explicit renderAll on session_end)
+        // will redraw with the updated isError flag.
+        if (ev.isError) {
           for (let i = state.messages.length - 1; i >= 0; i--) {
             if (state.messages[i].kind === 'step') {
               state.messages[i].isError = true;
               saveState();
+              renderAll();
               break;
             }
           }
         }
-        lastStepDiv = null;
         return;
       case 'text':
         addMessage({ kind: 'ai', text: ev.text });
@@ -1365,10 +1808,10 @@
 
   let ws = null;
   let backoff = 500;
-  let running = false;
 
   const sendLabel = $('.send .send-label');
   const setRunning = (r) => {
+    const changed = running !== r;
     running = r;
     const wsReady = ws && ws.readyState === WebSocket.OPEN;
     if (r) {
@@ -1389,6 +1832,10 @@
       if (recording) setStatus('recording', 'running');
       else if (wsReady) setStatus('connected', 'connected');
     }
+    // Toggling running affects whether the trailing group is rendered as
+    // live (spinner, auto-expand) or closed (chevron collapsed, Save-as
+    // chip on the final group). Redraw so the user sees the transition.
+    if (changed) renderAll();
   };
 
   const connect = () => {
@@ -1427,47 +1874,20 @@
         addMessage({ kind: 'system', text: `error: ${msg.payload?.message ?? 'unknown'}` });
         setRunning(false);
       } else if (msg.type === 'skill-saved') {
-        const p = msg.payload ?? {};
-        addMessage({
-          kind: 'system',
-          text: `✓ saved skill "${p.name}" → ${p.path}\n  try: "execute ${p.name}" in a new conversation`,
-        });
-        // Re-arm any saving buttons in the panel
-        root.querySelectorAll('.msg.done .actions .save-trigger').forEach((b) => {
-          if (b.textContent === 'Saving…') restoreTrigger(b);
-        });
+        handleArtifactSaved('skill', msg.payload ?? {});
       } else if (msg.type === 'skill-exists') {
         const p = msg.payload ?? {};
-        handleSkillExists(p.slug, p.existingPath);
+        handleArtifactExists('skill', p.slug, p.existingPath);
       } else if (msg.type === 'spec-saved') {
-        const p = msg.payload ?? {};
-        const n = pendingSpec?.assertions?.length ?? 0;
-        addMessage({
-          kind: 'system',
-          text: `✓ saved Playwright spec "${p.name}"${n > 0 ? ` (+${n} assertion${n === 1 ? '' : 's'})` : ''} → ${p.path}\n  run it: pnpm test:e2e`,
-        });
-        root.querySelectorAll('.msg.done .actions .save-trigger').forEach((b) => {
-          if (b.textContent === 'Saving…') restoreTrigger(b);
-        });
-        // Saved successfully — assertions are now baked into the file, clear them
-        state.assertions = [];
-        saveState();
-        updateAssertBadge();
-        pendingSpec = null;
+        handleArtifactSaved('spec', msg.payload ?? {});
       } else if (msg.type === 'spec-exists') {
         const p = msg.payload ?? {};
-        handleSpecExists(p.slug, p.existingPath);
+        handleArtifactExists('spec', p.slug, p.existingPath);
       } else if (msg.type === 'case-csv-saved') {
-        const p = msg.payload ?? {};
-        addMessage({
-          kind: 'system',
-          text: `✓ saved Jira test case "${p.name}" → ${p.path}\n  import via Xray Test Case Importer · or Zephyr Scale · or Jira issue importer (CSV).`,
-        });
-        if (pendingCase?.button) restoreTrigger(pendingCase.button);
-        pendingCase = null;
+        handleArtifactSaved('case-csv', msg.payload ?? {});
       } else if (msg.type === 'case-csv-exists') {
         const p = msg.payload ?? {};
-        handleCaseCsvExists(p.slug, p.existingPath);
+        handleArtifactExists('case-csv', p.slug, p.existingPath);
       } else if (msg.type === 'skills-list') {
         renderSkills(msg.payload?.skills ?? []);
       } else if (msg.type === 'cdp-status') {
@@ -1484,7 +1904,28 @@
           }
         }
       } else if (msg.type === 'hello') {
-        // handshake — could surface agentId/model later
+        // Server tells us its currently-selected agent on every connect.
+        // We may have a remembered preference in localStorage (state.currentAgent);
+        // if it differs, ask the server to switch. The server's choice is
+        // authoritative for the visual label until that round-trip completes.
+        const serverAgent = msg.payload?.agentId;
+        if (serverAgent) {
+          const remembered = state.currentAgent;
+          state.currentAgent = serverAgent;
+          renderAgentButton();
+          if (remembered && remembered !== serverAgent) {
+            // Defer until after `agents` lands so the server has the
+            // availability cache ready and we don't race the switch.
+            setTimeout(() => switchAgent(remembered), 50);
+          }
+        }
+      } else if (msg.type === 'agents') {
+        const p = msg.payload ?? {};
+        if (typeof p.current === 'string') state.currentAgent = p.current;
+        if (Array.isArray(p.available)) state.availableAgents = p.available;
+        renderAgentButton();
+        if (agentsOverlay.classList.contains('open')) renderAgentsOverlay();
+        saveState();
       }
     });
   };
