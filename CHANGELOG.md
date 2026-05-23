@@ -4,6 +4,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are ISO 
 
 All notable changes to Hover are recorded here. Conventional Commits in the git log are the source of truth; this file groups them by user-visible impact.
 
+## [0.2.3] — 2026-05-23
+
+### Documentation
+- Backfill v0.2.x release notes in CHANGELOG.md (this section). No code changes beyond the docs touch that ships this version.
+
+## [0.2.2] — 2026-05-23
+
+### Added
+- **OpenAI Codex CLI support.** Service auto-detects `claude` and `codex` on PATH; the widget header shows the active agent as a pill (`claude ▾`) with a dropdown to switch. Soft-sandbox agents (codex) get a ⚠ badge — codex has no built-in-tool deny list at the CLI level, so we use `--sandbox read-only` + a strict `developer_instructions` system prompt.
+- **Widget UI v2** — dark panel (`#1a1a1a`) + mint accent (`#7CFFA8`), Midscene-style info hierarchy. Conversation reads as one row per natural-language intent; tool-call details collapsed behind a chevron. Result and bug **Findings** render as dedicated cards instead of being folded into the last step.
+- **Custom in-shadow-DOM tooltip** with ~120ms delay and dark/mint theming — replaces native `title=` which rendered laggy and light-themed against the dark panel.
+
+### Changed
+- Save-as artifact pipeline now drives all three formats (Playwright spec, Claude Code Skill, Jira test case CSV) through a single config-table dispatcher on both the widget and service sides. ~700 fewer lines of duplicated code, same wire protocol.
+- `service.ts` split into focused modules under `packages/core/src/service/` (cdpHandlers, saveHandlers, cdpHint, types). Main file dropped from 749 to 444 lines.
+- Parser state (cost, turn count, item-type map, error flag) moved from module-level globals in `claude.ts` / `codex.ts` to a per-invocation `ParserState` object threaded through `parseEvent` / `onStreamEnd` by `invokeAgent`. Two concurrent runs no longer smear their accumulators together.
+- Pure widget transforms (`groupMessages` + helpers) extracted into `packages/vite-plugin/src/widget/reducer.js` with 31 new unit tests.
+
+### Fixed
+- **Save-as button stuck on "Saving…"** — the post-save re-arm selector still targeted the legacy `.msg.done .actions .save-trigger` from the pre-v2 done-card layout; switched to a defensive `.save-trigger` query so the trigger actually resets.
+- Skill tool-call no longer leaks into the user-facing timeline (hidden in the reducer's `HIDDEN_TOOLS` set).
+- Tool names in expanded step rows no longer wrap mid-name; only the args column wraps now.
+- macOS Switch-to-it focus on launch: after `Page.bringToFront()` we now raise the Chrome process at the OS layer via `osascript` by PID, matching by `--remote-debugging-port` listener so we don't accidentally raise the user's primary Chrome.
+
+## [0.2.1] — 2026-05-23
+
+### Fixed
+- **Switch-me-to-it** now actually focuses the debug Chrome window on macOS. CDP's `Page.bringToFront()` only activates the tab inside Chrome — the OS-level window stayed buried. We now also raise the Chrome process at the OS layer (`osascript` by PID on darwin, `wmctrl -ia` on Linux, `AppActivate` on Windows). Best-effort: if the helper is missing the tab is still correctly focused inside Chrome.
+
+## [0.2.0] — 2026-05-22
+
+### Changed (breaking)
+- **Package rename.** `@hyperyond/core` → `@hover-dev/core` (scoped, dedicated npm org). `@hyperyond/vite-plugin` → `vite-plugin-hover` (unscoped, follows the `vite-plugin-*` community convention so registry.vite.dev's daily npm scan picks it up).
+- Consumers must update imports:
+  ```diff
+  - import { hover } from '@hyperyond/vite-plugin';
+  + import { hover } from 'vite-plugin-hover';
+  ```
+- GitHub repo (`Hyperyond/Hover`) is unchanged.
+
 ## [Unreleased]
 
 ### Added (Phase 2 — spec crystallisation)
