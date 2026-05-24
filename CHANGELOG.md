@@ -4,6 +4,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are ISO 
 
 All notable changes to Hover are recorded here. Conventional Commits in the git log are the source of truth; this file groups them by user-visible impact.
 
+## [0.3.1] — 2026-05-24
+
+The "Next.js" follow-up to 0.3.0. v0.3.0 covered Vite / Astro / Nuxt / Webpack; this release closes the largest remaining gap with a Turbopack-native Next.js integration.
+
+### Added
+
+- **`@hover-dev/next` — Next.js (App Router, Turbopack) integration.** Three pieces: (a) `withHover(nextConfig, opts)` — pure `next.config.mjs` wrapper, serialises options onto `process.env` so the runtime can recover them across Next's config / build / serve lifecycle boundaries; (b) `<HoverScript />` — Server Component rendered after `{children}` in `app/layout.tsx`, emits an inline `<script type="module">` carrying the widget bundle; (c) `register()` from `@hover-dev/next/instrumentation` — Next's blessed dev-and-runtime hook, boots the Hover service via `startService` from `@hover-dev/core`. Active only when `process.env.NODE_ENV === 'development'` AND `process.env.NEXT_RUNTIME === 'nodejs'` (Edge runtime is unsupported — the service depends on `ws` + `cross-spawn` + `playwright-core`). Edge-bundle isolation uses a string-variable indirection (`const specifier = './register-node.js'; await import(specifier)`) so Turbopack's static tracer leaves the Node-only graph alone.
+- **`@hover-dev/cli` knows about Next.** Detection priority places `next` above `webpack` so a Next project routes to `@hover-dev/next` (not the webpack plugin, which only covers `next dev --webpack`). The Next mutator touches two files idempotently: wraps `next.config.{ts,mjs,js}` in `withHover(...)` via magicast, and creates / merges `instrumentation.ts` at the project root (or `src/`). `app/layout.tsx` is deliberately NOT auto-edited — AST-mutating user JSX invites whitespace drift and Server Component shape surprises; the CLI prints the one-liner to paste. `--next` flag added; `--help` updated.
+- **`examples/next-app`** — minimal Next 16 App Router dogfood (counter + todos, port 5182). Verifies the three-piece integration end-to-end against `next dev` on default Turbopack.
+
+### Changed
+
+- **`@hover-dev/core` and `@hover-dev/widget-bootstrap` switch to dist-entry shape** (`main: dist/index.js`) and ship a `dev: tsc --watch` script. This is a monorepo-only concession — Turbopack's resolver does not rewrite NodeNext-style `.js` import specifiers back to on-disk `.ts` files inside transitively-traced source packages ([vercel/next.js#82945](https://github.com/vercel/next.js/issues/82945)), so the workspace-symlinked source-mode entry that every other Hover example happily transpiles on-the-fly fails under `next dev`. End users on a published install see no difference (they already get compiled `.js`). When #82945 lands, both packages revert to src-entry; tracking comment lives in `packages/next-integration/src/withHover.ts`.
+- **Root `postinstall`** runs `pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap build` after every install. Fresh clones get usable `dist/` artefacts before anyone touches an example.
+- **`pnpm dev:example:next-app`** spawns three `concurrently` watchers in parallel (`tsc --watch` for core, `tsc --watch` for widget-bootstrap, `next dev` itself). Edits to `packages/core/src/service.ts` re-emit `packages/core/dist/service.js` in ~500 ms; Next picks up the changed `dist` file and HMRs the page. Cold start ~5 s.
+- **README + 中文 README**: bundler-coverage section grew to six targets (added Next.js with `@hover-dev/next`); example count went from 9 to 10; v0.3.x line in the roadmap moves from "planned" to "you are here". CLAUDE.md gained two new sections: package entry-point conventions (explaining the Next-tax) and Edge-runtime isolation in `@hover-dev/next` (explaining the string-variable indirection).
+
+### Internal
+
+- New publishable package: 8 total (`@hover-dev/core`, `@hover-dev/widget-bootstrap`, `@hover-dev/astro`, `@hover-dev/nuxt`, `@hover-dev/next`, `@hover-dev/cli`, `vite-plugin-hover`, `webpack-plugin-hover`). `.github/workflows/publish.yml`'s `PKG_FILTERS` updated to include `@hover-dev/next`; workspace-dep order preserved (`core` + `widget-bootstrap` publish before `next` so the `workspace:*` rewrite resolves correctly).
+- `@hover-dev/next` is the first Hover package built with `tsup` (esbuild-based) rather than raw `tsc`. Bundles the package itself; leaves `@hover-dev/core`, `playwright-core`, `react`, `next`, etc. external.
+
 ## [0.3.0] — 2026-05-24
 
 The "multi-bundler + one-command setup" release. Hover now covers every major frontend bundler and you wire it in with a single `npx`.
