@@ -72,9 +72,14 @@ export async function preflightCDP(
         .filter(t => t.type === 'page' || !t.type)
         .map(t => ({ url: t.url ?? '', title: t.title, type: t.type }))
         .filter(t => t.url.length > 0);
+    } else {
+      // /json/version was healthy but /json/list wasn't — surface it so the
+      // agent's system prompt isn't silently built from an empty tab list.
+      console.warn(`[hover] CDP /json/list returned HTTP ${listRes.status}; agent tab hint will be empty`);
     }
-  } catch {
-    // tab list is best-effort
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[hover] CDP /json/list failed: ${msg}; agent tab hint will be empty`);
   }
 
   return {

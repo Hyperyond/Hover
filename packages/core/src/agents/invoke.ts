@@ -15,9 +15,11 @@ import type { InvokeEvent, InvokeOptions, ParserState } from './types.js';
 /**
  * Spawn an agent and yield normalized InvokeEvents as they arrive.
  *
- * Caller is responsible for the lifecycle of `AsyncIterable`: iterating
- * to completion drains stdout; aborting via `break` will leave the child
- * running (use AbortController in a future iteration if needed).
+ * Lifecycle: the generator owns the child process. Iterating to completion
+ * drains stdout; breaking early (e.g. WS disconnect) runs the finally block
+ * which closes readline and SIGTERMs the child, so we never leak orphan
+ * agent processes that would keep driving the browser (and burning tokens)
+ * after the user has navigated away.
  */
 export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEvent> {
   const descriptor = getAgent(opts.agentId);
@@ -39,9 +41,6 @@ export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEve
     env: { ...process.env, CLAUDECODE: '' },
   });
 
-  // Wire abort: when the caller signals (e.g. WS disconnect), terminate the
-  // child so we don't leak orphan agent processes that keep driving the
-  // browser after the user has navigated away.
   const onAbort = () => {
     if (!child.killed) child.kill('SIGTERM');
   };
@@ -58,36 +57,38 @@ export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEve
   const rl = createInterface({ input: child.stdout! });
   const exitPromise = new Promise<number>(res => child.on('exit', c => res(c ?? -1)));
 
-  // Fresh parser state per invocation. Threaded into both parseEvent and
-  // onStreamEnd so descriptors don't have to reach for module globals
-  // (which would smear across concurrent invocations).
   const state: ParserState = {};
-
   let sawSessionEnd = false;
-  for await (const line of rl) {
-    for (const ev of descriptor.parseEvent(line, state)) {
-      if (ev.kind === 'session_end') sawSessionEnd = true;
-      yield ev;
-    }
-  }
 
-  const code = await exitPromise;
-  opts.signal?.removeEventListener('abort', onAbort);
-
-  if (!sawSessionEnd && !opts.signal?.aborted) {
-    // Give the descriptor a chance to synthesize its own terminator from
-    // accumulated state (codex does this — its stream never emits a
-    // session_end). Falls back to a generic error session_end if the
-    // descriptor declines and the child exited non-zero.
-    const synthetic = descriptor.onStreamEnd?.(code, state);
-    if (synthetic) {
-      yield synthetic;
-    } else if (code !== 0) {
-      yield {
-        kind: 'session_end',
-        isError: true,
-        summary: `agent exited with code ${code}`,
-      };
+  try {
+    for await (const line of rl) {
+      for (const ev of descriptor.parseEvent(line, state)) {
+        if (ev.kind === 'session_end') sawSessionEnd = true;
+        yield ev;
+      }
     }
+
+    const code = await exitPromise;
+
+    if (!sawSessionEnd && !opts.signal?.aborted) {
+      // Give the descriptor a chance to synthesize its own terminator from
+      // accumulated state (codex does this — its stream never emits a
+      // session_end). Falls back to a generic error session_end if the
+      // descriptor declines and the child exited non-zero.
+      const synthetic = descriptor.onStreamEnd?.(code, state);
+      if (synthetic) {
+        yield synthetic;
+      } else if (code !== 0) {
+        yield {
+          kind: 'session_end',
+          isError: true,
+          summary: `agent exited with code ${code}`,
+        };
+      }
+    }
+  } finally {
+    rl.close();
+    if (!child.killed) child.kill('SIGTERM');
+    opts.signal?.removeEventListener('abort', onAbort);
   }
 }

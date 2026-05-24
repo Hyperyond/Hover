@@ -96,6 +96,39 @@
     }
   };
 
+  // Debounced variant used on hot paths (every tool_use / ai-text event during
+  // a run). A long agent run can fire 50+ events in a few seconds; each one
+  // used to synchronously JSON.stringify the whole state (capped 200 msg list,
+  // a few KB at minimum) and hit localStorage. Coalescing to one write per
+  // 250ms keeps the chat log persistent for normal restart/HMR (loss window
+  // is the in-flight events only) while making the per-event cost effectively
+  // zero. A visibilitychange/pagehide handler below flushes the pending
+  // write so tab-close or refresh never drops the latest state.
+  let saveStateTimer = null;
+  const scheduleSaveState = () => {
+    if (saveStateTimer != null) return;
+    saveStateTimer = setTimeout(() => {
+      saveStateTimer = null;
+      saveState();
+    }, 250);
+  };
+  const flushSaveState = () => {
+    if (saveStateTimer != null) {
+      clearTimeout(saveStateTimer);
+      saveStateTimer = null;
+    }
+    saveState();
+  };
+  // Flush on tab hide / unload so we don't lose pending writes even though
+  // the hot path is debounced. visibilitychange + pagehide cover the modern
+  // mobile/Safari edge cases that 'beforeunload' alone misses.
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && saveStateTimer != null) {
+      flushSaveState();
+    }
+  });
+  window.addEventListener('pagehide', flushSaveState);
+
   const loadState = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -718,12 +751,28 @@
   // (Replay from localStorage on boot intentionally animates the restored
   // messages once — feels like the panel "wakes up".)
 
+  // rAF-coalesced renderAll for hot paths. A streaming tool_use burst (10
+  // tools in 200ms) used to fire 10 full DOM rebuilds back-to-back — wasted
+  // work since only the last frame's state is what the user sees. With this
+  // we collapse to at most one render per animation frame; the human-visible
+  // result is identical (still ~60Hz) but the synchronous work between WS
+  // events drops to near-zero, keeping the main thread free for scroll/input.
+  let renderRafPending = false;
+  const scheduleRender = () => {
+    if (renderRafPending) return;
+    renderRafPending = true;
+    requestAnimationFrame(() => {
+      renderRafPending = false;
+      renderAll();
+    });
+  };
+
   // Append a serialized message: push to state + persist + re-render.
   const addMessage = (msg) => {
     state.messages.push(msg);
     if (state.messages.length > MESSAGE_CAP) state.messages.shift();
-    saveState();
-    renderAll();
+    scheduleSaveState();
+    scheduleRender();
   };
 
   // Restore all stored messages on init.
@@ -1853,8 +1902,8 @@
           for (let i = state.messages.length - 1; i >= 0; i--) {
             if (state.messages[i].kind === 'step') {
               state.messages[i].isError = true;
-              saveState();
-              renderAll();
+              scheduleSaveState();
+              scheduleRender();
               break;
             }
           }

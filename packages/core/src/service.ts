@@ -190,6 +190,38 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     return agentAvailabilityCache;
   };
 
+  // Cache the CDP preflight result for a short window. preflightCDP() does
+  // two HTTP roundtrips to Chrome's debug endpoint (/json/version +
+  // /json/list); on a multi-turn session that's 100-300ms of latency before
+  // every follow-up — directly observable as a pause between hitting send
+  // and the agent starting work. A 5s TTL is comfortably shorter than the
+  // time it takes a user to type+send another message, but long enough that
+  // back-to-back commands skip the roundtrip. Failures are NOT cached so
+  // the user gets immediate feedback when they fix the underlying issue
+  // (e.g. start Chrome). Cache is invalidated whenever an invocation fails
+  // (defensive: if MCP somehow spawned its own Chromium we want the next
+  // preflight to re-probe).
+  const PREFLIGHT_TTL_MS = 5000;
+  let cachedPreflight: Awaited<ReturnType<typeof preflightCDP>> | null = null;
+  let cachedPreflightAt = 0;
+  const getPreflight = async (): Promise<Awaited<ReturnType<typeof preflightCDP>>> => {
+    const now = Date.now();
+    if (cachedPreflight?.ok && now - cachedPreflightAt < PREFLIGHT_TTL_MS) {
+      return cachedPreflight;
+    }
+    const result = await preflightCDP(cdpUrl);
+    if (result.ok) {
+      cachedPreflight = result;
+      cachedPreflightAt = now;
+    } else {
+      cachedPreflight = null;
+    }
+    return result;
+  };
+  const invalidatePreflight = () => {
+    cachedPreflight = null;
+  };
+
   const broadcastAgents = async (): Promise<void> => {
     const available = await getAvailability(false);
     const payload = { current: currentAgentId, available };
@@ -344,7 +376,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Playwright MCP server would silently launch its own Chromium —
         // and Hover's premise is to drive the user's existing Chrome (with
         // their dev state, cookies, devtools open), never spawn a fresh one.
-        const cdp = await preflightCDP(cdpUrl);
+        const cdp = await getPreflight();
         if (!cdp.ok) {
           send(ws, {
             type: 'event',
@@ -427,6 +459,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (ws.readyState === WebSocket.OPEN) {
           send(ws, { type: 'event', payload: errorEvent });
         }
+        // Force the next command to re-probe CDP. The error could be from
+        // Chrome dying, MCP spawning a stray Chromium, the user closing
+        // their debug window — anything that would make a cached "all
+        // healthy" result lie.
+        invalidatePreflight();
       } finally {
         busy = false;
         inflight = null;

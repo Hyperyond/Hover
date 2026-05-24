@@ -99,8 +99,11 @@ function clearStaleProfileLock(dir: string): void {
     if (existsSync(p)) {
       try {
         unlinkSync(p);
-      } catch {
-        /* ignore */
+      } catch (err) {
+        // Don't bail — Chrome may still launch despite a stale lock — but
+        // log so a downstream launch failure can be traced back to here.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[hover] couldn't clear ${p}: ${msg}`);
       }
     }
   }
