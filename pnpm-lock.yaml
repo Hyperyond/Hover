@@ -209,6 +209,12 @@ importers:
         specifier: ^5.0.0
         version: 5.18.1(@types/node@25.9.1)(db0@0.3.4)(ioredis@5.10.1)(jiti@2.7.0)(rollup@4.60.4)(terser@5.48.0)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
 
+  packages/cli:
+    dependencies:
+      magicast:
+        specifier: ^0.5.0
+        version: 0.5.3
+
   packages/core:
     dependencies:
       cross-spawn:
