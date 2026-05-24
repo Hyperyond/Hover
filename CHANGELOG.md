@@ -4,6 +4,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are ISO 
 
 All notable changes to Hover are recorded here. Conventional Commits in the git log are the source of truth; this file groups them by user-visible impact.
 
+## [0.3.0] — 2026-05-24
+
+The "multi-bundler + one-command setup" release. Hover now covers every major frontend bundler and you wire it in with a single `npx`.
+
+### Added
+
+- **`@hover-dev/cli` — one-command setup.** `npx @hover-dev/cli add` detects your bundler (Vite / Astro / Nuxt / Webpack), reads your lockfile to pick the right package manager (pnpm / yarn / bun / npm), installs the matching Hover package as a dev dep, and AST-edits your config file. Force a specific bundler with `--vite` / `--astro` / `--nuxt` / `--webpack`; preview without changes via `--dry-run`. Idempotent — safe to re-run.
+- **`@hover-dev/astro` — Astro integration.** Astro's HTML pipeline for `.astro` pages silently drops user Vite plugins' `transformIndexHtml` output, so dropping `vite-plugin-hover` into `astro.config.mjs`'s `vite.plugins` doesn't fully work. This package wraps the same core service + widget bundle behind Astro's `injectScript('page', ...)` integration API. Active only on `astro dev`.
+- **`@hover-dev/nuxt` — Nuxt module.** Nuxt renders HTML through Nitro, not Vite, so `transformIndexHtml` is a no-op for Nuxt SSR responses (nuxt/nuxt#19853). This module uses `@nuxt/kit`'s `defineNuxtModule` and pushes the widget into `nuxt.options.app.head.script` with `tagPosition: 'bodyClose'`, which Nitro renders inline into the SSR'd HTML. Active only when `nuxt.options.dev === true`.
+- **`webpack-plugin-hover` — webpack 5 plugin.** Covers vanilla `webpack-dev-server`, Rspack, Rsbuild, plus legacy CRA (via `craco`) and Vue CLI (via `configureWebpack`). Taps `HtmlWebpackPlugin.getHooks(compilation).alterAssetTagGroups` to push a `<script type="module">` into `bodyTags`; falls back to a `processAssets` HTML splice when `html-webpack-plugin` isn't installed. **Does NOT cover Next.js by default** — Next 16 ships Turbopack as the default bundler and Turbopack does not load webpack plugins. Next users on `next dev --webpack` can wire it manually; a Turbopack-native `@hover-dev/next` is on the v0.4 roadmap.
+- **`@hover-dev/widget-bootstrap` — host-agnostic widget builder.** Extracted from the previous `vite-plugin-hover` internals so every bundler plugin / integration above produces a byte-identical widget. Three layers: `getWidgetScript()` (Vite-shaped tag descriptor, one-liner inside `transformIndexHtml`), `buildWidgetBundle()` (raw `{ preamble, body }` strings — for Astro `injectScript`, Nuxt `app.head.script`, webpack `alterAssetTagGroups`, or any raw HTTP server), `readWidgetAssets()` (raw mtime-cached bytes — for future plugins that want `Compilation.assets`-style registration).
+- **`examples/astro-app`, `examples/nuxt-app`, `examples/webpack-app`, `examples/rn-web-app`** — four new dogfood targets, one per Hover integration package. Each ships the same counter + todo smoke content as `basic-app` for direct cross-target comparison. The rn-web-app demonstrates that React Native Web is in scope (just `react-native` → `react-native-web` Vite alias); React Native **native** (iOS / Android) is explicitly not supported — that space belongs to Maestro / Detox / Appium.
+
+### Changed
+
+- **`vite-plugin-hover` no longer ships its own widget assets.** It now consumes `@hover-dev/widget-bootstrap` for the widget bundle and `@hover-dev/core` for the service. The plugin's source dropped from 225 to 142 lines, all of which is now pure Vite-lifecycle glue. End users importing `import { hover } from 'vite-plugin-hover'` see no change in behaviour; npm pulls `@hover-dev/widget-bootstrap` automatically as a transitive dep. *(Tagged `refactor!:` in the commit log only because someone reaching into `vite-plugin-hover/dist/widget/*` programmatically would have to switch to `@hover-dev/widget-bootstrap/dist/widget/*`. The supported `hover()` plugin API is unchanged.)*
+- **Performance pass on the existing service + widget hot paths.** Five fixes in one PR ([details](https://github.com/Hyperyond/Hover/pull/2)): readline + child-process cleanup so caller `break` no longer leaks orphan agent processes; mtime-cached widget file reads in the Vite plugin (was synchronous re-read every page load); `preflightCDP` result cached for 5s so repeat invocations skip the `/json/version` + `/json/list` round-trip; widget `saveState` debounced and `renderAll` rAF-coalesced so a streaming tool_use burst collapses to one DOM rebuild per frame; agent PATH detection parallelised across the registry. Combined effect: lower latency on subsequent commands, lower CPU during long runs, no orphan processes after disconnects.
+- **README + 中文 README**: install section now leads with `npx @hover-dev/cli add`; manual `pnpm add -D <pkg>` moved under a `<details>` fold. New "Bundler coverage" subsection in "See it in action". Bottom example table grew from five to nine apps. New "React Native — only the Web target is supported" subsection states the scope explicitly so users don't show up expecting native mobile coverage.
+- **Banner image** updated to show `$ npx @hover-dev/cli add` instead of the old `npm install -D vite-plugin-hover` command. Tagline retained.
+
+### Fixed
+
+- `service.close()` errors during dev-server shutdown are now logged instead of silently swallowed.
+- `preflightCDP`'s `/json/list` failure path now logs a warning instead of silently returning an empty tab list (which would have produced an empty / incomplete CDP hint in the agent's system prompt).
+- `launchDebugChrome` `SingletonLock` cleanup errors are now logged instead of silently swallowed — makes diagnosing a "Chrome won't launch" cascade traceable.
+- Several union-type narrowing fixes in `@hover-dev/core` surfaced by the new Astro example's stricter `tsconfig` — pre-existing latent issues, no behaviour change.
+
+### Internal
+
+- New monorepo layout: 7 publishable packages (`@hover-dev/core`, `@hover-dev/widget-bootstrap`, `@hover-dev/astro`, `@hover-dev/nuxt`, `@hover-dev/cli`, `vite-plugin-hover`, `webpack-plugin-hover`) + 9 examples. `pnpm typecheck` and `pnpm test` continue to fan out cleanly across the workspace; 118 unit tests passing.
+- `.github/workflows/publish.yml` extended to cover all 7 packages via a single `env.PKG_FILTERS` variable — adding a new package in the future updates one line.
+
 ## [0.2.4] — 2026-05-24
 
 ### Changed
