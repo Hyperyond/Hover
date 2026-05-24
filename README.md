@@ -58,7 +58,7 @@ Open the floating chat in your dev page, describe what you want to verify in pla
   <sub><b><a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">▶ Watch the demo on YouTube</a></b></sub>
 </p>
 
-Nine real example apps live under [`examples/`](./examples/). Four stress different **testing surfaces** (login, multi-step form, cart checkout, canvas + DOM mix) — the Hover widget is driving each one. The other five exercise **bundler / framework coverage** (Astro, Nuxt, webpack, React Native Web, plus a deliberately-uninstrumented third-party origin used by the e-commerce popup flow).
+Ten real example apps live under [`examples/`](./examples/). Four stress different **testing surfaces** (login, multi-step form, cart checkout, canvas + DOM mix) — the Hover widget is driving each one. The other six exercise **bundler / framework coverage** (Astro, Nuxt, Next, webpack, React Native Web, plus a deliberately-uninstrumented third-party origin used by the e-commerce popup flow).
 
 ### Testing surfaces
 
@@ -87,12 +87,13 @@ Nine real example apps live under [`examples/`](./examples/). Four stress differ
 
 ### Bundler coverage
 
-Each of the five targets below pairs the same counter + todo smoke page with a different host bundler / framework, so each Hover integration package has a dedicated dogfood ground.
+Each of the six targets below pairs the same counter + todo smoke page with a different host bundler / framework, so each Hover integration package has a dedicated dogfood ground.
 
 | Example | Bundler / framework | Hover package | Port |
 |---|---|---|---|
 | [`examples/astro-app`](./examples/astro-app) | Astro 5 (static, `astro dev`) | [`@hover-dev/astro`](./packages/astro-integration/) | 5178 |
 | [`examples/nuxt-app`](./examples/nuxt-app) | Nuxt 4 (SSR, `nuxt dev`) | [`@hover-dev/nuxt`](./packages/nuxt-integration/) | 5179 |
+| [`examples/next-app`](./examples/next-app) | Next.js 16 App Router (Turbopack, `next dev`) | [`@hover-dev/next`](./packages/next-integration/) | 5182 |
 | [`examples/webpack-app`](./examples/webpack-app) | vanilla webpack 5 + `webpack-dev-server` | [`webpack-plugin-hover`](./packages/webpack-plugin/) | 5180 |
 | [`examples/rn-web-app`](./examples/rn-web-app) | React Native Web (Vite, `react-native` → `react-native-web` alias) | [`vite-plugin-hover`](./packages/vite-plugin/) | 5181 |
 | [`examples/payment-provider`](./examples/payment-provider) | Vite, **no Hover plugin** | n/a | 5177 |
@@ -330,7 +331,7 @@ hover({
 });
 ```
 
-## The nine example apps
+## The ten example apps
 
 Each one is a real, runnable app under `examples/` — together they cover both testing surfaces and bundler/framework integrations:
 
@@ -343,6 +344,7 @@ Each one is a real, runnable app under `examples/` — together they cover both 
 | [payment-provider](./examples/payment-provider) | 5177 | Deliberately **no** Hover plugin — simulates a third-party origin in cross-tab flows · Vite |
 | [astro-app](./examples/astro-app) | 5178 | Astro 5 static smoke page — verifies `@hover-dev/astro` via `injectScript` |
 | [nuxt-app](./examples/nuxt-app) | 5179 | Nuxt 4 SSR smoke page — verifies `@hover-dev/nuxt` via `app.head.script` |
+| [next-app](./examples/next-app) | 5182 | Next.js 16 App Router smoke page (Turbopack default) — verifies `@hover-dev/next` via `withHover` + `instrumentation.ts` + `<HoverScript />` |
 | [webpack-app](./examples/webpack-app) | 5180 | Vanilla webpack 5 + `webpack-dev-server`, plain JS no React — verifies `webpack-plugin-hover` via `alterAssetTagGroups` |
 | [rn-web-app](./examples/rn-web-app) | 5181 | React Native Web — `react-native` imports aliased to `react-native-web`, compiled to DOM via Vite. Demonstrates RN Web is in scope (RN native is not) |
 
