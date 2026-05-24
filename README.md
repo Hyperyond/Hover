@@ -263,7 +263,9 @@ Same flow. Vite dev server → debug Chrome → ✨.
 >
 > **Nuxt** renders HTML through Nitro, not Vite, so `transformIndexHtml` is a no-op for Nuxt's SSR responses — use the [`@hover-dev/nuxt`](./packages/nuxt-integration/) module, which pushes the widget into `nuxt.options.app.head.script` (Nitro inlines it into the SSR'd HTML).
 >
-> **Next.js / Webpack-based CRA / Vue CLI** are not yet covered — `webpack-plugin-hover` is on the v0.3.x track.
+> **Webpack-based projects** (vanilla `webpack-dev-server`, Rspack, Rsbuild, legacy CRA via `craco`, legacy Vue CLI via `configureWebpack`) — use [`webpack-plugin-hover`](./packages/webpack-plugin/), which taps `HtmlWebpackPlugin`'s `alterAssetTagGroups` hook.
+>
+> **Next.js** ships Turbopack as the default bundler since Next 16 and Turbopack does not load webpack plugins. Users on `next dev --webpack` can wire `webpack-plugin-hover` manually (see the package README). A Turbopack-native `@hover-dev/next` is on the roadmap.
 
 ## Plugin options
 
