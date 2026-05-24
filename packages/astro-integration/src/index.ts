@@ -1,0 +1,134 @@
+import { fileURLToPath } from 'node:url';
+import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
+import { startService, type ServiceHandle } from '@hover-dev/core/service';
+import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
+import type { AstroIntegration } from 'astro';
+
+export interface HoverOptions {
+  /** Port for the local Hover WebSocket service (default 51789). Auto-bumps
+   *  up to 9 times if busy. */
+  port?: number;
+  /** Whether the integration is active. Defaults to `command === 'dev'`. */
+  enabled?: boolean | ((env: { command: string }) => boolean);
+  /** Chrome CDP debug port the agent will operate on (default 9222). */
+  chromeDebugPort?: number;
+  /** Auto-launch a debug Chrome pointed at the dev server when Astro starts.
+   *  Default false — the widget detects on first click whether it's running
+   *  in the debug Chrome and launches one if not. Idempotent: reuses an
+   *  existing debug Chrome if `chromeDebugPort` is already alive. */
+  autoLaunchChrome?: boolean;
+  /** Agent id from @hover-dev/core's registry (default 'claude'). */
+  agentId?: string;
+  /** Model passed to the agent (default 'sonnet'). */
+  model?: string;
+  /** Hard $ ceiling per command. No default. */
+  maxBudgetUsd?: number;
+}
+
+/**
+ * Hover Astro integration.
+ *
+ * Why a separate integration instead of just using `vite-plugin-hover` via
+ * `astro.config.mjs`'s `vite.plugins`: Astro's HTML pipeline for `.astro`
+ * pages bypasses user-registered Vite plugins' `transformIndexHtml` output
+ * (verified empirically — the WS service boots fine via `configureServer`,
+ * but the widget `<script>` tag is dropped from the rendered HTML). Astro's
+ * canonical extension point for "add a script to every page" is the
+ * integration API's `injectScript('page', ...)`, which is what we use here.
+ *
+ * No-op outside `astro dev` — `astro build` / `preview` / `sync` exit early.
+ */
+export function hover(options: HoverOptions = {}): AstroIntegration {
+  const requestedPort = options.port ?? 51789;
+  const chromeDebugPort = options.chromeDebugPort ?? 9222;
+  const autoLaunchChrome = options.autoLaunchChrome ?? false;
+  const agentId = options.agentId ?? 'claude';
+  const model = options.model ?? 'sonnet';
+  const maxBudgetUsd = options.maxBudgetUsd;
+
+  let service: ServiceHandle | null = null;
+
+  return {
+    name: '@hover-dev/astro',
+    hooks: {
+      'astro:config:setup': async ({ command, config, injectScript, logger }) => {
+        const enabled =
+          typeof options.enabled === 'function'
+            ? options.enabled({ command })
+            : options.enabled ?? command === 'dev';
+        if (!enabled) return;
+
+        try {
+          service = await startService({
+            port: requestedPort,
+            agentId,
+            model,
+            maxBudgetUsd,
+            cdpUrl: `http://localhost:${chromeDebugPort}`,
+            // Project root for skill saves. Astro exposes this via
+            // `config.root` which is a URL — convert to filesystem path.
+            devRoot: fileURLToPath(config.root),
+          });
+        } catch (err) {
+          logger.error(
+            `failed to start service: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return;
+        }
+
+        const bumped = service.port !== requestedPort;
+        logger.info(
+          `service ready · ws://127.0.0.1:${service.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}`,
+        );
+
+        // Inject the widget bundle on every page. Unlike vite-plugin-hover's
+        // transformIndexHtml path, this is a single resolved string — by
+        // the time we call injectScript the service has bound and we know
+        // the actual port. No thunk needed here.
+        const { preamble, body } = buildWidgetBundle({ port: service.port });
+        injectScript('page', `${preamble}\n${body}`);
+
+        if (!autoLaunchChrome) return;
+        // Fire-and-forget Chrome launch. Idempotent: reuses an existing
+        // debug Chrome if one is already on `chromeDebugPort`.
+        const url = `http://localhost:${guessAstroPort(config)}/`;
+        launchDebugChrome({ url, port: chromeDebugPort })
+          .then(result => {
+            if (!result.ok) {
+              logger.warn(`couldn't auto-launch Chrome: ${result.reason}`);
+            } else if (result.alreadyRunning) {
+              logger.info(`reusing existing debug Chrome on :${result.port}`);
+            } else {
+              logger.info(`debug Chrome launched on :${result.port}`);
+            }
+          })
+          .catch(err => {
+            logger.warn(`Chrome auto-launch error: ${err instanceof Error ? err.message : String(err)}`);
+          });
+      },
+      'astro:server:done': async ({ logger }) => {
+        if (!service) return;
+        try {
+          await service.close();
+        } catch (err) {
+          logger.warn(`error closing service: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        service = null;
+      },
+    },
+  };
+}
+
+export default hover;
+
+// ─── helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Best-effort Astro dev URL for the auto-Chrome-launch. Astro stores port
+ * config under `config.server.port` (default 4321). We use this only to
+ * point Chrome at the right URL; if it's wrong the user can navigate
+ * themselves and the widget still works once the page loads.
+ */
+function guessAstroPort(config: { server?: { port?: number } }): number {
+  return config.server?.port ?? 4321;
+}

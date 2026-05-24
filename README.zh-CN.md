@@ -257,7 +257,11 @@ export default defineConfig({
 
 流程完全一样。Vite dev 服务器 → debug Chrome → ✨。
 
-> Svelte / Solid / Qwik / Astro / 原生 JS 都一样能用 —— Vite 能服务的任何项目都行。插件不关心框架；它只是通过 `transformIndexHtml` 往你的 dev 页面注入一个 Shadow DOM widget。
+> Svelte / Solid / Qwik / 原生 JS 都一样能用 —— **只要 Vite dev server 真正会跑用户 Vite 插件的 `transformIndexHtml`**，插件就跟具体框架无关。
+>
+> **Astro** 有自己的 HTML 管线，会绕过 `.astro` 页面的 `transformIndexHtml` —— 请用 [`@hover-dev/astro`](./packages/astro-integration/) 集成，它把同一套 service + widget 套在 Astro 的 `injectScript` API 上。
+>
+> **Nuxt / Next.js / Webpack-based CRA / Vue CLI** 目前还没覆盖 —— `@hover-dev/nuxt`、`webpack-plugin-hover` 等已经在 v0.3.x 路线图上。
 
 ## 插件选项
 

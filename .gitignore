@@ -8,6 +8,7 @@ build/
 *.tsbuildinfo
 .vite/
 .turbo/
+.astro/
 
 # Test artifacts
 coverage/
