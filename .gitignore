@@ -9,6 +9,8 @@ build/
 .vite/
 .turbo/
 .astro/
+.nuxt/
+.output/
 
 # Test artifacts
 coverage/

@@ -261,7 +261,9 @@ Same flow. Vite dev server → debug Chrome → ✨.
 >
 > **Astro** has its own HTML pipeline that bypasses `transformIndexHtml` on `.astro` pages — use the [`@hover-dev/astro`](./packages/astro-integration/) integration instead, which wraps the same service + widget bundle behind Astro's `injectScript` API.
 >
-> **Nuxt / Next.js / Webpack-based CRA / Vue CLI** are not yet covered — dedicated `@hover-dev/nuxt`, `webpack-plugin-hover` etc. are on the v0.3.x track.
+> **Nuxt** renders HTML through Nitro, not Vite, so `transformIndexHtml` is a no-op for Nuxt's SSR responses — use the [`@hover-dev/nuxt`](./packages/nuxt-integration/) module, which pushes the widget into `nuxt.options.app.head.script` (Nitro inlines it into the SSR'd HTML).
+>
+> **Next.js / Webpack-based CRA / Vue CLI** are not yet covered — `webpack-plugin-hover` is on the v0.3.x track.
 
 ## Plugin options
 
