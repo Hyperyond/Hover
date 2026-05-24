@@ -4,6 +4,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are ISO 
 
 All notable changes to Hover are recorded here. Conventional Commits in the git log are the source of truth; this file groups them by user-visible impact.
 
+## [0.3.2] — 2026-05-25
+
+Post-release audit fixes for v0.3.1's `@hover-dev/next`. Three real bugs + three code-quality improvements found by sweeping the integration after publish.
+
+### Fixed
+
+- **`@hover-dev/cli` no longer silently bricks `next.config.ts` projects.** Next 16 loads `.ts` configs through a CJS `require()` step that can't resolve `@hover-dev/next`'s ESM-only `exports` map. `mutateNext` previously wrote `withHover(...)` into the `.ts` file anyway, leaving the user with a broken `next dev`. It now detects `.ts` up-front and returns a tailored "rename to `.mjs` and paste this" instruction instead. `configCandidates` priority flipped so `.mjs`/`.js` are tried first.
+- **`register-node` single-process guard hardened.** Previously env-var only (`__HOVER_NEXT_RESOLVED_PORT`); now also a module-scoped `didRegister` boolean. Closes the race window where two concurrent `register()` awaits could both pass the env-var check before either had set the resolved port, and survives any Next HMR edge case that re-evaluates the instrumentation module without clearing `process.env`.
+- **Root `postinstall` no longer rebuilds on hot installs.** New `scripts/postinstall-build.mjs` walks the `src/` and `dist/` trees of `@hover-dev/core` and `@hover-dev/widget-bootstrap`, compares mtimes, and skips the build when both are fresh. Saves ~5 s on every `pnpm install` / `pnpm add` in CI and contributor workflows.
+
+### Changed
+
+- **`@hover-dev/next` package surface trimmed.** Removed `cross-spawn`, `playwright-core`, `ws` from `dependencies` — they were already transitively pulled in via `@hover-dev/core`, and listing them twice was a documentation lie waiting to drift. The `tsup external` list keeps them as bundle-time externals.
+- **`options.ts` boolean deserialisation is now symmetric.** Both `enabled` and `autoLaunchChrome` return `undefined` for unset env keys, `false` for `'0'`, `true` for `'1'`. The previous asymmetry happened to produce correct behaviour by coincidence but read confusingly. New `readBool` / `readNumber` helpers replace the inline conditionals.
+- **`tsup.config.ts` comments rewritten to match reality.** Earlier prose described an inlining scheme that didn't actually happen; the real reason for keeping `@hover-dev/widget-bootstrap` and `@hover-dev/core` external (asset relocation + Edge-bundle isolation) is now spelled out clearly.
+
 ## [0.3.1] — 2026-05-24
 
 The "Next.js" follow-up to 0.3.0. v0.3.0 covered Vite / Astro / Nuxt / Webpack; this release closes the largest remaining gap with a Turbopack-native Next.js integration.
