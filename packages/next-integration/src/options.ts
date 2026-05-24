@@ -57,20 +57,32 @@ export const ENV_KEYS = {
 /** Read HoverOptions back out of `process.env`, as written by `withHover`.
  *  Used by `register()` to recover the user's config inside the
  *  instrumentation hook. */
+// "Unset env var" vs "explicit false" matters for `enabled`/`autoLaunchChrome`:
+// downstream `?? defaultValue` only applies the default when the value is
+// undefined, so we must return undefined (not false) for keys the user never
+// wrote. `writeOptionsToEnv` writes '1' or '0' for set values; anything else
+// (unset, empty string) maps back to undefined.
+function readBool(raw: string | undefined): boolean | undefined {
+  if (raw === '1') return true;
+  if (raw === '0') return false;
+  return undefined;
+}
+
+function readNumber(raw: string | undefined): number | undefined {
+  return raw ? Number(raw) : undefined;
+}
+
 export function readOptionsFromEnv(): HoverOptions {
   const env = process.env;
-  const port = env[ENV_KEYS.PORT];
-  const chromeDebugPort = env[ENV_KEYS.CHROME_DEBUG_PORT];
-  const maxBudgetUsd = env[ENV_KEYS.MAX_BUDGET_USD];
   return {
-    port: port ? Number(port) : undefined,
-    enabled: env[ENV_KEYS.ENABLED] ? env[ENV_KEYS.ENABLED] === '1' : undefined,
-    chromeDebugPort: chromeDebugPort ? Number(chromeDebugPort) : undefined,
-    autoLaunchChrome: env[ENV_KEYS.AUTO_LAUNCH_CHROME] === '1',
+    port: readNumber(env[ENV_KEYS.PORT]),
+    enabled: readBool(env[ENV_KEYS.ENABLED]),
+    chromeDebugPort: readNumber(env[ENV_KEYS.CHROME_DEBUG_PORT]),
+    autoLaunchChrome: readBool(env[ENV_KEYS.AUTO_LAUNCH_CHROME]),
     devUrl: env[ENV_KEYS.DEV_URL] || undefined,
     agentId: env[ENV_KEYS.AGENT_ID] || undefined,
     model: env[ENV_KEYS.MODEL] || undefined,
-    maxBudgetUsd: maxBudgetUsd ? Number(maxBudgetUsd) : undefined,
+    maxBudgetUsd: readNumber(env[ENV_KEYS.MAX_BUDGET_USD]),
   };
 }
 

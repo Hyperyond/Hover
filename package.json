@@ -18,7 +18,7 @@
     "test:e2e": "pnpm --filter basic-app test",
     "commitlint": "commitlint --edit",
     "prepare": "husky",
-    "postinstall": "pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap build",
+    "postinstall": "node scripts/postinstall-build.mjs",
     "dev:example:basic-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter basic-app dev",
     "dev:example:stock-registration": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter stock-registration dev",
     "dev:example:canvas-paint": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter canvas-paint dev",

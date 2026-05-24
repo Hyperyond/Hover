@@ -45,10 +45,7 @@
   },
   "dependencies": {
     "@hover-dev/core": "workspace:*",
-    "@hover-dev/widget-bootstrap": "workspace:*",
-    "cross-spawn": "^7.0.6",
-    "playwright-core": "^1.50.0",
-    "ws": "^8.20.1"
+    "@hover-dev/widget-bootstrap": "workspace:*"
   },
   "peerDependencies": {
     "next": "^15.0.0 || ^16.0.0",

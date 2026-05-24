@@ -130,6 +130,21 @@ async function mutateNuxt(configPath: string): Promise<MutateResult> {
  * one-liner for that step instead of touching the file.
  */
 async function mutateNext(configPath: string, rootDir: string): Promise<MutateResult> {
+  // Next 16 loads `.ts` configs through a CJS `transpile-config` step that
+  // does `require()` on the compiled output. That path does NOT honour
+  // the `"import"` condition in ESM-only `exports`, so it cannot load
+  // `@hover-dev/next` (which is ESM). The user has to rename to `.mjs`
+  // (or `.js` with `"type": "module"` in package.json) — `.mjs` goes
+  // through Node's native `import()` which resolves ESM correctly.
+  // Spike + verification in CLAUDE.md "Edge runtime isolation" section.
+  if (configPath.endsWith('.ts')) {
+    return {
+      kind: 'manual',
+      reason: 'next.config.ts cannot load @hover-dev/next (Next loads .ts configs via CJS require, which does not honour ESM exports)',
+      instructions: tsConfigManualInstructions(configPath),
+    };
+  }
+
   const mod = await loadFile(configPath);
 
   // Step 1: wrap next.config export in withHover(...) — idempotent.
@@ -153,6 +168,37 @@ async function mutateNext(configPath: string, rootDir: string): Promise<MutateRe
 
   const alreadyWired = configAlreadyWired && instrumentationAlreadyWired;
   return { kind: 'ok', configPath, alreadyWired };
+}
+
+/**
+ * Tailored manual-instructions message for the "you have a next.config.ts"
+ * case. Tells the user exactly what to rename and what to paste, with the
+ * same shape as if the CLI had mutated successfully — so a `mv && paste`
+ * leaves them in the same end state as the auto-magicast path.
+ */
+function tsConfigManualInstructions(configPath: string): string {
+  const tsName = configPath.split('/').pop() ?? 'next.config.ts';
+  const mjsName = tsName.replace(/\.ts$/, '.mjs');
+  return [
+    `Next 16 can't load @hover-dev/next from a ${tsName}.`,
+    `(Next loads .ts configs via a CJS \`require()\` step that can't resolve`,
+    `the ESM-only \`exports\` map @hover-dev/next ships.) Rename to ${mjsName}`,
+    `and paste this:`,
+    ``,
+    `  // ${mjsName}`,
+    `  import { withHover } from '@hover-dev/next';`,
+    ``,
+    `  /** @type {import('next').NextConfig} */`,
+    `  const nextConfig = {`,
+    `    // your existing config`,
+    `  };`,
+    ``,
+    `  export default withHover(nextConfig);`,
+    ``,
+    `Then continue with steps 2 and 3 below.`,
+    ``,
+    manualInstructions('next'),
+  ].join('\n');
 }
 
 /**
