@@ -392,12 +392,12 @@ hover({
 - **v0.0.1-poc** —— Phase 0 —— 端到端可行性验证（`claude -p` 通过 CDP 驱动 Chrome）✓
 - **v0.1.x** —— Phase 1 —— Vite 插件 + 聊天 UI + 持久化服务 + Save as Spec ✓
 - **v0.2.x** —— Phase 2 —— 多 agent（claude + codex）、深色 widget v2、Result + Findings 卡、自定义 tooltip、代码质量重构 ✓ **（你在这里）**
-- **v0.3.x** —— **点击元素 → 生成精准修复提示词。** Hover 就长在 dev 页面里，可以读取 Vite / 框架插件注入的源码位置标记（React fiber 的 `_debugSource`、Vue `vite-plugin-vue-inspector` 注入的 `data-v-inspector` 属性），结合 DOM selector chain 一起组装出"文件路径 + 行号 + 列号 + 组件路径 + 选择器"的完整修复 prompt——Findings 卡里每条 bug 都会带一个 "Suggest fix" 按钮，一键复制丢到 coding-agent 聊天框。*前提说明：React ≤18 和 Vue + inspector plugin 开箱可用；React 19 删了 `_debugSource`，我们会另起炉灶写一个框架无关的 Vite transform 注入 `data-hover-source` 属性来补这个缺口。*
-- **v0.4.x** —— **更广的框架 + agent 覆盖。**
-  - `@hover-dev/next` —— Next.js 16+ Turbopack 原生集成（现有 `webpack-plugin-hover` 只覆盖 `next dev --webpack`）。
-  - 更多 agent 接入 [registry](./packages/core/src/agents/registry.ts) —— `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`。
+- **v0.3.x** —— **`@hover-dev/next` —— Next.js 16+ Turbopack 原生集成。** 现有 `webpack-plugin-hover` 只覆盖 `next dev --webpack`；Next 16 默认走 Turbopack，而 Turbopack 不加载 webpack plugin。补上原生 Next 模块，把 Hover bundler 覆盖故事里最大的那块缺口堵上。
+- **v0.4.x** —— **点击元素 → 生成精准修复提示词。** Hover 就长在 dev 页面里，可以读取 Vite / 框架插件注入的源码位置标记（React fiber 的 `_debugSource`、Vue `vite-plugin-vue-inspector` 注入的 `data-v-inspector` 属性），结合 DOM selector chain 一起组装出"文件路径 + 行号 + 列号 + 组件路径 + 选择器"的完整修复 prompt——Findings 卡里每条 bug 都会带一个 "Suggest fix" 按钮，一键复制丢到 coding-agent 聊天框。*前提说明：React ≤18 和 Vue + inspector plugin 开箱可用；React 19 删了 `_debugSource`，我们会另起炉灶写一个框架无关的 Vite transform 注入 `data-hover-source` 属性来补这个缺口。*
+- **v0.5.x** —— **多 tab / 跨 origin spike + 更多 agent。**
   - 多 tab / 跨 origin 场景（Stripe、OAuth、"Pay with PayHover"）—— spike 阶段。`examples/payment-provider` 已经在压 `window.open` → `postMessage` 回调路径，但 agent 实际处理 `browser_tabs(list/select)` 在野外还是脆。先开 tracking issue，spike 跑通再决定形态、再写进 release。
-- **v0.5.x** —— Chrome 扩展（脱离 Vite 插件依赖，支持非 Vite 栈）
+  - 更多 agent 接入 [registry](./packages/core/src/agents/registry.ts) —— `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`。
+- **v0.6.x** —— Chrome 扩展（脱离 Vite 插件依赖，支持非 Vite 栈）
 
 Phase 2 是你今天就能用的。
 
