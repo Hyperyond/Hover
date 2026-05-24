@@ -12,8 +12,8 @@
     "verify-widget": "pnpm --filter @hover-dev/core verify-widget",
     "ws-smoke": "pnpm --filter @hover-dev/core ws-smoke",
     "typecheck": "pnpm -r exec tsc --noEmit",
-    "build": "pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro build",
-    "clean": "pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro clean",
+    "build": "pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro --filter @hover-dev/nuxt build",
+    "clean": "pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro --filter @hover-dev/nuxt clean",
     "test": "pnpm -r --if-present test",
     "test:e2e": "pnpm --filter basic-app test",
     "commitlint": "commitlint --edit",
@@ -23,7 +23,8 @@
     "dev:example:canvas-paint": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter canvas-paint dev",
     "dev:example:e-commerce": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter e-commerce dev",
     "dev:example:payment-provider": "pnpm --filter payment-provider dev",
-    "dev:example:astro-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter astro-app dev"
+    "dev:example:astro-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter astro-app dev",
+    "dev:example:nuxt-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter nuxt-app dev"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.7.0",
