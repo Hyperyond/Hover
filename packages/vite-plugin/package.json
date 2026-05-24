@@ -22,21 +22,19 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/widget','dist/widget',{recursive:true})\"",
+    "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "prepack": "pnpm run clean && pnpm run build",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "prepack": "pnpm run clean && pnpm run build"
   },
   "dependencies": {
-    "@hover-dev/core": "workspace:*"
+    "@hover-dev/core": "workspace:*",
+    "@hover-dev/widget-bootstrap": "workspace:*"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
   "devDependencies": {
-    "vite": "^7.0.0",
-    "vitest": "^3.0.0"
+    "vite": "^7.0.0"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",

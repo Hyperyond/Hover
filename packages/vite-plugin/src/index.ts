@@ -1,8 +1,6 @@
-import { readFileSync, statSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
+import { getWidgetScript } from '@hover-dev/widget-bootstrap';
 import type { Plugin } from 'vite';
 
 export interface HoverOptions {
@@ -29,56 +27,6 @@ export interface HoverOptions {
   maxBudgetUsd?: number;
 }
 
-const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
-const WIDGET_DIR = resolve(PLUGIN_DIR, 'widget');
-const WIDGET_HTML = resolve(WIDGET_DIR, 'template.html');
-const WIDGET_CSS = resolve(WIDGET_DIR, 'style.css');
-const WIDGET_JS = resolve(WIDGET_DIR, 'client.js');
-// Extracted pure-function module (reducer + helpers). Authored as a real
-// ES module with `export` so it can be unit-tested from vitest; the export
-// keywords are stripped during concatenation into the browser widget IIFE.
-const WIDGET_REDUCER = resolve(WIDGET_DIR, 'reducer.js');
-
-/**
- * Read a widget source file with an mtime-keyed cache, optionally piping the
- * raw content through a `transform` so the transformed output is cached too.
- * The four widget files total ~140KB and are otherwise re-read + re-stringified
- * + re-regex'd synchronously on every page load — adding up across HMR cycles
- * and multiple concurrent example servers. The mtime check preserves the
- * "edit a widget file, reload page, see change" dev loop without paying for
- * the read or the transform on subsequent requests.
- *
- * Caches per (path, transform-identity), so the same source file can have
- * multiple cached derivatives (e.g. raw text + JSON-stringified) without
- * collisions.
- */
-function makeWidgetReader() {
-  const cache = new WeakMap<object, Map<string, { mtimeMs: number; content: string }>>();
-  const IDENTITY: (raw: string) => string = raw => raw;
-  return (path: string, transform: (raw: string) => string = IDENTITY): string => {
-    const mtimeMs = statSync(path).mtimeMs;
-    let table = cache.get(transform);
-    if (!table) {
-      table = new Map();
-      cache.set(transform, table);
-    }
-    const hit = table.get(path);
-    if (hit && hit.mtimeMs === mtimeMs) return hit.content;
-    const raw = readFileSync(path, 'utf-8');
-    const content = transform === IDENTITY ? raw : transform(raw);
-    table.set(path, { mtimeMs, content });
-    return content;
-  };
-}
-
-// Module-level transform refs so the cache lookup is stable across calls.
-// (Inline arrow functions would create a new identity each call and never hit.)
-const jsonStringify = (raw: string): string => JSON.stringify(raw);
-const stripReducerExports = (raw: string): string =>
-  raw
-    .replace(/^\s*export\s+(function|const|let|var)\b/gm, '$1')
-    .replace(/^\s*export\s+\{[^}]*\};?\s*$/gm, '');
-
 export function hover(options: HoverOptions = {}): Plugin {
   const port = options.port ?? 51789;
   const chromeDebugPort = options.chromeDebugPort ?? 9222;
@@ -94,7 +42,6 @@ export function hover(options: HoverOptions = {}): Plugin {
   let enabled = true;
   let service: ServiceHandle | null = null;
   let servicePort = port;
-  const readWidget = makeWidgetReader();
 
   return {
     name: 'hover',
@@ -183,40 +130,13 @@ export function hover(options: HoverOptions = {}): Plugin {
       order: 'post',
       handler() {
         if (!enabled) return;
-        // Read the widget's source files via an mtime-keyed cache so edits
-        // to template.html / style.css / client.js / reducer.js still show
-        // up on the next page load — no plugin restart needed. Splitting
-        // these out (vs. one giant .js with an innerHTML template literal)
-        // means each gets proper editor syntax highlighting, no
-        // string-escaping gymnastics for CSS / HTML, and CSS reads from a
-        // single source of truth.
-        //
-        // The same mtime cache also stores the *transformed* output: the
-        // JSON.stringify of CSS/HTML (50KB of string-escaping each page
-        // load otherwise) and the reducer's two regex-replace passes that
-        // strip ESM `export` keywords for IIFE concatenation. None of
-        // these transforms are cheap when they run dozens of times per
-        // HMR cycle across multiple example servers.
-        const js = readWidget(WIDGET_JS);
-        const reducerInlined = readWidget(WIDGET_REDUCER, stripReducerExports);
-        // Inject the ACTUAL port the service bound to (not the requested
-        // one) so the widget connects to its own example's service even if
-        // a sibling Vite already took 51789. CSS / HTML are stringified
-        // (JSON.stringify handles escaping) and stashed on window globals
-        // the client IIFE reads on boot.
-        const preamble = [
-          `window.__HOVER_PORT__ = ${servicePort};`,
-          `window.__HOVER_CSS__ = ${readWidget(WIDGET_CSS, jsonStringify)};`,
-          `window.__HOVER_HTML__ = ${readWidget(WIDGET_HTML, jsonStringify)};`,
-        ].join('\n');
-        return [
-          {
-            tag: 'script',
-            attrs: { type: 'module' },
-            children: `${preamble}\n${reducerInlined}\n${js}`,
-            injectTo: 'body',
-          },
-        ];
+        // Widget assembly (file reads, mtime cache, preamble, regex strips)
+        // all live in @hover-dev/widget-bootstrap so a future
+        // webpack-plugin-hover / next-plugin-hover can produce a
+        // byte-identical bundle from a different host. We pass `servicePort`
+        // as a thunk because the actual bound port is only known after
+        // `configureServer` ran (auto-bump from 51789 if busy).
+        return [getWidgetScript({ port: () => servicePort })];
       },
     },
   };
