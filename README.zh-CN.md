@@ -46,14 +46,16 @@
 ## 实际效果
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=ZviL3wRANiI">
-    <img src="https://img.youtube.com/vi/ZviL3wRANiI/maxresdefault.jpg" alt="Hover 演示视频 — 在 YouTube 观看" width="70%" />
+  <a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">
+    <img src="https://img.youtube.com/vi/ASWFWUyMUlc/maxresdefault.jpg" alt="Hover 演示视频 — 在 YouTube 观看" width="70%" />
   </a>
   <br/>
-  <sub><b><a href="https://www.youtube.com/watch?v=ZviL3wRANiI">▶ 在 YouTube 观看演示视频</a></b></sub>
+  <sub><b><a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">▶ 在 YouTube 观看演示视频</a></b></sub>
 </p>
 
-[`examples/`](./examples/) 下 4 个真实的 Vite app，每个都压一种不同的测试场景。右边的 Hover widget 都是同一套 UI 在驱动 —— 一样的 loop，四种工作流。
+[`examples/`](./examples/) 下有 8 个真实的示例 app。其中 4 个压**测试场景**（登录、多步表单、电商结账、画布 + DOM 混合）—— 右边的 Hover widget 都是同一套 UI 在驱动。另外 4 个压**bundler 覆盖**（Astro、Nuxt、webpack，加上电商弹窗流程里那个故意不装插件的第三方域）。
+
+### 测试场景
 
 <table>
 <tr>
@@ -77,6 +79,19 @@
 </td>
 </tr>
 </table>
+
+### Bundler 覆盖
+
+下面四个目标的页面内容都一样（counter + todo 烟雾页），但底层 bundler 各不同 —— 每个 Hover 集成包都有自己专属的 dogfood 落点。
+
+| 示例 | Bundler / 框架 | Hover 包 | 端口 |
+|---|---|---|---|
+| [`examples/astro-app`](./examples/astro-app) | Astro 5（静态，`astro dev`） | [`@hover-dev/astro`](./packages/astro-integration/) | 5178 |
+| [`examples/nuxt-app`](./examples/nuxt-app) | Nuxt 4（SSR，`nuxt dev`） | [`@hover-dev/nuxt`](./packages/nuxt-integration/) | 5179 |
+| [`examples/webpack-app`](./examples/webpack-app) | vanilla webpack 5 + `webpack-dev-server` | [`webpack-plugin-hover`](./packages/webpack-plugin/) | 5180 |
+| [`examples/payment-provider`](./examples/payment-provider) | Vite，**故意不装** Hover 插件 | n/a | 5177 |
+
+`payment-provider` 故意不装插件 —— `examples/e-commerce` 的 "Pay with PayHover" 按钮会把它弹到新标签页，Agent 要在没 widget 的情况下发现新标签页、切过去、操作完、再确认回调回到原标签页。
 
 ## 为什么是 Hover
 
@@ -280,17 +295,20 @@ hover({
 });
 ```
 
-## 五个 example 应用
+## 八个 example 应用
 
-`examples/` 下每个都是真实的 Vite 应用，专门压一种不同的测试场景：
+`examples/` 下每个都是真实可跑的应用，按"测试场景"和"bundler 覆盖"两个维度铺开：
 
 | 应用 | 端口 | 压什么 |
 |---|---|---|
-| [basic-app](./examples/basic-app) | 5173 | 登录 + 计数器 + todos。基线烟雾。 |
-| [e-commerce](./examples/e-commerce) | 5174 | 长动作链：商品列表 → 购物车 → 结账，跨标签页支付弹窗 |
-| [stock-registration](./examples/stock-registration) | 5175 | ~50 字段的券商开户表单，含条件展示 —— AI 填写富控件的能力 |
-| [canvas-paint](./examples/canvas-paint) | 5176 | `<canvas>` 像素中夹着 DOM 工具栏 —— 截图不透明时还能不能找到语义 selector |
-| [payment-provider](./examples/payment-provider) | 5177 | **故意不装** Hover 插件 —— 模拟跨标签页流程里的第三方域 |
+| [basic-app](./examples/basic-app) | 5173 | 登录 + 计数器 + todos。基线烟雾 · Vite + React |
+| [e-commerce](./examples/e-commerce) | 5174 | 长动作链：商品列表 → 购物车 → 结账，跨标签页支付弹窗 · Vite + React |
+| [stock-registration](./examples/stock-registration) | 5175 | ~50 字段的券商开户表单，含条件展示 —— AI 填写富控件的能力 · Vite + React |
+| [canvas-paint](./examples/canvas-paint) | 5176 | `<canvas>` 像素中夹着 DOM 工具栏 —— 截图不透明时还能不能找到语义 selector · Vite + React |
+| [payment-provider](./examples/payment-provider) | 5177 | **故意不装** Hover 插件 —— 模拟跨标签页流程里的第三方域 · Vite |
+| [astro-app](./examples/astro-app) | 5178 | Astro 5 静态站点烟雾页 —— 验证 `@hover-dev/astro` 走 `injectScript` 注入 |
+| [nuxt-app](./examples/nuxt-app) | 5179 | Nuxt 4 SSR 烟雾页 —— 验证 `@hover-dev/nuxt` 走 `app.head.script` 注入 |
+| [webpack-app](./examples/webpack-app) | 5180 | vanilla webpack 5 + `webpack-dev-server`，纯 JS 无 React —— 验证 `webpack-plugin-hover` 走 `alterAssetTagGroups` 注入 |
 
 任何一个都用 `pnpm dev:example:<name>` 启动。
 

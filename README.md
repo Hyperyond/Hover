@@ -46,14 +46,16 @@ Open the floating chat in your dev page, describe what you want to verify in pla
 ## See it in action
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=ZviL3wRANiI">
-    <img src="https://img.youtube.com/vi/ZviL3wRANiI/maxresdefault.jpg" alt="Hover demo — watch on YouTube" width="70%" />
+  <a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">
+    <img src="https://img.youtube.com/vi/ASWFWUyMUlc/maxresdefault.jpg" alt="Hover demo — watch on YouTube" width="70%" />
   </a>
   <br/>
-  <sub><b><a href="https://www.youtube.com/watch?v=ZviL3wRANiI">▶ Watch the demo on YouTube</a></b></sub>
+  <sub><b><a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">▶ Watch the demo on YouTube</a></b></sub>
 </p>
 
-Four real example apps under [`examples/`](./examples/), each stressing a different testing surface. The Hover widget on the right is driving each one — same loop, same UI, four very different workflows.
+Eight real example apps live under [`examples/`](./examples/). Four stress different **testing surfaces** (login, multi-step form, cart checkout, canvas + DOM mix) — the Hover widget is driving each one. The other four exercise **bundler coverage** (Astro, Nuxt, webpack, plus a deliberately-uninstrumented third-party origin used by the e-commerce popup flow).
+
+### Testing surfaces
 
 <table>
 <tr>
@@ -77,6 +79,19 @@ Four real example apps under [`examples/`](./examples/), each stressing a differ
 </td>
 </tr>
 </table>
+
+### Bundler coverage
+
+Each of the four targets below pairs the same counter + todo smoke page with a different host bundler, so each Hover integration package has a dedicated dogfood ground.
+
+| Example | Bundler / framework | Hover package | Port |
+|---|---|---|---|
+| [`examples/astro-app`](./examples/astro-app) | Astro 5 (static, `astro dev`) | [`@hover-dev/astro`](./packages/astro-integration/) | 5178 |
+| [`examples/nuxt-app`](./examples/nuxt-app) | Nuxt 4 (SSR, `nuxt dev`) | [`@hover-dev/nuxt`](./packages/nuxt-integration/) | 5179 |
+| [`examples/webpack-app`](./examples/webpack-app) | vanilla webpack 5 + `webpack-dev-server` | [`webpack-plugin-hover`](./packages/webpack-plugin/) | 5180 |
+| [`examples/payment-provider`](./examples/payment-provider) | Vite, **no Hover plugin** | n/a | 5177 |
+
+The `payment-provider` target is deliberately uninstrumented — `examples/e-commerce`'s "Pay with PayHover" button opens it in a new tab, and the agent has to discover, switch to, drive, and confirm callback into the original tab without a widget present.
 
 ## Why Hover
 
@@ -280,17 +295,20 @@ hover({
 });
 ```
 
-## The five example apps
+## The eight example apps
 
-Each one is a real Vite app under `examples/` that stresses a different testing surface:
+Each one is a real, runnable app under `examples/` — together they cover both testing surfaces and bundler integrations:
 
 | App | Port | Stresses |
 |---|---|---|
-| [basic-app](./examples/basic-app) | 5173 | Login + counter + todos. Baseline smoke. |
-| [e-commerce](./examples/e-commerce) | 5174 | Long action chains: product list → cart → checkout, cross-tab payment popup |
-| [stock-registration](./examples/stock-registration) | 5175 | ~50-field brokerage form with conditional reveals — AI form-fill on rich controls |
-| [canvas-paint](./examples/canvas-paint) | 5176 | DOM toolbar amidst `<canvas>` pixels — semantic selectors when snapshots are opaque |
-| [payment-provider](./examples/payment-provider) | 5177 | Deliberately **no** Hover plugin — simulates a third-party origin in cross-tab flows |
+| [basic-app](./examples/basic-app) | 5173 | Login + counter + todos. Baseline smoke · Vite + React |
+| [e-commerce](./examples/e-commerce) | 5174 | Long action chains: product list → cart → checkout, cross-tab payment popup · Vite + React |
+| [stock-registration](./examples/stock-registration) | 5175 | ~50-field brokerage form with conditional reveals — AI form-fill on rich controls · Vite + React |
+| [canvas-paint](./examples/canvas-paint) | 5176 | DOM toolbar amidst `<canvas>` pixels — semantic selectors when snapshots are opaque · Vite + React |
+| [payment-provider](./examples/payment-provider) | 5177 | Deliberately **no** Hover plugin — simulates a third-party origin in cross-tab flows · Vite |
+| [astro-app](./examples/astro-app) | 5178 | Astro 5 static smoke page — verifies `@hover-dev/astro` via `injectScript` |
+| [nuxt-app](./examples/nuxt-app) | 5179 | Nuxt 4 SSR smoke page — verifies `@hover-dev/nuxt` via `app.head.script` |
+| [webpack-app](./examples/webpack-app) | 5180 | Vanilla webpack 5 + `webpack-dev-server`, plain JS no React — verifies `webpack-plugin-hover` via `alterAssetTagGroups` |
 
 Run any of them with `pnpm dev:example:<name>`.
 
