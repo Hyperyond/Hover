@@ -236,10 +236,16 @@ export function groupMessages(messages, isLiveRun) {
           steps: [],
           errored: false,
           status: 'running',
+          startedAt: m.at ?? null,
+          endedAt: null,
+          costStartUsd: m.costUsdSnapshot ?? null,
+          costEndUsd: m.costUsdSnapshot ?? null,
         };
         pendingTitle = null;
       }
       open.steps.push({ tool: m.tool, input: m.input, isError: !!m.isError });
+      if (typeof m.costUsdSnapshot === 'number') open.costEndUsd = m.costUsdSnapshot;
+      if (m.at != null) open.endedAt = m.at;
       if (m.isError) open.errored = true;
       continue;
     }

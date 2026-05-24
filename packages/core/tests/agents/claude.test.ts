@@ -93,7 +93,7 @@ describe('claudeAgent.parseEvent', () => {
     // and turn count, so the widget can show a live $ counter mid-stream.
     expect(claudeAgent.parseEvent(line)).toEqual([
       { kind: 'usage', costUsd: 0, turns: 1 },
-      { kind: 'tool_use', tool: 'browser_navigate', input: { url: '/' } },
+      { kind: 'tool_use', tool: 'browser_navigate', input: { url: '/' }, costUsdSnapshot: 0 },
     ]);
   });
 

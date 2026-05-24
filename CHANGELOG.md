@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are ISO 
 
 All notable changes to Hover are recorded here. Conventional Commits in the git log are the source of truth; this file groups them by user-visible impact.
 
+## [0.2.4] — 2026-05-24
+
+### Changed
+- **Group meta line now shows duration + per-group cost** instead of step-count. Finished group: `1.1s · $0.0123`. Running group: `1.1s`, ticking once per second (in-place DOM patch — no flicker, no scroll thrash, no re-animation of fresh rows). Per-group cost is computed by diffing the cumulative `runningCost` snapshot stamped on the first vs. last `tool_use` event in the group, so it attributes LLM spend to the natural-language intent that drove those tools rather than dumping a single session-total at the end.
+- `InvokeEvent.tool_use` carries a new optional `costUsdSnapshot` field (cumulative session cost at the moment of the tool call). Backwards-compatible: older consumers ignore it; widget falls back to the previous `N steps` meta for groups that predate the wiring (e.g. messages restored from localStorage written by 0.2.3).
+
+### Fixed
+- **`mcp/playwright: pending` no longer shown as a permanent stuck state.** Claude Code only reports MCP server status once, at `system/init` — usually "pending" because the handshake hasn't finished. There is no follow-up "connected" event, so the original message hung in the timeline forever even though the MCP was working fine (proof: every subsequent `mcp__playwright__*` tool call succeeded). The widget now silences `pending` and `connected` and only surfaces genuine failure states (`⚠ mcp/<server>: <status>`).
+
 ## [0.2.3] — 2026-05-23
 
 ### Documentation

@@ -433,6 +433,16 @@
 
   const formatCost = (usd) => (usd == null ? '' : `$${usd.toFixed(4)}`);
   const formatTurns = (n) => (n == null ? '' : `${n} turn${n === 1 ? '' : 's'}`);
+  // Human-friendly elapsed time. <60s → "1.1s" (one decimal, floored to 0.1s so
+  // a freshly opened group doesn't blink "0.0s"); ≥60s → "1m 23s".
+  const formatDuration = (ms) => {
+    if (ms == null || !Number.isFinite(ms) || ms < 0) return '';
+    const sec = ms / 1000;
+    if (sec < 60) return `${Math.max(0.1, sec).toFixed(1)}s`;
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}m ${s}s`;
+  };
 
   const renderUserRow = (text) => {
     const div = document.createElement('div');
@@ -589,13 +599,35 @@
 
     const meta = document.createElement('span');
     meta.className = 'gr-meta';
+    // Per-group cost is the diff between the cost snapshot taken at the last
+    // step and the one taken at the first step. Both snapshots are stamped
+    // by the agent layer (claude.ts / codex.ts) onto tool_use events so the
+    // group can attribute LLM spend to the natural-language intent that drove
+    // those tools. Falsy diff (≤0 or unknown) → omit the cost piece.
+    const costDiff =
+      g.costEndUsd != null && g.costStartUsd != null
+        ? g.costEndUsd - g.costStartUsd
+        : null;
+    const isRunning = g.status === 'running';
+    const endTime = isRunning ? Date.now() : g.endedAt;
+    const durationMs =
+      g.startedAt != null && endTime != null ? endTime - g.startedAt : null;
     const parts = [];
-    if (g.turns != null) parts.push(formatTurns(g.turns));
-    if (g.costUsd != null) parts.push(`<span class="gr-cost">${formatCost(g.costUsd)}</span>`);
+    if (durationMs != null) parts.push(formatDuration(durationMs));
+    if (!isRunning && costDiff != null && costDiff > 0) {
+      parts.push(`<span class="gr-cost">${formatCost(costDiff)}</span>`);
+    }
+    // Fallback for groups that predate the cost-snapshot wiring (older
+    // localStorage state) — keep the original step-count meta so they don't
+    // render blank.
     if (parts.length === 0 && g.steps && g.steps.length > 0) {
       parts.push(`${g.steps.length} step${g.steps.length === 1 ? '' : 's'}`);
     }
     if (parts.length) meta.innerHTML = parts.join(' · ');
+    if (isRunning && g.startedAt != null) {
+      meta.setAttribute('data-running-meta', '1');
+      meta.setAttribute('data-started-at', String(g.startedAt));
+    }
     row.appendChild(meta);
 
     row.addEventListener('click', () => {
@@ -665,6 +697,21 @@
     lastRenderedGroupCount = groups.length;
     if (wasAtBottom) scrollToBottom();
   };
+
+  // Tick the running group's elapsed-time readout once per second. We patch
+  // only the meta span in place rather than calling renderAll() so the DOM
+  // stays stable (no flicker, no scroll thrash, no re-animation of fresh
+  // rows). The meta span is marked with `data-running-meta` only when the
+  // group is in 'running' state — finishing the group removes the attribute
+  // on the next renderAll, which stops the tick from touching it again.
+  setInterval(() => {
+    if (!running) return;
+    const node = bodyEl.querySelector('[data-running-meta="1"]');
+    if (!node) return;
+    const startedAt = Number(node.getAttribute('data-started-at'));
+    if (!Number.isFinite(startedAt)) return;
+    node.innerHTML = formatDuration(Date.now() - startedAt);
+  }, 1000);
 
   // Reset the freshness tracker when the conversation is cleared so the
   // first re-render after "+" doesn't think everything is brand new.
@@ -1762,13 +1809,29 @@
         showCost(0, true);
         return;
       case 'mcp_status':
-        addMessage({ kind: 'system', text: `mcp/${ev.server}: ${ev.status}` });
+        // Claude Code only reports MCP status once, at system/init — usually
+        // "pending" because the MCP child hasn't finished its handshake yet.
+        // There is no follow-up "connected" event, so surfacing "pending"
+        // looked like a permanent stuck state to users. The actual proof of
+        // life is the first mcp__playwright__* tool_use that arrives later.
+        // We therefore only surface MCP status when it's NOT a healthy state —
+        // "failed", "error", etc. — so the user sees something only when it
+        // genuinely matters.
+        if (ev.status && ev.status !== 'connected' && ev.status !== 'pending') {
+          addMessage({ kind: 'system', text: `⚠ mcp/${ev.server}: ${ev.status}` });
+        }
         return;
       case 'usage':
         showCost(ev.costUsd ?? 0, true);
         return;
       case 'tool_use':
-        addMessage({ kind: 'step', tool: ev.tool, input: ev.input });
+        addMessage({
+          kind: 'step',
+          tool: ev.tool,
+          input: ev.input,
+          at: Date.now(),
+          costUsdSnapshot: ev.costUsdSnapshot,
+        });
         return;
       case 'tool_result':
         // On error, retroactively mark the most recent step in state.messages

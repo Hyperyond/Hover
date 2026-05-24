@@ -61,7 +61,7 @@ export interface InvokeOptions {
 export type InvokeEvent =
   | { kind: 'session_start'; sessionId: string; model?: string }
   | { kind: 'mcp_status'; server: string; status: string }
-  | { kind: 'tool_use'; tool: string; input: unknown }
+  | { kind: 'tool_use'; tool: string; input: unknown; costUsdSnapshot?: number }
   | { kind: 'tool_result'; isError?: boolean; preview?: string }
   | { kind: 'text'; text: string }
   /** Running cost / turn-count update emitted mid-session so the widget can

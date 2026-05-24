@@ -169,7 +169,12 @@ export const claudeAgent: AgentDescriptor = {
         if (block.type === 'tool_use') {
           const name = (block as { name?: string }).name ?? '';
           const tool = name.replace(/^mcp__playwright__/, '');
-          out.push({ kind: 'tool_use', tool, input: (block as { input?: unknown }).input });
+          out.push({
+            kind: 'tool_use',
+            tool,
+            input: (block as { input?: unknown }).input,
+            costUsdSnapshot: s.runningCost,
+          });
         } else if (block.type === 'text') {
           const text = (block as { text?: string }).text?.trim();
           if (text) out.push({ kind: 'text', text });

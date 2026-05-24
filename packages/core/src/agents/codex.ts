@@ -250,11 +250,11 @@ export const codexAgent: AgentDescriptor = {
         // `name`, fall back to `tool`. Same for input.
         const rawName = it.name ?? it.tool ?? '';
         const tool = rawName.replace(/^mcp__playwright__/, '').replace(/^mcp__hover-playwright__/, '');
-        out.push({ kind: 'tool_use', tool, input: it.input ?? it.arguments });
+        out.push({ kind: 'tool_use', tool, input: it.input ?? it.arguments, costUsdSnapshot: s.runningCost });
       } else if (it.type === 'command_execution') {
         // We DISCOURAGED this in developer_instructions but the agent can
         // still try. Surface it so the user sees it happen.
-        out.push({ kind: 'tool_use', tool: 'shell', input: { command: it.command } });
+        out.push({ kind: 'tool_use', tool: 'shell', input: { command: it.command }, costUsdSnapshot: s.runningCost });
       }
       return out;
     }
