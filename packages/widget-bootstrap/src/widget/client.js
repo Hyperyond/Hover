@@ -80,14 +80,14 @@
   // closes over the same binding.
   let running = false;
 
-  // Step aggregation: see packages/vite-plugin/src/widget/reducer.js for the
-  // pure transforms (groupMessages, extractFindings, stripMarkdown,
+  // Step aggregation: see packages/widget-bootstrap/src/widget/reducer.js
+  // for the pure transforms (groupMessages, extractFindings, stripMarkdown,
   // classifySeverity, plus the NOTEWORTHY_AI / HIDDEN_TOOLS / BOUNDARY_TOOLS /
   // MAX_TOOLS_PER_GROUP constants). That file is concatenated into this
   // widget at plugin build time (with `export` keywords stripped) so its
   // declarations are visible in this closure as plain bindings. Unit tests
-  // live in packages/vite-plugin/tests/reducer.test.js — keep this file
-  // free of grouping logic, edit reducer.js instead.
+  // live in packages/widget-bootstrap/tests/reducer.test.js — keep this
+  // file free of grouping logic, edit reducer.js instead.
   const saveState = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));

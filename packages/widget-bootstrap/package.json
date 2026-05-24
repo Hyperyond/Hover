@@ -1,0 +1,46 @@
+{
+  "name": "@hover-dev/widget-bootstrap",
+  "version": "0.0.0",
+  "description": "Low-level helper that builds the Hover floating-chat widget's inline-script bundle. Used by Hover's bundler plugins (vite-plugin-hover, future webpack/Next/Astro plugins). End users probably want one of those plugins instead.",
+  "license": "Apache-2.0",
+  "author": "Hyperyond",
+  "homepage": "https://github.com/Hyperyond/Hover#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hyperyond/Hover.git",
+    "directory": "packages/widget-bootstrap"
+  },
+  "bugs": "https://github.com/Hyperyond/Hover/issues",
+  "keywords": ["hover", "widget", "bundler-plugin-helper"],
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/widget','dist/widget',{recursive:true})\"",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "pnpm run clean && pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  }
+}
