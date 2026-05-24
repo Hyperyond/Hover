@@ -515,7 +515,7 @@
     if (g.saveable) {
       const actions = document.createElement('div');
       actions.className = 'report-actions';
-      actions.appendChild(buildSaveDropdown());
+      actions.appendChild(buildSaveDropdown(g.source));
       root.appendChild(actions);
     }
 
@@ -753,7 +753,7 @@
     b.innerHTML = TRIGGER_LABEL_HTML;
   };
 
-  function buildSaveDropdown() {
+  function buildSaveDropdown(source) {
     const wrap = document.createElement('div');
     wrap.className = 'save-wrap';
 
@@ -769,7 +769,13 @@
     menu.hidden = true;
     menu.setAttribute('role', 'menu');
 
-    const items = [
+    // Jira test-case CSV is the agent-Findings → Xray/Zephyr export path:
+    // it bakes the agent's natural-language summary, findings, and step list
+    // into a test-management import format. Manually recorded sessions
+    // produce no summary or findings (the user just clicked through a UI),
+    // so the resulting CSV would be empty of useful test-design fields —
+    // hide the item to avoid suggesting an artifact that won't be useful.
+    const allItems = [
       {
         icon: SPEC_ICON_SVG, label: 'Playwright spec',
         sub: '__vibe_tests__/<slug>.spec.ts · for CI',
@@ -787,8 +793,12 @@
         sub: '__vibe_tests__/<slug>.case.csv · for Xray / Zephyr / Jira',
         cls: 'item-case',
         run: () => saveAsArtifact('case-csv', trigger),
+        agentOnly: true,
       },
     ];
+    const items = source === 'recording'
+      ? allItems.filter((it) => !it.agentOnly)
+      : allItems;
     for (const it of items) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -1635,6 +1645,7 @@
         kind: 'done',
         turns: captured,
         costUsd: 0,
+        source: 'recording',
         summary: `Recorded ${captured} action${captured === 1 ? '' : 's'}. Click Save as Skill / Spec on this card to keep it.`,
       });
     }

@@ -272,6 +272,7 @@ export function groupMessages(messages, isLiveRun) {
           turns: m.turns,
           costUsd: m.costUsd,
           saveable: !m.isError,
+          source: m.source || 'agent',
         });
       }
 
