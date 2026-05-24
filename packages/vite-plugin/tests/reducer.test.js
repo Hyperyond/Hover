@@ -227,11 +227,25 @@ describe('groupMessages', () => {
       turns: 5,
       costUsd: 0.12,
       saveable: true,
+      source: 'agent',
     });
     // Markdown stripped — no '##' in the report text
     expect(groups[2].text).not.toContain('##');
     expect(groups[2].text).toContain('Verification');
     expect(groups[2].text).toContain('All PASS');
+  });
+
+  it('threads the done.source field through to the report card', () => {
+    const messages = [
+      { kind: 'user', text: '(recording manual interactions)' },
+      { kind: 'step', tool: 'browser_click', input: {} },
+      { kind: 'done', source: 'recording', turns: 1, costUsd: 0, summary: 'Recorded 1 action.' },
+    ];
+    const groups = groupMessages(messages, false);
+    expect(groups.find(g => g.kind === 'report')).toMatchObject({
+      kind: 'report',
+      source: 'recording',
+    });
   });
 
   it('emits a findings card alongside the report when the summary has a Findings block', () => {
