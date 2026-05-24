@@ -64,7 +64,12 @@ export const FRAMEWORKS: Framework[] = [
     // Next project's `next` dep should land on `@hover-dev/next`, not the
     // webpack plugin (which only covers `next dev --webpack`).
     detectDeps: ['next'],
-    configCandidates: ['next.config.ts', 'next.config.mjs', 'next.config.js'],
+    // `.mjs` and `.js` first because Next loads them via native `import()`
+    // and our `mutateNext` can magicast them in place. `.ts` is checked
+    // last and triggers a `manual` result that tells the user to rename to
+    // `.mjs` first — Next loads `.ts` configs through a CJS require step
+    // that can't resolve `@hover-dev/next`'s ESM-only `exports` map.
+    configCandidates: ['next.config.mjs', 'next.config.js', 'next.config.ts'],
   },
   {
     id: 'webpack',

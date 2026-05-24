@@ -12,12 +12,19 @@ import { ENV_KEYS, readOptionsFromEnv, type HoverOptions } from './options.js';
  * statically analyses imports — Edge bundling stops at the dynamic
  * `await import('./register-node.js')` boundary.
  */
+// Module-scoped guard. Next dev hot-reloads instrumentation when the file
+// changes, and the user might also call register() from multiple places.
+// `RESOLVED_PORT` on env is the cross-runtime signal HoverScript reads, but
+// a module-local boolean is the bulletproof "did this module already do its
+// work" check: it survives any env-var clearing edge case, and it's also
+// honoured before we'd race two concurrent register() calls (two awaits on
+// startService before either sets RESOLVED_PORT).
+let didRegister = false;
+
 export async function registerNode(overrides: HoverOptions = {}): Promise<void> {
-  // Single-process guard: Next dev hot-reloads instrumentation when the
-  // file changes, and the user might call register() from multiple places.
-  // Reading our own RESOLVED_PORT proves a previous call already booted a
-  // service in this process, so we no-op.
+  if (didRegister) return;
   if (process.env[ENV_KEYS.RESOLVED_PORT]) return;
+  didRegister = true;
 
   const fromEnv = readOptionsFromEnv();
   const opts: HoverOptions = { ...fromEnv, ...overrides };

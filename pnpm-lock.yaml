@@ -304,15 +304,6 @@ importers:
       '@hover-dev/widget-bootstrap':
         specifier: workspace:*
         version: link:../widget-bootstrap
-      cross-spawn:
-        specifier: ^7.0.6
-        version: 7.0.6
-      playwright-core:
-        specifier: ^1.50.0
-        version: 1.60.0
-      ws:
-        specifier: ^8.20.1
-        version: 8.20.1
     devDependencies:
       '@types/react':
         specifier: ^19.0.0
