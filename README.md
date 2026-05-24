@@ -210,13 +210,38 @@ Or just open `http://localhost:5173/` in the debug Chrome, click the ✨ floatin
 
 ## Install
 
+**One command, zero global installs:**
+
 ```bash
-pnpm add -D vite-plugin-hover
-# or:  npm install -D vite-plugin-hover
-# or:  yarn add -D vite-plugin-hover
+npx @hover-dev/cli add
 ```
 
-That's it — no `.npmrc`, no auth tokens. The `vite-plugin-hover` and `@hover-dev/core` packages are public on npmjs.com.
+The CLI detects your bundler (Vite / Astro / Nuxt / Webpack), reads your lockfile to pick the right package manager (pnpm / yarn / bun / npm), installs the matching Hover package as a dev dep, and AST-edits your config file. Idempotent — safe to re-run.
+
+Force a specific bundler if detection picks wrong:
+
+```bash
+npx @hover-dev/cli add --vite      # vite-plugin-hover
+npx @hover-dev/cli add --astro     # @hover-dev/astro
+npx @hover-dev/cli add --nuxt      # @hover-dev/nuxt
+npx @hover-dev/cli add --webpack   # webpack-plugin-hover
+```
+
+Preview without changing anything: `npx @hover-dev/cli add --dry-run`.
+
+<details>
+<summary>Or install the package manually</summary>
+
+```bash
+pnpm add -D vite-plugin-hover     # for Vite projects
+# or `@hover-dev/astro`, `@hover-dev/nuxt`, `webpack-plugin-hover`
+```
+
+Then add the plugin/integration to your bundler config — see the per-package READMEs under [`packages/`](./packages).
+
+</details>
+
+No `.npmrc`, no auth tokens. All packages are public on npmjs.com.
 
 **No `.env` to fill out either.** Hover doesn't ship an LLM SDK; it shells out to whichever coding-agent CLI is on your `PATH` — `claude` ([install](https://docs.claude.com/claude-code)) or `codex` ([install](https://developers.openai.com/codex)). Whatever you're already logged into covers it.
 
