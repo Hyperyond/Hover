@@ -257,7 +257,11 @@ export default defineConfig({
 
 Same flow. Vite dev server → debug Chrome → ✨.
 
-> Works the same in Svelte / Solid / Qwik / Astro / vanilla — anything Vite serves. The plugin is framework-agnostic; it just injects a Shadow DOM widget into your dev page via `transformIndexHtml`.
+> Works the same in Svelte / Solid / Qwik / vanilla — anything whose Vite dev server actually runs user Vite plugins' `transformIndexHtml`. The plugin is framework-agnostic at that layer.
+>
+> **Astro** has its own HTML pipeline that bypasses `transformIndexHtml` on `.astro` pages — use the [`@hover-dev/astro`](./packages/astro-integration/) integration instead, which wraps the same service + widget bundle behind Astro's `injectScript` API.
+>
+> **Nuxt / Next.js / Webpack-based CRA / Vue CLI** are not yet covered — dedicated `@hover-dev/nuxt`, `webpack-plugin-hover` etc. are on the v0.3.x track.
 
 ## Plugin options
 
