@@ -393,7 +393,10 @@ If your favourite agent (`codex`, `cursor-agent`, `aider`, `gemini`, `qwen-code`
 - **v0.1.x** — Phase 1 — Vite plugin + chat UI + persistent service + Save as Spec ✓
 - **v0.2.x** — Phase 2 — multi-agent (claude + codex), dark widget v2, Result + Findings cards, custom tooltip, code-quality pass ✓ **(you are here)**
 - **v0.3.x** — **Click → Suggest fix prompt.** Because Hover lives inside the dev page, it can read the source-location annotations Vite/framework plugins inject (React fiber `_debugSource`, Vue's `vite-plugin-vue-inspector` `data-v-inspector` attribute) and pair them with the DOM selector chain. Each row in the Findings card gets a "Suggest fix" button that copies a precise prompt — file path + line + column + component path + selector — straight into your coding-agent chat. *Caveat: React ≤18 and Vue + inspector plugin work out of the box; React 19 dropped `_debugSource` so we'll ship our own Vite transform (framework-agnostic `data-hover-source` attributes) to fill the gap.*
-- **v0.4.x** — per-step screenshot capture + a self-contained HTML report for offline review, more agents (`cursor-agent` / `aider` / `gemini-cli`)
+- **v0.4.x** — **broader framework + agent coverage.**
+  - `@hover-dev/next` — Next.js 16+ Turbopack-native integration (the existing `webpack-plugin-hover` only covers `next dev --webpack`).
+  - More agents wired into the [registry](./packages/core/src/agents/registry.ts) — `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`.
+  - Multi-tab / cross-origin flows (Stripe, OAuth, "Pay with PayHover") — spike phase. `examples/payment-provider` already stresses the `window.open` → `postMessage` callback path, but the agent's handling of `browser_tabs(list/select)` is brittle in the wild. Tracking issue to follow; shape TBD before we commit it to a release.
 - **v0.5.x** — Chrome extension (drop the Vite-plugin dependency for non-Vite stacks)
 
 Phase 2 is what you can use today.
