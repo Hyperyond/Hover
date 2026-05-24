@@ -4,28 +4,47 @@ name: Publish
 # (https://registry.npmjs.org) when a v* tag is pushed. The same tarballs
 # are also attached to a GitHub Release for archival.
 #
-# Trigger:    git tag -a v0.1.5 -m "..." && git push --tags
+# Trigger:    git tag -a v0.3.0 -m "..." && git push --tags
 # Auth:       NPM_TOKEN repo secret (a granular automation token from
 #             https://www.npmjs.com/settings/<user>/tokens with read+write
-#             on @hover-dev/* and vite-plugin-hover) — must be added before
-#             the first run. GITHUB_TOKEN is auto-injected (used for the
-#             Release).
-# Packages:   @hover-dev/core (scoped — org must exist on npm.org,
-#             https://www.npmjs.com/settings/hover-dev) and vite-plugin-hover
-#             (unscoped, follows the community vite-plugin-* convention).
+#             on @hover-dev/* and vite-plugin-hover / webpack-plugin-hover)
+#             — must be added before the first run. GITHUB_TOKEN is
+#             auto-injected (used for the Release).
+#
+# Packages (7 total):
+#   Scoped, the @hover-dev org on npmjs.com
+#     - @hover-dev/core              — the Node service
+#     - @hover-dev/widget-bootstrap  — shared widget assets + bundle builder
+#     - @hover-dev/astro             — Astro integration
+#     - @hover-dev/nuxt              — Nuxt module
+#     - @hover-dev/cli               — `npx @hover-dev/cli add` setup CLI
+#   Unscoped (follows the community vite-plugin-* / webpack-*-plugin convention)
+#     - vite-plugin-hover            — Vite plugin
+#     - webpack-plugin-hover         — Webpack 5 plugin
+#
+# Dependency order matters: widget-bootstrap (and core) must be on npm
+# before the four packages that depend on them can resolve. pnpm publish
+# respects workspace dependency order automatically, but we still list the
+# packages explicitly so the filter is unambiguous if order detection
+# ever changes upstream.
 #
 # What it does:
 #   1. Checkout, install pnpm + Node 24, restore pnpm cache
-#   2. Rewrite package.json versions from the tag (v0.1.5 → "0.1.5")
-#      so we don't have to remember to bump package.json in lockstep
+#   2. Rewrite each publishable package.json's version from the tag
+#      (v0.3.0 → "0.3.0") so we don't have to remember to bump
+#      package.json in lockstep
 #   3. Typecheck + unit tests as a release gate
-#   4. Build each package (tsc + asset copy for vite-plugin-hover)
+#   4. Build each package (tsc + asset copy for the packages that ship
+#      non-TS files — widget-bootstrap copies src/widget/ to dist/widget/)
 #   5. pnpm publish each one to https://registry.npmjs.org
 #   6. Pack the same tarballs and attach to a GitHub Release
 #
-# Consumers can then install with no .npmrc and no auth — same shape as any
-# other public npm package:
-#   pnpm add -D vite-plugin-hover
+# Consumers can then install with no .npmrc and no auth — same shape as
+# any other public npm package:
+#   npx @hover-dev/cli add               # one command, picks the right shim
+# or manually:
+#   pnpm add -D vite-plugin-hover        # ...or @hover-dev/astro / @hover-dev/nuxt
+#                                          / webpack-plugin-hover
 
 on:
   push:
@@ -36,12 +55,25 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g. 0.1.5). Required for manual runs.'
+        description: 'Version to publish (e.g. 0.3.0). Required for manual runs.'
         required: true
         type: string
 
 permissions:
   contents: write   # softprops/action-gh-release needs this to create the Release
+
+# Single source of truth for the publishable-package filter chain — every
+# step below reuses it via ${{ env.PKG_FILTERS }}. Adding a new package?
+# Update this one variable.
+env:
+  PKG_FILTERS: >-
+    --filter @hover-dev/core
+    --filter @hover-dev/widget-bootstrap
+    --filter vite-plugin-hover
+    --filter @hover-dev/astro
+    --filter @hover-dev/nuxt
+    --filter webpack-plugin-hover
+    --filter @hover-dev/cli
 
 jobs:
   publish:
@@ -72,7 +104,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
           else
-            # GITHUB_REF_NAME is e.g. "v0.1.5"; strip the leading "v"
+            # GITHUB_REF_NAME is e.g. "v0.3.0"; strip the leading "v"
             VERSION="${GITHUB_REF_NAME#v}"
           fi
           if [ -z "$VERSION" ]; then
@@ -88,7 +120,7 @@ jobs:
           # committing or git-tagging (the tag already exists, that's why
           # we're here). --allow-same-version is a safety net if someone
           # already bumped manually before tagging.
-          pnpm --filter @hover-dev/core --filter vite-plugin-hover exec npm version \
+          pnpm ${{ env.PKG_FILTERS }} exec npm version \
             "${{ steps.version.outputs.version }}" \
             --no-git-tag-version \
             --allow-same-version
@@ -101,7 +133,7 @@ jobs:
         # fans out to examples/basic-app whose tests are Playwright e2e
         # against an actual dev server (not appropriate as a publish gate,
         # and would need a chromium install in CI).
-        run: pnpm --filter @hover-dev/core --filter vite-plugin-hover --if-present test
+        run: pnpm ${{ env.PKG_FILTERS }} --if-present test
 
       - name: Build
         run: pnpm build
@@ -115,14 +147,14 @@ jobs:
         # --access public: required on the first publish of a scoped
         # package; npm.org defaults scoped packages to restricted/private
         # unless you say otherwise.
-        run: pnpm --filter @hover-dev/core --filter vite-plugin-hover publish --no-git-checks --access public
+        run: pnpm ${{ env.PKG_FILTERS }} publish --no-git-checks --access public
 
       - name: Pack tarballs for release assets
         # Re-pack so the GitHub Release has the same tarballs we just
         # published — useful for archival / offline mirroring.
         run: |
           mkdir -p release-tarballs
-          pnpm --filter @hover-dev/core --filter vite-plugin-hover exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release-tarballs"
+          pnpm ${{ env.PKG_FILTERS }} exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release-tarballs"
 
       - name: Create GitHub Release
         # Only on real tag pushes; manual workflow_dispatch reuses an
