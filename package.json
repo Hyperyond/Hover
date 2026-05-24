@@ -25,7 +25,8 @@
     "dev:example:payment-provider": "pnpm --filter payment-provider dev",
     "dev:example:astro-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter astro-app dev",
     "dev:example:nuxt-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter nuxt-app dev",
-    "dev:example:webpack-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter webpack-app dev"
+    "dev:example:webpack-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter webpack-app dev",
+    "dev:example:rn-web-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter rn-web-app dev"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.7.0",
