@@ -1,17 +1,17 @@
 {
-  "name": "vite-plugin-hover",
+  "name": "@hover-dev/widget-bootstrap",
   "version": "0.0.0",
-  "description": "Vite plugin that injects the Hover chat widget into your dev server, so AI can drive a real (non-headless) debug Chrome via CDP.",
+  "description": "Low-level helper that builds the Hover floating-chat widget's inline-script bundle. Used by Hover's bundler plugins (vite-plugin-hover, future webpack/Next/Astro plugins). End users probably want one of those plugins instead.",
   "license": "Apache-2.0",
   "author": "Hyperyond",
   "homepage": "https://github.com/Hyperyond/Hover#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Hyperyond/Hover.git",
-    "directory": "packages/vite-plugin"
+    "directory": "packages/widget-bootstrap"
   },
   "bugs": "https://github.com/Hyperyond/Hover/issues",
-  "keywords": ["hover", "vite", "vite-plugin", "playwright", "browser-testing", "claude"],
+  "keywords": ["hover", "widget", "bundler-plugin-helper"],
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -22,28 +22,20 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/widget','dist/widget',{recursive:true})\"",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "prepack": "pnpm run clean && pnpm run build"
-  },
-  "dependencies": {
-    "@hover-dev/core": "workspace:*",
-    "@hover-dev/widget-bootstrap": "workspace:*"
-  },
-  "peerDependencies": {
-    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
+    "prepack": "pnpm run clean && pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "vite": "^7.0.0"
+    "vitest": "^3.0.0"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
-    "bin": {
-      "hover-chrome": "dist/bin/hover-chrome.js"
-    },
     "exports": {
       ".": {
         "types": "./dist/index.d.ts",

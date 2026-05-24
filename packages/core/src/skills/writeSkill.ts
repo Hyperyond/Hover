@@ -26,7 +26,7 @@ export class SkillExistsError extends Error {
 
 /**
  * Serialized message shape from the widget's localStorage. Matches the
- * `state.messages` schema in packages/vite-plugin/src/widget.js.
+ * `state.messages` schema in packages/widget-bootstrap/src/widget/client.js.
  */
 export interface SkillStep {
   kind: 'user' | 'system' | 'step' | 'ai' | 'done';

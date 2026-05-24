@@ -182,10 +182,16 @@ importers:
       '@hover-dev/core':
         specifier: workspace:*
         version: link:../core
+      '@hover-dev/widget-bootstrap':
+        specifier: workspace:*
+        version: link:../widget-bootstrap
     devDependencies:
       vite:
         specifier: ^7.0.0
         version: 7.3.3(@types/node@25.9.1)(jiti@2.6.1)(tsx@4.22.3)
+
+  packages/widget-bootstrap:
+    devDependencies:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@25.9.1)(jiti@2.6.1)(tsx@4.22.3)
