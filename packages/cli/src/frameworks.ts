@@ -15,7 +15,7 @@
  * `configCandidates` is the list of filenames the mutator will look for,
  * in priority order. The first one that exists in cwd wins.
  */
-export type FrameworkId = 'astro' | 'nuxt' | 'webpack' | 'vite';
+export type FrameworkId = 'astro' | 'nuxt' | 'next' | 'webpack' | 'vite';
 
 export interface Framework {
   /** Short id used as the --<id> CLI flag and the `Detected: <id>` output. */
@@ -57,13 +57,24 @@ export const FRAMEWORKS: Framework[] = [
     configCandidates: ['nuxt.config.ts', 'nuxt.config.js', 'nuxt.config.mjs'],
   },
   {
+    id: 'next',
+    label: 'Next.js',
+    hoverPackage: '@hover-dev/next',
+    // Must check before `webpack` — Next 16+ defaults to Turbopack, and a
+    // Next project's `next` dep should land on `@hover-dev/next`, not the
+    // webpack plugin (which only covers `next dev --webpack`).
+    detectDeps: ['next'],
+    configCandidates: ['next.config.ts', 'next.config.mjs', 'next.config.js'],
+  },
+  {
     id: 'webpack',
     label: 'Webpack',
     hoverPackage: 'webpack-plugin-hover',
-    // `webpack-cli` is the user-facing wrapper; `next` ships its own webpack
-    // (and our plugin works under `next dev --webpack`). Pure `webpack` as a
+    // `webpack-cli` is the user-facing wrapper for vanilla webpack-dev-server,
+    // Rspack / Rsbuild, CRA, Vue CLI. We no longer detect on `next` here —
+    // Next projects route to `@hover-dev/next` above. Pure `webpack` as a
     // transitive dep is too noisy to detect on.
-    detectDeps: ['webpack-cli', 'next'],
+    detectDeps: ['webpack-cli'],
     configCandidates: ['webpack.config.js', 'webpack.config.mjs', 'webpack.config.ts'],
   },
   {

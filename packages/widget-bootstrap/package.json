@@ -13,9 +13,13 @@
   "bugs": "https://github.com/Hyperyond/Hover/issues",
   "keywords": ["hover", "widget", "bundler-plugin-helper"],
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "files": [
     "dist",
@@ -23,6 +27,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/widget','dist/widget',{recursive:true})\"",
+    "dev": "pnpm run build && tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "pnpm run clean && pnpm run build",
     "test": "vitest run",
@@ -33,14 +38,6 @@
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
-    "access": "public",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "exports": {
-      ".": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.js"
-      }
-    }
+    "access": "public"
   }
 }

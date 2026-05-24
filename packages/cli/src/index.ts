@@ -72,13 +72,14 @@ Usage:
   npx @hover-dev/cli add --vite       ${dim('# force a specific bundler')}
   npx @hover-dev/cli add --astro
   npx @hover-dev/cli add --nuxt
+  npx @hover-dev/cli add --next
   npx @hover-dev/cli add --webpack
   npx @hover-dev/cli add --dry-run    ${dim('# show what would happen, change nothing')}
   npx @hover-dev/cli --help
   npx @hover-dev/cli --version
 
 What it does:
-  1. Detects your bundler (Vite / Astro / Nuxt / Webpack) from package.json.
+  1. Detects your bundler (Vite / Astro / Nuxt / Next / Webpack) from package.json.
   2. Detects your package manager (pnpm / yarn / bun / npm) from your lockfile.
   3. Installs the matching Hover integration as a dev dependency.
   4. Adds the plugin/integration to your config file.
@@ -103,7 +104,7 @@ async function runAdd(args: ParsedArgs): Promise<number> {
   if (!framework) {
     err(`Couldn't detect a supported bundler in package.json.`);
     info(`Supported: ${FRAMEWORKS.map(f => f.id).join(', ')}.`);
-    info(`Force one with --vite / --astro / --nuxt / --webpack.`);
+    info(`Force one with --vite / --astro / --nuxt / --next / --webpack.`);
     return 1;
   }
   if (args.framework) {
@@ -152,6 +153,28 @@ async function runAdd(args: ParsedArgs): Promise<number> {
       warn(`Reason: ${result.reason}`);
       console.log(result.instructions);
       break;
+  }
+
+  // Next.js needs one extra manual step the CLI cannot safely do: render
+  // `<HoverScript />` in `app/layout.tsx`. Modifying JSX in user code with
+  // ASTs invites whitespace drift and Server Component shape surprises;
+  // the instruction is short, so we print it and let the human paste it.
+  if (framework.id === 'next' && result.kind === 'ok' && !result.alreadyWired) {
+    info(`One last step — add ${cyan('<HoverScript />')} to your ${cyan('app/layout.tsx')}:`);
+    console.log(`
+  import { HoverScript } from '@hover-dev/next';
+
+  export default function RootLayout({ children }) {
+    return (
+      <html>
+        <body>
+          {children}
+          <HoverScript />
+        </body>
+      </html>
+    );
+  }
+`);
   }
 
   spark(`Done. Run your dev server and click the floating ✨.`);

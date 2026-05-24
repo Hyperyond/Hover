@@ -1,0 +1,67 @@
+{
+  "name": "@hover-dev/next",
+  "version": "0.0.0",
+  "description": "Next.js integration for Hover. Injects the floating chat widget into your Next dev site and starts the local agent-driving service. Works under Turbopack (Next 16+ default) and webpack. No-op outside `next dev`.",
+  "license": "Apache-2.0",
+  "author": "Hyperyond",
+  "homepage": "https://github.com/Hyperyond/Hover#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hyperyond/Hover.git",
+    "directory": "packages/next-integration"
+  },
+  "bugs": "https://github.com/Hyperyond/Hover/issues",
+  "keywords": [
+    "hover",
+    "next",
+    "nextjs",
+    "turbopack",
+    "playwright",
+    "browser-testing",
+    "claude"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./instrumentation": {
+      "types": "./dist/instrumentation.d.ts",
+      "import": "./dist/instrumentation.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "pnpm run clean && pnpm run build"
+  },
+  "dependencies": {
+    "@hover-dev/core": "workspace:*",
+    "@hover-dev/widget-bootstrap": "workspace:*",
+    "cross-spawn": "^7.0.6",
+    "playwright-core": "^1.50.0",
+    "ws": "^8.20.1"
+  },
+  "peerDependencies": {
+    "next": "^15.0.0 || ^16.0.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "tsup": "^8.5.1"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  }
+}

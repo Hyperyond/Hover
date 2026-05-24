@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { builders, loadFile, writeFile, type ProxifiedModule } from 'magicast';
 import type { Framework, FrameworkId } from './frameworks.js';
@@ -42,6 +42,8 @@ export async function mutateConfig(rootDir: string, framework: Framework): Promi
         return await mutateAstro(configPath);
       case 'nuxt':
         return await mutateNuxt(configPath);
+      case 'next':
+        return await mutateNext(configPath, rootDir);
       case 'webpack':
         return await mutateWebpack(configPath);
     }
@@ -106,6 +108,123 @@ async function mutateNuxt(configPath: string): Promise<MutateResult> {
   config.modules.push('@hover-dev/nuxt');
   await writeFile(mod, configPath);
   return { kind: 'ok', configPath, alreadyWired: false };
+}
+
+// ─── Next.js: withHover() wrap + instrumentation.ts merge ──────────────
+
+/**
+ * Next is the only framework where wiring touches two files:
+ *
+ * 1. `next.config.{ts,mjs,js}` — wrap the user's exported config in
+ *    `withHover(...)`. Idempotent: detect an existing import from
+ *    `@hover-dev/next` and bail.
+ * 2. `instrumentation.ts` — Next's blessed hook for dev-only server-side
+ *    init. We MUST NOT boot the Hover service in `next.config.ts` because
+ *    that file is also loaded by `next build`, which would leak an orphan
+ *    service into CI. The instrumentation hook only fires for
+ *    `next dev` / `next start`.
+ *
+ * The user's `app/layout.tsx` still needs a `<HoverScript />` import after
+ * `{children}` — we can't safely AST-mutate JSX in user code (RSC,
+ * Server Component conventions, formatting), so the CLI prints a manual
+ * one-liner for that step instead of touching the file.
+ */
+async function mutateNext(configPath: string, rootDir: string): Promise<MutateResult> {
+  const mod = await loadFile(configPath);
+
+  // Step 1: wrap next.config export in withHover(...) — idempotent.
+  let configAlreadyWired = false;
+  if (alreadyImported(mod, '@hover-dev/next')) {
+    configAlreadyWired = true;
+  } else {
+    mod.imports.$add({ from: '@hover-dev/next', imported: 'withHover' });
+    // Wrap whatever the user has as `export default`. Works for plain object,
+    // for `defineConfig({...})` (no-op upstream — Next never had that
+    // helper), and for already-wrapped configs (which we skip via the
+    // `alreadyImported` check above).
+    const previous = mod.exports.default;
+    mod.exports.default = builders.functionCall('withHover', previous);
+    await writeFile(mod, configPath);
+  }
+
+  // Step 2: instrumentation.ts — create or merge.
+  const instrumentationPath = findOrPickInstrumentationPath(rootDir);
+  const instrumentationAlreadyWired = ensureInstrumentationRegistersHover(instrumentationPath);
+
+  const alreadyWired = configAlreadyWired && instrumentationAlreadyWired;
+  return { kind: 'ok', configPath, alreadyWired };
+}
+
+/**
+ * Locate the user's existing instrumentation file, or pick a default path
+ * to create one at. Next looks for `instrumentation.{ts,js}` at the project
+ * root or under `src/`. We prefer `src/` if it exists (consistent with the
+ * Next default scaffold), otherwise drop one at the project root.
+ */
+function findOrPickInstrumentationPath(rootDir: string): string {
+  const candidates = [
+    join(rootDir, 'instrumentation.ts'),
+    join(rootDir, 'instrumentation.js'),
+    join(rootDir, 'src', 'instrumentation.ts'),
+    join(rootDir, 'src', 'instrumentation.js'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  const useSrc = existsSync(join(rootDir, 'src'));
+  return useSrc ? join(rootDir, 'src', 'instrumentation.ts') : join(rootDir, 'instrumentation.ts');
+}
+
+/**
+ * Ensure the instrumentation file calls `register` from
+ * `@hover-dev/next/instrumentation`. Returns true if the file already
+ * had it wired (so the caller can report "already wired" honestly).
+ *
+ * We do this as a plain text edit (not magicast) because instrumentation
+ * files are usually tiny and the user might have written them in one of
+ * many idiomatic shapes (named function, arrow, async). String-level
+ * editing keeps formatting stable; magicast's stringifier would reformat.
+ */
+function ensureInstrumentationRegistersHover(filePath: string): boolean {
+  const HOVER_IMPORT = "import { register as registerHover } from '@hover-dev/next/instrumentation';";
+  const HOVER_CALL = 'await registerHover();';
+
+  if (!existsSync(filePath)) {
+    // Greenfield — write a full instrumentation file.
+    const fresh = [
+      HOVER_IMPORT,
+      '',
+      'export async function register() {',
+      `  ${HOVER_CALL}`,
+      '}',
+      '',
+    ].join('\n');
+    writeFileSync(filePath, fresh, 'utf-8');
+    return false;
+  }
+
+  const existing = readFileSync(filePath, 'utf-8');
+  if (existing.includes('@hover-dev/next/instrumentation')) {
+    return true;
+  }
+
+  // The file exists but doesn't reference us. We want to (a) add our
+  // import at the top, (b) inject `await registerHover();` into the
+  // user's existing `register` function if we can find it, or
+  // (c) bail to a comment if we can't.
+  let next = `${HOVER_IMPORT}\n${existing}`;
+  const registerMatch = /(export\s+async\s+function\s+register\s*\([^)]*\)\s*\{)/.exec(next);
+  if (registerMatch) {
+    next = next.replace(registerMatch[0], `${registerMatch[0]}\n  ${HOVER_CALL}`);
+  } else {
+    // Couldn't find a function signature to splice into — append a new
+    // register export. If the user already has one in a non-standard
+    // shape Next will warn at startup, which is fine — better than us
+    // silently doing nothing.
+    next = `${next}\n\nexport async function register() {\n  ${HOVER_CALL}\n}\n`;
+  }
+  writeFileSync(filePath, next, 'utf-8');
+  return false;
 }
 
 // ─── Webpack: new HoverPlugin() in plugins array ────────────────────────
@@ -197,6 +316,24 @@ export function manualInstructions(id: FrameworkId): string {
         `Add to your nuxt config:`,
         ``,
         `  modules: ['@hover-dev/nuxt'],`,
+      ].join('\n');
+    case 'next':
+      return [
+        `Three steps for Next.js:`,
+        ``,
+        `1. Wrap your next.config:`,
+        `   import { withHover } from '@hover-dev/next';`,
+        `   export default withHover({ /* your config */ });`,
+        ``,
+        `2. Create instrumentation.ts at your project root:`,
+        `   import { register as registerHover } from '@hover-dev/next/instrumentation';`,
+        `   export async function register() {`,
+        `     await registerHover();`,
+        `   }`,
+        ``,
+        `3. Render <HoverScript /> in your app/layout.tsx, after {children}:`,
+        `   import { HoverScript } from '@hover-dev/next';`,
+        `   // ... inside <body>: {children}<HoverScript />`,
       ].join('\n');
     case 'webpack':
       return [

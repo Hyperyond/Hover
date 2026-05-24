@@ -58,7 +58,7 @@
   <sub><b><a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">▶ 在 YouTube 观看演示视频</a></b></sub>
 </p>
 
-[`examples/`](./examples/) 下有 9 个真实的示例 app。其中 4 个压**测试场景**（登录、多步表单、电商结账、画布 + DOM 混合）—— 右边的 Hover widget 都是同一套 UI 在驱动。另外 5 个压**bundler / 框架覆盖**（Astro、Nuxt、webpack、React Native Web，加上电商弹窗流程里那个故意不装插件的第三方域）。
+[`examples/`](./examples/) 下有 10 个真实的示例 app。其中 4 个压**测试场景**（登录、多步表单、电商结账、画布 + DOM 混合）—— 右边的 Hover widget 都是同一套 UI 在驱动。另外 6 个压**bundler / 框架覆盖**（Astro、Nuxt、Next、webpack、React Native Web，加上电商弹窗流程里那个故意不装插件的第三方域）。
 
 ### 测试场景
 
@@ -87,12 +87,13 @@
 
 ### Bundler 覆盖
 
-下面五个目标的页面内容都一样（counter + todo 烟雾页），但底层 bundler / 框架不同 —— 每个 Hover 集成包都有自己专属的 dogfood 落点。
+下面六个目标的页面内容都一样（counter + todo 烟雾页），但底层 bundler / 框架不同 —— 每个 Hover 集成包都有自己专属的 dogfood 落点。
 
 | 示例 | Bundler / 框架 | Hover 包 | 端口 |
 |---|---|---|---|
 | [`examples/astro-app`](./examples/astro-app) | Astro 5（静态，`astro dev`） | [`@hover-dev/astro`](./packages/astro-integration/) | 5178 |
 | [`examples/nuxt-app`](./examples/nuxt-app) | Nuxt 4（SSR，`nuxt dev`） | [`@hover-dev/nuxt`](./packages/nuxt-integration/) | 5179 |
+| [`examples/next-app`](./examples/next-app) | Next.js 16 App Router（Turbopack，`next dev`） | [`@hover-dev/next`](./packages/next-integration/) | 5182 |
 | [`examples/webpack-app`](./examples/webpack-app) | vanilla webpack 5 + `webpack-dev-server` | [`webpack-plugin-hover`](./packages/webpack-plugin/) | 5180 |
 | [`examples/rn-web-app`](./examples/rn-web-app) | React Native Web（Vite，`react-native` → `react-native-web` alias） | [`vite-plugin-hover`](./packages/vite-plugin/) | 5181 |
 | [`examples/payment-provider`](./examples/payment-provider) | Vite，**故意不装** Hover 插件 | n/a | 5177 |
@@ -330,7 +331,7 @@ hover({
 });
 ```
 
-## 九个 example 应用
+## 十个 example 应用
 
 `examples/` 下每个都是真实可跑的应用，按"测试场景"和"bundler / 框架覆盖"两个维度铺开：
 
@@ -343,6 +344,7 @@ hover({
 | [payment-provider](./examples/payment-provider) | 5177 | **故意不装** Hover 插件 —— 模拟跨标签页流程里的第三方域 · Vite |
 | [astro-app](./examples/astro-app) | 5178 | Astro 5 静态站点烟雾页 —— 验证 `@hover-dev/astro` 走 `injectScript` 注入 |
 | [nuxt-app](./examples/nuxt-app) | 5179 | Nuxt 4 SSR 烟雾页 —— 验证 `@hover-dev/nuxt` 走 `app.head.script` 注入 |
+| [next-app](./examples/next-app) | 5182 | Next.js 16 App Router 烟雾页（Turbopack 默认）—— 验证 `@hover-dev/next` 走 `withHover` + `instrumentation.ts` + `<HoverScript />` 注入 |
 | [webpack-app](./examples/webpack-app) | 5180 | vanilla webpack 5 + `webpack-dev-server`，纯 JS 无 React —— 验证 `webpack-plugin-hover` 走 `alterAssetTagGroups` 注入 |
 | [rn-web-app](./examples/rn-web-app) | 5181 | React Native Web —— `react-native` 通过 Vite alias 指到 `react-native-web`，编译到 DOM。证明 RN Web 在覆盖范围内（RN 原生不在） |
 
