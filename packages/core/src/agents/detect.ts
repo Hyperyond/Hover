@@ -32,14 +32,18 @@ export interface DetectedAgent {
 /**
  * Scan PATH for every agent in the registry. Returns only the ones found,
  * in registry insertion order.
+ *
+ * Probes all agents in parallel — each `which`/`where` call is ~50-200ms
+ * and the registry's growth target is 7-10 agents, so serial would noticeably
+ * lag the first widget hello / agent-dropdown open.
  */
 export async function detectAgents(): Promise<DetectedAgent[]> {
-  const detected: DetectedAgent[] = [];
-  for (const descriptor of listAgents()) {
-    const binPath = await resolveBinForAgent(descriptor);
-    if (binPath) detected.push({ descriptor, binPath });
-  }
-  return detected;
+  const descriptors = listAgents();
+  const paths = await Promise.all(descriptors.map(d => resolveBinForAgent(d)));
+  return descriptors.flatMap((descriptor, i) => {
+    const binPath = paths[i];
+    return binPath ? [{ descriptor, binPath }] : [];
+  });
 }
 
 export interface AgentAvailability {
@@ -56,13 +60,14 @@ export interface AgentAvailability {
 /**
  * Like `detectAgents`, but also includes registered-but-not-installed agents
  * so the widget can render them dimmed with an install hint. Order matches
- * the registry.
+ * the registry. Probes run in parallel — see `detectAgents`.
  */
 export async function listAgentAvailability(): Promise<AgentAvailability[]> {
-  const result: AgentAvailability[] = [];
-  for (const descriptor of listAgents()) {
-    const binPath = await resolveBinForAgent(descriptor);
-    result.push({
+  const descriptors = listAgents();
+  const paths = await Promise.all(descriptors.map(d => resolveBinForAgent(d)));
+  return descriptors.map((descriptor, i) => {
+    const binPath = paths[i];
+    return {
       id: descriptor.id,
       label: descriptor.display.label,
       tagline: descriptor.display.tagline,
@@ -71,9 +76,8 @@ export async function listAgentAvailability(): Promise<AgentAvailability[]> {
       binPath: binPath ?? undefined,
       homepage: descriptor.display.homepage,
       installHint: descriptor.display.installHint,
-    });
-  }
-  return result;
+    };
+  });
 }
 
 /**
