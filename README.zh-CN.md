@@ -263,7 +263,9 @@ export default defineConfig({
 >
 > **Nuxt** 通过 Nitro 渲染 HTML，不走 Vite，所以 Vite 的 `transformIndexHtml` 对 Nuxt 的 SSR 响应是 no-op —— 请用 [`@hover-dev/nuxt`](./packages/nuxt-integration/) 模块，它把 widget 推进 `nuxt.options.app.head.script`（Nitro 会内联到 SSR 出的 HTML 里）。
 >
-> **Next.js / Webpack-based CRA / Vue CLI** 目前还没覆盖 —— `webpack-plugin-hover` 已经在 v0.3.x 路线图上。
+> **基于 Webpack 的项目**（vanilla `webpack-dev-server`、Rspack、Rsbuild、走 `craco` 的老 CRA、走 `configureWebpack` 的老 Vue CLI）—— 请用 [`webpack-plugin-hover`](./packages/webpack-plugin/)，它挂在 `HtmlWebpackPlugin` 的 `alterAssetTagGroups` 钩子上。
+>
+> **Next.js** 自 16 起默认使用 Turbopack，而 Turbopack 不加载 webpack 插件。`next dev --webpack` 模式的用户可以手动接 `webpack-plugin-hover`（详见包 README）。Turbopack 原生的 `@hover-dev/next` 已经在路线图上。
 
 ## 插件选项
 

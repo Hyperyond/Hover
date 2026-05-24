@@ -1,0 +1,57 @@
+{
+  "name": "webpack-plugin-hover",
+  "version": "0.0.0",
+  "description": "Webpack 5 plugin that injects the Hover chat widget into your dev server, so AI can drive a real (non-headless) debug Chrome via CDP. Works with vanilla webpack-dev-server, Rspack, Rsbuild, and legacy CRA / Vue CLI projects.",
+  "license": "Apache-2.0",
+  "author": "Hyperyond",
+  "homepage": "https://github.com/Hyperyond/Hover#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hyperyond/Hover.git",
+    "directory": "packages/webpack-plugin"
+  },
+  "bugs": "https://github.com/Hyperyond/Hover/issues",
+  "keywords": ["hover", "webpack", "webpack-plugin", "rspack", "rsbuild", "playwright", "browser-testing", "claude"],
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "pnpm run clean && pnpm run build"
+  },
+  "dependencies": {
+    "@hover-dev/core": "workspace:*",
+    "@hover-dev/widget-bootstrap": "workspace:*"
+  },
+  "peerDependencies": {
+    "webpack": "^5.0.0",
+    "html-webpack-plugin": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "html-webpack-plugin": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/html-webpack-plugin": "^3.2.9",
+    "html-webpack-plugin": "^5.6.0",
+    "webpack": "^5.95.0"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  }
+}

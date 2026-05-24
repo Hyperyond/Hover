@@ -1,0 +1,7 @@
+{
+  "//": "Intentionally empty for the monorepo-wide `pnpm typecheck` (which runs `tsc --noEmit` per workspace). This example is plain JS (no TypeScript) and has no source to typecheck — the empty include keeps `tsc --noEmit` from printing its help banner and exiting non-zero.",
+  "extends": "../../tsconfig.base.json",
+  "files": [],
+  "include": [],
+  "exclude": ["dist", "node_modules"]
+}
