@@ -150,6 +150,35 @@
       if (typeof parsed.currentAgent === 'string' && parsed.currentAgent) {
         state.currentAgent = parsed.currentAgent;
       }
+      // Salvage an interrupted recording: if the last "(recording manual
+      // interactions)" user message has no matching done card after it,
+      // the user reloaded mid-recording. Synthesize a done card so the
+      // session is closeable / saveable / not leaking into the next run.
+      let lastRecordingIdx = -1;
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.kind === 'user' && m.text === '(recording manual interactions)') {
+          lastRecordingIdx = i;
+          break;
+        }
+      }
+      if (lastRecordingIdx >= 0) {
+        const hasDoneAfter = state.messages
+          .slice(lastRecordingIdx + 1)
+          .some((m) => m.kind === 'done' && m.source === 'recording');
+        if (!hasDoneAfter) {
+          const captured = state.messages
+            .slice(lastRecordingIdx + 1)
+            .filter((m) => m.kind === 'step').length;
+          state.messages.push({
+            kind: 'done',
+            turns: captured,
+            costUsd: 0,
+            source: 'recording',
+            summary: `Recorded ${captured} action${captured === 1 ? '' : 's'} before reload. Click Save as Skill / Spec on this card to keep it.`,
+          });
+        }
+      }
     } catch {
       /* corrupt — start fresh */
     }
@@ -1499,13 +1528,12 @@
     hideCost();
   });
 
-  // ───────────────────────── Alt-click "Assert This" ─────────────────
+  // ───────────────────────── Pending assertions badge ─────────────────
   //
-  // While the panel is open, holding Alt and clicking any element in the
-  // host page produces an assertion derived from that element's current
-  // state. Click is intercepted in the capture phase so the host app's
-  // own handler does not fire. Assertions accumulate in state.assertions
-  // and ship out with the next Save as Spec.
+  // The header badge shows how many checks are queued for the next Save
+  // as Spec. Assertions are produced by the Record sub-toolbar's check
+  // sub-modes (Exists / Says / Equals) and accumulate in state.assertions;
+  // Save as Spec bakes them in and clears the list.
 
   const updateAssertBadge = () => {
     const n = state.assertions.length;
@@ -1533,17 +1561,14 @@
     addMessage({ kind: 'system', text: 'Cleared pending assertions.' });
   });
 
-  // ─────────────── Picker hover-mode (⌥ held → element preview) ─────────────
+  // ─────────────── Picker hover-mode (element preview) ─────────────
   //
-  // Without visible feedback the alt-click chord is invisible: users hold
-  // alt, see nothing change, and have no way to know what their click will
-  // hit. While ⌥ is held *and the panel is open*, we light up an overlay
-  // that tracks `elementFromPoint`, draw a badge naming the pending action
-  // (Assert / Fix — switches with shiftKey), and show a top-screen chord
-  // hint. Releasing alt clears everything.
-  //
-  // The overlay lives inside our shadow root with pointer-events:none, so
-  // it never intercepts the click and never pollutes the host page DOM.
+  // When the user enters Fix mode or a Record check sub-mode, we light
+  // up an overlay that tracks `elementFromPoint` and draws a badge
+  // naming the pending action (Fix / Check: Exists / Check: Says /
+  // Check: Equals). The overlay lives in the shadow root with
+  // pointer-events:none, so it never intercepts the click and never
+  // pollutes the host page DOM.
 
   const pickerOverlay = $('.picker-overlay');
   const pickerBadge = $('.picker-badge');
@@ -1605,13 +1630,20 @@
     pickerLastTarget = target;
   }
 
-  // Esc cancels whichever mode is active.
+  // Esc cancels whichever mode is active. The two branches are mutually
+  // exclusive — fixMode and assert-* can't both be active (fixMode is set
+  // only by enterFixMode which is reachable only when not in an assert
+  // sub-mode), but the early return makes that invariant explicit and
+  // avoids the surprise of both branches firing if a future code path
+  // ever managed to overlap them.
   document.addEventListener('keyup', (e) => {
-    if (e.key === 'Escape') {
-      if (fixMode) cancelFixMode();
-      if (pickerMode && pickerMode.startsWith('assert-')) {
-        setRecordSubMode('action'); // assert-* → action
-      }
+    if (e.key !== 'Escape') return;
+    if (fixMode) {
+      cancelFixMode();
+      return;
+    }
+    if (pickerMode && pickerMode.startsWith('assert-')) {
+      setRecordSubMode('action');
     }
   });
   document.addEventListener('mousemove', (e) => {
@@ -1626,7 +1658,7 @@
   //
   // A single shared strip at the top of the viewport. Lives in the shadow
   // root so styling is isolated, but sits above .panel — visible even when
-  // the panel is closed (the common case during alt-click element picking).
+  // the panel is closed (the common case during element picking).
 
   const toastEl = $('.picker-toast');
   let toastTimer = null;
@@ -1652,7 +1684,7 @@
   //
   // User clicks the Fix button → fix-mode starts, panel auto-opens, cursor
   // becomes crosshair, host-page hover paints a mint outline with a "Fix"
-  // badge (same overlay component as ⌥-pick). User clicks any host-page
+  // badge (shared picker-overlay component). User clicks any host-page
   // element → panel body switches to the fix-popover view (right side of
   // the screen — host page is untouched). User types their intent and hits
   // Copy / ⌘↵; the structured fact blob below is prepended with the intent,
@@ -1831,6 +1863,11 @@
   // Capture-phase click during fix-mode picks the element and shows popover.
   document.addEventListener('click', (e) => {
     if (!fixMode) return;
+    // Once the popover is open, the user is editing intent for an already
+    // chosen element. Letting a stray click on the host page silently
+    // re-target the popover (overwriting their typed text) is a footgun.
+    // Cancel/Esc/⌘↵ is the only way out from the popover state.
+    if (fixPopover && fixPopover.classList.contains('visible')) return;
     if (e.composedPath().includes(host)) return; // ignore clicks inside widget
     e.preventDefault();
     e.stopPropagation();
@@ -2093,6 +2130,7 @@
   let recording = false;
   let recordingPaused = false; // true while a Fix popover is open mid-recording
   let recordStartIdx = 0;
+  let recordStartAssertionsCount = 0; // state.assertions.length at session start (for per-session delta)
   let recordSubMode = 'action';
   const pendingFills = new Map(); // element → last seen value
   const recordToolbar = $('.record-toolbar');
@@ -2142,6 +2180,7 @@
       textarea.disabled = true;
       addMessage({ kind: 'user', text: '(recording manual interactions)' });
       recordStartIdx = state.messages.length;
+      recordStartAssertionsCount = state.assertions.length;
       // Show sub-toolbar; default to Record mode. First-use hint above
       // the mode buttons fades in once per browser, then we set a flag
       // so it stays hidden on subsequent recordings.
@@ -2158,6 +2197,12 @@
       recordBtn.classList.remove('recording');
       recLabel.textContent = 'Record';
       host.classList.remove('recording');
+      // Defensive: if the session somehow ended while a Fix popover was
+      // open (HMR re-init, external call), recordingPaused could stick
+      // true and silently suppress the next session's capture handlers.
+      // Always clear here.
+      recordingPaused = false;
+      host.classList.remove('record-paused');
       // Clear any in-flight assert sub-mode + overlay.
       setRecordSubMode('action');
       flushAllFills();
@@ -2165,7 +2210,10 @@
       sendBtn.disabled = !wsReady;
       textarea.disabled = !wsReady;
       const captured = state.messages.slice(recordStartIdx).filter(m => m.kind === 'step').length;
-      const assertCount = state.assertions.length;
+      // Per-session delta — assertions from previous unsaved sessions
+      // are still in state.assertions (they'll bake in on Save), but
+      // this Done card is about *this* session's count.
+      const assertCount = Math.max(0, state.assertions.length - recordStartAssertionsCount);
       const parts = [`Recorded ${captured} action${captured === 1 ? '' : 's'}`];
       if (assertCount > 0) parts.push(`and ${assertCount} check${assertCount === 1 ? '' : 's'}`);
       const lead = parts.join(' ');
@@ -2364,20 +2412,38 @@
     { capture: true },
   );
 
+  // Track the *original* pre-flash style per element + a single in-flight
+  // timer. If flashElement(el) is called again before the previous timer
+  // fires, we reuse the original snapshot (don't re-snapshot the mint
+  // outline we ourselves just wrote) and reset the timer. Without this,
+  // back-to-back flashes on the same element would orphan the mint
+  // outline indefinitely.
+  const flashOriginal = new WeakMap();
+  const flashTimer = new WeakMap();
   function flashElement(el) {
-    const old = {
-      outline: el.style.outline,
-      outlineOffset: el.style.outlineOffset,
-      transition: el.style.transition,
-    };
+    if (!flashOriginal.has(el)) {
+      flashOriginal.set(el, {
+        outline: el.style.outline,
+        outlineOffset: el.style.outlineOffset,
+        transition: el.style.transition,
+      });
+    }
+    const prevTimer = flashTimer.get(el);
+    if (prevTimer) clearTimeout(prevTimer);
     el.style.transition = 'outline 0.15s ease';
     el.style.outline = '3px solid #10b981';
     el.style.outlineOffset = '3px';
-    setTimeout(() => {
-      el.style.outline = old.outline;
-      el.style.outlineOffset = old.outlineOffset;
-      el.style.transition = old.transition;
+    const t = setTimeout(() => {
+      const orig = flashOriginal.get(el);
+      if (orig) {
+        el.style.outline = orig.outline;
+        el.style.outlineOffset = orig.outlineOffset;
+        el.style.transition = orig.transition;
+        flashOriginal.delete(el);
+      }
+      flashTimer.delete(el);
     }, 900);
+    flashTimer.set(el, t);
   }
 
   // ───────────────────────── server event → state mutation ─────────────────────────

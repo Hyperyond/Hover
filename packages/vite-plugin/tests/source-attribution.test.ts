@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { transformSourceAttribution } from '../src/source-attribution.js';
+import { transformSourceAttribution } from '../src/index.js';
 
 const root = '/repo';
 const filename = '/repo/src/App.tsx';
