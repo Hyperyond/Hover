@@ -640,6 +640,13 @@ header {
   background: var(--error);
 }
 
+/* Cancelled (user pressed Stop). Visually neutral — no left bar, no
+ * red/green tint — so the user sees "this was your choice, not a
+ * failure". Border + icon use --text-mute. */
+.group.cancelled {
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
 .group-row {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px;
@@ -666,9 +673,10 @@ header {
   border-radius: 50%;
   font-weight: 700;
 }
-.group.ok      .gr-icon { color: var(--accent); background: rgba(124, 255, 168, 0.12); }
-.group.error   .gr-icon { color: var(--error);  background: rgba(248, 113, 113, 0.14); }
-.group.running .gr-icon { color: var(--accent); background: transparent; }
+.group.ok        .gr-icon { color: var(--accent);   background: rgba(124, 255, 168, 0.12); }
+.group.error     .gr-icon { color: var(--error);    background: rgba(248, 113, 113, 0.14); }
+.group.cancelled .gr-icon { color: var(--text-mute); background: rgba(255, 255, 255, 0.06); }
+.group.running   .gr-icon { color: var(--accent);   background: transparent; }
 
 .group-row .gr-title {
   flex: 1; min-width: 0;
@@ -676,8 +684,9 @@ header {
   font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.group.running .gr-title { color: var(--accent); font-weight: 500; }
-.group.error .gr-title { color: var(--error); }
+.group.running   .gr-title { color: var(--accent); font-weight: 500; }
+.group.error     .gr-title { color: var(--error); }
+.group.cancelled .gr-title { color: var(--text-mute); }
 /* Spinner: open-top ring rotating at 0.9s/turn. Conveys "actively doing
  * something" — paired with a faint mint shimmer on the row background
  * (see .group.running below) to anchor activity. */
@@ -760,8 +769,9 @@ header {
    * .report-header carries its own top corner radius and .report-body /
    * .report-actions sit flush inside the inner padding. */
 }
-.report.ok    { border-left: 3px solid var(--accent); }
-.report.error { border-left: 3px solid var(--error); }
+.report.ok        { border-left: 3px solid var(--accent); }
+.report.error     { border-left: 3px solid var(--error); }
+.report.cancelled { border-left: 3px solid var(--text-mute); }
 
 .report-header {
   display: flex; align-items: center; gap: 8px;
@@ -769,8 +779,9 @@ header {
   border-bottom: 1px solid var(--line);
   border-radius: 10px 10px 0 0;
 }
-.report.ok    .report-header { background: rgba(124, 255, 168, 0.06); }
-.report.error .report-header { background: rgba(248, 113, 113, 0.06); }
+.report.ok        .report-header { background: rgba(124, 255, 168, 0.06); }
+.report.error     .report-header { background: rgba(248, 113, 113, 0.06); }
+.report.cancelled .report-header { background: rgba(255, 255, 255, 0.03); }
 
 .report-header-icon {
   width: 18px; height: 18px;
@@ -779,8 +790,9 @@ header {
   font-size: 11px; font-weight: 700;
   flex-shrink: 0;
 }
-.report.ok    .report-header-icon { background: rgba(124, 255, 168, 0.18); color: var(--accent); }
-.report.error .report-header-icon { background: rgba(248, 113, 113, 0.18); color: var(--error); }
+.report.ok        .report-header-icon { background: rgba(124, 255, 168, 0.18); color: var(--accent); }
+.report.error     .report-header-icon { background: rgba(248, 113, 113, 0.18); color: var(--error); }
+.report.cancelled .report-header-icon { background: rgba(255, 255, 255, 0.10); color: var(--text-mute); }
 
 .report-header-label {
   font-weight: 600; font-size: 12px;

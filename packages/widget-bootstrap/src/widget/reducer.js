@@ -157,8 +157,11 @@ export function extractFindings(summary) {
  *                card if the summary contained a `## Findings` block).
  *   - 'system' → standalone system row, doesn't open/close a group.
  *
- * Groups have a status: 'running' | 'ok' | 'error'. The last group during
- * a live session is 'running' until 'done' arrives.
+ * Groups have a status: 'running' | 'ok' | 'error' | 'cancelled'. The
+ * last group during a live session is 'running' until 'done' arrives.
+ * 'cancelled' is the user-pressed-Stop case — visually neutral (grey ⊘)
+ * rather than red, because the agent didn't fail, the user chose to
+ * end the run.
  *
  * Status is a BUSINESS-LEVEL signal: did the agent complete the logical
  * step the user asked for? It is NOT a tool-level signal. A tool call
@@ -274,9 +277,11 @@ export function groupMessages(messages, isLiveRun) {
       const { findings, rest } = extractFindings(rawSummary);
 
       if (open && open.kind === 'group') {
-        // Business-level: only the session's own isError marks the
-        // step red. Individual tool retries don't escalate.
-        open.status = m.isError ? 'error' : 'ok';
+        // Business-level: 'cancelled' (user pressed Stop) is its own
+        // status, distinct from 'error' (agent / runtime failure) and
+        // 'ok' (agent completed). Individual tool retries inside the
+        // step still don't escalate to status.
+        open.status = m.cancelled ? 'cancelled' : m.isError ? 'error' : 'ok';
         open.summary = null;
         groups.push(open);
         open = null;
@@ -288,9 +293,12 @@ export function groupMessages(messages, isLiveRun) {
           kind: 'report',
           text: reportText || null,
           isError: !!m.isError,
+          cancelled: !!m.cancelled,
           turns: m.turns,
           costUsd: m.costUsd,
-          saveable: !m.isError,
+          // A cancelled run isn't saveable as a spec — the agent didn't
+          // finish what the user asked for. Errors are also unsaveable.
+          saveable: !m.isError && !m.cancelled,
           source: m.source || 'agent',
         });
       }

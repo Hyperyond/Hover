@@ -314,6 +314,29 @@ describe('groupMessages', () => {
     expect(group.steps[2].isError).toBe(false);
   });
 
+  it('marks a user-cancelled run as cancelled, not error', () => {
+    // User pressed Stop mid-run. service.ts emits session_end with
+    // cancelled: true, isError: false. The agent didn't fail — the
+    // user chose to stop — so the group + report should render
+    // neutral (grey ⊘ "Stopped"), not red (✗ "Failed"). The run is
+    // also not saveable as a spec since it didn't complete.
+    const messages = [
+      { kind: 'user', text: 'do something long' },
+      { kind: 'ai', text: 'Starting the long task.' },
+      { kind: 'step', tool: 'browser_snapshot', input: {} },
+      { kind: 'done', summary: 'cancelled by user', cancelled: true, isError: false, costUsd: 0.05 },
+    ];
+    const groups = groupMessages(messages, false);
+    const group = groups.find(g => g.kind === 'group');
+    const report = groups.find(g => g.kind === 'report');
+    expect(group).toBeDefined();
+    expect(group.status).toBe('cancelled');
+    expect(report).toBeDefined();
+    expect(report.cancelled).toBe(true);
+    expect(report.isError).toBe(false);
+    expect(report.saveable).toBe(false);
+  });
+
   it('does not expose the legacy `errored` field on closed groups', () => {
     // Regression: previously the reducer accumulated an `open.errored`
     // boolean that escalated tool-level isError to a red group. With the

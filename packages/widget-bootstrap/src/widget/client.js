@@ -516,16 +516,21 @@
   // intent obvious.
   const renderReport = (g) => {
     const root = document.createElement('div');
-    root.className = 'report ' + (g.isError ? 'error' : 'ok');
+    // Variant precedence: cancelled (user Stop) > error (agent failure)
+    //                     > ok. Keeps the user-initiated stop visually
+    // distinct from a real failure even if some downstream caller sets
+    // both flags simultaneously.
+    const variant = g.cancelled ? 'cancelled' : g.isError ? 'error' : 'ok';
+    root.className = 'report ' + variant;
 
     const header = document.createElement('div');
     header.className = 'report-header';
     const icon = document.createElement('span');
     icon.className = 'report-header-icon';
-    icon.textContent = g.isError ? '✗' : '✓';
+    icon.textContent = variant === 'cancelled' ? '⊘' : variant === 'error' ? '✗' : '✓';
     const label = document.createElement('span');
     label.className = 'report-header-label';
-    label.textContent = g.isError ? 'Failed' : 'Result';
+    label.textContent = variant === 'cancelled' ? 'Stopped' : variant === 'error' ? 'Failed' : 'Result';
     const meta = document.createElement('span');
     meta.className = 'report-header-meta';
     const parts = [];
@@ -612,14 +617,21 @@
     chevron.className = 'gr-chevron';
     chevron.textContent = '▶';
 
-    // Status indicator. For 'running', render an outlined ring (the gentle
-    // mint pulse on it comes from CSS); the ✓ / ✗ are for closed steps.
+    // Status indicator:
+    //   running   → outlined ring (mint pulse via CSS)
+    //   error     → red ✗ (agent / runtime failure)
+    //   cancelled → grey ⊘ (user pressed Stop)
+    //   ok        → green ✓
     const icon = document.createElement('span');
     icon.className = 'gr-icon';
     if (g.status === 'running') {
       icon.classList.add('gr-ring');
+    } else if (g.status === 'error') {
+      icon.textContent = '✗';
+    } else if (g.status === 'cancelled') {
+      icon.textContent = '⊘';
     } else {
-      icon.textContent = g.status === 'error' ? '✗' : '✓';
+      icon.textContent = '✓';
     }
 
     const title = document.createElement('span');
@@ -1918,6 +1930,7 @@
           turns: ev.turns,
           costUsd: ev.costUsd,
           isError: ev.isError,
+          cancelled: ev.cancelled,
           summary: ev.summary,
         });
         // Done card carries the final cost; hide the live chip so the

@@ -235,11 +235,18 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // Send a synthetic session_end so the widget resets to idle immediately.
       // The for-await loop below short-circuits on `cancelled`, so no events
       // from the dying child will arrive after this.
+      //
+      // `cancelled: true` is the load-bearing field — it lets the widget
+      // distinguish "user pressed Stop" from "agent crashed". `isError`
+      // stays false because the agent didn't fail: the user chose to
+      // end the run. The widget renders this as a neutral "Stopped"
+      // state rather than a red Failed card.
       send(ws, {
         type: 'event',
         payload: {
           kind: 'session_end',
-          isError: true,
+          isError: false,
+          cancelled: true,
           summary: 'cancelled by user',
         } satisfies InvokeEvent,
       });
