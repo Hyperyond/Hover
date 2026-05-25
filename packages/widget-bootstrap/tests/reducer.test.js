@@ -280,14 +280,54 @@ describe('groupMessages', () => {
     expect(finishedGroups[1].status).toBe('ok');
   });
 
-  it('marks the group as errored when any step has isError', () => {
+  it('marks the group as errored only when the session-level done is an error', () => {
     const messages = [
       { kind: 'user', text: 'p' },
-      { kind: 'step', tool: 'browser_click', input: {}, isError: true },
+      { kind: 'step', tool: 'browser_click', input: {} },
       { kind: 'done', summary: '', isError: true },
     ];
     const groups = groupMessages(messages, false);
     expect(groups[1].status).toBe('error');
+  });
+
+  it('keeps the group green when individual tool retries failed but the session succeeded', () => {
+    // The agent typically retries a selector / approach before landing
+    // the intended interaction. Those tool-level errors are diagnostic
+    // detail (still rendered in the expanded view via step.isError),
+    // not a business-level failure signal. The group should stay green
+    // as long as the session-level done is non-error.
+    const messages = [
+      { kind: 'user', text: 'click the submit button' },
+      { kind: 'ai', text: 'Locating the submit button.' },
+      { kind: 'step', tool: 'mcp__playwright__browser_click', input: { ref: 'e12' }, isError: true },
+      { kind: 'step', tool: 'mcp__playwright__browser_snapshot', input: {} },
+      { kind: 'step', tool: 'mcp__playwright__browser_click', input: { ref: 'e7' } },
+      { kind: 'done', summary: 'Submit clicked.', isError: false },
+    ];
+    const groups = groupMessages(messages, false);
+    const group = groups.find(g => g.kind === 'group');
+    expect(group).toBeDefined();
+    expect(group.status).toBe('ok');
+    // step-level error info preserved for the expanded diagnostic view
+    expect(group.steps[0].isError).toBe(true);
+    expect(group.steps[1].isError).toBe(false);
+    expect(group.steps[2].isError).toBe(false);
+  });
+
+  it('does not expose the legacy `errored` field on closed groups', () => {
+    // Regression: previously the reducer accumulated an `open.errored`
+    // boolean that escalated tool-level isError to a red group. With the
+    // new business-view semantics there is no per-group error
+    // accumulator at all.
+    const messages = [
+      { kind: 'user', text: 'p' },
+      { kind: 'step', tool: 'browser_click', input: {}, isError: true },
+      { kind: 'done', summary: '', isError: false },
+    ];
+    const groups = groupMessages(messages, false);
+    const group = groups.find(g => g.kind === 'group');
+    expect(group).toBeDefined();
+    expect(group.errored).toBeUndefined();
   });
 
   it('falls back to a tool-derived title when no ai text precedes the step', () => {

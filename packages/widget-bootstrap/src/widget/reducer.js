@@ -159,10 +159,22 @@ export function extractFindings(summary) {
  *
  * Groups have a status: 'running' | 'ok' | 'error'. The last group during
  * a live session is 'running' until 'done' arrives.
+ *
+ * Status is a BUSINESS-LEVEL signal: did the agent complete the logical
+ * step the user asked for? It is NOT a tool-level signal. A tool call
+ * that returned `is_error: true` is just one retry attempt — the agent
+ * routinely re-tries with a different selector / approach inside the
+ * same step and recovers. Marking the whole step red because one tool
+ * call failed inside it (the prior behaviour) made successful runs look
+ * mostly-broken to the user. Now: a group is red ONLY if the
+ * session-level `done.isError` is true (agent itself reported failure).
+ * Individual tool errors are still preserved in `step.isError` and
+ * rendered as red lines when the user expands the group — diagnostic
+ * info stays available, top-level status reflects the business outcome.
  */
 export function groupMessages(messages, isLiveRun) {
   const groups = [];
-  let open = null;            // { kind: 'group', title, steps, errored, status }
+  let open = null;            // { kind: 'group', title, steps, status }
   let pendingTitle = null;    // last unconsumed ai text — promoted to title on next step
   let lastAiText = null;      // remembered for the done-card summary fallback
 
@@ -221,11 +233,15 @@ export function groupMessages(messages, isLiveRun) {
 
       // Split BEFORE adding this step when (a) it's a boundary tool or
       // (b) the open group is already at MAX_TOOLS_PER_GROUP.
+      // A mid-stream split closes with 'ok' — the only thing that can
+      // turn a group red is the session-level `done.isError` at the
+      // very end. See the function-level comment on business vs tool
+      // status semantics.
       if (open && open.kind === 'group') {
         const isBoundary = BOUNDARY_TOOLS.has(m.tool);
         const isFull = open.steps.length >= MAX_TOOLS_PER_GROUP;
         if (isBoundary || isFull) {
-          closeOpen(open.errored ? 'error' : 'ok');
+          closeOpen('ok');
         }
       }
 
@@ -234,7 +250,6 @@ export function groupMessages(messages, isLiveRun) {
           kind: 'group',
           title: pendingTitle ?? titleFromTool(m.tool, m.input),
           steps: [],
-          errored: false,
           status: 'running',
           startedAt: m.at ?? null,
           endedAt: null,
@@ -243,10 +258,12 @@ export function groupMessages(messages, isLiveRun) {
         };
         pendingTitle = null;
       }
+      // step.isError is kept on each tool line for the expanded view —
+      // users can drill in to see which retries failed — but it no
+      // longer escalates to the group's top-level status.
       open.steps.push({ tool: m.tool, input: m.input, isError: !!m.isError });
       if (typeof m.costUsdSnapshot === 'number') open.costEndUsd = m.costUsdSnapshot;
       if (m.at != null) open.endedAt = m.at;
-      if (m.isError) open.errored = true;
       continue;
     }
 
@@ -257,7 +274,9 @@ export function groupMessages(messages, isLiveRun) {
       const { findings, rest } = extractFindings(rawSummary);
 
       if (open && open.kind === 'group') {
-        open.status = m.isError ? 'error' : (open.errored ? 'error' : 'ok');
+        // Business-level: only the session's own isError marks the
+        // step red. Individual tool retries don't escalate.
+        open.status = m.isError ? 'error' : 'ok';
         open.summary = null;
         groups.push(open);
         open = null;
@@ -286,8 +305,11 @@ export function groupMessages(messages, isLiveRun) {
   }
 
   // End of stream. An open group with no 'done' means the run is still live.
+  // Status: running while live; 'ok' on a finished-but-no-done stream
+  // (e.g. localStorage snapshot of a session that was cut off mid-run).
+  // Tool-level retries inside the group don't change the conclusion.
   if (open) {
-    open.status = isLiveRun ? 'running' : (open.errored ? 'error' : 'ok');
+    open.status = isLiveRun ? 'running' : 'ok';
     groups.push(open);
   }
   if (pendingTitle && !isLiveRun) flushPendingTitleAsBubble();
