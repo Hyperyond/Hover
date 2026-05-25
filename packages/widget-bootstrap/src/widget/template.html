@@ -90,13 +90,39 @@
       <button type="button" class="record-btn" aria-label="record manual interactions" data-tooltip="Record your own clicks/typing on the page">
         <span class="rec-dot"></span><span class="rec-label">Record</span>
       </button>
-      <span class="hint">⌥ + click element to assert</span>
+      <button type="button" class="fix-btn" aria-label="suggest fix prompt" data-tooltip="Click a page element, describe what to change, copy a prompt for your coding agent">
+        <span class="fix-icon" aria-hidden="true">⌖</span><span class="fix-label">Fix</span>
+      </button>
+      <span class="hint">⌥click assert</span>
       <button type="button" class="send" disabled>
         <span class="send-label">Send</span>
         <span class="chord" aria-hidden="true">⏎</span>
       </button>
     </div>
   </footer>
+
+  <!--
+    Fix-mode popover — appears inside the panel body when the user has
+    clicked an element while Fix mode is active. Covers the messages area
+    while open. Esc / Cancel returns to messages view; Copy submits the
+    fix prompt to clipboard and exits fix mode.
+  -->
+  <div class="fix-popover" role="dialog" aria-modal="false" aria-hidden="true" aria-label="Suggest a fix">
+    <div class="fix-popover-head">
+      <span class="fix-popover-title">Suggest a fix</span>
+      <button class="fix-popover-cancel" type="button" aria-label="Cancel" data-tooltip="Cancel (Esc)">×</button>
+    </div>
+    <div class="fix-popover-target">
+      <span class="fix-popover-el-tag"></span>
+      <span class="fix-popover-el-text"></span>
+      <code class="fix-popover-el-src"></code>
+    </div>
+    <textarea class="fix-popover-input" rows="4" placeholder="What would you like to change about this element?" aria-label="What would you like to change?"></textarea>
+    <div class="fix-popover-foot">
+      <span class="fix-popover-hint"><kbd>⌘</kbd><kbd>↵</kbd> copy prompt · <kbd>Esc</kbd> cancel</span>
+      <button class="fix-popover-copy" type="button">Copy prompt</button>
+    </div>
+  </div>
 
   <div class="modal" aria-hidden="true">
     <div class="modal-backdrop"></div>
@@ -120,3 +146,34 @@
   <span class="hover-tip-text"></span>
   <span class="hover-tip-arrow" aria-hidden="true"></span>
 </div>
+
+<!--
+  Picker overlay — while the user holds ⌥ (and panel is open), Hover
+  tracks the host-page element under the cursor and draws this fixed
+  rectangle around its bounding box. pointer-events:none so it never
+  intercepts the click. Badge in the corner names the action (Assert
+  vs Fix), driven by the shift-key state.
+-->
+<div class="picker-overlay" aria-hidden="true">
+  <span class="picker-badge"></span>
+  <span class="picker-tag"></span>
+</div>
+
+<!--
+  Picker hint — short chord reference that fades in while ⌥ is held,
+  so the user doesn't have to remember the chord. Positioned at the
+  top centre of the screen.
+-->
+<div class="picker-hint" aria-hidden="true">
+  <span><kbd>⌥</kbd>click <em>assert</em></span>
+  <span class="picker-hint-sep">·</span>
+  <span><kbd>Esc</kbd> cancel</span>
+</div>
+
+<!--
+  Toast strip — appears at the top of the viewport for ~2.5s when an
+  alt-click / Fix action completes. Lives in the shadow root so styling
+  is isolated; rendered above the panel so it's visible even if the
+  panel is closed (the common case during element picking).
+-->
+<div class="picker-toast" role="status" aria-live="polite" aria-hidden="true"></div>

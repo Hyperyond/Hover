@@ -1279,3 +1279,301 @@ textarea:disabled { background: var(--bg-2); color: var(--text-dim); cursor: not
   border-right: none; border-bottom: 1px solid var(--accent);
   border-top: none; border-left: 1px solid var(--accent);
 }
+
+/* ───────────────────────── picker overlay (⌥/⇧⌥ hover) ─────────────────────────
+ *
+ * Three pieces, all gated on .picker-active being set on :host (script
+ * toggles it when the user holds ⌥):
+ *
+ *   .picker-overlay   the per-element outline that follows the cursor
+ *   .picker-badge     small chip on the overlay corner — "Assert" / "Fix"
+ *   .picker-tag       monospace tag-name label under the badge
+ *   .picker-hint      top-screen chord cheatsheet
+ *   .picker-toast     post-action confirmation strip
+ *
+ * pointer-events:none everywhere — the overlay must never intercept the
+ * click; user is clicking the real element under the cursor.
+ */
+
+:host(.picker-active) { cursor: crosshair !important; }
+
+.picker-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 0; height: 0;
+  border: 2px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent-dim);
+  pointer-events: none;
+  z-index: 2147483646;
+  display: none;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
+  transition: top 60ms linear, left 60ms linear, width 60ms linear, height 60ms linear;
+}
+:host(.picker-active) .picker-overlay.visible {
+  display: block;
+}
+.picker-badge {
+  position: absolute;
+  top: -22px;
+  right: -2px;
+  background: var(--accent);
+  color: #0e0e0e;
+  font: 600 10px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.picker-tag {
+  position: absolute;
+  bottom: -20px;
+  left: -2px;
+  background: #0e0e0e;
+  color: var(--accent);
+  font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 4px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  border: 1px solid var(--accent);
+}
+
+.picker-hint {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  background: #0e0e0e;
+  color: var(--text);
+  font: 500 12px/1 ui-sans-serif, system-ui, sans-serif;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease, transform 120ms ease;
+  z-index: 2147483647;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+:host(.picker-active) .picker-hint {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+/* In fix-mode the footer Fix button already shows the active state, so
+ * the chord cheatsheet is redundant — hide it. */
+:host(.fix-active) .picker-hint {
+  opacity: 0;
+}
+.picker-hint kbd {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 5px;
+  font: 500 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent);
+}
+.picker-hint em {
+  font-style: normal;
+  color: var(--text-mute);
+  margin-left: 2px;
+}
+.picker-hint-sep {
+  color: var(--text-dim);
+}
+
+.picker-toast {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  background: #0e0e0e;
+  color: var(--text);
+  font: 500 13px/1.3 ui-sans-serif, system-ui, sans-serif;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease, transform 160ms ease;
+  z-index: 2147483647;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(124,255,168,0.18);
+  max-width: 80vw;
+}
+.picker-toast.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.picker-toast.error {
+  border-color: var(--error);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(248,113,113,0.2);
+}
+.picker-toast-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ───────────────────────── Fix button + popover ─────────────────────────
+ *
+ * Fix button sits next to Record in the footer. Visual matches Record but
+ * uses the mint accent (Hover's brand colour) instead of red, since Fix
+ * is a "select-and-tell" action rather than a destructive record one.
+ */
+.fix-btn {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 11px;
+  color: var(--text-mute);
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex; align-items: center; gap: 5px;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.fix-btn > * { pointer-events: none; }
+.fix-btn:not(:disabled):hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.fix-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.fix-btn .fix-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+.fix-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* Popover — covers the panel's .body when visible. Lives in shadow root,
+ * inside .panel, after .body and footer. Absolute-positioned so it can sit
+ * over .body without affecting layout when hidden.
+ */
+.fix-popover {
+  position: absolute;
+  top: 48px; /* below the header */
+  left: 0;
+  right: 0;
+  bottom: 0;  /* extends to footer */
+  background: var(--bg);
+  display: none;
+  flex-direction: column;
+  padding: 14px;
+  gap: 10px;
+  z-index: 5;
+}
+.fix-popover.visible {
+  display: flex;
+}
+.fix-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fix-popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.fix-popover-cancel {
+  background: transparent;
+  border: 0;
+  color: var(--text-mute);
+  font-size: 18px;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fix-popover-cancel:hover {
+  color: var(--text);
+  background: var(--bg-2);
+}
+.fix-popover-target {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fix-popover-el-tag {
+  font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent);
+}
+.fix-popover-el-text {
+  color: var(--text);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fix-popover-el-text:empty { display: none; }
+.fix-popover-el-src {
+  font: 500 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-mute);
+  background: transparent;
+  padding: 0;
+}
+.fix-popover-input {
+  flex: 1;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  color: var(--text);
+  font: 400 13px/1.5 ui-sans-serif, system-ui, sans-serif;
+  resize: none;
+  min-height: 80px;
+}
+.fix-popover-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.fix-popover-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fix-popover-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.fix-popover-hint kbd {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-mute);
+}
+.fix-popover-copy {
+  background: var(--accent);
+  color: #0e0e0e;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font: 600 12px/1 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.fix-popover-copy:hover { filter: brightness(1.1); }

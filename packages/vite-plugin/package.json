@@ -11,7 +11,14 @@
     "directory": "packages/vite-plugin"
   },
   "bugs": "https://github.com/Hyperyond/Hover/issues",
-  "keywords": ["hover", "vite", "vite-plugin", "playwright", "browser-testing", "claude"],
+  "keywords": [
+    "hover",
+    "vite",
+    "vite-plugin",
+    "playwright",
+    "browser-testing",
+    "claude"
+  ],
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -24,17 +31,24 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "prepack": "pnpm run clean && pnpm run build"
+    "prepack": "pnpm run clean && pnpm run build",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@babel/parser": "^7.29.3",
+    "@babel/traverse": "^7.29.0",
+    "@babel/types": "^7.29.0",
     "@hover-dev/core": "workspace:*",
-    "@hover-dev/widget-bootstrap": "workspace:*"
+    "@hover-dev/widget-bootstrap": "workspace:*",
+    "magic-string": "^0.30.21"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
   "devDependencies": {
-    "vite": "^7.0.0"
+    "@types/babel__traverse": "^7.28.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.4"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",

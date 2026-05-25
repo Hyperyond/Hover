@@ -1533,9 +1533,120 @@
     addMessage({ kind: 'system', text: 'Cleared pending assertions.' });
   });
 
+  // ─────────────── Picker hover-mode (⌥ held → element preview) ─────────────
+  //
+  // Without visible feedback the alt-click chord is invisible: users hold
+  // alt, see nothing change, and have no way to know what their click will
+  // hit. While ⌥ is held *and the panel is open*, we light up an overlay
+  // that tracks `elementFromPoint`, draw a badge naming the pending action
+  // (Assert / Fix — switches with shiftKey), and show a top-screen chord
+  // hint. Releasing alt clears everything.
+  //
+  // The overlay lives inside our shadow root with pointer-events:none, so
+  // it never intercepts the click and never pollutes the host page DOM.
+
+  const pickerOverlay = $('.picker-overlay');
+  const pickerBadge = $('.picker-badge');
+  const pickerTag = $('.picker-tag');
+  // Two independent ways to enter picker mode:
+  //   • holding ⌥ while panel is open  → 'assert' (legacy chord)
+  //   • clicking the footer Fix button → 'fix' (independent flow, no key needed)
+  // pickerMode is either null (inactive), 'assert', or 'fix'. The overlay
+  // / cursor / badge react to the current mode.
+  let pickerMode = null;
+  let pickerLastTarget = null;
+  let fixMode = false; // mirror of pickerMode === 'fix' for click-handler guards
+  // Last cursor position — tracked even when picker is inactive, so that
+  // entering picker mode can immediately paint the overlay around the
+  // element under the cursor without waiting for the next mousemove event.
+  let lastMouseX = -1;
+  let lastMouseY = -1;
+
+  function enterAssertPickerMode() {
+    if (pickerMode) return;
+    pickerMode = 'assert';
+    host.classList.add('picker-active');
+    if (lastMouseX >= 0) {
+      const el = document.elementFromPoint(lastMouseX, lastMouseY);
+      updatePickerOverlay(el, 'assert');
+    }
+  }
+  function exitAssertPickerMode() {
+    if (pickerMode !== 'assert') return;
+    pickerMode = null;
+    host.classList.remove('picker-active');
+    pickerOverlay.classList.remove('visible');
+    pickerLastTarget = null;
+  }
+  // Shared overlay update used by both alt-pick (assert) and fix-mode.
+  // The `mode` parameter drives the badge label so the user knows what
+  // their click is about to do.
+  function updatePickerOverlay(target, mode) {
+    if (!target || !(target instanceof Element)) {
+      pickerOverlay.classList.remove('visible');
+      pickerLastTarget = null;
+      return;
+    }
+    // Skip elements inside the widget shadow tree.
+    if (target.closest('[data-hover="true"]') === host) {
+      pickerOverlay.classList.remove('visible');
+      return;
+    }
+    // <html> / <body> are too coarse to be useful targets.
+    if (target === document.documentElement || target === document.body) {
+      pickerOverlay.classList.remove('visible');
+      return;
+    }
+    const r = target.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) {
+      pickerOverlay.classList.remove('visible');
+      return;
+    }
+    pickerOverlay.style.left = `${r.left - 2}px`;
+    pickerOverlay.style.top = `${r.top - 2}px`;
+    pickerOverlay.style.width = `${r.width + 4}px`;
+    pickerOverlay.style.height = `${r.height + 4}px`;
+    pickerBadge.textContent = mode === 'fix' ? 'Fix' : 'Assert';
+    pickerTag.textContent = `<${target.tagName.toLowerCase()}>`;
+    pickerOverlay.classList.add('visible');
+    pickerLastTarget = target;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Alt') return;
+    if (!isOpen()) return;
+    if (fixMode) return; // fix-mode is independent of alt
+    enterAssertPickerMode();
+  });
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Alt' && pickerMode === 'assert' && !e.altKey) {
+      exitAssertPickerMode();
+    }
+    if (e.key === 'Escape') {
+      if (pickerMode === 'assert') exitAssertPickerMode();
+      if (fixMode) cancelFixMode();
+    }
+  });
+  // Window blur (alt-tab) — leaving the page mid-pick should not leave the
+  // overlay stuck on.
+  window.addEventListener('blur', () => {
+    if (pickerMode === 'assert') exitAssertPickerMode();
+  });
+  document.addEventListener('mousemove', (e) => {
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    if (!pickerMode) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    updatePickerOverlay(el, pickerMode);
+  });
+
   document.addEventListener(
     'click',
     (e) => {
+      // Fix-mode capture (no modifier key needed) — handled in the fix-mode
+      // block further down. Alt-key path below handles assert only.
+      if (fixMode) return;
+
       if (!e.altKey) return;
       if (!isOpen()) return;
       // Skip clicks inside our own widget.
@@ -1547,9 +1658,14 @@
       const target = e.target;
       if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
 
+      // Click commits the pick — overlay should disappear immediately so
+      // the toast can take over the user's attention.
+      pickerOverlay.classList.remove('visible');
+
       const ass = inspectElement(target);
       if (!ass) {
         addMessage({ kind: 'system', text: `⊘ Alt-click ignored: ${target.tagName.toLowerCase()} has no usable identity` });
+        showPickerToast(`<${target.tagName.toLowerCase()}> has no usable identity`, { error: true });
         return;
       }
       state.assertions.push(ass);
@@ -1557,9 +1673,306 @@
       updateAssertBadge();
       flashElement(target);
       addMessage({ kind: 'system', text: `✓ Asserted: ${ass.hint}` });
+      showPickerToast(`Asserted: ${ass.hint}`);
     },
     { capture: true },
   );
+
+  // ─────────────────── Toast helper (used by picker actions) ─────────────
+  //
+  // A single shared strip at the top of the viewport. Lives in the shadow
+  // root so styling is isolated, but sits above .panel — visible even when
+  // the panel is closed (the common case during alt-click element picking).
+
+  const toastEl = $('.picker-toast');
+  let toastTimer = null;
+  function showPickerToast(text, opts = {}) {
+    if (!toastEl) return;
+    toastEl.classList.toggle('error', !!opts.error);
+    toastEl.innerHTML = '';
+    const icon = document.createElement('span');
+    icon.className = 'picker-toast-icon';
+    icon.textContent = opts.error ? '⊘' : '✓';
+    const label = document.createElement('span');
+    label.textContent = text;
+    toastEl.appendChild(icon);
+    toastEl.appendChild(label);
+    toastEl.classList.add('visible');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastEl.classList.remove('visible');
+    }, opts.error ? 3500 : 2500);
+  }
+
+  // ─────────────────── Fix mode (footer "Fix" button) ───────────────────
+  //
+  // User clicks the Fix button → fix-mode starts, panel auto-opens, cursor
+  // becomes crosshair, host-page hover paints a mint outline with a "Fix"
+  // badge (same overlay component as ⌥-pick). User clicks any host-page
+  // element → panel body switches to the fix-popover view (right side of
+  // the screen — host page is untouched). User types their intent and hits
+  // Copy / ⌘↵; the structured fact blob below is prepended with the intent,
+  // copied to clipboard, and the user pastes into their coding agent.
+  //
+  // Hybrid context for the chosen element:
+  //   • element's own data-hover-source (Vite transform output)
+  //   • likely-target descent (e.g. <div> wrapper → <button> inside it)
+  //   • DOM ancestor data-hover-source chain (the user's call site lives
+  //     in the ancestors for wrapper-rendered hosts: styled-components,
+  //     className-forwarding components, multi-layer nesting)
+  //   • React _debugOwner name chain — owners survived in React 19 even
+  //     though _debugSource didn't; gives grep keywords for styled-
+  //     components and other library-rendered hosts
+  //   • Playwright selector + outerHTML excerpt
+  //
+  // Hover's own sandboxed agent only has the Playwright MCP, so this is
+  // a clipboard handoff — not a server call.
+
+  const fixBtn = $('.fix-btn');
+  const fixPopover = $('.fix-popover');
+  const fixPopoverElTag = fixPopover && fixPopover.querySelector('.fix-popover-el-tag');
+  const fixPopoverElText = fixPopover && fixPopover.querySelector('.fix-popover-el-text');
+  const fixPopoverElSrc = fixPopover && fixPopover.querySelector('.fix-popover-el-src');
+  const fixPopoverInput = fixPopover && fixPopover.querySelector('.fix-popover-input');
+  const fixPopoverCopy = fixPopover && fixPopover.querySelector('.fix-popover-copy');
+  const fixPopoverCancel = fixPopover && fixPopover.querySelector('.fix-popover-cancel');
+  let fixSelectedElement = null;
+  let fixSelectedCtx = null;
+
+  function enterFixMode() {
+    if (fixMode) return;
+    fixMode = true;
+    // Ensure panel is open so the user can see the popover when they click.
+    if (!isOpen()) launcher.click();
+    host.classList.add('picker-active');
+    host.classList.add('fix-active');
+    fixBtn.classList.add('active');
+    pickerBadge.textContent = 'Fix';
+    if (lastMouseX >= 0) {
+      const el = document.elementFromPoint(lastMouseX, lastMouseY);
+      updatePickerOverlay(el, 'fix');
+    }
+  }
+
+  function exitFixMode() {
+    if (!fixMode) return;
+    fixMode = false;
+    host.classList.remove('picker-active');
+    host.classList.remove('fix-active');
+    fixBtn.classList.remove('active');
+    pickerOverlay.classList.remove('visible');
+    pickerLastTarget = null;
+  }
+
+  function cancelFixMode() {
+    closeFixPopover();
+    exitFixMode();
+  }
+
+  function showFixPopover(el) {
+    fixSelectedElement = el;
+    const ctx = collectFixContext(el);
+    fixSelectedCtx = ctx;
+    const headlineEl = ctx.target.el;
+    fixPopoverElTag.textContent = `<${headlineEl.tagName.toLowerCase()}>`;
+    fixPopoverElText.textContent = ctx.target.text || '';
+    fixPopoverElSrc.textContent = ctx.target.ownStamp || ctx.ancestorStamps[0]?.src || '(no source stamp)';
+    fixPopover.setAttribute('aria-hidden', 'false');
+    fixPopover.classList.add('visible');
+    panel.classList.add('fix-popover-open');
+    fixPopoverInput.value = '';
+    setTimeout(() => fixPopoverInput.focus(), 30);
+  }
+
+  function closeFixPopover() {
+    fixPopover.classList.remove('visible');
+    fixPopover.setAttribute('aria-hidden', 'true');
+    panel.classList.remove('fix-popover-open');
+    fixSelectedElement = null;
+    fixSelectedCtx = null;
+  }
+
+  async function commitFixPopover() {
+    if (!fixSelectedCtx) return;
+    const intent = fixPopoverInput.value.trim();
+    const prompt = renderFixPrompt(fixSelectedCtx, intent);
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      copied = true;
+    } catch {
+      copied = false;
+    }
+    const label = fixSelectedCtx.target.selector?.hint || fixSelectedCtx.target.tag;
+    if (copied) {
+      addMessage({
+        kind: 'system',
+        text: `📋 Fix prompt copied for ${label} — paste into your coding agent.`,
+      });
+      showPickerToast('Fix prompt copied — paste into your coding agent');
+    } else {
+      addMessage({
+        kind: 'system',
+        text: `⚠ Couldn't copy to clipboard. Prompt for ${label} printed to console.`,
+      });
+      showPickerToast('Clipboard blocked — prompt printed to console', { error: true });
+      console.info('[hover] fix prompt:\n' + prompt);
+    }
+    cancelFixMode();
+  }
+
+  if (fixBtn) {
+    fixBtn.addEventListener('click', () => {
+      if (fixMode) {
+        cancelFixMode();
+      } else {
+        enterFixMode();
+      }
+    });
+  }
+  if (fixPopover) {
+    fixPopoverCopy.addEventListener('click', commitFixPopover);
+    fixPopoverCancel.addEventListener('click', cancelFixMode);
+    fixPopoverInput.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        commitFixPopover();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelFixMode();
+      }
+    });
+  }
+
+  // Capture-phase click during fix-mode picks the element and shows popover.
+  document.addEventListener('click', (e) => {
+    if (!fixMode) return;
+    if (e.composedPath().includes(host)) return; // ignore clicks inside widget
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.target;
+    if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
+    pickerOverlay.classList.remove('visible');
+    host.classList.remove('picker-active');
+    host.classList.remove('fix-active');
+    // Collect context BEFORE flashElement so the transient outline style
+    // doesn't end up in the captured outerHTML.
+    showFixPopover(target);
+    flashElement(target);
+  }, { capture: true });
+
+  // "Interactive" tag check — used by the likely-target descent.
+  function isInteractive(el) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'button' || tag === 'a' || tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    if (el.hasAttribute('role')) {
+      const r = el.getAttribute('role');
+      if (r === 'button' || r === 'link' || r === 'checkbox' || r === 'radio' || r === 'switch' || r === 'tab' || r === 'menuitem') return true;
+    }
+    return false;
+  }
+
+  // If the clicked element isn't itself interactive but contains exactly
+  // one interactive descendant, that's almost certainly what the user
+  // meant — e.g. clicking a wrapping <div> aimed at the <button> inside.
+  // Returns the deeper element or null.
+  function findLikelyInteractiveTarget(el) {
+    if (isInteractive(el)) return null; // already the target
+    const candidates = el.querySelectorAll('button, a, input, textarea, select, [role="button"], [role="link"], [role="checkbox"], [role="radio"]');
+    if (candidates.length === 1) return candidates[0];
+    return null;
+  }
+
+  function elementSummary(el) {
+    const ownStamp = el.getAttribute('data-hover-source');
+    const selector = bestSelector(el);
+    // Outer HTML, normalised: drop empty style="" attrs and the transient
+    // outline/transition style flashElement injects on commit; cap length.
+    let outer = (el.outerHTML || '');
+    outer = outer.replace(/\sstyle=""/g, '');
+    outer = outer.replace(/\sstyle="[^"]*(?:outline|transition)[^"]*"/g, '');
+    outer = outer.slice(0, 400);
+    const text = (el.textContent || '').trim().slice(0, 120);
+    return { el, tag: el.tagName.toLowerCase(), text, ownStamp, selector, outer };
+  }
+
+  function collectFixContext(el) {
+    // DOM ancestor chain (parent → root), up to 8 levels. The user's call
+    // site is in here for wrapper-rendered hosts.
+    const ancestorStamps = [];
+    let cur = el.parentElement;
+    let depth = 0;
+    while (cur && cur !== document.body && depth < 8) {
+      const s = cur.getAttribute?.('data-hover-source');
+      if (s) ancestorStamps.push({ tag: cur.tagName.toLowerCase(), src: s });
+      cur = cur.parentElement;
+      depth++;
+    }
+
+    // React owner-name chain via _debugOwner. Names only — React 19 has
+    // no _debugSource, so we can't get file locations from the fiber.
+    const owners = [];
+    const fiberKey = Object.keys(el).find((k) => k.startsWith('__reactFiber$'));
+    if (fiberKey) {
+      let fiber = el[fiberKey];
+      let safety = 30;
+      while (fiber && safety-- > 0) {
+        const t = fiber.type;
+        const name = typeof t === 'string' ? null : (t?.displayName || t?.name || null);
+        if (name && !owners.includes(name)) owners.push(name);
+        fiber = fiber._debugOwner || fiber.return || null;
+      }
+    }
+
+    // "target" is the element we point the agent at. If the clicked
+    // element is a wrapper around a single interactive child, prefer the
+    // child (Playwright selector + headline both come from it).
+    const likely = findLikelyInteractiveTarget(el);
+    const targetEl = likely ?? el;
+    const target = elementSummary(targetEl);
+    const clicked = likely ? elementSummary(el) : null;
+
+    return { clicked, target, ancestorStamps, owners };
+  }
+
+  function renderFixPrompt(ctx, intent) {
+    const lines = [];
+    lines.push('Change this element in my app:');
+    lines.push('');
+    if (intent) {
+      // Quote each line so the model parses the intent as a single block.
+      for (const ln of intent.split('\n')) lines.push(`> ${ln}`);
+      lines.push('');
+    }
+    if (ctx.clicked) {
+      lines.push(`Clicked: <${ctx.clicked.tag}>${ctx.clicked.text ? ` — "${ctx.clicked.text}"` : ''}`);
+      lines.push(`Most likely target: <${ctx.target.tag}>${ctx.target.text ? ` — "${ctx.target.text}"` : ''}`);
+    } else {
+      lines.push(`Element: <${ctx.target.tag}>${ctx.target.text ? ` — "${ctx.target.text}"` : ''}`);
+    }
+    if (ctx.target.ownStamp) {
+      lines.push(`Source of likely target: ${ctx.target.ownStamp}`);
+    }
+    if (ctx.clicked?.ownStamp && ctx.clicked.ownStamp !== ctx.target.ownStamp) {
+      lines.push(`Source of clicked element: ${ctx.clicked.ownStamp}`);
+    }
+    if (!ctx.target.ownStamp && !ctx.clicked?.ownStamp) {
+      lines.push('Source: unavailable (likely rendered by a library wrapper — see ancestor chain)');
+    }
+    if (ctx.ancestorStamps.length > 0) {
+      lines.push('Ancestor sources (closer ancestors first):');
+      for (const a of ctx.ancestorStamps) lines.push(`  • <${a.tag}> @ ${a.src}`);
+    }
+    if (ctx.owners.length > 0) {
+      lines.push(`React component chain (innermost first): ${ctx.owners.join(' → ')}`);
+    }
+    if (ctx.target.selector) {
+      lines.push(`Playwright selector: ${ctx.target.selector.code}`);
+    }
+    lines.push('Outer HTML:');
+    lines.push('  ' + ctx.target.outer);
+    return lines.join('\n');
+  }
 
   function inspectElement(el) {
     const sel = bestSelector(el);
