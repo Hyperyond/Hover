@@ -34,7 +34,18 @@ export function resolveMcpConfig(opts: {
   // Using `package.json` as the resolution target is the documented
   // Node.js pattern for locating an installed package's directory
   // regardless of its main/exports map.
-  const require = createRequire(import.meta.url);
+  //
+  // The resolution starts from `process.cwd()`, NOT `import.meta.url`.
+  // When this module is dynamically imported through Next 16's Turbopack
+  // (via `@hover-dev/next`'s `register-node.js`), `import.meta.url` is
+  // a virtual "[project]/..." URL that doesn't resolve to a real file
+  // on disk — `createRequire` accepts the URL but the resulting
+  // `require.resolve('@playwright/mcp/...')` walks the wrong tree and
+  // emits a "[project]/..." prefix in the result, which Claude Code
+  // can't actually load. `process.cwd()` is the user's project root,
+  // and `@playwright/mcp` is always reachable from there because it's
+  // a declared dependency of `@hover-dev/core`, which the user installed.
+  const require = createRequire(resolve(process.cwd(), 'package.json'));
   const pkgJsonPath = require.resolve('@playwright/mcp/package.json');
   const pkgRoot = dirname(pkgJsonPath);
   // The package's `bin` map declares "playwright-mcp": "cli.js" — we
