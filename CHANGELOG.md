@@ -4,6 +4,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are ISO 
 
 All notable changes to Hover are recorded here. Conventional Commits in the git log are the source of truth; this file groups them by user-visible impact.
 
+## [0.5.0] — 2026-05-26
+
+Two big additions land together: a **Suggest fix prompt** button that copies a precise source-attribution prompt into the user's coding agent, and a **Record + Assert merge** that consolidates the two separate workflows into one sub-toolbar. Plus seven release-audit fixes including one critical monorepo dev-mode unblock.
+
+### Added
+
+- **Suggest fix prompt (footer ⌖ Fix button).** Click Fix → click any host-page element → type what you'd like to change → ⌘↵. Hover assembles a fact-only prompt — source `file:line:col`, ancestor source chain (catches styled-components / wrapper-rendered hosts), React component chain, Playwright selector, outer HTML — and writes it to the clipboard, ready to paste into Cursor / Claude Code / Windsurf. The prompt has zero leading instructions — agent gets pure context and the user's intent as a markdown blockquote. Verified end-to-end on five wrapper shapes (bare host, styled-components, className-forwarding, multi-layer nested, Radix Slot/asChild) in `examples/basic-app/src/wrapper-lab.tsx`.
+- **`data-hover-source` Vite transform.** Stamps `data-hover-source="<file>:<line>:<col>"` on every host JSX element in user code. React 19 compatible — runs `enforce: 'pre'` so it sees JSX before `@vitejs/plugin-react` collapses it. Serve-only no-op in production. Toggle via the new `sourceAttribution` plugin option (default true). 11 vitest tests; covers JSX/TSX, lowercase tag filtering, ancestor preservation, TypeScript generics, fragments, syntax errors, and Windows path normalisation.
+- **Record + Assert merged into one sub-toolbar.** Toggle Record in the footer, then switch between four mutually-exclusive modes via the new sub-toolbar above the textarea: **● Record** (records the click as a Playwright step — the default), **✓ Exists** (`expect(SEL).toBeVisible()`), **¶ Says** (`toHaveText("…")`), **= Equals** (`toHaveValue("…")` / `toBeChecked()` for checkboxes). Check sub-modes are one-shot — after the click commits the assertion, the toolbar snaps back to Record. Pattern follows Playwright codegen's five-button toolbar. The hidden ⌥click=assert chord is **removed** — its functionality moves into the Record session itself.
+- **First-use hint above the sub-toolbar.** "Click on the page to record what you do, or switch to a check below." Shown once per browser via `localStorage['hover:sub-toolbar-hint-seen']`, then suppressed.
+- **Pause-during-Fix.** Clicking Fix mid-recording is now allowed. Capture pauses while the popover is open (a new `recordingPaused` flag short-circuits all four capture handlers); recording auto-resumes when Fix closes (Submit or Cancel). The Record button is disabled while Fix is open so you can't accidentally end the paused session.
+- **Wrapper-attribution lab.** New `examples/basic-app/src/wrapper-lab.tsx` exercises five wrapper patterns side-by-side. The file-header comments document the measured behaviour for each (which gets a precise stamp, which falls back to ancestor chain, which falls back to `_debugOwner` name).
+
+### Changed
+
+- **Sub-toolbar labels are plain English, not Playwright jargon.** Earlier internal-API-derived labels (`Action / Visible / Text / Value`) confused users who hadn't used Playwright codegen. Now: `Record / Exists / Says / Equals`. Each has a plain-English tooltip explaining what the check actually checks. User-visible strings throughout — Done card summary, post-action toast, picker overlay badge — say "check" instead of "assertion".
+- **Footer Send button is right-aligned.** The right-pusher span was removed when the sub-toolbar took over the old `⌥click assert` hint; Send drifted left and hugged Fix. One-line CSS fix (`margin-left: auto`).
+- **Done card summary uses per-session check count.** Previously read from the workspace-wide `state.assertions.length`, so a second consecutive recording would report the first session's still-unsaved checks. The Done card now reports only the delta since the current session started; unsaved checks still bake into the eventual Save as Spec.
+
+### Fixed
+
+- **Release-blocker: `pnpm dev` / `pnpm test:e2e` were broken in the monorepo since v0.4.x.** `vite-plugin/src/index.ts` imported `./source-attribution.js`, but the file on disk was `.ts` and `vite-plugin-hover` ships in src-entry shape in the monorepo (`main: src/index.ts`). Vite's esbuild externalises workspace dependencies when bundling the user's `vite.config.ts`, so Node's strict ESM resolver tried to find a literal `.js` next to `index.ts` and failed. Local PRs passed only because Playwright's `reuseExistingServer` reused stale Vite instances from prior sessions. **End users on npm-installed `vite-plugin-hover` were unaffected** (their `publishConfig.main: dist/index.js` had a sibling `dist/source-attribution.js`), but anyone doing fresh `git clone && pnpm install && pnpm dev:example:basic-app` hit `ERR_MODULE_NOT_FOUND`. Fix: inline the source-attribution transform directly into `index.ts`.
+- **Host-page clicks while the Fix popover is open no longer silently re-target it.** Previously a stray click would overwrite the user's typed intent and swap the element preview. Now the click handler returns early when the popover is visible; Cancel / Esc / ⌘↵ is the only path out.
+- **`flashElement` no longer orphans the mint outline.** Back-to-back flashes on the same element used to leave a permanent green ring if the second flash's snapshot caught the first flash's transient style. WeakMap-tracked original style + single in-flight timer means re-entry reuses the first snapshot and resets the timer.
+- **`recordingPaused` flag is always cleared on `setRecording(false)`.** Defensive cleanup — happy path through enter/exit Fix is fine, but HMR re-init or programmatic stop paths could orphan the flag, suppressing all capture in the next Record session.
+- **Recording interrupted by page reload no longer leaks into the next session.** `loadState` now detects a `(recording manual interactions)` user message with no matching done card after it, and synthesizes a "Recorded N actions before reload" done card so the survived steps are still saveable instead of getting swept into whatever runs next.
+- **Esc keyup handler structured for mutual exclusion.** `fixMode` and `assert-*` sub-modes can't actually coexist via the UI, but the previous structure (two consecutive `if`s with no return) made it look like both branches could fire on a single Esc. Restructured as if-fixMode-return-else-if.
+
+### Removed
+
+- **⌥click=assert chord.** Its functionality is now reached via Record's `✓ Exists / ¶ Says / = Equals` sub-modes. The chord was discoverable only via a footer hint and had no equivalent in any other test-recording tool (Playwright codegen, Cypress Studio, Selenium IDE all use a toolbar mode or right-click) — folding it into Record drops the hidden modifier-key surface and produces the same data shape downstream.
+
+### Internal
+
+- 7 new PRs (#27-#33) merged into main. Last release was v0.3.4; this release skips v0.4.x as a separate tag because v0.4.x (`Suggest fix prompt`) and v0.5.x A (`Record + Assert merge`) were merged in the same dev cycle and the README / roadmap now describe them together. CHANGELOG entry rolls them up.
+
 ## [0.3.3] — 2026-05-25
 
 A perf pass on the LLM hot path plus a round of UX fixes that came out of dogfooding the result.
