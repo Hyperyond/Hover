@@ -1547,6 +1547,14 @@
       const target = e.target;
       if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
 
+      // ⇧⌥click → Suggest fix prompt. Sibling to the ⌥click=assert flow.
+      if (e.shiftKey) {
+        suggestFixForElement(target).catch((err) => {
+          addMessage({ kind: 'system', text: `⊘ Suggest-fix failed: ${err?.message || err}` });
+        });
+        return;
+      }
+
       const ass = inspectElement(target);
       if (!ass) {
         addMessage({ kind: 'system', text: `⊘ Alt-click ignored: ${target.tagName.toLowerCase()} has no usable identity` });
@@ -1560,6 +1568,109 @@
     },
     { capture: true },
   );
+
+  // ─────────────────── ⇧⌥click "Suggest fix prompt" ──────────────────
+  //
+  // Hybrid context model — for any clicked element, collect:
+  //   • the element's own data-hover-source (when our Vite transform
+  //     stamped it — works for bare host elements and Radix-Slot/asChild)
+  //   • DOM ancestor data-hover-source chain (the call site for
+  //     className-forwarding / nested wrappers lives in the ancestors)
+  //   • React _debugOwner name chain — owners survived in React 19 even
+  //     though _debugSource didn't; gives grep keywords for styled-
+  //     components and other library-rendered hosts
+  //   • Playwright selector + outerHTML excerpt — universal fallback
+  //
+  // Result is rendered as a prompt and written to clipboard, ready for
+  // the user to paste into their coding-agent chat (Cursor / Claude
+  // Code / Windsurf etc). Hover's own sandboxed agent only has the
+  // Playwright MCP, so this is a clipboard handoff — not a server call.
+
+  async function suggestFixForElement(el) {
+    const ctx = collectFixContext(el);
+    const prompt = renderFixPrompt(ctx);
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      copied = true;
+    } catch {
+      copied = false;
+    }
+    flashElement(el);
+    const label = ctx.selector?.hint || ctx.tag;
+    addMessage({
+      kind: 'system',
+      text: copied
+        ? `📋 Suggest-fix prompt copied for ${label} — paste into your coding agent.`
+        : `⚠ Couldn't copy to clipboard. Prompt for ${label} in console.`,
+    });
+    if (!copied) console.info('[hover] suggest-fix prompt:\n' + prompt);
+  }
+
+  function collectFixContext(el) {
+    const ownStamp = el.getAttribute('data-hover-source');
+
+    // DOM ancestor chain, up to and including the first ancestor that
+    // carries data-hover-source. Capped at 8 to keep prompts tight.
+    const ancestorStamps = [];
+    let cur = el.parentElement;
+    let depth = 0;
+    while (cur && cur !== document.body && depth < 8) {
+      const s = cur.getAttribute?.('data-hover-source');
+      if (s) ancestorStamps.push({ tag: cur.tagName.toLowerCase(), src: s });
+      cur = cur.parentElement;
+      depth++;
+    }
+
+    // React owner-name chain via _debugOwner. Names only — React 19 has
+    // no _debugSource, so we can't get file locations from the fiber.
+    const owners = [];
+    const fiberKey = Object.keys(el).find((k) => k.startsWith('__reactFiber$'));
+    if (fiberKey) {
+      let fiber = el[fiberKey];
+      let safety = 30;
+      while (fiber && safety-- > 0) {
+        const t = fiber.type;
+        const name = typeof t === 'string' ? null : (t?.displayName || t?.name || null);
+        if (name && !owners.includes(name)) owners.push(name);
+        fiber = fiber._debugOwner || fiber.return || null;
+      }
+    }
+
+    const selector = bestSelector(el);
+    const outer = (el.outerHTML || '').slice(0, 400);
+    const tag = el.tagName.toLowerCase();
+    const text = (el.textContent || '').trim().slice(0, 120);
+
+    return { tag, text, ownStamp, ancestorStamps, owners, selector, outer };
+  }
+
+  function renderFixPrompt(ctx) {
+    const lines = [];
+    lines.push("I'd like to change this element in my app. Please open the right file and propose the edit.");
+    lines.push('');
+    lines.push(`Element: <${ctx.tag}>${ctx.text ? ` — "${ctx.text}"` : ''}`);
+    if (ctx.ownStamp) {
+      lines.push(`Source (precise): ${ctx.ownStamp}`);
+    } else {
+      lines.push('Source (precise): unavailable — element rendered by a library wrapper. Use the hints below.');
+    }
+    if (ctx.ancestorStamps.length > 0) {
+      lines.push('Ancestor source chain (closer ancestors first — the call site is usually one of these):');
+      for (const a of ctx.ancestorStamps) lines.push(`  • <${a.tag}> @ ${a.src}`);
+    }
+    if (ctx.owners.length > 0) {
+      lines.push(`Component chain (React owners, innermost → outermost): ${ctx.owners.join(' → ')}`);
+    }
+    if (ctx.selector) {
+      lines.push(`Playwright selector: ${ctx.selector.code}`);
+    }
+    lines.push('Rendered HTML:');
+    lines.push('  ' + ctx.outer);
+    lines.push('');
+    lines.push('Describe the fix you want, then make the edit. Prefer editing the call site over the wrapper definition unless the change should apply everywhere.');
+    return lines.join('\n');
+  }
 
   function inspectElement(el) {
     const sel = bestSelector(el);
