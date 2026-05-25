@@ -2172,6 +2172,12 @@
       recordBtn.classList.remove('recording');
       recLabel.textContent = 'Record';
       host.classList.remove('recording');
+      // Defensive: if the session somehow ended while a Fix popover was
+      // open (HMR re-init, external call), recordingPaused could stick
+      // true and silently suppress the next session's capture handlers.
+      // Always clear here.
+      recordingPaused = false;
+      host.classList.remove('record-paused');
       // Clear any in-flight assert sub-mode + overlay.
       setRecordSubMode('action');
       flushAllFills();
