@@ -153,7 +153,7 @@ All three files check into the same git repo as the rest of your code. The momen
 
 Everything checks into git. Nothing lives in a vendor's database. A spec written on a developer's laptop on Monday is reviewed by QA on Tuesday and runs in CI from Wednesday — same file, no export step.
 
-## What you get in v0.2.x (Phase 2 shipped)
+## What you get today
 
 - **Vite plugin** that injects a Shadow-DOM widget into your dev page. No-op in production. Marked `data-hover="true"` so your own Playwright runs can skip it.
 - **No API key, no `.env`, no per-token billing.** Hover spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for (Claude Pro / Max, ChatGPT Pro). The `@hover-dev/core` package contains zero LLM SDK code — there's nothing to authenticate against. Get the most out of the agent quota you've already bought.
@@ -166,8 +166,13 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
   - **Save as Playwright spec** → `__vibe_tests__/<slug>.spec.ts`, uses `getByRole / getByLabel / getByTestId` semantic selectors. JSDoc header carries plain-English Steps + Expected blocks so non-coders can review.
   - **Save as Skill** → `.claude/skills/<slug>/SKILL.md`, replayable by saying *"execute login-as-claude"* in a future conversation.
   - **Save as Jira case** → `__vibe_tests__/<slug>.case.csv`, an Xray-compatible multi-row CSV that imports straight into Jira / Xray / Zephyr Scale as a Manual Test issue.
-- **Alt-click "Assert This"** — Hold ⌥, click any element in your page, get a generated assertion (`expect(...).toHaveValue / toBeChecked / toHaveText / …`). Assertions accumulate; the next *Save as spec* bakes them in.
-- **Record mode** — Toggle Record, do the flow manually, get the same step sequence as if the agent had driven it. The downstream save path doesn't care whether the steps came from a human or from Claude.
+- **Record mode with built-in checks** — Toggle Record in the footer, do the flow manually, get the same step sequence as if the agent had driven it. While recording, the sub-toolbar lets you switch what the next click captures:
+  - **● Record** — record the click / fill / select as a Playwright step (default)
+  - **✓ Exists** — check the element appears: `expect(SEL).toBeVisible()`
+  - **¶ Says** — check the element's text matches: `expect(SEL).toHaveText("…")`
+  - **= Equals** — check an input / select / checkbox's current value
+  Check modes are one-shot — after the click commits the assertion, you snap back to Record. The same Save card downstream takes everything: actions and checks bake into the same `.spec.ts`. The downstream save path doesn't care whether the steps came from a human or from Claude.
+- **Fix prompt button** — A separate **⌖ Fix** button next to Record. Click it, click any element on the page, type *what you'd like to change*, and Hover assembles a precise prompt — source `file:line:col`, ancestor source chain, React component chain, Playwright selector, outer HTML — onto your clipboard. Paste into Cursor / Claude Code / Windsurf and the agent has exact context. See [Fix prompt](#fix-prompt) below.
 - **Session persistence + resume.** Widget state survives page reload via `localStorage`; the next prompt resumes the same `claude --session-id`.
 
 ### Bug discovery as a first-class output
@@ -191,6 +196,36 @@ The widget header shows the active agent as a pill. Click it for a dropdown of e
 `claude` is the recommended default (hard sandbox, MCP-only tool surface). `codex` is wired as the second-class citizen (soft sandbox — codex doesn't expose a built-in-tool deny list at the CLI level, so we lean on its `--sandbox read-only` flag + a strict `developer_instructions` prompt). The widget marks soft-sandbox agents with a ⚠ badge so you know the surface is broader.
 
 Adding `cursor-agent` / `aider` / `gemini-cli` / your own coding-agent CLI is one file in [`packages/core/src/agents/registry.ts`](./packages/core/src/agents/registry.ts).
+
+## Fix prompt
+
+The widget knows the source location of every host element on your page — a Vite transform stamps `data-hover-source="file:line:col"` onto every `<button>` / `<div>` / `<input>` you authored in JSX. Click the **⌖ Fix** button next to Record, click any element, type what you'd like to change, hit ⌘↵, and Hover assembles a precise prompt into your clipboard. Paste it into Cursor / Claude Code / Windsurf and your agent has exact context.
+
+The prompt is **fact-only** — no leading instructions for the agent to echo back, no "please open the right file" boilerplate. Just your intent (as a markdown blockquote) followed by what Hover observed:
+
+```
+Change this element in my app:
+
+> Make this button red and add a loading spinner on click
+
+Element: <button> — "Add to cart"
+Source of likely target: src/components/ShadcnButton.tsx:42:11
+Ancestor sources (closer ancestors first):
+  • <div> @ src/routes/Cart.tsx:71:6
+  • <section> @ src/routes/Cart.tsx:64:4
+  • <main> @ src/App.tsx:11:6
+React component chain (innermost first): ShadcnButton → CartLineItem → Cart → App
+Playwright selector: page.getByRole("button", { name: "Add to cart" })
+Outer HTML:
+  <button data-hover-source="src/components/ShadcnButton.tsx:42:11" class="btn-primary">Add to cart</button>
+```
+
+Two parts of this matter:
+
+- **Likely-target descent** — if you click a `<div>` wrapping a button, Hover auto-points the prompt at the inner button (it's almost always what you meant). The `<div>` itself appears as "Clicked" in the prompt so the agent has both anchors.
+- **Ancestor chain catches wrapper-rendered hosts** — `<StyledButton>` renders a `<button>` from inside `styled-components`' source; Hover's transform can't reach into a library, so the element's *own* source stamp would point to library internals. But the **DOM ancestor chain** still carries the user's call site — typically the `<div>` that wraps `<StyledButton>` in your component. The agent reads the chain and lands on the right file. [`examples/basic-app/src/wrapper-lab.tsx`](./examples/basic-app/src/wrapper-lab.tsx) exercises five wrapper shapes (bare host, styled-components, className-forwarding, multi-layer nested, Radix Slot/asChild) with measured findings recorded in the file header.
+
+Clicking **Fix mid-recording is allowed** — Record pauses while the popover is open and resumes automatically when you close it (Submit or Cancel). The Record button is disabled during Fix so you can't accidentally end the paused session; Fix's Submit / Cancel is the only path back.
 
 ## Quick start
 
@@ -328,6 +363,8 @@ hover({
   agentId: 'claude',       // matches @hover-dev/core's agent registry
   model: 'sonnet',         // 'opus' costs ~5× — use sonnet for browser driving
   maxBudgetUsd: undefined, // hard $ ceiling per agent invocation; no default — use Stop in the widget
+  sourceAttribution: true, // stamps data-hover-source="file:line:col" on host JSX elements;
+                           // dev-only — set false to disable if another tool conflicts
 });
 ```
 
@@ -394,18 +431,22 @@ If your favourite agent (`codex`, `cursor-agent`, `aider`, `gemini`, `qwen-code`
 - **v0.0.1-poc** — Phase 0 — end-to-end feasibility (`claude -p` drives Chrome via CDP) ✓
 - **v0.1.x** — Phase 1 — Vite plugin + chat UI + persistent service + Save as Spec ✓
 - **v0.2.x** — Phase 2 — multi-agent (claude + codex), dark widget v2, Result + Findings cards, custom tooltip, code-quality pass ✓
-- **v0.3.x** — **`@hover-dev/next` — Next.js 16+ Turbopack-native integration** ✓ **(you are here)**. Three pieces — `withHover(nextConfig, opts)` wrapper for `next.config.mjs`, a `<HoverScript />` Server Component for `app/layout.tsx`, and a `register()` helper for `instrumentation.ts`. The existing `webpack-plugin-hover` only covers `next dev --webpack`; this package is the Turbopack-native path. `npx @hover-dev/cli add` routes Next projects here automatically.
-- **v0.4.x** — **Click → Suggest fix prompt.** Because Hover lives inside the dev page, it can read the source-location annotations Vite/framework plugins inject (React fiber `_debugSource`, Vue's `vite-plugin-vue-inspector` `data-v-inspector` attribute) and pair them with the DOM selector chain. Each row in the Findings card gets a "Suggest fix" button that copies a precise prompt — file path + line + column + component path + selector — straight into your coding-agent chat. *Caveat: React ≤18 and Vue + inspector plugin work out of the box; React 19 dropped `_debugSource` so we'll ship our own Vite transform (framework-agnostic `data-hover-source` attributes) to fill the gap.*
-- **v0.5.x** — **multi-tab / cross-origin spike + more agents.**
-  - Multi-tab / cross-origin flows (Stripe, OAuth, "Pay with PayHover") — spike phase. `examples/payment-provider` already stresses the `window.open` → `postMessage` callback path, but the agent's handling of `browser_tabs(list/select)` is brittle in the wild. Tracking issue to follow; shape TBD before we commit it to a release.
+- **v0.3.x** — **`@hover-dev/next` — Next.js 16+ Turbopack-native integration** ✓. Three pieces — `withHover(nextConfig, opts)` wrapper for `next.config.mjs`, a `<HoverScript />` Server Component for `app/layout.tsx`, and a `register()` helper for `instrumentation.ts`. The existing `webpack-plugin-hover` only covers `next dev --webpack`; this package is the Turbopack-native path. `npx @hover-dev/cli add` routes Next projects here automatically.
+- **v0.4.x** — **Click → Suggest fix prompt.** ✓ Independent footer Fix button + element picker + intent popover + clipboard handoff. A Vite transform stamps `data-hover-source="file:line:col"` on every host JSX element (React 19 compatible — runs `enforce: 'pre'` so it sees JSX before `@vitejs/plugin-react` collapses it). The picker walks the DOM ancestor chain to catch wrapper-rendered hosts (styled-components, className-forwarding, multi-layer nested, Radix Slot/asChild — all five shapes verified against `examples/basic-app/src/wrapper-lab.tsx`). React component chain comes from `_debugOwner`. Vue / Svelte source-attribution is planned but not yet shipped.
+- **v0.5.x** — **Merged Record + Assert workflow + AI-compiled spec output.** Three stages:
+  - **A** ✓ — Record mode now contains a sub-toolbar with four modes: `● Record / ✓ Exists / ¶ Says / = Equals`. Check sub-modes are one-shot and follow Playwright codegen's pattern. The hidden `⌥click=assert` chord is gone — Record and Fix coexist via pause-insert-resume: clicking Fix mid-recording pauses capture, and recording resumes automatically when the Fix popover closes. **(you are here)**
+  - **B** planned — Record steps will carry the same source-attribution metadata as the Fix prompt (own `data-hover-source` + ancestor chain + `_debugOwner` chain), feeding C.
+  - **C** planned — `writeSpec.ts` rewritten to call your local CLI agent (claude / codex) to AI-compile `state.messages` + `state.assertions` into a polished `.spec.ts`, falling back to the existing deterministic `translateStep` codegen on failure. Outputs are still standard `@playwright/test` files; the AI is an authoring-time aid, not a CI dependency.
+- **v0.6.x** — **multi-tab / cross-origin + more agents + Chrome extension.**
+  - Multi-tab / cross-origin flows (Stripe, OAuth, "Pay with PayHover") — `examples/payment-provider` already stresses the `window.open` → `postMessage` path, but the agent's handling of `browser_tabs(list/select)` is brittle in the wild.
   - More agents wired into the [registry](./packages/core/src/agents/registry.ts) — `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`.
-- **v0.6.x** — Chrome extension (drop the Vite-plugin dependency for non-Vite stacks)
+  - Chrome extension (drops the Vite-plugin dependency for non-Vite stacks).
 
-v0.3.x is what you can use today.
+v0.5.x A is what you can use today.
 
 ## Project status
 
-🟢 **v0.3.x shipped** — dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. The navigation-to-same-origin quirk that occasionally destroyed the widget mid-stream is caught up-front by a hardened system prompt (the agent is explicitly forbidden from `browser_navigate`-ing to the active origin). Auto-resumes on reload if it slips through.
+🟢 **v0.4.x + v0.5.x stage A shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. The recording workflow gained the Playwright-codegen-style sub-toolbar (`Record / Exists / Says / Equals`) and a dedicated Fix prompt button; Fix is enterable mid-recording (pauses capture, auto-resumes on close). A Vite transform stamps `data-hover-source` for the Fix prompt's element resolution.
 
 Tracking issues at [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues).
 
