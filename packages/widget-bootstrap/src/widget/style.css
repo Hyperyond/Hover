@@ -1028,6 +1028,10 @@ textarea:disabled { background: var(--bg-2); color: var(--text-dim); cursor: not
 }
 
 .send {
+  /* margin-left: auto pushes Send to the flex container's far right.
+   * Previously a flex:1 .hint span did this; that span was removed
+   * in the v0.5 sub-toolbar work, so Send is now the right-pusher. */
+  margin-left: auto;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 10px 5px 12px;
   border-radius: 7px; border: 1px solid var(--accent);
