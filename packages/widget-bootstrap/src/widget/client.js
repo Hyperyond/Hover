@@ -1605,13 +1605,20 @@
     pickerLastTarget = target;
   }
 
-  // Esc cancels whichever mode is active.
+  // Esc cancels whichever mode is active. The two branches are mutually
+  // exclusive — fixMode and assert-* can't both be active (fixMode is set
+  // only by enterFixMode which is reachable only when not in an assert
+  // sub-mode), but the early return makes that invariant explicit and
+  // avoids the surprise of both branches firing if a future code path
+  // ever managed to overlap them.
   document.addEventListener('keyup', (e) => {
-    if (e.key === 'Escape') {
-      if (fixMode) cancelFixMode();
-      if (pickerMode && pickerMode.startsWith('assert-')) {
-        setRecordSubMode('action'); // assert-* → action
-      }
+    if (e.key !== 'Escape') return;
+    if (fixMode) {
+      cancelFixMode();
+      return;
+    }
+    if (pickerMode && pickerMode.startsWith('assert-')) {
+      setRecordSubMode('action');
     }
   });
   document.addEventListener('mousemove', (e) => {
@@ -1831,6 +1838,11 @@
   // Capture-phase click during fix-mode picks the element and shows popover.
   document.addEventListener('click', (e) => {
     if (!fixMode) return;
+    // Once the popover is open, the user is editing intent for an already
+    // chosen element. Letting a stray click on the host page silently
+    // re-target the popover (overwriting their typed text) is a footgun.
+    // Cancel/Esc/⌘↵ is the only way out from the popover state.
+    if (fixPopover && fixPopover.classList.contains('visible')) return;
     if (e.composedPath().includes(host)) return; // ignore clicks inside widget
     e.preventDefault();
     e.stopPropagation();
