@@ -150,6 +150,35 @@
       if (typeof parsed.currentAgent === 'string' && parsed.currentAgent) {
         state.currentAgent = parsed.currentAgent;
       }
+      // Salvage an interrupted recording: if the last "(recording manual
+      // interactions)" user message has no matching done card after it,
+      // the user reloaded mid-recording. Synthesize a done card so the
+      // session is closeable / saveable / not leaking into the next run.
+      let lastRecordingIdx = -1;
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.kind === 'user' && m.text === '(recording manual interactions)') {
+          lastRecordingIdx = i;
+          break;
+        }
+      }
+      if (lastRecordingIdx >= 0) {
+        const hasDoneAfter = state.messages
+          .slice(lastRecordingIdx + 1)
+          .some((m) => m.kind === 'done' && m.source === 'recording');
+        if (!hasDoneAfter) {
+          const captured = state.messages
+            .slice(lastRecordingIdx + 1)
+            .filter((m) => m.kind === 'step').length;
+          state.messages.push({
+            kind: 'done',
+            turns: captured,
+            costUsd: 0,
+            source: 'recording',
+            summary: `Recorded ${captured} action${captured === 1 ? '' : 's'} before reload. Click Save as Skill / Spec on this card to keep it.`,
+          });
+        }
+      }
     } catch {
       /* corrupt — start fresh */
     }
