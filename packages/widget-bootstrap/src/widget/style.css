@@ -1539,8 +1539,8 @@ textarea:disabled { background: var(--bg-2); color: var(--text-dim); cursor: not
  */
 .record-toolbar {
   display: none;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px 14px;
   border-top: 1px solid var(--line);
   background: var(--bg-2);
@@ -1552,6 +1552,17 @@ textarea:disabled { background: var(--bg-2); color: var(--text-dim); cursor: not
 @keyframes rec-toolbar-in {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+.record-toolbar-hint {
+  font: 400 11px/1.4 ui-sans-serif, system-ui, sans-serif;
+  color: var(--text-mute);
+  padding: 2px 0;
+}
+.record-toolbar-hint[hidden] { display: none; }
+.record-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .record-toolbar-label {
   font: 500 11px/1 ui-sans-serif, system-ui, sans-serif;

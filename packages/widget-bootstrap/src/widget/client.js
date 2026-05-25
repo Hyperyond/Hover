@@ -1567,9 +1567,9 @@
   function badgeForMode(mode) {
     switch (mode) {
       case 'fix': return 'Fix';
-      case 'assert-visible': return 'Assert: Visible';
-      case 'assert-text':    return 'Assert: Text';
-      case 'assert-value':   return 'Assert: Value';
+      case 'assert-visible': return 'Check: Exists';
+      case 'assert-text':    return 'Check: Says';
+      case 'assert-value':   return 'Check: Equals';
       default: return '';
     }
   }
@@ -1685,6 +1685,7 @@
 
   function enterFixMode() {
     if (fixMode) return;
+    if (recording) return; // mutex: can't enter Fix while recording
     fixMode = true;
     pickerMode = 'fix';
     // Ensure panel is open so the user can see the popover when they click.
@@ -1692,6 +1693,7 @@
     host.classList.add('picker-active');
     host.classList.add('fix-active');
     fixBtn.classList.add('active');
+    updateMutexUi();
     if (lastMouseX >= 0) {
       const el = document.elementFromPoint(lastMouseX, lastMouseY);
       updatePickerOverlay(el, 'fix');
@@ -1707,6 +1709,7 @@
     fixBtn.classList.remove('active');
     pickerOverlay.classList.remove('visible');
     pickerLastTarget = null;
+    updateMutexUi();
   }
 
   function cancelFixMode() {
@@ -1774,6 +1777,30 @@
         enterFixMode();
       }
     });
+  }
+
+  // Record + Fix are mutually exclusive: each must be off before the other
+  // can be entered. We could auto-cancel the active mode when the user
+  // clicks the other button, but that would silently commit a recording
+  // session the user didn't intend to finish — so we disable instead.
+  function updateMutexUi() {
+    if (!fixBtn || !recordBtn) return;
+    // Disable Fix while recording.
+    if (recording) {
+      fixBtn.disabled = true;
+      fixBtn.setAttribute('data-tooltip', 'Stop recording before suggesting a fix');
+    } else {
+      fixBtn.disabled = false;
+      fixBtn.setAttribute('data-tooltip', 'Click a page element, describe what to change, copy a prompt for your coding agent');
+    }
+    // Disable Record while fix-mode is active.
+    if (fixMode) {
+      recordBtn.disabled = true;
+      recordBtn.setAttribute('data-tooltip', 'Cancel Fix before recording');
+    } else {
+      recordBtn.disabled = false;
+      recordBtn.setAttribute('data-tooltip', 'Record your own clicks/typing on the page');
+    }
   }
   if (fixPopover) {
     fixPopoverCopy.addEventListener('click', commitFixPopover);
@@ -2102,9 +2129,18 @@
       textarea.disabled = true;
       addMessage({ kind: 'user', text: '(recording manual interactions)' });
       recordStartIdx = state.messages.length;
-      // Show sub-toolbar; default to Action mode.
+      // Show sub-toolbar; default to Record mode. First-use hint above
+      // the mode buttons fades in once per browser, then we set a flag
+      // so it stays hidden on subsequent recordings.
       host.classList.add('recording');
+      const hintEl = $('.record-toolbar-hint');
+      if (hintEl) {
+        const seen = localStorage.getItem('hover:sub-toolbar-hint-seen') === '1';
+        hintEl.hidden = seen;
+        if (!seen) localStorage.setItem('hover:sub-toolbar-hint-seen', '1');
+      }
       setRecordSubMode('action');
+      updateMutexUi();
     } else {
       recordBtn.classList.remove('recording');
       recLabel.textContent = 'Record';
@@ -2118,7 +2154,7 @@
       const captured = state.messages.slice(recordStartIdx).filter(m => m.kind === 'step').length;
       const assertCount = state.assertions.length;
       const parts = [`Recorded ${captured} action${captured === 1 ? '' : 's'}`];
-      if (assertCount > 0) parts.push(`+ ${assertCount} assertion${assertCount === 1 ? '' : 's'}`);
+      if (assertCount > 0) parts.push(`and ${assertCount} check${assertCount === 1 ? '' : 's'}`);
       const lead = parts.join(' ');
       addMessage({
         kind: 'done',
@@ -2127,11 +2163,13 @@
         source: 'recording',
         summary: `${lead}. Click Save as Skill / Spec on this card to keep it.`,
       });
+      updateMutexUi();
     }
   };
 
   recordBtn.addEventListener('click', () => {
     if (running) return;
+    if (fixMode) return; // mutex with Fix
     setRecording(!recording);
   });
 
@@ -2226,9 +2264,10 @@
         e.preventDefault();
         e.stopPropagation();
         const ass = buildRecordingAssertion(el, recordSubMode);
+        const checkLabel = badgeForMode(recordSubMode).replace('Check: ', '').toLowerCase();
         if (!ass) {
-          addMessage({ kind: 'system', text: `⊘ Assert ignored: ${el.tagName.toLowerCase()} doesn't support ${recordSubMode}` });
-          showPickerToast(`<${el.tagName.toLowerCase()}> doesn't support ${recordSubMode}`, { error: true });
+          addMessage({ kind: 'system', text: `⊘ Check skipped: <${el.tagName.toLowerCase()}> doesn't support a "${checkLabel}" check` });
+          showPickerToast(`<${el.tagName.toLowerCase()}> doesn't support a "${checkLabel}" check`, { error: true });
           setRecordSubMode('action');
           return;
         }
@@ -2236,8 +2275,8 @@
         saveState();
         updateAssertBadge();
         flashElement(el);
-        addMessage({ kind: 'system', text: `✓ Asserted: ${ass.hint}` });
-        showPickerToast(`Asserted: ${ass.hint}`);
+        addMessage({ kind: 'system', text: `✓ Check added: ${ass.hint}` });
+        showPickerToast(`Check added: ${ass.hint}`);
         setRecordSubMode('action');
         return;
       }
