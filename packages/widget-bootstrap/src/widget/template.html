@@ -88,29 +88,38 @@
     Record sub-toolbar — only visible while recording (.recording class on
     the host). Four mutually-exclusive modes; the active one decides what
     the next host-page click captures:
-      • Action            (default) records a click / fill / select step
-      • Assert visibility one-shot: emits expect(SEL).toBeVisible()
-      • Assert text       one-shot: emits expect(SEL).toHaveText("...")
-      • Assert value      one-shot: emits expect(SEL).toHaveValue("...")
-    Assert sub-modes are one-shot — after the next click commits the
-    assertion, the toolbar snaps back to Action. Pattern follows
-    Playwright codegen's three assert buttons in its toolbar.
+      • Record   (default) — record the click / fill / select as an action step
+      • Exists   one-shot  — check the element appears: expect(SEL).toBeVisible()
+      • Says     one-shot  — check the element's visible text: expect(SEL).toHaveText(...)
+      • Equals   one-shot  — check an input/select/checkbox's value: expect(SEL).toHaveValue(...)
+    Assert sub-modes are one-shot — after the next click commits the check,
+    the toolbar snaps back to Record. Pattern follows Playwright codegen's
+    assert buttons. Internal data-mode values keep the original assert-*
+    names so the reducer / state shape doesn't churn.
+
+    First-use hint above the toolbar appears once per browser, suppressed
+    after via the localStorage key 'hover:sub-toolbar-hint-seen'.
   -->
   <div class="record-toolbar" aria-hidden="true">
-    <span class="record-toolbar-label">Mode:</span>
-    <div class="record-toolbar-modes" role="radiogroup" aria-label="Recording mode">
-      <button type="button" class="rec-mode active" data-mode="action" role="radio" aria-checked="true">
-        <span class="rec-mode-icon" aria-hidden="true">●</span>Action
-      </button>
-      <button type="button" class="rec-mode" data-mode="assert-visible" role="radio" aria-checked="false" data-tooltip="Next click → expect(...).toBeVisible()">
-        <span class="rec-mode-icon" aria-hidden="true">✓</span>Visible
-      </button>
-      <button type="button" class="rec-mode" data-mode="assert-text" role="radio" aria-checked="false" data-tooltip="Next click → expect(...).toHaveText(...)">
-        <span class="rec-mode-icon" aria-hidden="true">¶</span>Text
-      </button>
-      <button type="button" class="rec-mode" data-mode="assert-value" role="radio" aria-checked="false" data-tooltip="Next click → expect(...).toHaveValue(...)">
-        <span class="rec-mode-icon" aria-hidden="true">=</span>Value
-      </button>
+    <div class="record-toolbar-hint" hidden>
+      Click on the page to record what you do, or switch to a check below.
+    </div>
+    <div class="record-toolbar-row">
+      <span class="record-toolbar-label">Mode:</span>
+      <div class="record-toolbar-modes" role="radiogroup" aria-label="Recording mode">
+        <button type="button" class="rec-mode active" data-mode="action" role="radio" aria-checked="true" data-tooltip="Record your clicks, typing, and selections as a Playwright test">
+          <span class="rec-mode-icon" aria-hidden="true">●</span>Record
+        </button>
+        <button type="button" class="rec-mode" data-mode="assert-visible" role="radio" aria-checked="false" data-tooltip="Check that the next element you click appears on the page">
+          <span class="rec-mode-icon" aria-hidden="true">✓</span>Exists
+        </button>
+        <button type="button" class="rec-mode" data-mode="assert-text" role="radio" aria-checked="false" data-tooltip="Check that the next element you click contains this exact text">
+          <span class="rec-mode-icon" aria-hidden="true">¶</span>Says
+        </button>
+        <button type="button" class="rec-mode" data-mode="assert-value" role="radio" aria-checked="false" data-tooltip="Check an input, select, or checkbox's current value">
+          <span class="rec-mode-icon" aria-hidden="true">=</span>Equals
+        </button>
+      </div>
     </div>
   </div>
 

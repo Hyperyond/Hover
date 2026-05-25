@@ -1567,9 +1567,9 @@
   function badgeForMode(mode) {
     switch (mode) {
       case 'fix': return 'Fix';
-      case 'assert-visible': return 'Assert: Visible';
-      case 'assert-text':    return 'Assert: Text';
-      case 'assert-value':   return 'Assert: Value';
+      case 'assert-visible': return 'Check: Exists';
+      case 'assert-text':    return 'Check: Says';
+      case 'assert-value':   return 'Check: Equals';
       default: return '';
     }
   }
@@ -2102,8 +2102,16 @@
       textarea.disabled = true;
       addMessage({ kind: 'user', text: '(recording manual interactions)' });
       recordStartIdx = state.messages.length;
-      // Show sub-toolbar; default to Action mode.
+      // Show sub-toolbar; default to Record mode. First-use hint above
+      // the mode buttons fades in once per browser, then we set a flag
+      // so it stays hidden on subsequent recordings.
       host.classList.add('recording');
+      const hintEl = $('.record-toolbar-hint');
+      if (hintEl) {
+        const seen = localStorage.getItem('hover:sub-toolbar-hint-seen') === '1';
+        hintEl.hidden = seen;
+        if (!seen) localStorage.setItem('hover:sub-toolbar-hint-seen', '1');
+      }
       setRecordSubMode('action');
     } else {
       recordBtn.classList.remove('recording');
@@ -2118,7 +2126,7 @@
       const captured = state.messages.slice(recordStartIdx).filter(m => m.kind === 'step').length;
       const assertCount = state.assertions.length;
       const parts = [`Recorded ${captured} action${captured === 1 ? '' : 's'}`];
-      if (assertCount > 0) parts.push(`+ ${assertCount} assertion${assertCount === 1 ? '' : 's'}`);
+      if (assertCount > 0) parts.push(`and ${assertCount} check${assertCount === 1 ? '' : 's'}`);
       const lead = parts.join(' ');
       addMessage({
         kind: 'done',
@@ -2226,9 +2234,10 @@
         e.preventDefault();
         e.stopPropagation();
         const ass = buildRecordingAssertion(el, recordSubMode);
+        const checkLabel = badgeForMode(recordSubMode).replace('Check: ', '').toLowerCase();
         if (!ass) {
-          addMessage({ kind: 'system', text: `⊘ Assert ignored: ${el.tagName.toLowerCase()} doesn't support ${recordSubMode}` });
-          showPickerToast(`<${el.tagName.toLowerCase()}> doesn't support ${recordSubMode}`, { error: true });
+          addMessage({ kind: 'system', text: `⊘ Check skipped: <${el.tagName.toLowerCase()}> doesn't support a "${checkLabel}" check` });
+          showPickerToast(`<${el.tagName.toLowerCase()}> doesn't support a "${checkLabel}" check`, { error: true });
           setRecordSubMode('action');
           return;
         }
@@ -2236,8 +2245,8 @@
         saveState();
         updateAssertBadge();
         flashElement(el);
-        addMessage({ kind: 'system', text: `✓ Asserted: ${ass.hint}` });
-        showPickerToast(`Asserted: ${ass.hint}`);
+        addMessage({ kind: 'system', text: `✓ Check added: ${ass.hint}` });
+        showPickerToast(`Check added: ${ass.hint}`);
         setRecordSubMode('action');
         return;
       }
