@@ -2,6 +2,7 @@ import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import { getWidgetScript } from '@hover-dev/widget-bootstrap';
 import type { Plugin } from 'vite';
+import { transformSourceAttribution } from './source-attribution.js';
 
 export interface HoverOptions {
   /** Port for the local Hover WebSocket service (default 51789). */
@@ -25,6 +26,11 @@ export interface HoverOptions {
    *  user lets them; the widget's running-cost chip + Stop button are the
    *  intended control. Set a number here if you want a hard cutoff. */
   maxBudgetUsd?: number;
+  /** Stamp `data-hover-source="<file>:<line>:<col>"` on host JSX elements in
+   *  user code so the widget's element picker can produce a precise file
+   *  location. Dev-only; serve-mode plugin is a no-op in production anyway.
+   *  Default true. Set false to disable if it conflicts with another tool. */
+  sourceAttribution?: boolean;
 }
 
 export function hover(options: HoverOptions = {}): Plugin {
@@ -38,20 +44,37 @@ export function hover(options: HoverOptions = {}): Plugin {
   // counter in its header so the user can Stop when they've seen enough.
   // Pass an explicit number here to reinstate a hard ceiling.
   const maxBudgetUsd = options.maxBudgetUsd;
+  const sourceAttribution = options.sourceAttribution ?? true;
 
   let enabled = true;
   let service: ServiceHandle | null = null;
   let servicePort = port;
+  let viteRoot = process.cwd();
 
   return {
     name: 'hover',
     apply: 'serve',
+    // Must run before @vitejs/plugin-react / vue / svelte transforms — those
+    // collapse JSX/templates into render-function calls, leaving no host-tag
+    // AST for source-attribution to walk. `enforce: 'pre'` puts us at the
+    // top of the user-plugin chain.
+    enforce: 'pre',
 
     configResolved(config) {
       enabled =
         typeof options.enabled === 'function'
           ? options.enabled({ mode: config.mode })
           : options.enabled ?? config.mode === 'development';
+      viteRoot = config.root;
+    },
+
+    transform(code, id) {
+      if (!enabled || !sourceAttribution) return null;
+      // Strip Vite's `?query` / `#hash` suffixes before extension check.
+      const cleanId = id.split('?')[0];
+      if (!/\.(jsx|tsx)$/.test(cleanId)) return null;
+      if (cleanId.includes('/node_modules/')) return null;
+      return transformSourceAttribution({ code, filename: cleanId, root: viteRoot });
     },
 
     async configureServer(server) {
