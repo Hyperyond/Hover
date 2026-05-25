@@ -35,8 +35,6 @@
  *   server → client (in addition to those documented in the file body):
  *     { type: 'agents',        payload: { current: string, available: AgentAvailability[] } }
  */
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
 import {
@@ -46,10 +44,11 @@ import {
 } from './agents/detect.js';
 import { getAgent } from './agents/registry.js';
 import type { InvokeEvent } from './agents/types.js';
-import { preflightCDP } from './playwright/preflight.js';
+import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
+import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
 import { listSkills } from './skills/writeSkill.js';
 import { send, type ClientMessage } from './service/types.js';
-import { buildCdpHint } from './service/cdpHint.js';
+import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
 import {
   handleCheckCdp,
   handleLaunchChrome,
@@ -61,9 +60,6 @@ import {
   SPEC_CONFIG,
   CASE_CSV_CONFIG,
 } from './service/saveHandlers.js';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
 
 export interface ServiceOptions {
   port: number;
@@ -166,12 +162,17 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   // so the user can hit Stop when they've seen enough. Pass maxBudgetUsd
   // explicitly (or via the Vite plugin option) if a hard ceiling is needed.
   const maxBudgetUsd = opts.maxBudgetUsd;
-  const mcpConfig = opts.mcpConfig ?? DEFAULT_MCP_CONFIG;
   const cdpUrl = opts.cdpUrl ?? 'http://localhost:9222';
   const devRoot = opts.devRoot ?? process.cwd();
 
   const wss = await pickAndBind('127.0.0.1', requestedPort, PORT_RETRIES);
   const port = (wss.address() as { port: number }).port;
+
+  // Resolve a CDP-pinned MCP config pointing at our local
+  // `@playwright/mcp` install. See resolveMcpConfig.ts for the rationale
+  // (avoids `npx -y @playwright/mcp@latest`'s registry round-trip on
+  // every command — 300 ms - 2 s of hot-path latency).
+  const mcpConfig = opts.mcpConfig ?? resolveMcpConfig({ cdpUrl, port });
 
   // Surface post-listen errors instead of crashing the host process.
   wss.on('error', err => {
@@ -190,37 +191,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     return agentAvailabilityCache;
   };
 
-  // Cache the CDP preflight result for a short window. preflightCDP() does
-  // two HTTP roundtrips to Chrome's debug endpoint (/json/version +
-  // /json/list); on a multi-turn session that's 100-300ms of latency before
-  // every follow-up — directly observable as a pause between hitting send
-  // and the agent starting work. A 5s TTL is comfortably shorter than the
-  // time it takes a user to type+send another message, but long enough that
-  // back-to-back commands skip the roundtrip. Failures are NOT cached so
-  // the user gets immediate feedback when they fix the underlying issue
-  // (e.g. start Chrome). Cache is invalidated whenever an invocation fails
-  // (defensive: if MCP somehow spawned its own Chromium we want the next
-  // preflight to re-probe).
-  const PREFLIGHT_TTL_MS = 5000;
-  let cachedPreflight: Awaited<ReturnType<typeof preflightCDP>> | null = null;
-  let cachedPreflightAt = 0;
-  const getPreflight = async (): Promise<Awaited<ReturnType<typeof preflightCDP>>> => {
-    const now = Date.now();
-    if (cachedPreflight?.ok && now - cachedPreflightAt < PREFLIGHT_TTL_MS) {
-      return cachedPreflight;
-    }
-    const result = await preflightCDP(cdpUrl);
-    if (result.ok) {
-      cachedPreflight = result;
-      cachedPreflightAt = now;
-    } else {
-      cachedPreflight = null;
-    }
-    return result;
-  };
-  const invalidatePreflight = () => {
-    cachedPreflight = null;
-  };
+  // The CDP preflight cache (shared between this service's command path
+  // and the widget's `check-cdp` ping via `cdpStatus.checkCdpStatus`)
+  // lives in ./playwright/preflightCache.ts. 30-second TTL, keyed by
+  // cdpUrl. See that file for the rationale.
 
   const broadcastAgents = async (): Promise<void> => {
     const available = await getAvailability(false);
@@ -376,7 +350,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Playwright MCP server would silently launch its own Chromium —
         // and Hover's premise is to drive the user's existing Chrome (with
         // their dev state, cookies, devtools open), never spawn a fresh one.
-        const cdp = await getPreflight();
+        const cdp = await getPreflight(cdpUrl);
         if (!cdp.ok) {
           send(ws, {
             type: 'event',
@@ -395,7 +369,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // a wasteful full-page reload that also destroys the Hover widget
         // momentarily (the widget re-injects + recovers, but the agent's
         // own session sometimes gets confused).
-        const appendSystemPrompt = buildCdpHint(cdp.tabs);
+        // First turn pays the full rules + narration block; follow-up
+        // turns (`resumeSessionId` set) get only the volatile tab list.
+        // The static rules are already in the prior turn's context, and
+        // re-sending them fragments Anthropic's prompt-cache fingerprint
+        // (cache hits require byte-identical system prompts across turns).
+        // See cdpHint.ts for the why.
+        const appendSystemPrompt = resumeSessionId
+          ? buildCdpHintResume(cdp.tabs)
+          : buildCdpHint(cdp.tabs);
 
         // Snapshot the agent id so a switch-agent message during the run
         // can't smear two agents across one invocation. (We also gate
@@ -463,7 +445,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Chrome dying, MCP spawning a stray Chromium, the user closing
         // their debug window — anything that would make a cached "all
         // healthy" result lie.
-        invalidatePreflight();
+        invalidatePreflight(cdpUrl);
       } finally {
         busy = false;
         inflight = null;

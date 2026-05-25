@@ -401,11 +401,11 @@ If your favourite agent (`codex`, `cursor-agent`, `aider`, `gemini`, `qwen-code`
   - More agents wired into the [registry](./packages/core/src/agents/registry.ts) — `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`.
 - **v0.6.x** — Chrome extension (drop the Vite-plugin dependency for non-Vite stacks)
 
-Phase 2 is what you can use today.
+v0.3.x is what you can use today.
 
 ## Project status
 
-🟢 **Phase 2 shipped** in v0.2.x — dogfood-ready. Use it on real Vite apps; the navigation-to-same-origin quirk that occasionally destroyed the widget mid-stream is now caught up-front by a hardened system prompt (the agent is explicitly forbidden from `browser_navigate`-ing to the active origin). Auto-resumes on reload if it slips through.
+🟢 **v0.3.x shipped** — dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. The navigation-to-same-origin quirk that occasionally destroyed the widget mid-stream is caught up-front by a hardened system prompt (the agent is explicitly forbidden from `browser_navigate`-ing to the active origin). Auto-resumes on reload if it slips through.
 
 Tracking issues at [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues).
 

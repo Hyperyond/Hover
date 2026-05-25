@@ -11,7 +11,14 @@
     "directory": "packages/core"
   },
   "bugs": "https://github.com/Hyperyond/Hover/issues",
-  "keywords": ["hover", "playwright", "mcp", "agent", "browser-testing", "claude"],
+  "keywords": [
+    "hover",
+    "playwright",
+    "mcp",
+    "agent",
+    "browser-testing",
+    "claude"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,7 +42,6 @@
   },
   "files": [
     "dist",
-    "mcp.config.json",
     "README.md"
   ],
   "scripts": {
@@ -54,6 +60,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@playwright/mcp": "0.0.75",
     "cross-spawn": "^7.0.6",
     "playwright-core": "^1.50.0",
     "ws": "^8.20.1"

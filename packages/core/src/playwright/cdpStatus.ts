@@ -12,7 +12,7 @@
  *                     trigger a launch.
  */
 import { chromium } from 'playwright-core';
-import { preflightCDP } from './preflight.js';
+import { getPreflight } from './preflightCache.js';
 import { findCdpPid, raiseChromeWindow } from './raiseWindow.js';
 
 export type CdpState = 'same-window' | 'wrong-window' | 'no-cdp';
@@ -52,7 +52,7 @@ export async function checkCdpStatus(
     return { state: 'no-cdp', reason: `unparseable page URL: ${pageUrl}` };
   }
 
-  const cdp = await preflightCDP(cdpUrl);
+  const cdp = await getPreflight(cdpUrl);
   if (!cdp.ok) {
     return { state: 'no-cdp', reason: cdp.reason };
   }

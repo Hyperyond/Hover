@@ -12,16 +12,35 @@
  *
  * Lives in its own file because this string is the most-tuned text in the
  * repo and the easiest to break with a typo. Tests can import directly.
+ *
+ * Two-tier split (since v0.4.x perf pass):
+ *   - `buildCdpHint(tabs)` returns the full rules + narration block.
+ *     Used on the *first* turn of a session (no `--resume`).
+ *   - `buildCdpHintResume(tabs)` returns ONLY the volatile tab list +
+ *     active-origin guard. Used on subsequent turns once `--resume`
+ *     re-anchors the agent to the prior turn's full system prompt —
+ *     the stable rules are already in context, so re-sending them
+ *     fragments Anthropic's prompt cache and bills ~500 extra input
+ *     tokens per turn for zero behavioural change.
  */
 
-export function buildCdpHint(tabs: { url: string; title?: string }[]): string {
-  if (tabs.length === 0) return '';
+interface Tab { url: string; title?: string }
+
+function resolveActiveOrigin(tabs: Tab[]): { active: Tab; activeOrigin: string } | null {
+  if (tabs.length === 0) return null;
   // Prefer the localhost tab if we have multiple — that's almost always the
   // dev server the user is testing against.
   const localhost = tabs.find(t => /localhost|127\.0\.0\.1/.test(t.url));
   const active = localhost ?? tabs[0];
   let activeOrigin = '';
   try { activeOrigin = new URL(active.url).origin; } catch { /* malformed url — fall back to no-origin guard */ }
+  return { active, activeOrigin };
+}
+
+export function buildCdpHint(tabs: Tab[]): string {
+  const resolved = resolveActiveOrigin(tabs);
+  if (!resolved) return '';
+  const { active, activeOrigin } = resolved;
 
   return [
     `The user's Chrome currently has these tabs open:`,
@@ -80,5 +99,34 @@ export function buildCdpHint(tabs: { url: string; title?: string }[]): string {
     ``,
     `  Do NOT spread bug discoveries across mid-run narration — keep them in the`,
     `  final summary so they group cleanly. Mid-run, just narrate the next step.`,
+  ].join('\n');
+}
+
+/**
+ * Volatile-only hint for `--resume` turns: just the tab list snapshot.
+ * Empty string when the tab list is empty (nothing to refresh).
+ *
+ * The rules and narration format from `buildCdpHint` are already
+ * established in the prior turn's context; re-sending them here would
+ * fragment Anthropic's prompt-cache fingerprint (cache hits require the
+ * system prompt to match byte-for-byte across turns) and bill ~500
+ * extra input tokens per follow-up turn for no behaviour change.
+ *
+ * We DO re-send the tab list because it can drift between turns (user
+ * opens a second tab, switches focus). The active-origin nav-guard is
+ * not repeated — the agent has it from turn 1 and the tab-list update
+ * keeps it grounded in the current URL.
+ */
+export function buildCdpHintResume(tabs: Tab[]): string {
+  const resolved = resolveActiveOrigin(tabs);
+  if (!resolved) return '';
+  const { active } = resolved;
+  return [
+    `(Resumed session — full nav + narration rules already in context.)`,
+    ``,
+    `Current Chrome tabs:`,
+    ...tabs.map(t => `  - ${t.url}${t.title ? `  (${t.title})` : ''}`),
+    ``,
+    `Likely active dev tab: ${active.url}`,
   ].join('\n');
 }
