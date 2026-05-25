@@ -120,3 +120,36 @@
   <span class="hover-tip-text"></span>
   <span class="hover-tip-arrow" aria-hidden="true"></span>
 </div>
+
+<!--
+  Picker overlay — while the user holds ⌥ (and panel is open), Hover
+  tracks the host-page element under the cursor and draws this fixed
+  rectangle around its bounding box. pointer-events:none so it never
+  intercepts the click. Badge in the corner names the action (Assert
+  vs Fix), driven by the shift-key state.
+-->
+<div class="picker-overlay" aria-hidden="true">
+  <span class="picker-badge"></span>
+  <span class="picker-tag"></span>
+</div>
+
+<!--
+  Picker hint — short chord reference that fades in while ⌥ is held,
+  so the user doesn't have to remember the chord. Positioned at the
+  top centre of the screen.
+-->
+<div class="picker-hint" aria-hidden="true">
+  <span><kbd>⌥</kbd>click <em>assert</em></span>
+  <span class="picker-hint-sep">·</span>
+  <span><kbd>⇧⌥</kbd>click <em>suggest fix</em></span>
+  <span class="picker-hint-sep">·</span>
+  <span><kbd>Esc</kbd> cancel</span>
+</div>
+
+<!--
+  Toast strip — appears at the top of the viewport for ~2.5s when an
+  alt-click action completes. Lives in the shadow root so styling is
+  isolated; rendered above the panel so it's visible even if the panel
+  is closed (the most common case during element picking).
+-->
+<div class="picker-toast" role="status" aria-live="polite" aria-hidden="true"></div>

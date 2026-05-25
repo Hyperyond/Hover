@@ -1533,6 +1533,109 @@
     addMessage({ kind: 'system', text: 'Cleared pending assertions.' });
   });
 
+  // ─────────────── Picker hover-mode (⌥ held → element preview) ─────────────
+  //
+  // Without visible feedback the alt-click chord is invisible: users hold
+  // alt, see nothing change, and have no way to know what their click will
+  // hit. While ⌥ is held *and the panel is open*, we light up an overlay
+  // that tracks `elementFromPoint`, draw a badge naming the pending action
+  // (Assert / Fix — switches with shiftKey), and show a top-screen chord
+  // hint. Releasing alt clears everything.
+  //
+  // The overlay lives inside our shadow root with pointer-events:none, so
+  // it never intercepts the click and never pollutes the host page DOM.
+
+  const pickerOverlay = $('.picker-overlay');
+  const pickerBadge = $('.picker-badge');
+  const pickerTag = $('.picker-tag');
+  let pickerActive = false;
+  let pickerLastTarget = null;
+  let pickerLastShift = false;
+  // Last cursor position — tracked even when picker is inactive, so that
+  // entering picker mode (alt-keydown) can immediately paint the overlay
+  // around the element under the cursor without waiting for the next
+  // mousemove event.
+  let lastMouseX = -1;
+  let lastMouseY = -1;
+
+  function enterPickerMode(shiftHeld) {
+    if (pickerActive) return;
+    pickerActive = true;
+    host.classList.add('picker-active');
+    if (lastMouseX >= 0) {
+      const el = document.elementFromPoint(lastMouseX, lastMouseY);
+      updatePickerOverlay(el, !!shiftHeld);
+    }
+  }
+  function exitPickerMode() {
+    if (!pickerActive) return;
+    pickerActive = false;
+    host.classList.remove('picker-active');
+    pickerOverlay.classList.remove('visible');
+    pickerLastTarget = null;
+  }
+  function updatePickerOverlay(target, shiftHeld) {
+    if (!target || !(target instanceof Element)) {
+      pickerOverlay.classList.remove('visible');
+      pickerLastTarget = null;
+      return;
+    }
+    // Skip elements inside the widget shadow tree.
+    if (target.closest('[data-hover="true"]') === host) {
+      pickerOverlay.classList.remove('visible');
+      return;
+    }
+    // <html> / <body> are too coarse to be useful targets.
+    if (target === document.documentElement || target === document.body) {
+      pickerOverlay.classList.remove('visible');
+      return;
+    }
+    const r = target.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) {
+      pickerOverlay.classList.remove('visible');
+      return;
+    }
+    pickerOverlay.style.left = `${r.left - 2}px`;
+    pickerOverlay.style.top = `${r.top - 2}px`;
+    pickerOverlay.style.width = `${r.width + 4}px`;
+    pickerOverlay.style.height = `${r.height + 4}px`;
+    pickerBadge.textContent = shiftHeld ? 'Fix' : 'Assert';
+    pickerTag.textContent = `<${target.tagName.toLowerCase()}>`;
+    pickerOverlay.classList.add('visible');
+    pickerLastTarget = target;
+    pickerLastShift = shiftHeld;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Alt') return;
+    if (!isOpen()) return;
+    enterPickerMode(e.shiftKey);
+  });
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Alt' || e.key === 'Shift') {
+      // Re-evaluate: if Alt is no longer held the mode ends; if only Shift
+      // was released but Alt is still held, just refresh the badge.
+      if (!e.altKey) {
+        exitPickerMode();
+      } else if (pickerActive && pickerLastTarget) {
+        updatePickerOverlay(pickerLastTarget, e.shiftKey);
+      }
+    }
+    if (e.key === 'Escape' && pickerActive) {
+      exitPickerMode();
+    }
+  });
+  // Window blur (alt-tab) — leaving the page mid-pick should not leave the
+  // overlay stuck on.
+  window.addEventListener('blur', exitPickerMode);
+  document.addEventListener('mousemove', (e) => {
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    if (!pickerActive) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    updatePickerOverlay(el, e.shiftKey);
+  });
+
   document.addEventListener(
     'click',
     (e) => {
@@ -1547,10 +1650,15 @@
       const target = e.target;
       if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
 
+      // Click commits the pick — overlay should disappear immediately so
+      // the toast can take over the user's attention.
+      pickerOverlay.classList.remove('visible');
+
       // ⇧⌥click → Suggest fix prompt. Sibling to the ⌥click=assert flow.
       if (e.shiftKey) {
         suggestFixForElement(target).catch((err) => {
           addMessage({ kind: 'system', text: `⊘ Suggest-fix failed: ${err?.message || err}` });
+          showPickerToast(`Suggest-fix failed: ${err?.message || err}`, { error: true });
         });
         return;
       }
@@ -1558,6 +1666,7 @@
       const ass = inspectElement(target);
       if (!ass) {
         addMessage({ kind: 'system', text: `⊘ Alt-click ignored: ${target.tagName.toLowerCase()} has no usable identity` });
+        showPickerToast(`<${target.tagName.toLowerCase()}> has no usable identity`, { error: true });
         return;
       }
       state.assertions.push(ass);
@@ -1565,9 +1674,36 @@
       updateAssertBadge();
       flashElement(target);
       addMessage({ kind: 'system', text: `✓ Asserted: ${ass.hint}` });
+      showPickerToast(`Asserted: ${ass.hint}`);
     },
     { capture: true },
   );
+
+  // ─────────────────── Toast helper (used by picker actions) ─────────────
+  //
+  // A single shared strip at the top of the viewport. Lives in the shadow
+  // root so styling is isolated, but sits above .panel — visible even when
+  // the panel is closed (the common case during alt-click element picking).
+
+  const toastEl = $('.picker-toast');
+  let toastTimer = null;
+  function showPickerToast(text, opts = {}) {
+    if (!toastEl) return;
+    toastEl.classList.toggle('error', !!opts.error);
+    toastEl.innerHTML = '';
+    const icon = document.createElement('span');
+    icon.className = 'picker-toast-icon';
+    icon.textContent = opts.error ? '⊘' : '✓';
+    const label = document.createElement('span');
+    label.textContent = text;
+    toastEl.appendChild(icon);
+    toastEl.appendChild(label);
+    toastEl.classList.add('visible');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastEl.classList.remove('visible');
+    }, opts.error ? 3500 : 2500);
+  }
 
   // ─────────────────── ⇧⌥click "Suggest fix prompt" ──────────────────
   //
@@ -1598,13 +1734,20 @@
     }
     flashElement(el);
     const label = ctx.selector?.hint || ctx.tag;
-    addMessage({
-      kind: 'system',
-      text: copied
-        ? `📋 Suggest-fix prompt copied for ${label} — paste into your coding agent.`
-        : `⚠ Couldn't copy to clipboard. Prompt for ${label} in console.`,
-    });
-    if (!copied) console.info('[hover] suggest-fix prompt:\n' + prompt);
+    if (copied) {
+      addMessage({
+        kind: 'system',
+        text: `📋 Suggest-fix prompt copied for ${label} — paste into your coding agent.`,
+      });
+      showPickerToast(`Fix prompt copied — paste into your coding agent`);
+    } else {
+      addMessage({
+        kind: 'system',
+        text: `⚠ Couldn't copy to clipboard. Prompt for ${label} in console.`,
+      });
+      showPickerToast(`Clipboard blocked — prompt printed to console`, { error: true });
+      console.info('[hover] suggest-fix prompt:\n' + prompt);
+    }
   }
 
   function collectFixContext(el) {
