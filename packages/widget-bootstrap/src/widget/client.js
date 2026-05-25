@@ -34,6 +34,7 @@
   const statusEl = $('.status');
   const newBtn = $('.newbtn');
   const skillsBtn = $('.skillsbtn');
+  const starBtn = $('.starbtn');
   const skillsOverlay = $('.skills-overlay');
   const skillsListEl = $('.skills-list-items');
   const skillsCountEl = $('.skills-overlay .count');
@@ -1473,6 +1474,10 @@
     statusEl.textContent = text;
     statusEl.className = `status ${cls}`;
   };
+
+  starBtn.addEventListener('click', () => {
+    window.open('https://github.com/Hyperyond/Hover', '_blank', 'noopener,noreferrer');
+  });
 
   newBtn.addEventListener('click', async () => {
     if (state.messages.length === 0 && !state.sessionId && state.assertions.length === 0) return;
