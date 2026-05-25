@@ -4,6 +4,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are ISO 
 
 All notable changes to Hover are recorded here. Conventional Commits in the git log are the source of truth; this file groups them by user-visible impact.
 
+## [0.3.3] — 2026-05-25
+
+A perf pass on the LLM hot path plus a round of UX fixes that came out of dogfooding the result.
+
+### Fixed
+
+- **Group status now reflects business outcome, not tool retries.** Previously, a single MCP tool call that returned `is_error: true` painted the entire group red ✗ even when the agent recovered with a retry and the step actually succeeded. Real-world example: 3 of 4 steps showed red on a run that had in fact completed cleanly — the agent had simply retried a stale `ref=...` selector inside each step. Now `step.isError` is preserved on individual tool entries (still rendered in the expanded view for diagnostics), but only the session-level `done.isError` paints the group red.
+- **User-pressed-Stop renders as "Stopped", not "Failed".** Previously the cancel path emitted `session_end { isError: true, summary: 'cancelled by user' }`, so the widget rendered a red ✗ "Failed" card — treating the user's own action as a system failure. The terminal state now has three rendered-distinctly cases: ✓ green Result (agent completed) · ✗ red Failed (agent / runtime error) · ⊘ grey Stopped (user pressed Stop). A cancelled run is also no longer marked `saveable` — it's not a complete spec.
+- **The agent now knows its standing mission.** A user typing "test" got a single `browser_snapshot` and a one-line "App is running fine" report. The system prompt covered navigation rules and narration format but never stated what the agent is actually here to do. New "Your job" preamble in `buildCdpHint` defines the standing mission: drive the app, exercise interactive surfaces, report bugs. Vague prompts ("test", "check", "find bugs") trigger a real exploratory test pass (snapshot → identify surfaces → drive 2–5 flows → note findings) instead of a one-shot status report. Specific prompts ("log in and add a todo") are still followed verbatim.
+- **Result card no longer drops the prose summary written inside a `## Findings` block.** `extractFindings` only kept the `## Findings` list items and threw the rest of the block — plus anything after the next heading — away. Agents writing structured findings mixed with prose paragraphs (the common shape, especially after the mission preamble landed) saw their narrative summary silently vanish. The reducer now stitches `beforeBlock` + non-list-item lines from inside the block + `afterBlock` back together as `rest`; only the actual list items get extracted into `findings[]`.
+- **Next.js integration: MCP server now connects under Turbopack.** `resolveMcpConfig` used `import.meta.url` as the base for resolving `@playwright/mcp/cli.js`, but Next 16's Turbopack rewrites that to a `[project]/...` virtual URL, which `createRequire` then propagated into the generated mcp.config.json. Claude Code couldn't load the resulting path and reported `mcp_status: failed`; the agent fell back to non-browser tools. Resolution now starts from `process.cwd()`, which is a real disk path under every consumer (Vite / Astro / Nuxt / Webpack worked too, just by accident).
+
+### Performance
+
+Three wins on the LLM-driven loop's hot path; ~1 s (median ~16%) shaved off the time-to-first-`tool_use` on a cold command, and 93% trimmed off the system-prompt addendum on every follow-up turn. Came out of a post-v0.3.2 latency audit. End-to-end benchmark at [`packages/core/src/scripts/bench-ttfb.ts`](https://github.com/Hyperyond/Hover/blob/v0.3.3/packages/core/src/scripts/bench-ttfb.ts) (run via `pnpm bench-ttfb`).
+
+- **Pinned MCP server path.** Was: `mcp.config.json` ran `npx -y @playwright/mcp@latest` on every `claude -p` spawn — registry round-trip + tarball metadata + node boot before the MCP server could start (2.4-6.0 s in isolation). Now: `@playwright/mcp` is a direct dep of `@hover-dev/core`, and a new `resolveMcpConfig.ts` resolves `cli.js` via `createRequire(...).resolve()` at service boot and writes a synthetic mcp config to `<tmpdir>/hover/mcp-config-<port>.json` pointing `process.execPath cli.js …` at it.
+- **System-prompt addendum split into stable + volatile.** Was: `service.ts` re-appended the full 2.4 KB CDP hint (nav rules + narration format + tab list) every turn via `--append-system-prompt`, fragmenting Anthropic's prompt-cache fingerprint and re-billing ~600 input tokens per follow-up. Now: new `buildCdpHintResume(tabs)` returns just a 175-char tab snapshot; service picks `resumeSessionId ? buildCdpHintResume : buildCdpHint`. 93% size reduction on follow-up turns, fingerprint stays cache-friendly.
+- **Shared preflight cache across command + check-cdp paths; 30 s TTL.** Was: service kept a 5 s closure-scoped preflight cache for its own use; `cdpStatus.checkCdpStatus` did a fresh preflight on every widget `check-cdp` ping (which fires on every Vite HMR reconnect). Now: module-scoped `preflightCache.ts`, keyed by cdpUrl, shared by both paths. TTL bumped to 30 s — Chrome's tab list doesn't drift faster.
+
+### Internal
+
+- New `pnpm bench-ttfb` script for A/B-ing perf changes across git branches. Documented in `CLAUDE.md`.
+
 ## [0.3.2] — 2026-05-25
 
 Post-release audit fixes for v0.3.1's `@hover-dev/next`. Three real bugs + three code-quality improvements found by sweeping the integration after publish.
