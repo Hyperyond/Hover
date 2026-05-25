@@ -228,6 +228,7 @@ pnpm smoke                # end-to-end: detect agents → CDP preflight → invo
 pnpm detect               # list installed coding agents
 pnpm verify-widget        # validate that the injected widget reports `data-vibe-test`
 pnpm ws-smoke             # exercise the @hover-dev/core WebSocket bridge in isolation
+pnpm bench-ttfb [n=5]     # time the LLM-driven loop's first tool_use latency (needs Chrome on :9222 + a dev server). A/B perf changes by running on each branch.
 ```
 
 ```bash

@@ -401,11 +401,11 @@ hover({
   - 更多 agent 接入 [registry](./packages/core/src/agents/registry.ts) —— `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`。
 - **v0.6.x** —— Chrome 扩展（脱离 Vite 插件依赖，支持非 Vite 栈）
 
-Phase 2 是你今天就能用的。
+v0.3.x 是你今天就能用的。
 
 ## 项目状态
 
-🟢 **Phase 2 已发布** 在 v0.2.x —— dogfood 可用。可以在真实 Vite 应用上跑；之前偶尔会出现 AI navigate 到同源 URL 把 widget 打断的问题，现在系统 prompt 已加固（明确禁止 agent `browser_navigate` 到当前 origin）。万一漏掉，刷新后会自动 resume。
+🟢 **v0.3.x 已发布** —— 全部六个宿主 bundler 都 dogfood 可用：Vite、Astro、Nuxt、Next.js (Turbopack)、webpack 5 和 React Native Web。之前偶尔会出现 AI navigate 到同源 URL 把 widget 打断的问题，现在系统 prompt 已加固（明确禁止 agent `browser_navigate` 到当前 origin）。万一漏掉，刷新后会自动 resume。
 
 Issue 跟踪：[github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues)。
 
