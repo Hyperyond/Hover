@@ -2381,20 +2381,38 @@
     { capture: true },
   );
 
+  // Track the *original* pre-flash style per element + a single in-flight
+  // timer. If flashElement(el) is called again before the previous timer
+  // fires, we reuse the original snapshot (don't re-snapshot the mint
+  // outline we ourselves just wrote) and reset the timer. Without this,
+  // back-to-back flashes on the same element would orphan the mint
+  // outline indefinitely.
+  const flashOriginal = new WeakMap();
+  const flashTimer = new WeakMap();
   function flashElement(el) {
-    const old = {
-      outline: el.style.outline,
-      outlineOffset: el.style.outlineOffset,
-      transition: el.style.transition,
-    };
+    if (!flashOriginal.has(el)) {
+      flashOriginal.set(el, {
+        outline: el.style.outline,
+        outlineOffset: el.style.outlineOffset,
+        transition: el.style.transition,
+      });
+    }
+    const prevTimer = flashTimer.get(el);
+    if (prevTimer) clearTimeout(prevTimer);
     el.style.transition = 'outline 0.15s ease';
     el.style.outline = '3px solid #10b981';
     el.style.outlineOffset = '3px';
-    setTimeout(() => {
-      el.style.outline = old.outline;
-      el.style.outlineOffset = old.outlineOffset;
-      el.style.transition = old.transition;
+    const t = setTimeout(() => {
+      const orig = flashOriginal.get(el);
+      if (orig) {
+        el.style.outline = orig.outline;
+        el.style.outlineOffset = orig.outlineOffset;
+        el.style.transition = orig.transition;
+        flashOriginal.delete(el);
+      }
+      flashTimer.delete(el);
     }, 900);
+    flashTimer.set(el, t);
   }
 
   // ───────────────────────── server event → state mutation ─────────────────────────
