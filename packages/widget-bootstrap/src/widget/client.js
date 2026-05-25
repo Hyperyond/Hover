@@ -2105,6 +2105,7 @@
   let recording = false;
   let recordingPaused = false; // true while a Fix popover is open mid-recording
   let recordStartIdx = 0;
+  let recordStartAssertionsCount = 0; // state.assertions.length at session start (for per-session delta)
   let recordSubMode = 'action';
   const pendingFills = new Map(); // element → last seen value
   const recordToolbar = $('.record-toolbar');
@@ -2154,6 +2155,7 @@
       textarea.disabled = true;
       addMessage({ kind: 'user', text: '(recording manual interactions)' });
       recordStartIdx = state.messages.length;
+      recordStartAssertionsCount = state.assertions.length;
       // Show sub-toolbar; default to Record mode. First-use hint above
       // the mode buttons fades in once per browser, then we set a flag
       // so it stays hidden on subsequent recordings.
@@ -2177,7 +2179,10 @@
       sendBtn.disabled = !wsReady;
       textarea.disabled = !wsReady;
       const captured = state.messages.slice(recordStartIdx).filter(m => m.kind === 'step').length;
-      const assertCount = state.assertions.length;
+      // Per-session delta — assertions from previous unsaved sessions
+      // are still in state.assertions (they'll bake in on Save), but
+      // this Done card is about *this* session's count.
+      const assertCount = Math.max(0, state.assertions.length - recordStartAssertionsCount);
       const parts = [`Recorded ${captured} action${captured === 1 ? '' : 's'}`];
       if (assertCount > 0) parts.push(`and ${assertCount} check${assertCount === 1 ? '' : 's'}`);
       const lead = parts.join(' ');
