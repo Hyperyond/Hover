@@ -105,7 +105,7 @@ describe('extractFindings', () => {
     });
   });
 
-  it('stops at the next ATX heading', () => {
+  it('stops at the next ATX heading and preserves what comes after', () => {
     const summary = `## Findings
 - **Bug** — A
 
@@ -113,13 +113,45 @@ describe('extractFindings', () => {
 - not a finding`;
     const { findings, rest } = extractFindings(summary);
     expect(findings).toHaveLength(1);
-    expect(rest).toBe(null); // no content before the findings header
+    // Content AFTER the findings block is kept in the rest — only the
+    // list items themselves are extracted as structured findings.
+    expect(rest).toBe('## Next Section\n- not a finding');
   });
 
   it('returns no findings when the header has no list items', () => {
     const { findings, rest } = extractFindings('Body\n## Findings\n\n');
     expect(findings).toEqual([]);
     expect(rest).toBe('Body\n## Findings\n\n'); // unchanged when no items
+  });
+
+  it('preserves prose written INSIDE the Findings block alongside list items', () => {
+    // Real-world shape from a basic-app dogfood session: agent wrote a
+    // structured Findings block but mixed it with prose paragraphs
+    // describing the verification outcome per feature. Before this fix
+    // the prose was silently dropped — only the single list item
+    // survived and the Result card displayed just the lead-in sentence.
+    const summary = `Everything looks clean. Here's my summary:
+
+## Findings
+
+All three sections are functional with no logic bugs. One minor resource issue:
+
+- **Minor** — favicon.ico returns 404 on every page load
+
+**Login:** Accepts any well-formed email. Logout works.
+**Counter:** Increment, decrement, reset all correct.
+**Todos:** Add, remove, count badge all work.`;
+    const { findings, rest } = extractFindings(summary);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('minor');
+    // Lead-in line stays, prose paragraphs inside the block stay.
+    // Only the list item itself gets pulled out into findings[].
+    expect(rest).toContain("Everything looks clean. Here's my summary:");
+    expect(rest).toContain('All three sections are functional');
+    expect(rest).toContain('**Login:**');
+    expect(rest).toContain('**Counter:**');
+    expect(rest).toContain('**Todos:**');
+    expect(rest).not.toContain('favicon.ico'); // moved to findings[]
   });
 });
 
@@ -280,14 +312,77 @@ describe('groupMessages', () => {
     expect(finishedGroups[1].status).toBe('ok');
   });
 
-  it('marks the group as errored when any step has isError', () => {
+  it('marks the group as errored only when the session-level done is an error', () => {
     const messages = [
       { kind: 'user', text: 'p' },
-      { kind: 'step', tool: 'browser_click', input: {}, isError: true },
+      { kind: 'step', tool: 'browser_click', input: {} },
       { kind: 'done', summary: '', isError: true },
     ];
     const groups = groupMessages(messages, false);
     expect(groups[1].status).toBe('error');
+  });
+
+  it('keeps the group green when individual tool retries failed but the session succeeded', () => {
+    // The agent typically retries a selector / approach before landing
+    // the intended interaction. Those tool-level errors are diagnostic
+    // detail (still rendered in the expanded view via step.isError),
+    // not a business-level failure signal. The group should stay green
+    // as long as the session-level done is non-error.
+    const messages = [
+      { kind: 'user', text: 'click the submit button' },
+      { kind: 'ai', text: 'Locating the submit button.' },
+      { kind: 'step', tool: 'mcp__playwright__browser_click', input: { ref: 'e12' }, isError: true },
+      { kind: 'step', tool: 'mcp__playwright__browser_snapshot', input: {} },
+      { kind: 'step', tool: 'mcp__playwright__browser_click', input: { ref: 'e7' } },
+      { kind: 'done', summary: 'Submit clicked.', isError: false },
+    ];
+    const groups = groupMessages(messages, false);
+    const group = groups.find(g => g.kind === 'group');
+    expect(group).toBeDefined();
+    expect(group.status).toBe('ok');
+    // step-level error info preserved for the expanded diagnostic view
+    expect(group.steps[0].isError).toBe(true);
+    expect(group.steps[1].isError).toBe(false);
+    expect(group.steps[2].isError).toBe(false);
+  });
+
+  it('marks a user-cancelled run as cancelled, not error', () => {
+    // User pressed Stop mid-run. service.ts emits session_end with
+    // cancelled: true, isError: false. The agent didn't fail — the
+    // user chose to stop — so the group + report should render
+    // neutral (grey ⊘ "Stopped"), not red (✗ "Failed"). The run is
+    // also not saveable as a spec since it didn't complete.
+    const messages = [
+      { kind: 'user', text: 'do something long' },
+      { kind: 'ai', text: 'Starting the long task.' },
+      { kind: 'step', tool: 'browser_snapshot', input: {} },
+      { kind: 'done', summary: 'cancelled by user', cancelled: true, isError: false, costUsd: 0.05 },
+    ];
+    const groups = groupMessages(messages, false);
+    const group = groups.find(g => g.kind === 'group');
+    const report = groups.find(g => g.kind === 'report');
+    expect(group).toBeDefined();
+    expect(group.status).toBe('cancelled');
+    expect(report).toBeDefined();
+    expect(report.cancelled).toBe(true);
+    expect(report.isError).toBe(false);
+    expect(report.saveable).toBe(false);
+  });
+
+  it('does not expose the legacy `errored` field on closed groups', () => {
+    // Regression: previously the reducer accumulated an `open.errored`
+    // boolean that escalated tool-level isError to a red group. With the
+    // new business-view semantics there is no per-group error
+    // accumulator at all.
+    const messages = [
+      { kind: 'user', text: 'p' },
+      { kind: 'step', tool: 'browser_click', input: {}, isError: true },
+      { kind: 'done', summary: '', isError: false },
+    ];
+    const groups = groupMessages(messages, false);
+    const group = groups.find(g => g.kind === 'group');
+    expect(group).toBeDefined();
+    expect(group.errored).toBeUndefined();
   });
 
   it('falls back to a tool-derived title when no ai text precedes the step', () => {

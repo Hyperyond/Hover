@@ -69,7 +69,16 @@ export type InvokeEvent =
    *  stream-json includes `total_cost_usd` on intermediate result-ish events;
    *  agents that don't surface running cost simply never emit this. */
   | { kind: 'usage'; costUsd?: number; turns?: number }
-  | { kind: 'session_end'; turns?: number; costUsd?: number; isError?: boolean; summary?: string }
+  /** End-of-session event. Three terminal states the widget renders distinctly:
+   *
+   *   - normal completion: `isError: false`, no `cancelled` flag
+   *   - agent / runtime failure: `isError: true`, no `cancelled` flag
+   *   - user-initiated stop: `cancelled: true` (and we leave `isError: false`
+   *     so downstream "did the agent fail?" predicates don't conflate
+   *     "user pressed Stop" with "agent crashed mid-run"). The widget
+   *     renders this as a neutral "Stopped" state, not a red Failed card.
+   */
+  | { kind: 'session_end'; turns?: number; costUsd?: number; isError?: boolean; cancelled?: boolean; summary?: string }
   | { kind: 'raw'; line: string };
 
 /**
