@@ -1559,6 +1559,19 @@ textarea:disabled { background: var(--bg-2); color: var(--text-dim); cursor: not
   padding: 2px 0;
 }
 .record-toolbar-hint[hidden] { display: none; }
+/* Paused state (Fix popover open mid-recording). The popover usually
+ * covers the sub-toolbar entirely, so this is mostly defensive — but
+ * if the popover ever resizes or stays narrow, the dim treatment
+ * makes it visually obvious that capture is suspended. */
+:host(.record-paused) .record-toolbar {
+  opacity: 0.4;
+  pointer-events: none;
+}
+:host(.record-paused) .record-toolbar-label::after {
+  content: ' (paused while Fix is open)';
+  color: var(--text-dim);
+  font-weight: 400;
+}
 .record-toolbar-row {
   display: flex;
   align-items: center;

@@ -1685,9 +1685,15 @@
 
   function enterFixMode() {
     if (fixMode) return;
-    if (recording) return; // mutex: can't enter Fix while recording
     fixMode = true;
     pickerMode = 'fix';
+    // If we're currently recording, pause capture so the user can fix
+    // an element they noticed mid-flow without ending the session and
+    // losing the Done card. exitFixMode resumes.
+    if (recording) {
+      recordingPaused = true;
+      host.classList.add('record-paused');
+    }
     // Ensure panel is open so the user can see the popover when they click.
     if (!isOpen()) launcher.click();
     host.classList.add('picker-active');
@@ -1709,6 +1715,10 @@
     fixBtn.classList.remove('active');
     pickerOverlay.classList.remove('visible');
     pickerLastTarget = null;
+    if (recordingPaused) {
+      recordingPaused = false;
+      host.classList.remove('record-paused');
+    }
     updateMutexUi();
   }
 
@@ -1779,24 +1789,26 @@
     });
   }
 
-  // Record + Fix are mutually exclusive: each must be off before the other
-  // can be entered. We could auto-cancel the active mode when the user
-  // clicks the other button, but that would silently commit a recording
-  // session the user didn't intend to finish — so we disable instead.
+  // Record and Fix coexist via pause-insert-resume:
+  //   - Fix is enterable mid-recording — it pauses capture while the
+  //     popover is open, and recording resumes automatically when Fix
+  //     closes. The Fix-button tooltip changes to reflect this.
+  //   - Record is blocked while Fix is open. Stop / Resume of the
+  //     recording happens through the Fix popover lifecycle, not by
+  //     clicking the Record button — so we disable it to prevent the
+  //     user from accidentally ending the paused session.
   function updateMutexUi() {
     if (!fixBtn || !recordBtn) return;
-    // Disable Fix while recording.
     if (recording) {
-      fixBtn.disabled = true;
-      fixBtn.setAttribute('data-tooltip', 'Stop recording before suggesting a fix');
+      fixBtn.disabled = false;
+      fixBtn.setAttribute('data-tooltip', 'Pause recording, suggest a fix, then resume — the recording continues automatically when you close Fix');
     } else {
       fixBtn.disabled = false;
       fixBtn.setAttribute('data-tooltip', 'Click a page element, describe what to change, copy a prompt for your coding agent');
     }
-    // Disable Record while fix-mode is active.
     if (fixMode) {
       recordBtn.disabled = true;
-      recordBtn.setAttribute('data-tooltip', 'Cancel Fix before recording');
+      recordBtn.setAttribute('data-tooltip', 'Close Fix to continue with Record');
     } else {
       recordBtn.disabled = false;
       recordBtn.setAttribute('data-tooltip', 'Record your own clicks/typing on the page');
@@ -2079,6 +2091,7 @@
   // snaps back to action. Pattern follows Playwright codegen.
 
   let recording = false;
+  let recordingPaused = false; // true while a Fix popover is open mid-recording
   let recordStartIdx = 0;
   let recordSubMode = 'action';
   const pendingFills = new Map(); // element → last seen value
@@ -2205,6 +2218,7 @@
     'input',
     (e) => {
       if (!recording) return;
+      if (recordingPaused) return; // Fix popover open mid-recording
       if (recordSubMode !== 'action') return; // assert sub-modes don't capture typing
       if (e.composedPath().includes(host)) return;
       const el = e.target;
@@ -2222,6 +2236,7 @@
     'change',
     (e) => {
       if (!recording) return;
+      if (recordingPaused) return; // Fix popover open mid-recording
       if (recordSubMode !== 'action') return; // assert sub-modes don't capture changes
       if (e.composedPath().includes(host)) return;
       const el = e.target;
@@ -2251,6 +2266,7 @@
     'click',
     (e) => {
       if (!recording) return;
+      if (recordingPaused) return; // Fix popover open mid-recording
       if (e.composedPath().includes(host)) return;
       const el = e.target;
       if (!(el instanceof Element)) return;
@@ -2333,6 +2349,7 @@
     'submit',
     (e) => {
       if (!recording) return;
+      if (recordingPaused) return; // Fix popover open mid-recording
       if (e.composedPath().includes(host)) return;
       flushAllFills();
       // Mirror what happens on Submit click — the submit button (or Enter).
