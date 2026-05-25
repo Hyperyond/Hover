@@ -1548,39 +1548,32 @@
   const pickerOverlay = $('.picker-overlay');
   const pickerBadge = $('.picker-badge');
   const pickerTag = $('.picker-tag');
-  // Two independent ways to enter picker mode:
-  //   • holding ⌥ while panel is open  → 'assert' (legacy chord)
-  //   • clicking the footer Fix button → 'fix' (independent flow, no key needed)
-  // pickerMode is either null (inactive), 'assert', or 'fix'. The overlay
-  // / cursor / badge react to the current mode.
+  // Picker mode drives the host-page hover outline + the corner badge
+  // text. Three independent entry points set it:
+  //   • Fix button (footer)                       → 'fix'
+  //   • Recording mode + assert sub-toolbar       → 'assert-visible' / 'assert-text' / 'assert-value'
+  // (Plain Action recording does NOT activate the picker — clicks go
+  // through as host-page interactions and get captured as steps.)
   let pickerMode = null;
   let pickerLastTarget = null;
   let fixMode = false; // mirror of pickerMode === 'fix' for click-handler guards
-  // Last cursor position — tracked even when picker is inactive, so that
-  // entering picker mode can immediately paint the overlay around the
-  // element under the cursor without waiting for the next mousemove event.
+  // Last cursor position — tracked passively. The mode setters use it so
+  // the overlay paints immediately on activation without waiting for the
+  // next mousemove.
   let lastMouseX = -1;
   let lastMouseY = -1;
 
-  function enterAssertPickerMode() {
-    if (pickerMode) return;
-    pickerMode = 'assert';
-    host.classList.add('picker-active');
-    if (lastMouseX >= 0) {
-      const el = document.elementFromPoint(lastMouseX, lastMouseY);
-      updatePickerOverlay(el, 'assert');
+  // Badge text per mode. Kept short — the overlay is tight on space.
+  function badgeForMode(mode) {
+    switch (mode) {
+      case 'fix': return 'Fix';
+      case 'assert-visible': return 'Assert: Visible';
+      case 'assert-text':    return 'Assert: Text';
+      case 'assert-value':   return 'Assert: Value';
+      default: return '';
     }
   }
-  function exitAssertPickerMode() {
-    if (pickerMode !== 'assert') return;
-    pickerMode = null;
-    host.classList.remove('picker-active');
-    pickerOverlay.classList.remove('visible');
-    pickerLastTarget = null;
-  }
-  // Shared overlay update used by both alt-pick (assert) and fix-mode.
-  // The `mode` parameter drives the badge label so the user knows what
-  // their click is about to do.
+
   function updatePickerOverlay(target, mode) {
     if (!target || !(target instanceof Element)) {
       pickerOverlay.classList.remove('visible');
@@ -1606,31 +1599,20 @@
     pickerOverlay.style.top = `${r.top - 2}px`;
     pickerOverlay.style.width = `${r.width + 4}px`;
     pickerOverlay.style.height = `${r.height + 4}px`;
-    pickerBadge.textContent = mode === 'fix' ? 'Fix' : 'Assert';
+    pickerBadge.textContent = badgeForMode(mode);
     pickerTag.textContent = `<${target.tagName.toLowerCase()}>`;
     pickerOverlay.classList.add('visible');
     pickerLastTarget = target;
   }
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Alt') return;
-    if (!isOpen()) return;
-    if (fixMode) return; // fix-mode is independent of alt
-    enterAssertPickerMode();
-  });
+  // Esc cancels whichever mode is active.
   document.addEventListener('keyup', (e) => {
-    if (e.key === 'Alt' && pickerMode === 'assert' && !e.altKey) {
-      exitAssertPickerMode();
-    }
     if (e.key === 'Escape') {
-      if (pickerMode === 'assert') exitAssertPickerMode();
       if (fixMode) cancelFixMode();
+      if (pickerMode && pickerMode.startsWith('assert-')) {
+        setRecordSubMode('action'); // assert-* → action
+      }
     }
-  });
-  // Window blur (alt-tab) — leaving the page mid-pick should not leave the
-  // overlay stuck on.
-  window.addEventListener('blur', () => {
-    if (pickerMode === 'assert') exitAssertPickerMode();
   });
   document.addEventListener('mousemove', (e) => {
     lastMouseX = e.clientX;
@@ -1639,44 +1621,6 @@
     const el = document.elementFromPoint(e.clientX, e.clientY);
     updatePickerOverlay(el, pickerMode);
   });
-
-  document.addEventListener(
-    'click',
-    (e) => {
-      // Fix-mode capture (no modifier key needed) — handled in the fix-mode
-      // block further down. Alt-key path below handles assert only.
-      if (fixMode) return;
-
-      if (!e.altKey) return;
-      if (!isOpen()) return;
-      // Skip clicks inside our own widget.
-      if (e.composedPath().includes(host)) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const target = e.target;
-      if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
-
-      // Click commits the pick — overlay should disappear immediately so
-      // the toast can take over the user's attention.
-      pickerOverlay.classList.remove('visible');
-
-      const ass = inspectElement(target);
-      if (!ass) {
-        addMessage({ kind: 'system', text: `⊘ Alt-click ignored: ${target.tagName.toLowerCase()} has no usable identity` });
-        showPickerToast(`<${target.tagName.toLowerCase()}> has no usable identity`, { error: true });
-        return;
-      }
-      state.assertions.push(ass);
-      saveState();
-      updateAssertBadge();
-      flashElement(target);
-      addMessage({ kind: 'system', text: `✓ Asserted: ${ass.hint}` });
-      showPickerToast(`Asserted: ${ass.hint}`);
-    },
-    { capture: true },
-  );
 
   // ─────────────────── Toast helper (used by picker actions) ─────────────
   //
@@ -1742,12 +1686,12 @@
   function enterFixMode() {
     if (fixMode) return;
     fixMode = true;
+    pickerMode = 'fix';
     // Ensure panel is open so the user can see the popover when they click.
     if (!isOpen()) launcher.click();
     host.classList.add('picker-active');
     host.classList.add('fix-active');
     fixBtn.classList.add('active');
-    pickerBadge.textContent = 'Fix';
     if (lastMouseX >= 0) {
       const el = document.elementFromPoint(lastMouseX, lastMouseY);
       updatePickerOverlay(el, 'fix');
@@ -1757,6 +1701,7 @@
   function exitFixMode() {
     if (!fixMode) return;
     fixMode = false;
+    if (pickerMode === 'fix') pickerMode = null;
     host.classList.remove('picker-active');
     host.classList.remove('fix-active');
     fixBtn.classList.remove('active');
@@ -2097,10 +2042,55 @@
   // captured and appended to state.messages as a step in the same shape
   // the agent emits — so writeSkill / writeSpec downstream don't care
   // whether the steps came from claude or from the user.
+  //
+  // Sub-toolbar lets the user switch what the next click captures:
+  //   • action            — record click / fill / select as a Playwright step
+  //   • assert-visible    — emit expect(SEL).toBeVisible(), one-shot
+  //   • assert-text       — emit expect(SEL).toHaveText("…"),  one-shot
+  //   • assert-value      — emit expect(SEL).toHaveValue("…"), one-shot
+  // Assertion sub-modes are one-shot — after committing, the toolbar
+  // snaps back to action. Pattern follows Playwright codegen.
 
   let recording = false;
   let recordStartIdx = 0;
+  let recordSubMode = 'action';
   const pendingFills = new Map(); // element → last seen value
+  const recordToolbar = $('.record-toolbar');
+  const recModeBtns = recordToolbar ? Array.from(recordToolbar.querySelectorAll('.rec-mode')) : [];
+
+  function setRecordSubMode(mode) {
+    recordSubMode = mode;
+    for (const btn of recModeBtns) {
+      const on = btn.dataset.mode === mode;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    }
+    // Drive the picker overlay so the user sees an outline + badge for
+    // the element under the cursor whenever they're about to assert.
+    if (recording && mode !== 'action') {
+      pickerMode = mode;
+      host.classList.add('picker-active');
+      if (lastMouseX >= 0) {
+        const el = document.elementFromPoint(lastMouseX, lastMouseY);
+        updatePickerOverlay(el, mode);
+      }
+    } else {
+      // Back to action mode — overlay off, cursor back to normal.
+      if (pickerMode && pickerMode.startsWith('assert-')) {
+        pickerMode = null;
+        host.classList.remove('picker-active');
+        pickerOverlay.classList.remove('visible');
+        pickerLastTarget = null;
+      }
+    }
+  }
+
+  for (const btn of recModeBtns) {
+    btn.addEventListener('click', () => {
+      if (!recording) return;
+      setRecordSubMode(btn.dataset.mode);
+    });
+  }
 
   const setRecording = (on) => {
     recording = on;
@@ -2112,20 +2102,30 @@
       textarea.disabled = true;
       addMessage({ kind: 'user', text: '(recording manual interactions)' });
       recordStartIdx = state.messages.length;
+      // Show sub-toolbar; default to Action mode.
+      host.classList.add('recording');
+      setRecordSubMode('action');
     } else {
       recordBtn.classList.remove('recording');
       recLabel.textContent = 'Record';
+      host.classList.remove('recording');
+      // Clear any in-flight assert sub-mode + overlay.
+      setRecordSubMode('action');
       flushAllFills();
       const wsReady = ws && ws.readyState === WebSocket.OPEN;
       sendBtn.disabled = !wsReady;
       textarea.disabled = !wsReady;
       const captured = state.messages.slice(recordStartIdx).filter(m => m.kind === 'step').length;
+      const assertCount = state.assertions.length;
+      const parts = [`Recorded ${captured} action${captured === 1 ? '' : 's'}`];
+      if (assertCount > 0) parts.push(`+ ${assertCount} assertion${assertCount === 1 ? '' : 's'}`);
+      const lead = parts.join(' ');
       addMessage({
         kind: 'done',
         turns: captured,
         costUsd: 0,
         source: 'recording',
-        summary: `Recorded ${captured} action${captured === 1 ? '' : 's'}. Click Save as Skill / Spec on this card to keep it.`,
+        summary: `${lead}. Click Save as Skill / Spec on this card to keep it.`,
       });
     }
   };
@@ -2167,6 +2167,7 @@
     'input',
     (e) => {
       if (!recording) return;
+      if (recordSubMode !== 'action') return; // assert sub-modes don't capture typing
       if (e.composedPath().includes(host)) return;
       const el = e.target;
       if (!(el instanceof HTMLElement)) return;
@@ -2183,6 +2184,7 @@
     'change',
     (e) => {
       if (!recording) return;
+      if (recordSubMode !== 'action') return; // assert sub-modes don't capture changes
       if (e.composedPath().includes(host)) return;
       const el = e.target;
       if (!(el instanceof HTMLElement)) return;
@@ -2211,13 +2213,34 @@
     'click',
     (e) => {
       if (!recording) return;
-      if (e.altKey) return; // Alt-click is "Assert This", not record
       if (e.composedPath().includes(host)) return;
       const el = e.target;
       if (!(el instanceof Element)) return;
 
-      // Flush any text input the user was typing in before this click
+      // Flush any text input the user was typing in before this click.
       flushAllFills();
+
+      // In an assert sub-mode the click commits an assertion instead of
+      // a recorded action step. One-shot — snap back to action after.
+      if (recordSubMode !== 'action') {
+        e.preventDefault();
+        e.stopPropagation();
+        const ass = buildRecordingAssertion(el, recordSubMode);
+        if (!ass) {
+          addMessage({ kind: 'system', text: `⊘ Assert ignored: ${el.tagName.toLowerCase()} doesn't support ${recordSubMode}` });
+          showPickerToast(`<${el.tagName.toLowerCase()}> doesn't support ${recordSubMode}`, { error: true });
+          setRecordSubMode('action');
+          return;
+        }
+        state.assertions.push(ass);
+        saveState();
+        updateAssertBadge();
+        flashElement(el);
+        addMessage({ kind: 'system', text: `✓ Asserted: ${ass.hint}` });
+        showPickerToast(`Asserted: ${ass.hint}`);
+        setRecordSubMode('action');
+        return;
+      }
 
       // For form submission via Enter, the click event won't fire; we
       // catch that case via the submit listener below.
@@ -2225,6 +2248,47 @@
     },
     { capture: true },
   );
+
+  // Build an assertion {code, hint} pinned to a specific assert kind,
+  // mirroring the existing inspectElement() shape so writeSpec consumes
+  // it identically. Returns null when the element can't produce that
+  // assertion (e.g. assert-value on a <div> with no value).
+  function buildRecordingAssertion(el, mode) {
+    const sel = bestSelector(el);
+    if (!sel) return null;
+    let assPart;
+    if (mode === 'assert-visible') {
+      assPart = { code: 'expect(SEL).toBeVisible()', hint: '· visible' };
+    } else if (mode === 'assert-text') {
+      const text = (el.textContent || '').trim();
+      if (!text || text.length > 200) return null;
+      assPart = { code: `expect(SEL).toHaveText(${JSON.stringify(text)})`, hint: `· text "${text.slice(0, 30)}${text.length > 30 ? '…' : ''}"` };
+    } else if (mode === 'assert-value') {
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'input') {
+        const t = (el.getAttribute('type') || 'text').toLowerCase();
+        if (t === 'checkbox' || t === 'radio') {
+          assPart = el.checked
+            ? { code: 'expect(SEL).toBeChecked()', hint: '· is checked' }
+            : { code: 'expect(SEL).not.toBeChecked()', hint: '· is unchecked' };
+        } else {
+          const v = el.value ?? '';
+          assPart = { code: `expect(SEL).toHaveValue(${JSON.stringify(v)})`, hint: `· value "${String(v).slice(0, 30)}"` };
+        }
+      } else if (tag === 'textarea' || tag === 'select') {
+        const v = el.value ?? '';
+        assPart = { code: `expect(SEL).toHaveValue(${JSON.stringify(v)})`, hint: `· value "${String(v).slice(0, 30)}"` };
+      } else {
+        return null; // value assertion only makes sense on form fields
+      }
+    } else {
+      return null;
+    }
+    return {
+      code: assPart.code.replace('SEL', sel.code),
+      hint: `${sel.hint} ${assPart.hint}`,
+    };
+  }
 
   document.addEventListener(
     'submit',

@@ -84,6 +84,36 @@
     </div>
   </div>
 
+  <!--
+    Record sub-toolbar — only visible while recording (.recording class on
+    the host). Four mutually-exclusive modes; the active one decides what
+    the next host-page click captures:
+      • Action            (default) records a click / fill / select step
+      • Assert visibility one-shot: emits expect(SEL).toBeVisible()
+      • Assert text       one-shot: emits expect(SEL).toHaveText("...")
+      • Assert value      one-shot: emits expect(SEL).toHaveValue("...")
+    Assert sub-modes are one-shot — after the next click commits the
+    assertion, the toolbar snaps back to Action. Pattern follows
+    Playwright codegen's three assert buttons in its toolbar.
+  -->
+  <div class="record-toolbar" aria-hidden="true">
+    <span class="record-toolbar-label">Mode:</span>
+    <div class="record-toolbar-modes" role="radiogroup" aria-label="Recording mode">
+      <button type="button" class="rec-mode active" data-mode="action" role="radio" aria-checked="true">
+        <span class="rec-mode-icon" aria-hidden="true">●</span>Action
+      </button>
+      <button type="button" class="rec-mode" data-mode="assert-visible" role="radio" aria-checked="false" data-tooltip="Next click → expect(...).toBeVisible()">
+        <span class="rec-mode-icon" aria-hidden="true">✓</span>Visible
+      </button>
+      <button type="button" class="rec-mode" data-mode="assert-text" role="radio" aria-checked="false" data-tooltip="Next click → expect(...).toHaveText(...)">
+        <span class="rec-mode-icon" aria-hidden="true">¶</span>Text
+      </button>
+      <button type="button" class="rec-mode" data-mode="assert-value" role="radio" aria-checked="false" data-tooltip="Next click → expect(...).toHaveValue(...)">
+        <span class="rec-mode-icon" aria-hidden="true">=</span>Value
+      </button>
+    </div>
+  </div>
+
   <footer>
     <textarea placeholder="e.g. test the login flow" rows="3" disabled aria-label="instruction"></textarea>
     <div class="footer-actions">
@@ -93,7 +123,6 @@
       <button type="button" class="fix-btn" aria-label="suggest fix prompt" data-tooltip="Click a page element, describe what to change, copy a prompt for your coding agent">
         <span class="fix-icon" aria-hidden="true">⌖</span><span class="fix-label">Fix</span>
       </button>
-      <span class="hint">⌥click assert</span>
       <button type="button" class="send" disabled>
         <span class="send-label">Send</span>
         <span class="chord" aria-hidden="true">⏎</span>
@@ -157,17 +186,6 @@
 <div class="picker-overlay" aria-hidden="true">
   <span class="picker-badge"></span>
   <span class="picker-tag"></span>
-</div>
-
-<!--
-  Picker hint — short chord reference that fades in while ⌥ is held,
-  so the user doesn't have to remember the chord. Positioned at the
-  top centre of the screen.
--->
-<div class="picker-hint" aria-hidden="true">
-  <span><kbd>⌥</kbd>click <em>assert</em></span>
-  <span class="picker-hint-sep">·</span>
-  <span><kbd>Esc</kbd> cancel</span>
 </div>
 
 <!--
