@@ -105,7 +105,7 @@ describe('extractFindings', () => {
     });
   });
 
-  it('stops at the next ATX heading', () => {
+  it('stops at the next ATX heading and preserves what comes after', () => {
     const summary = `## Findings
 - **Bug** — A
 
@@ -113,13 +113,45 @@ describe('extractFindings', () => {
 - not a finding`;
     const { findings, rest } = extractFindings(summary);
     expect(findings).toHaveLength(1);
-    expect(rest).toBe(null); // no content before the findings header
+    // Content AFTER the findings block is kept in the rest — only the
+    // list items themselves are extracted as structured findings.
+    expect(rest).toBe('## Next Section\n- not a finding');
   });
 
   it('returns no findings when the header has no list items', () => {
     const { findings, rest } = extractFindings('Body\n## Findings\n\n');
     expect(findings).toEqual([]);
     expect(rest).toBe('Body\n## Findings\n\n'); // unchanged when no items
+  });
+
+  it('preserves prose written INSIDE the Findings block alongside list items', () => {
+    // Real-world shape from a basic-app dogfood session: agent wrote a
+    // structured Findings block but mixed it with prose paragraphs
+    // describing the verification outcome per feature. Before this fix
+    // the prose was silently dropped — only the single list item
+    // survived and the Result card displayed just the lead-in sentence.
+    const summary = `Everything looks clean. Here's my summary:
+
+## Findings
+
+All three sections are functional with no logic bugs. One minor resource issue:
+
+- **Minor** — favicon.ico returns 404 on every page load
+
+**Login:** Accepts any well-formed email. Logout works.
+**Counter:** Increment, decrement, reset all correct.
+**Todos:** Add, remove, count badge all work.`;
+    const { findings, rest } = extractFindings(summary);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('minor');
+    // Lead-in line stays, prose paragraphs inside the block stay.
+    // Only the list item itself gets pulled out into findings[].
+    expect(rest).toContain("Everything looks clean. Here's my summary:");
+    expect(rest).toContain('All three sections are functional');
+    expect(rest).toContain('**Login:**');
+    expect(rest).toContain('**Counter:**');
+    expect(rest).toContain('**Todos:**');
+    expect(rest).not.toContain('favicon.ico'); // moved to findings[]
   });
 });
 

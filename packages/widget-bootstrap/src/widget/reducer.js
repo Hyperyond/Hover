@@ -116,11 +116,21 @@ export function extractFindings(summary) {
   }
   if (headerIdx === -1) return { findings: [], rest: summary };
 
+  // Walk the Findings block. Pull out list items as structured findings;
+  // keep every other line (prose paragraphs, sub-headings, blanks) as
+  // narrative that stays in the Result card. Agents commonly write a
+  // mixed `## Findings` block with both — only extracting list items
+  // would silently lose the prose summary.
   const findings = [];
+  const carriedProseLines = [];
   let i = headerIdx + 1;
+  let blockEnd = lines.length;
   while (i < lines.length) {
     const line = lines[i];
-    if (/^#{2,3}\s+\S/.test(line)) break;
+    if (/^#{2,3}\s+\S/.test(line) && !FINDINGS_HEADER_RE.test(line)) {
+      blockEnd = i;
+      break;
+    }
     const m = FINDING_LINE_RE.exec(line);
     if (m) {
       findings.push({
@@ -128,13 +138,27 @@ export function extractFindings(summary) {
         marker: m[1] || null,
         text: m[2].trim(),
       });
+    } else {
+      carriedProseLines.push(line);
     }
     i++;
   }
 
   if (findings.length === 0) return { findings: [], rest: summary };
 
-  const rest = lines.slice(0, headerIdx).join('\n').trim() || null;
+  const beforeBlock = lines.slice(0, headerIdx);
+  const carriedProse = carriedProseLines.join('\n').trim();
+  const afterBlock = lines.slice(blockEnd);
+
+  // Stitch: text before the Findings header + any prose found inside
+  // the block (separated by a blank line for breathing room) + anything
+  // after the block. Collapse to null if the whole thing is empty.
+  const parts = [
+    beforeBlock.join('\n').trim(),
+    carriedProse,
+    afterBlock.join('\n').trim(),
+  ].filter(Boolean);
+  const rest = parts.length > 0 ? parts.join('\n\n') : null;
   return { findings, rest };
 }
 
