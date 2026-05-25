@@ -1685,6 +1685,7 @@
 
   function enterFixMode() {
     if (fixMode) return;
+    if (recording) return; // mutex: can't enter Fix while recording
     fixMode = true;
     pickerMode = 'fix';
     // Ensure panel is open so the user can see the popover when they click.
@@ -1692,6 +1693,7 @@
     host.classList.add('picker-active');
     host.classList.add('fix-active');
     fixBtn.classList.add('active');
+    updateMutexUi();
     if (lastMouseX >= 0) {
       const el = document.elementFromPoint(lastMouseX, lastMouseY);
       updatePickerOverlay(el, 'fix');
@@ -1707,6 +1709,7 @@
     fixBtn.classList.remove('active');
     pickerOverlay.classList.remove('visible');
     pickerLastTarget = null;
+    updateMutexUi();
   }
 
   function cancelFixMode() {
@@ -1774,6 +1777,30 @@
         enterFixMode();
       }
     });
+  }
+
+  // Record + Fix are mutually exclusive: each must be off before the other
+  // can be entered. We could auto-cancel the active mode when the user
+  // clicks the other button, but that would silently commit a recording
+  // session the user didn't intend to finish — so we disable instead.
+  function updateMutexUi() {
+    if (!fixBtn || !recordBtn) return;
+    // Disable Fix while recording.
+    if (recording) {
+      fixBtn.disabled = true;
+      fixBtn.setAttribute('data-tooltip', 'Stop recording before suggesting a fix');
+    } else {
+      fixBtn.disabled = false;
+      fixBtn.setAttribute('data-tooltip', 'Click a page element, describe what to change, copy a prompt for your coding agent');
+    }
+    // Disable Record while fix-mode is active.
+    if (fixMode) {
+      recordBtn.disabled = true;
+      recordBtn.setAttribute('data-tooltip', 'Cancel Fix before recording');
+    } else {
+      recordBtn.disabled = false;
+      recordBtn.setAttribute('data-tooltip', 'Record your own clicks/typing on the page');
+    }
   }
   if (fixPopover) {
     fixPopoverCopy.addEventListener('click', commitFixPopover);
@@ -2113,6 +2140,7 @@
         if (!seen) localStorage.setItem('hover:sub-toolbar-hint-seen', '1');
       }
       setRecordSubMode('action');
+      updateMutexUi();
     } else {
       recordBtn.classList.remove('recording');
       recLabel.textContent = 'Record';
@@ -2135,11 +2163,13 @@
         source: 'recording',
         summary: `${lead}. Click Save as Skill / Spec on this card to keep it.`,
       });
+      updateMutexUi();
     }
   };
 
   recordBtn.addEventListener('click', () => {
     if (running) return;
+    if (fixMode) return; // mutex with Fix
     setRecording(!recording);
   });
 
