@@ -1528,13 +1528,12 @@
     hideCost();
   });
 
-  // ───────────────────────── Alt-click "Assert This" ─────────────────
+  // ───────────────────────── Pending assertions badge ─────────────────
   //
-  // While the panel is open, holding Alt and clicking any element in the
-  // host page produces an assertion derived from that element's current
-  // state. Click is intercepted in the capture phase so the host app's
-  // own handler does not fire. Assertions accumulate in state.assertions
-  // and ship out with the next Save as Spec.
+  // The header badge shows how many checks are queued for the next Save
+  // as Spec. Assertions are produced by the Record sub-toolbar's check
+  // sub-modes (Exists / Says / Equals) and accumulate in state.assertions;
+  // Save as Spec bakes them in and clears the list.
 
   const updateAssertBadge = () => {
     const n = state.assertions.length;
@@ -1562,17 +1561,14 @@
     addMessage({ kind: 'system', text: 'Cleared pending assertions.' });
   });
 
-  // ─────────────── Picker hover-mode (⌥ held → element preview) ─────────────
+  // ─────────────── Picker hover-mode (element preview) ─────────────
   //
-  // Without visible feedback the alt-click chord is invisible: users hold
-  // alt, see nothing change, and have no way to know what their click will
-  // hit. While ⌥ is held *and the panel is open*, we light up an overlay
-  // that tracks `elementFromPoint`, draw a badge naming the pending action
-  // (Assert / Fix — switches with shiftKey), and show a top-screen chord
-  // hint. Releasing alt clears everything.
-  //
-  // The overlay lives inside our shadow root with pointer-events:none, so
-  // it never intercepts the click and never pollutes the host page DOM.
+  // When the user enters Fix mode or a Record check sub-mode, we light
+  // up an overlay that tracks `elementFromPoint` and draws a badge
+  // naming the pending action (Fix / Check: Exists / Check: Says /
+  // Check: Equals). The overlay lives in the shadow root with
+  // pointer-events:none, so it never intercepts the click and never
+  // pollutes the host page DOM.
 
   const pickerOverlay = $('.picker-overlay');
   const pickerBadge = $('.picker-badge');
@@ -1662,7 +1658,7 @@
   //
   // A single shared strip at the top of the viewport. Lives in the shadow
   // root so styling is isolated, but sits above .panel — visible even when
-  // the panel is closed (the common case during alt-click element picking).
+  // the panel is closed (the common case during element picking).
 
   const toastEl = $('.picker-toast');
   let toastTimer = null;
@@ -1688,7 +1684,7 @@
   //
   // User clicks the Fix button → fix-mode starts, panel auto-opens, cursor
   // becomes crosshair, host-page hover paints a mint outline with a "Fix"
-  // badge (same overlay component as ⌥-pick). User clicks any host-page
+  // badge (shared picker-overlay component). User clicks any host-page
   // element → panel body switches to the fix-popover view (right side of
   // the screen — host page is untouched). User types their intent and hits
   // Copy / ⌘↵; the structured fact blob below is prepended with the intent,
