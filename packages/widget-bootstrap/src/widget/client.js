@@ -1548,33 +1548,40 @@
   const pickerOverlay = $('.picker-overlay');
   const pickerBadge = $('.picker-badge');
   const pickerTag = $('.picker-tag');
-  let pickerActive = false;
+  // Two independent ways to enter picker mode:
+  //   • holding ⌥ while panel is open  → 'assert' (legacy chord)
+  //   • clicking the footer Fix button → 'fix' (independent flow, no key needed)
+  // pickerMode is either null (inactive), 'assert', or 'fix'. The overlay
+  // / cursor / badge react to the current mode.
+  let pickerMode = null;
   let pickerLastTarget = null;
-  let pickerLastShift = false;
+  let fixMode = false; // mirror of pickerMode === 'fix' for click-handler guards
   // Last cursor position — tracked even when picker is inactive, so that
-  // entering picker mode (alt-keydown) can immediately paint the overlay
-  // around the element under the cursor without waiting for the next
-  // mousemove event.
+  // entering picker mode can immediately paint the overlay around the
+  // element under the cursor without waiting for the next mousemove event.
   let lastMouseX = -1;
   let lastMouseY = -1;
 
-  function enterPickerMode(shiftHeld) {
-    if (pickerActive) return;
-    pickerActive = true;
+  function enterAssertPickerMode() {
+    if (pickerMode) return;
+    pickerMode = 'assert';
     host.classList.add('picker-active');
     if (lastMouseX >= 0) {
       const el = document.elementFromPoint(lastMouseX, lastMouseY);
-      updatePickerOverlay(el, !!shiftHeld);
+      updatePickerOverlay(el, 'assert');
     }
   }
-  function exitPickerMode() {
-    if (!pickerActive) return;
-    pickerActive = false;
+  function exitAssertPickerMode() {
+    if (pickerMode !== 'assert') return;
+    pickerMode = null;
     host.classList.remove('picker-active');
     pickerOverlay.classList.remove('visible');
     pickerLastTarget = null;
   }
-  function updatePickerOverlay(target, shiftHeld) {
+  // Shared overlay update used by both alt-pick (assert) and fix-mode.
+  // The `mode` parameter drives the badge label so the user knows what
+  // their click is about to do.
+  function updatePickerOverlay(target, mode) {
     if (!target || !(target instanceof Element)) {
       pickerOverlay.classList.remove('visible');
       pickerLastTarget = null;
@@ -1599,46 +1606,47 @@
     pickerOverlay.style.top = `${r.top - 2}px`;
     pickerOverlay.style.width = `${r.width + 4}px`;
     pickerOverlay.style.height = `${r.height + 4}px`;
-    pickerBadge.textContent = shiftHeld ? 'Fix' : 'Assert';
+    pickerBadge.textContent = mode === 'fix' ? 'Fix' : 'Assert';
     pickerTag.textContent = `<${target.tagName.toLowerCase()}>`;
     pickerOverlay.classList.add('visible');
     pickerLastTarget = target;
-    pickerLastShift = shiftHeld;
   }
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Alt') return;
     if (!isOpen()) return;
-    enterPickerMode(e.shiftKey);
+    if (fixMode) return; // fix-mode is independent of alt
+    enterAssertPickerMode();
   });
   document.addEventListener('keyup', (e) => {
-    if (e.key === 'Alt' || e.key === 'Shift') {
-      // Re-evaluate: if Alt is no longer held the mode ends; if only Shift
-      // was released but Alt is still held, just refresh the badge.
-      if (!e.altKey) {
-        exitPickerMode();
-      } else if (pickerActive && pickerLastTarget) {
-        updatePickerOverlay(pickerLastTarget, e.shiftKey);
-      }
+    if (e.key === 'Alt' && pickerMode === 'assert' && !e.altKey) {
+      exitAssertPickerMode();
     }
-    if (e.key === 'Escape' && pickerActive) {
-      exitPickerMode();
+    if (e.key === 'Escape') {
+      if (pickerMode === 'assert') exitAssertPickerMode();
+      if (fixMode) cancelFixMode();
     }
   });
   // Window blur (alt-tab) — leaving the page mid-pick should not leave the
   // overlay stuck on.
-  window.addEventListener('blur', exitPickerMode);
+  window.addEventListener('blur', () => {
+    if (pickerMode === 'assert') exitAssertPickerMode();
+  });
   document.addEventListener('mousemove', (e) => {
     lastMouseX = e.clientX;
     lastMouseY = e.clientY;
-    if (!pickerActive) return;
+    if (!pickerMode) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    updatePickerOverlay(el, e.shiftKey);
+    updatePickerOverlay(el, pickerMode);
   });
 
   document.addEventListener(
     'click',
     (e) => {
+      // Fix-mode capture (no modifier key needed) — handled in the fix-mode
+      // block further down. Alt-key path below handles assert only.
+      if (fixMode) return;
+
       if (!e.altKey) return;
       if (!isOpen()) return;
       // Skip clicks inside our own widget.
@@ -1653,15 +1661,6 @@
       // Click commits the pick — overlay should disappear immediately so
       // the toast can take over the user's attention.
       pickerOverlay.classList.remove('visible');
-
-      // ⇧⌥click → Suggest fix prompt. Sibling to the ⌥click=assert flow.
-      if (e.shiftKey) {
-        suggestFixForElement(target).catch((err) => {
-          addMessage({ kind: 'system', text: `⊘ Suggest-fix failed: ${err?.message || err}` });
-          showPickerToast(`Suggest-fix failed: ${err?.message || err}`, { error: true });
-        });
-        return;
-      }
 
       const ass = inspectElement(target);
       if (!ass) {
@@ -1705,26 +1704,98 @@
     }, opts.error ? 3500 : 2500);
   }
 
-  // ─────────────────── ⇧⌥click "Suggest fix prompt" ──────────────────
+  // ─────────────────── Fix mode (footer "Fix" button) ───────────────────
   //
-  // Hybrid context model — for any clicked element, collect:
-  //   • the element's own data-hover-source (when our Vite transform
-  //     stamped it — works for bare host elements and Radix-Slot/asChild)
-  //   • DOM ancestor data-hover-source chain (the call site for
-  //     className-forwarding / nested wrappers lives in the ancestors)
+  // User clicks the Fix button → fix-mode starts, panel auto-opens, cursor
+  // becomes crosshair, host-page hover paints a mint outline with a "Fix"
+  // badge (same overlay component as ⌥-pick). User clicks any host-page
+  // element → panel body switches to the fix-popover view (right side of
+  // the screen — host page is untouched). User types their intent and hits
+  // Copy / ⌘↵; the structured fact blob below is prepended with the intent,
+  // copied to clipboard, and the user pastes into their coding agent.
+  //
+  // Hybrid context for the chosen element:
+  //   • element's own data-hover-source (Vite transform output)
+  //   • likely-target descent (e.g. <div> wrapper → <button> inside it)
+  //   • DOM ancestor data-hover-source chain (the user's call site lives
+  //     in the ancestors for wrapper-rendered hosts: styled-components,
+  //     className-forwarding components, multi-layer nesting)
   //   • React _debugOwner name chain — owners survived in React 19 even
   //     though _debugSource didn't; gives grep keywords for styled-
   //     components and other library-rendered hosts
-  //   • Playwright selector + outerHTML excerpt — universal fallback
+  //   • Playwright selector + outerHTML excerpt
   //
-  // Result is rendered as a prompt and written to clipboard, ready for
-  // the user to paste into their coding-agent chat (Cursor / Claude
-  // Code / Windsurf etc). Hover's own sandboxed agent only has the
-  // Playwright MCP, so this is a clipboard handoff — not a server call.
+  // Hover's own sandboxed agent only has the Playwright MCP, so this is
+  // a clipboard handoff — not a server call.
 
-  async function suggestFixForElement(el) {
+  const fixBtn = $('.fix-btn');
+  const fixPopover = $('.fix-popover');
+  const fixPopoverElTag = fixPopover && fixPopover.querySelector('.fix-popover-el-tag');
+  const fixPopoverElText = fixPopover && fixPopover.querySelector('.fix-popover-el-text');
+  const fixPopoverElSrc = fixPopover && fixPopover.querySelector('.fix-popover-el-src');
+  const fixPopoverInput = fixPopover && fixPopover.querySelector('.fix-popover-input');
+  const fixPopoverCopy = fixPopover && fixPopover.querySelector('.fix-popover-copy');
+  const fixPopoverCancel = fixPopover && fixPopover.querySelector('.fix-popover-cancel');
+  let fixSelectedElement = null;
+  let fixSelectedCtx = null;
+
+  function enterFixMode() {
+    if (fixMode) return;
+    fixMode = true;
+    // Ensure panel is open so the user can see the popover when they click.
+    if (!isOpen()) launcher.click();
+    host.classList.add('picker-active');
+    host.classList.add('fix-active');
+    fixBtn.classList.add('active');
+    pickerBadge.textContent = 'Fix';
+    if (lastMouseX >= 0) {
+      const el = document.elementFromPoint(lastMouseX, lastMouseY);
+      updatePickerOverlay(el, 'fix');
+    }
+  }
+
+  function exitFixMode() {
+    if (!fixMode) return;
+    fixMode = false;
+    host.classList.remove('picker-active');
+    host.classList.remove('fix-active');
+    fixBtn.classList.remove('active');
+    pickerOverlay.classList.remove('visible');
+    pickerLastTarget = null;
+  }
+
+  function cancelFixMode() {
+    closeFixPopover();
+    exitFixMode();
+  }
+
+  function showFixPopover(el) {
+    fixSelectedElement = el;
     const ctx = collectFixContext(el);
-    const prompt = renderFixPrompt(ctx);
+    fixSelectedCtx = ctx;
+    const headlineEl = ctx.target.el;
+    fixPopoverElTag.textContent = `<${headlineEl.tagName.toLowerCase()}>`;
+    fixPopoverElText.textContent = ctx.target.text || '';
+    fixPopoverElSrc.textContent = ctx.target.ownStamp || ctx.ancestorStamps[0]?.src || '(no source stamp)';
+    fixPopover.setAttribute('aria-hidden', 'false');
+    fixPopover.classList.add('visible');
+    panel.classList.add('fix-popover-open');
+    fixPopoverInput.value = '';
+    setTimeout(() => fixPopoverInput.focus(), 30);
+  }
+
+  function closeFixPopover() {
+    fixPopover.classList.remove('visible');
+    fixPopover.setAttribute('aria-hidden', 'true');
+    panel.classList.remove('fix-popover-open');
+    fixSelectedElement = null;
+    fixSelectedCtx = null;
+  }
+
+  async function commitFixPopover() {
+    if (!fixSelectedCtx) return;
+    const intent = fixPopoverInput.value.trim();
+    const prompt = renderFixPrompt(fixSelectedCtx, intent);
     let copied = false;
     try {
       await navigator.clipboard.writeText(prompt);
@@ -1732,29 +1803,102 @@
     } catch {
       copied = false;
     }
-    flashElement(el);
-    const label = ctx.selector?.hint || ctx.tag;
+    const label = fixSelectedCtx.target.selector?.hint || fixSelectedCtx.target.tag;
     if (copied) {
       addMessage({
         kind: 'system',
-        text: `📋 Suggest-fix prompt copied for ${label} — paste into your coding agent.`,
+        text: `📋 Fix prompt copied for ${label} — paste into your coding agent.`,
       });
-      showPickerToast(`Fix prompt copied — paste into your coding agent`);
+      showPickerToast('Fix prompt copied — paste into your coding agent');
     } else {
       addMessage({
         kind: 'system',
-        text: `⚠ Couldn't copy to clipboard. Prompt for ${label} in console.`,
+        text: `⚠ Couldn't copy to clipboard. Prompt for ${label} printed to console.`,
       });
-      showPickerToast(`Clipboard blocked — prompt printed to console`, { error: true });
-      console.info('[hover] suggest-fix prompt:\n' + prompt);
+      showPickerToast('Clipboard blocked — prompt printed to console', { error: true });
+      console.info('[hover] fix prompt:\n' + prompt);
     }
+    cancelFixMode();
+  }
+
+  if (fixBtn) {
+    fixBtn.addEventListener('click', () => {
+      if (fixMode) {
+        cancelFixMode();
+      } else {
+        enterFixMode();
+      }
+    });
+  }
+  if (fixPopover) {
+    fixPopoverCopy.addEventListener('click', commitFixPopover);
+    fixPopoverCancel.addEventListener('click', cancelFixMode);
+    fixPopoverInput.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        commitFixPopover();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelFixMode();
+      }
+    });
+  }
+
+  // Capture-phase click during fix-mode picks the element and shows popover.
+  document.addEventListener('click', (e) => {
+    if (!fixMode) return;
+    if (e.composedPath().includes(host)) return; // ignore clicks inside widget
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.target;
+    if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
+    pickerOverlay.classList.remove('visible');
+    host.classList.remove('picker-active');
+    host.classList.remove('fix-active');
+    // Collect context BEFORE flashElement so the transient outline style
+    // doesn't end up in the captured outerHTML.
+    showFixPopover(target);
+    flashElement(target);
+  }, { capture: true });
+
+  // "Interactive" tag check — used by the likely-target descent.
+  function isInteractive(el) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'button' || tag === 'a' || tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    if (el.hasAttribute('role')) {
+      const r = el.getAttribute('role');
+      if (r === 'button' || r === 'link' || r === 'checkbox' || r === 'radio' || r === 'switch' || r === 'tab' || r === 'menuitem') return true;
+    }
+    return false;
+  }
+
+  // If the clicked element isn't itself interactive but contains exactly
+  // one interactive descendant, that's almost certainly what the user
+  // meant — e.g. clicking a wrapping <div> aimed at the <button> inside.
+  // Returns the deeper element or null.
+  function findLikelyInteractiveTarget(el) {
+    if (isInteractive(el)) return null; // already the target
+    const candidates = el.querySelectorAll('button, a, input, textarea, select, [role="button"], [role="link"], [role="checkbox"], [role="radio"]');
+    if (candidates.length === 1) return candidates[0];
+    return null;
+  }
+
+  function elementSummary(el) {
+    const ownStamp = el.getAttribute('data-hover-source');
+    const selector = bestSelector(el);
+    // Outer HTML, normalised: drop empty style="" attrs and the transient
+    // outline/transition style flashElement injects on commit; cap length.
+    let outer = (el.outerHTML || '');
+    outer = outer.replace(/\sstyle=""/g, '');
+    outer = outer.replace(/\sstyle="[^"]*(?:outline|transition)[^"]*"/g, '');
+    outer = outer.slice(0, 400);
+    const text = (el.textContent || '').trim().slice(0, 120);
+    return { el, tag: el.tagName.toLowerCase(), text, ownStamp, selector, outer };
   }
 
   function collectFixContext(el) {
-    const ownStamp = el.getAttribute('data-hover-source');
-
-    // DOM ancestor chain, up to and including the first ancestor that
-    // carries data-hover-source. Capped at 8 to keep prompts tight.
+    // DOM ancestor chain (parent → root), up to 8 levels. The user's call
+    // site is in here for wrapper-rendered hosts.
     const ancestorStamps = [];
     let cur = el.parentElement;
     let depth = 0;
@@ -1780,38 +1924,53 @@
       }
     }
 
-    const selector = bestSelector(el);
-    const outer = (el.outerHTML || '').slice(0, 400);
-    const tag = el.tagName.toLowerCase();
-    const text = (el.textContent || '').trim().slice(0, 120);
+    // "target" is the element we point the agent at. If the clicked
+    // element is a wrapper around a single interactive child, prefer the
+    // child (Playwright selector + headline both come from it).
+    const likely = findLikelyInteractiveTarget(el);
+    const targetEl = likely ?? el;
+    const target = elementSummary(targetEl);
+    const clicked = likely ? elementSummary(el) : null;
 
-    return { tag, text, ownStamp, ancestorStamps, owners, selector, outer };
+    return { clicked, target, ancestorStamps, owners };
   }
 
-  function renderFixPrompt(ctx) {
+  function renderFixPrompt(ctx, intent) {
     const lines = [];
-    lines.push("I'd like to change this element in my app. Please open the right file and propose the edit.");
+    lines.push('Change this element in my app:');
     lines.push('');
-    lines.push(`Element: <${ctx.tag}>${ctx.text ? ` — "${ctx.text}"` : ''}`);
-    if (ctx.ownStamp) {
-      lines.push(`Source (precise): ${ctx.ownStamp}`);
+    if (intent) {
+      // Quote each line so the model parses the intent as a single block.
+      for (const ln of intent.split('\n')) lines.push(`> ${ln}`);
+      lines.push('');
+    }
+    if (ctx.clicked) {
+      lines.push(`Clicked: <${ctx.clicked.tag}>${ctx.clicked.text ? ` — "${ctx.clicked.text}"` : ''}`);
+      lines.push(`Most likely target: <${ctx.target.tag}>${ctx.target.text ? ` — "${ctx.target.text}"` : ''}`);
     } else {
-      lines.push('Source (precise): unavailable — element rendered by a library wrapper. Use the hints below.');
+      lines.push(`Element: <${ctx.target.tag}>${ctx.target.text ? ` — "${ctx.target.text}"` : ''}`);
+    }
+    if (ctx.target.ownStamp) {
+      lines.push(`Source of likely target: ${ctx.target.ownStamp}`);
+    }
+    if (ctx.clicked?.ownStamp && ctx.clicked.ownStamp !== ctx.target.ownStamp) {
+      lines.push(`Source of clicked element: ${ctx.clicked.ownStamp}`);
+    }
+    if (!ctx.target.ownStamp && !ctx.clicked?.ownStamp) {
+      lines.push('Source: unavailable (likely rendered by a library wrapper — see ancestor chain)');
     }
     if (ctx.ancestorStamps.length > 0) {
-      lines.push('Ancestor source chain (closer ancestors first — the call site is usually one of these):');
+      lines.push('Ancestor sources (closer ancestors first):');
       for (const a of ctx.ancestorStamps) lines.push(`  • <${a.tag}> @ ${a.src}`);
     }
     if (ctx.owners.length > 0) {
-      lines.push(`Component chain (React owners, innermost → outermost): ${ctx.owners.join(' → ')}`);
+      lines.push(`React component chain (innermost first): ${ctx.owners.join(' → ')}`);
     }
-    if (ctx.selector) {
-      lines.push(`Playwright selector: ${ctx.selector.code}`);
+    if (ctx.target.selector) {
+      lines.push(`Playwright selector: ${ctx.target.selector.code}`);
     }
-    lines.push('Rendered HTML:');
-    lines.push('  ' + ctx.outer);
-    lines.push('');
-    lines.push('Describe the fix you want, then make the edit. Prefer editing the call site over the wrapper definition unless the change should apply everywhere.');
+    lines.push('Outer HTML:');
+    lines.push('  ' + ctx.target.outer);
     return lines.join('\n');
   }
 
