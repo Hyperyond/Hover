@@ -278,6 +278,12 @@ header {
   border-color: var(--accent);
   color: var(--accent);
 }
+.iconbtn.starbtn:not(:disabled):hover {
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.45);
+  background: rgba(255, 215, 0, 0.08);
+}
+.iconbtn.starbtn:not(:disabled):hover svg { fill: rgba(255, 215, 0, 0.18); }
 .iconbtn.assertbtn[hidden] { display: none; }
 .iconbtn.assertbtn {
   width: auto; padding: 0 8px;
