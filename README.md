@@ -51,11 +51,11 @@ Open the floating chat in your dev page, describe what you want to verify in pla
 ## See it in action
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">
-    <img src="https://img.youtube.com/vi/ASWFWUyMUlc/maxresdefault.jpg" alt="Hover demo — watch on YouTube" width="70%" />
+  <a href="https://www.youtube.com/watch?v=lQV5dmVWaIA">
+    <img src="https://img.youtube.com/vi/lQV5dmVWaIA/maxresdefault.jpg" alt="Hover demo — watch on YouTube" width="70%" />
   </a>
   <br/>
-  <sub><b><a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">▶ Watch the demo on YouTube</a></b></sub>
+  <sub><b><a href="https://www.youtube.com/watch?v=lQV5dmVWaIA">▶ Watch the demo on YouTube</a></b></sub>
 </p>
 
 Ten real example apps live under [`examples/`](./examples/). Four stress different **testing surfaces** (login, multi-step form, cart checkout, canvas + DOM mix) — the Hover widget is driving each one. The other six exercise **bundler / framework coverage** (Astro, Nuxt, Next, webpack, React Native Web, plus a deliberately-uninstrumented third-party origin used by the e-commerce popup flow).
