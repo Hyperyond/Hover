@@ -51,11 +51,11 @@
 ## 实际效果
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">
-    <img src="https://img.youtube.com/vi/ASWFWUyMUlc/maxresdefault.jpg" alt="Hover 演示视频 — 在 YouTube 观看" width="70%" />
+  <a href="https://www.youtube.com/watch?v=lQV5dmVWaIA">
+    <img src="https://img.youtube.com/vi/lQV5dmVWaIA/maxresdefault.jpg" alt="Hover 演示视频 — 在 YouTube 观看" width="70%" />
   </a>
   <br/>
-  <sub><b><a href="https://www.youtube.com/watch?v=ASWFWUyMUlc">▶ 在 YouTube 观看演示视频</a></b></sub>
+  <sub><b><a href="https://www.youtube.com/watch?v=lQV5dmVWaIA">▶ 在 YouTube 观看演示视频</a></b></sub>
 </p>
 
 [`examples/`](./examples/) 下有 10 个真实的示例 app。其中 4 个压**测试场景**（登录、多步表单、电商结账、画布 + DOM 混合）—— 右边的 Hover widget 都是同一套 UI 在驱动。另外 6 个压**bundler / 框架覆盖**（Astro、Nuxt、Next、webpack、React Native Web，加上电商弹窗流程里那个故意不装插件的第三方域）。
