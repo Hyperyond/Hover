@@ -185,11 +185,54 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   const wss = await pickAndBind('127.0.0.1', requestedPort, PORT_RETRIES);
   const port = (wss.address() as { port: number }).port;
 
-  // Resolve a CDP-pinned MCP config pointing at our local
-  // `@playwright/mcp` install. See resolveMcpConfig.ts for the rationale
-  // (avoids `npx -y @playwright/mcp@latest`'s registry round-trip on
-  // every command — 300 ms - 2 s of hot-path latency).
-  const mcpConfig = opts.mcpConfig ?? resolveMcpConfig({ cdpUrl, port });
+  // Build a fresh MCP config per command, so the currently-active mode's
+  // contributed servers (plus runtime env from setMcpServerEnv) land in
+  // the file the agent reads. `opts.mcpConfig` still wins if the host
+  // forced an explicit one, but in that case mode-contributed servers
+  // are silently dropped — we log a warning the first time it happens.
+  let warnedExplicitMcpOverride = false;
+  const buildMcpConfig = (): string => {
+    if (opts.mcpConfig) {
+      const activePlugin = currentModeId ? pluginsByModeId.get(currentModeId) : null;
+      if (activePlugin?.mcpServers?.length && !warnedExplicitMcpOverride) {
+        process.stderr.write(
+          `[hover] explicit opts.mcpConfig overrides plugin-contributed MCP servers ` +
+            `(plugin "${activePlugin.name}" wanted ${activePlugin.mcpServers
+              .map((s) => s.id)
+              .join(', ')}).\n`,
+        );
+        warnedExplicitMcpOverride = true;
+      }
+      return opts.mcpConfig;
+    }
+    const extra: { id: string; command: string; args?: string[]; env?: Record<string, string> }[] = [];
+    if (currentModeId) {
+      for (const p of plugins) {
+        for (const srv of p.mcpServers ?? []) {
+          const scope = srv.activeInModes ?? (p.mode ? [p.mode.id] : []);
+          const inMode = scope.includes('*') || scope.includes(currentModeId);
+          if (!inMode) continue;
+          extra.push({
+            id: srv.id,
+            command: srv.command,
+            args: srv.args,
+            env: {
+              ...(srv.env ?? {}),
+              ...(mcpEnvOverrides.get(srv.id) ?? {}),
+            },
+          });
+        }
+      }
+    }
+    return resolveMcpConfig({
+      cdpUrl,
+      port,
+      extra,
+      // Suffix the filename by the mode so different mode toggles within
+      // one service produce distinct config files (debugging aid).
+      suffix: currentModeId ?? undefined,
+    });
+  };
 
   // Surface post-listen errors instead of crashing the host process.
   wss.on('error', err => {
@@ -235,6 +278,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
    *  Surfaced to launchDebugChrome calls when the widget asks us to
    *  launch a debug Chrome. */
   let modeChromeProxy: { port: number; spki: string } | null = null;
+  /** Runtime env overrides keyed by mcpServer id, set by plugin
+   *  activate hooks (via ctx.setMcpServerEnv). Cleared on mode change.
+   *  Merged with the manifest-declared env when the agent's spawn-time
+   *  MCP config is built. */
+  const mcpEnvOverrides = new Map<string, Record<string, string>>();
 
   /** Send the current mode catalogue to one ws (or all if undefined). */
   const broadcastModes = (target?: WebSocket): void => {
@@ -291,6 +339,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       }
     }
     modeChromeProxy = null;
+    mcpEnvOverrides.clear();
     currentModeId = null;
 
     // Bring up new mode
@@ -307,6 +356,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           modeId: newModeId,
           setChromeProxy(proxy) {
             modeChromeProxy = proxy;
+          },
+          setMcpServerEnv(id, env) {
+            mcpEnvOverrides.set(id, env);
           },
         };
         await next.hooks['hover:mode:activate'](ctx);
@@ -532,6 +584,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       cancelled = false;
       inflight = new AbortController();
       try {
+        // Build the MCP config first — it's pure local file IO and lets
+        // us assert plugin-contributed servers landed in the config even
+        // when CDP preflight subsequently fails (useful for smoke tests
+        // that don't have a real debug Chrome wired up).
+        const mcpConfig = buildMcpConfig();
+
         // Preflight: refuse to invoke if CDP isn't reachable. Otherwise the
         // Playwright MCP server would silently launch its own Chromium —
         // and Hover's premise is to drive the user's existing Chrome (with
@@ -594,6 +652,25 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // a soft one gets nothing and relies on its descriptor's built-in
         // sandbox flags + developer_instructions.
         const isHardSandbox = invokedDescriptor?.sandboxStrength === 'hard';
+        // Active mode's plugin-contributed MCP server ids — added to the
+        // hard-sandbox allow list so Claude can actually call them. Claude
+        // sanitises non-alphanumeric chars in the id when forming tool
+        // names (e.g. "@hover-dev/security:flows" → "mcp__hover_dev_security_flows"),
+        // and `--allowedTools mcp__foo` matches every tool under that
+        // prefix. We pass the prefix `mcp__<sanitized>` so all of the
+        // server's tools are reachable.
+        const sanitize = (s: string): string => s.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        const activePluginMcpIds: string[] = [];
+        if (currentModeId) {
+          for (const p of plugins) {
+            for (const srv of p.mcpServers ?? []) {
+              const scope = srv.activeInModes ?? (p.mode ? [p.mode.id] : []);
+              if (scope.includes('*') || scope.includes(currentModeId)) {
+                activePluginMcpIds.push(`mcp__${sanitize(srv.id)}`);
+              }
+            }
+          }
+        }
         for await (const ev of invokeAgent({
           agentId: invokedAgentId,
           prompt: text,
@@ -605,8 +682,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           appendSystemPrompt,
           // Skill stays in the allow list so saved skills under
           // <devRoot>/.claude/skills/ can be invoked. mcp__playwright covers
-          // every browser tool.
-          allowedTools: isHardSandbox ? ['mcp__playwright', 'Skill'] : undefined,
+          // every browser tool. Plugin-contributed MCPs are appended when
+          // the corresponding mode is active.
+          allowedTools: isHardSandbox
+            ? ['mcp__playwright', 'Skill', ...activePluginMcpIds]
+            : undefined,
           disallowedTools: isHardSandbox
             ? [
                 // file / shell / data access — never appropriate for browser driving

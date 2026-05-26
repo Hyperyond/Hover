@@ -107,6 +107,13 @@ export interface ModeActivateCtx extends HoverHookCtxBase {
   /** Tell the host "Chrome should be relaunched with these proxy settings"
    *  for the duration of this mode. Pass null to clear. */
   setChromeProxy(proxy: { port: number; spki: string } | null): void;
+  /** Set additional env vars on one of this plugin's declared MCP servers.
+   *  The MCP server isn't actually spawned until the agent runs a command,
+   *  so plugins use this in activate() to pass runtime data (port numbers,
+   *  auth tokens) that didn't exist at manifest-construction time.
+   *  Merged on top of any env declared in the manifest; subsequent calls
+   *  for the same id replace previous overrides. */
+  setMcpServerEnv(id: string, env: Record<string, string>): void;
 }
 
 /** Fired when this plugin's mode is being deactivated. The plugin
