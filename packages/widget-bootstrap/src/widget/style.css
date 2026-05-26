@@ -1095,6 +1095,125 @@ textarea:disabled { background: var(--bg-2); color: var(--text-dim); cursor: not
   50%      { opacity: 0.4; transform: scale(0.7); }
 }
 
+/*
+ * Voice mode (push-to-talk). Round affordance sitting to the right of Send,
+ * to read as an input-mode toggle ("speak instead of type") rather than
+ * another text-side action button. Uses the mint accent on listening.
+ */
+.mic-btn {
+  width: 32px; height: 32px;
+  flex: 0 0 32px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--text-mute);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  margin-left: 2px;
+}
+.mic-btn { position: relative; }
+.mic-btn > * { pointer-events: none; }
+.mic-btn .mic-glyph { width: 16px; height: 16px; }
+/* Timer overlay — same slot as the icon, swapped via display rules below.
+ * Tabular-nums keeps "9 → 10" from jumping width. */
+.mic-btn .mic-timer {
+  position: absolute; inset: 0;
+  display: none;
+  align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: inherit;
+  line-height: 1;
+}
+.mic-btn.listening .mic-glyph { display: none; }
+.mic-btn.listening .mic-timer { display: inline-flex; }
+.mic-btn:not(:disabled):hover {
+  color: var(--accent);
+  border-color: rgba(124, 255, 168, 0.5);
+  background: var(--accent-dim);
+}
+.mic-btn:not(:disabled):active { transform: scale(0.94); }
+.mic-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.mic-btn.listening {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(124, 255, 168, 0.6);
+  /* Glow pulses to signal "still recording" — replaces the icon pulse
+   * since the icon is hidden behind the timer while listening. */
+  animation: mic-glow 1.3s ease-in-out infinite;
+}
+@keyframes mic-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(124, 255, 168, 0.10); }
+  50%      { box-shadow: 0 0 0 5px rgba(124, 255, 168, 0.22); }
+}
+
+/*
+ * Settings overlay — mirrors .agents-overlay / .skills-overlay shape so the
+ * three header panels feel consistent. One block of rows for now (just the
+ * TTS toggle); future settings drop into .settings-list as more
+ * .settings-row labels.
+ */
+.settings-overlay {
+  position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  display: none;
+  flex-direction: column;
+  z-index: 5;
+}
+.settings-overlay.open { display: flex; }
+.settings-overlay .settings-header {
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-mute);
+}
+.settings-list { flex: 1; overflow-y: auto; padding: 8px; }
+.settings-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  margin-bottom: 6px;
+  cursor: pointer;
+  background: var(--bg-2);
+}
+.settings-row:hover { border-color: rgba(124, 255, 168, 0.35); }
+.settings-row-label { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.settings-row-title { font-size: 13px; color: var(--text); font-weight: 500; }
+.settings-row-hint { font-size: 11px; color: var(--text-mute); line-height: 1.4; }
+.settings-row input[type="checkbox"] {
+  margin-top: 2px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 32px; height: 18px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+  flex: 0 0 auto;
+}
+.settings-row input[type="checkbox"]::before {
+  content: '';
+  position: absolute; top: 1px; left: 1px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--text-mute);
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.settings-row input[type="checkbox"]:checked {
+  background: var(--accent-dim);
+  border-color: rgba(124, 255, 168, 0.5);
+}
+.settings-row input[type="checkbox"]:checked::before {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+
 /* ───────────────────────── modal (dark) ───────────────────────── */
 
 .modal {

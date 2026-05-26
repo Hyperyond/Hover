@@ -43,6 +43,8 @@
   const assertCountEl = $('.assert-count');
   const recordBtn = $('.record-btn');
   const recLabel = $('.rec-label');
+  const micBtn = $('.mic-btn');
+  const micTimerEl = micBtn?.querySelector('.mic-timer');
   const bodyEl = $('.body');
   const textarea = $('textarea');
   const sendBtn = $('.send');
@@ -59,6 +61,10 @@
   const agentsListEl = $('.agents-list-items');
   const agentsCountEl = $('.agents-overlay .count');
   const agentsCloseBtn = $('.agents-close');
+  const settingsBtn = $('.settingsbtn');
+  const settingsOverlay = $('.settings-overlay');
+  const settingsCloseBtn = $('.settings-close');
+  const settingsTtsToggle = $('.settings-tts-toggle');
 
   // ───────────────────────── persistent state ─────────────────────────
   // Survives panel close, page reload, and AI-driven navigations within
@@ -200,6 +206,169 @@
   const isOpen = () => panel.classList.contains('open');
 
   launcher.addEventListener('click', () => setOpen(!isOpen()));
+
+  // ───────────────────────── voice mode (STT + TTS) ─────────────────────
+  // voice.js (concatenated into this IIFE by buildWidgetBundle) exposes
+  // detectVoiceSupport / shouldSpeak / detectLanguage / pickVoice /
+  // createRecognizer / createSpeaker. We wire them here:
+  //
+  //   - STT: push-to-talk on the mic button. pointerdown starts recognition,
+  //     pointerup stops. Interim transcripts echo into the textarea; the
+  //     final transcript triggers submit() so the agent path is unchanged.
+  //   - TTS: every InvokeEvent flowing through handleServerEvent is passed
+  //     through shouldSpeak(); decisions that say "speak" enqueue an utter-
+  //     ance with a voice picked by the text's language (zh/en autodetect).
+  //
+  // Defaults: TTS on whenever the browser supports it, STT button shown
+  // whenever SpeechRecognition is available. Firefox (no SpeechRecognition)
+  // sees a disabled mic button with an explanatory tooltip.
+  //
+  // The push-to-talk button starts the recognizer on pointerdown and stops
+  // it on pointerup/leave/cancel. The recognizer's own onend/onerror does
+  // the cleanup — never call stop() twice.
+
+  const voiceCaps = detectVoiceSupport();
+  if (voiceCaps.stt) {
+    micBtn.disabled = false;
+  } else {
+    micBtn.disabled = true;
+    if (voiceCaps.reasons.length > 0) {
+      micBtn.setAttribute('data-tooltip', voiceCaps.reasons.join(' · '));
+    }
+  }
+
+  // langHint tracks the language of the user's most recent prompt (or the
+  // recognizer's last STT result). The TTS layer reads this so tool_use /
+  // session_end utterances stay in the user's language regardless of what
+  // the agent text-replies in (claude / codex commonly answer in English
+  // even after a Chinese prompt). Updated by submit() and onFinal().
+  let langHint = 'en';
+
+  // Settings persistence — kept in a separate localStorage key from `state`
+  // so adding a new toggle doesn't bump the chat-history schema version
+  // and wipe everyone's messages. `ttsEnabled` defaults to true to keep
+  // first-time experience aligned with what was shipped today.
+  const SETTINGS_KEY = 'hover:settings:v1';
+  const settings = { ttsEnabled: true };
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.ttsEnabled === 'boolean') settings.ttsEnabled = parsed.ttsEnabled;
+    }
+  } catch { /* corrupt / privacy mode */ }
+  const saveSettings = () => {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+  };
+
+  // Chrome loads voices async — the very first speechSynthesis.getVoices()
+  // returns [] and the real list arrives on a voiceschanged event. Without
+  // an await here, the first utterance picks a null voice and the engine
+  // reads Chinese text with an English voice. waitForVoices() resolves
+  // immediately when voices are already loaded, on the event when they
+  // arrive, or after a 2s hard timeout.
+  if (voiceCaps.tts) {
+    waitForVoices(window.speechSynthesis).catch(() => {});
+  }
+
+  const speaker = voiceCaps.tts
+    ? createSpeaker({
+        getVoiceForText: (text) =>
+          pickVoice(window.speechSynthesis, detectLanguage(text)),
+      })
+    : null;
+
+  let listening = false;
+  let micTimerId = null;
+  let micTimerStartedAt = 0;
+  const stopMicTimer = () => {
+    if (micTimerId != null) {
+      clearInterval(micTimerId);
+      micTimerId = null;
+    }
+    if (micTimerEl) micTimerEl.textContent = '0';
+  };
+  const startMicTimer = () => {
+    stopMicTimer();
+    if (!micTimerEl) return;
+    micTimerStartedAt = Date.now();
+    micTimerEl.textContent = '0';
+    // Tick once per second. Render whole seconds — push-to-talk rarely runs
+    // longer than ~30s so a 2-digit cap (no MM:SS) keeps the icon clean.
+    micTimerId = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - micTimerStartedAt) / 1000);
+      micTimerEl.textContent = String(elapsed);
+    }, 1000);
+  };
+  const setListening = (on) => {
+    listening = on;
+    micBtn.classList.toggle('listening', on);
+    micBtn.setAttribute('aria-pressed', String(on));
+    if (on) startMicTimer();
+    else stopMicTimer();
+  };
+
+  const recognizer = voiceCaps.stt
+    ? createRecognizer({
+        onInterim: (text) => {
+          // Echo interim transcript into the textarea so the user can
+          // see what we're hearing in real time. Final transcript replaces
+          // this when isFinal arrives.
+          textarea.value = text;
+        },
+        onFinal: (text) => {
+          textarea.value = text;
+          setListening(false);
+          langHint = detectLanguage(text);
+          submit();
+        },
+        onError: (err) => {
+          setListening(false);
+          if (err === 'not-allowed' || err === 'service-not-allowed') {
+            addMessage({
+              kind: 'system',
+              text: 'Microphone access denied. Allow it in the browser address bar to use Voice mode.',
+            });
+          } else if (err !== 'aborted') {
+            addMessage({ kind: 'system', text: `Voice error: ${err}` });
+          }
+        },
+        onEnd: () => setListening(false),
+      })
+    : null;
+
+  if (micBtn && recognizer) {
+    micBtn.addEventListener('pointerdown', (e) => {
+      if (micBtn.disabled || running) return;
+      e.preventDefault();
+      // If TTS is in the middle of an utterance, the mic open implies the
+      // user wants to talk now — drop the speech queue so we don't have
+      // the speaker overlap their voice input.
+      speaker?.cancel();
+      setListening(true);
+      // Hint the recognizer with the last detected reply language if any
+      // recent ai text exists in state.messages — otherwise leave the
+      // factory default (zh-CN).
+      let lastAi = null;
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.kind === 'ai' && typeof m.text === 'string') {
+          lastAi = m.text;
+          break;
+        }
+      }
+      const startLang = lastAi
+        ? (detectLanguage(lastAi) === 'zh' ? 'zh-CN' : 'en-US')
+        : 'zh-CN';
+      recognizer.start(startLang);
+    });
+    const releaseHandler = () => {
+      if (listening) recognizer.stop();
+    };
+    micBtn.addEventListener('pointerup', releaseHandler);
+    micBtn.addEventListener('pointerleave', releaseHandler);
+    micBtn.addEventListener('pointercancel', releaseHandler);
+  }
 
   // ───────────────────────── CDP state ─────────────────────────
   // The widget asks the local service "is this Chrome the debug Chrome?" on
@@ -1344,6 +1513,36 @@
   // Initial render so the button has something before the server replies.
   renderAgentButton();
 
+  // ───────────────────────── settings overlay ─────────────────────────
+  //
+  // Simple toggles panel. Same shape as skills / agents overlays but read
+  // from the SETTINGS_KEY localStorage record (independent of the chat
+  // state schema). Each toggle wires directly to the corresponding
+  // settings.* field and a saveSettings() call on change.
+  const openSettingsOverlay = () => {
+    if (settingsTtsToggle) settingsTtsToggle.checked = settings.ttsEnabled;
+    settingsOverlay.classList.add('open');
+    settingsOverlay.setAttribute('aria-hidden', 'false');
+    settingsBtn.classList.add('active');
+  };
+  const closeSettingsOverlay = () => {
+    settingsOverlay.classList.remove('open');
+    settingsOverlay.setAttribute('aria-hidden', 'true');
+    settingsBtn.classList.remove('active');
+  };
+  settingsBtn?.addEventListener('click', () => {
+    if (settingsOverlay.classList.contains('open')) closeSettingsOverlay();
+    else openSettingsOverlay();
+  });
+  settingsCloseBtn?.addEventListener('click', closeSettingsOverlay);
+  settingsTtsToggle?.addEventListener('change', () => {
+    settings.ttsEnabled = !!settingsTtsToggle.checked;
+    saveSettings();
+    // Flush any in-flight utterances when turning OFF so the user gets
+    // immediate silence rather than the current sentence finishing.
+    if (!settings.ttsEnabled) speaker?.cancel();
+  });
+
   // ───────────────────────── custom tooltip ─────────────────────────
   //
   // Replaces the native `title=` tooltip which (a) renders in OS chrome
@@ -1522,6 +1721,8 @@
     state.assertions = [];
     // Don't animate the empty state as if it were fresh content.
     lastRenderedGroupCount = 0;
+    // Drop any pending TTS so the new conversation starts in silence.
+    speaker?.cancel();
     saveState();
     renderAll();
     updateAssertBadge();
@@ -2473,6 +2674,16 @@
   };
 
   const handleServerEvent = (ev) => {
+    // Voice mode: route every event past the TTS layer first. shouldSpeak()
+    // owns the policy (which events deserve an utterance, what text to use);
+    // langHint tells it whether to use Chinese or English phrasing. The
+    // settings.ttsEnabled toggle is checked here (not at speaker construction
+    // time) so flipping it in the settings panel takes effect immediately
+    // without rebuilding anything.
+    if (speaker && settings.ttsEnabled) {
+      const decision = shouldSpeak(ev, langHint);
+      if (decision.speak && decision.text) speaker.speak(decision.text);
+    }
     switch (ev.kind) {
       case 'session_start':
         state.sessionId = ev.sessionId;
@@ -2683,6 +2894,10 @@
     // Block sends when this widget isn't bound to the debug Chrome — the
     // service can't drive a tab it can't see over CDP.
     if (cdpState === 'wrong-window' || cdpState === 'no-cdp' || cdpLaunching) return;
+    // Keep langHint in sync with the user's latest message so TTS narration
+    // for this run stays in the right language even if the agent replies
+    // English to a Chinese prompt.
+    langHint = detectLanguage(text);
     addMessage({ kind: 'user', text });
     textarea.value = '';
     setRunning(true);
@@ -2697,6 +2912,9 @@
   const cancelRunning = () => {
     if (!running || !ws || ws.readyState !== WebSocket.OPEN) return;
     sendBtn.disabled = true; // until server acks with session_end
+    // Drop the TTS queue so a stop press doesn't leave the speaker mid-
+    // sentence — the session_end (cancelled) event will say "Stopped."
+    speaker?.cancel();
     ws.send(JSON.stringify({ type: 'cancel' }));
   };
 
