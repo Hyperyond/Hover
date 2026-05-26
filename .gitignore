@@ -12,6 +12,8 @@ build/
 .nuxt/
 .output/
 .next
+.vitepress/cache
+.vitepress/dist/
 
 # Test artifacts
 coverage/
@@ -44,4 +46,4 @@ Thumbs.db
 *.swo
 
 .claude
-docs/Harness
+Harness

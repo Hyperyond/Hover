@@ -1,0 +1,54 @@
+# Pick an agent
+
+Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for. Two agents are wired today: `claude` (recommended) and `codex`. More are one file in [the registry](/reference/agent-registry).
+
+## Supported today
+
+| Agent | Sandbox | Notes |
+|---|---|---|
+| **Claude Code** (`claude`) | Hard — explicit allow/deny list, MCP-only tool surface, `--max-budget-usd` ceiling | **Recommended default.** Tightest blast radius. |
+| **OpenAI Codex** (`codex`) | Soft — no built-in-tool deny list at CLI level; uses `--sandbox read-only` + strict `developer_instructions` | Marked with a ⚠ badge in the widget so you know the surface is broader. |
+
+The widget shows the active agent as a pill (`claude ▾`) in the header. Click it for a dropdown of every agent in the registry — installed ones in white, missing ones grey with copy-pasteable install hints.
+
+## How sandboxing works
+
+For **hard-sandbox** agents (Claude), Hover passes:
+
+```
+--strict-mcp-config
+--permission-mode dontAsk
+--allowedTools mcp__playwright
+--disallowedTools "Bash Edit Write Read Grep Glob Task WebFetch WebSearch …"
+```
+
+The Playwright MCP server is the only tool the agent can reach. Filesystem access (other than the `__vibe_tests__/` write path which the Node service handles) is forbidden.
+
+For **soft-sandbox** agents (Codex), there is no equivalent flag to disable built-in tools. Hover passes:
+
+```
+--sandbox read-only
+--ask-for-approval never
+```
+
+…and injects a strict `developer_instructions` system prompt telling the agent to use only `mcp__playwright__*`. A determined or hallucinating agent *could* still try a built-in shell call — hence the ⚠ badge in the widget header.
+
+## Switching agents on the fly
+
+Click the agent pill. Pick the new one. No restart required — the next prompt routes to it. State (sessionId, history) is per-agent.
+
+## Adding your own agent
+
+Write an `AgentDescriptor` and register it in [`packages/core/src/agents/registry.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/agents/registry.ts). See [Agent registry](/reference/agent-registry) for the full interface.
+
+Candidates already on the radar: `cursor-agent`, `aider`, `gemini-cli`, `qwen-code`.
+
+## Cost & budget
+
+Default model is `sonnet`, not `opus` — a browser-driving session is ~5× cheaper. Override per invocation:
+
+```bash
+HOVER_MODEL=opus pnpm smoke
+```
+
+Hover's `--max-budget-usd 0.50` ceiling is a runaway-prompt safety belt. Phase-0 sessions empirically complete a 5-step task on the example frontend for well under $0.10.
