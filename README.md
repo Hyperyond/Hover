@@ -173,6 +173,7 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
   - **= Equals** — check an input / select / checkbox's current value
   Check modes are one-shot — after the click commits the assertion, you snap back to Record. The same Save card downstream takes everything: actions and checks bake into the same `.spec.ts`. The downstream save path doesn't care whether the steps came from a human or from Claude.
 - **Fix prompt button** — A separate **⌖ Fix** button next to Record. Click it, click any element on the page, type *what you'd like to change*, and Hover assembles a precise prompt — source `file:line:col`, ancestor source chain, React component chain, Playwright selector, outer HTML — onto your clipboard. Paste into Cursor / Claude Code / Windsurf and the agent has exact context. See [Fix prompt](#fix-prompt) below.
+- **Voice mode (push-to-talk + spoken progress).** Hold the round 🎙 button next to Send, speak your instruction (中文 or English — Hover detects), release to fire. While the agent works, key step events (`Opening page` / `Clicking …` / `Done in N steps`) get read aloud in the same language you used, so you can keep your eyes on the page under test. Pure browser-native Web Speech API — zero extra API keys, zero service-side changes. Chrome 139+ runs the recogniser on-device (SODA pack). Toggle TTS off from the new ⚙ settings panel. See [Voice mode](#voice-mode) below.
 - **Session persistence + resume.** Widget state survives page reload via `localStorage`; the next prompt resumes the same `claude --session-id`.
 
 ### Bug discovery as a first-class output
@@ -184,6 +185,18 @@ The agent's verification report and any bugs it finds get their own cards at the
 </p>
 
 The system prompt teaches the agent to emit this structured block at the end of every run, so QA reading the saved spec can scan the bug list without scrolling through tool calls.
+
+### Voice mode
+
+Speak your prompt; hear the agent's progress. Hold the round 🎙 button next to Send (push-to-talk) — the icon switches to a live elapsed-seconds counter and the mint glow pulses while listening. Mid-sentence pauses don't cut you off; the recogniser stays open until you release. Speak Chinese or English — Hover detects the language from your prompt and routes both the TTS playback voice (prefers Siri / Premium / Google over legacy system voices) and the spoken step phrasing to match (`打开页面` / `点击登录按钮` / `完成，共 5 步` vs. `Opening page` / `Clicking Submit` / `Done in 5 steps`).
+
+Three knobs worth knowing:
+
+- **Push-to-talk only.** No always-listening mode — privacy by default, no hot-mic in your dev environment.
+- **TTS on by default, one click to mute.** Open the ⚙ settings panel in the header, flip *Speech narration* off. In-flight utterances cut immediately. State persists across reloads.
+- **No cloud round-trip.** Both STT and TTS use the browser's built-in Web Speech API. On Chrome 139+ the recogniser installs SODA language packs and runs on-device — audio never leaves your machine. No new API keys, no `.env` entries, no service-side changes. Firefox (no `SpeechRecognition`) sees a disabled mic button with a "use Chrome" tooltip.
+
+Voice playback is filtered, not a fire-hose: only `tool_use` events that map to a humanised verb (`Clicking`, `Filling form`, `Switching tab`, …) get spoken; `browser_snapshot` / `browser_take_screenshot` / read-only diagnostics are deliberately silent so the ear isn't drowned in noise. The Stop button cancels any in-flight utterance the moment you press it.
 
 ### Pick your agent — claude, codex, or roll your own
 
@@ -438,19 +451,20 @@ If your favourite agent (`codex`, `cursor-agent`, `aider`, `gemini`, `qwen-code`
 - **v0.3.x** — **`@hover-dev/next` — Next.js 16+ Turbopack-native integration** ✓. Three pieces — `withHover(nextConfig, opts)` wrapper for `next.config.mjs`, a `<HoverScript />` Server Component for `app/layout.tsx`, and a `register()` helper for `instrumentation.ts`. The existing `webpack-plugin-hover` only covers `next dev --webpack`; this package is the Turbopack-native path. `npx @hover-dev/cli add` routes Next projects here automatically.
 - **v0.4.x** — **Click → Suggest fix prompt.** ✓ Independent footer Fix button + element picker + intent popover + clipboard handoff. A Vite transform stamps `data-hover-source="file:line:col"` on every host JSX element (React 19 compatible — runs `enforce: 'pre'` so it sees JSX before `@vitejs/plugin-react` collapses it). The picker walks the DOM ancestor chain to catch wrapper-rendered hosts (styled-components, className-forwarding, multi-layer nested, Radix Slot/asChild — all five shapes verified against `examples/basic-app/src/wrapper-lab.tsx`). React component chain comes from `_debugOwner`. Vue / Svelte source-attribution is planned but not yet shipped.
 - **v0.5.x** — **Merged Record + Assert workflow + AI-compiled spec output.** Three stages:
-  - **A** ✓ — Record mode now contains a sub-toolbar with four modes: `● Record / ✓ Exists / ¶ Says / = Equals`. Check sub-modes are one-shot and follow Playwright codegen's pattern. The hidden `⌥click=assert` chord is gone — Record and Fix coexist via pause-insert-resume: clicking Fix mid-recording pauses capture, and recording resumes automatically when the Fix popover closes. **(you are here)**
+  - **A** ✓ — Record mode now contains a sub-toolbar with four modes: `● Record / ✓ Exists / ¶ Says / = Equals`. Check sub-modes are one-shot and follow Playwright codegen's pattern. The hidden `⌥click=assert` chord is gone — Record and Fix coexist via pause-insert-resume: clicking Fix mid-recording pauses capture, and recording resumes automatically when the Fix popover closes.
   - **B** planned — Record steps will carry the same source-attribution metadata as the Fix prompt (own `data-hover-source` + ancestor chain + `_debugOwner` chain), feeding C.
   - **C** planned — `writeSpec.ts` rewritten to call your local CLI agent (claude / codex) to AI-compile `state.messages` + `state.assertions` into a polished `.spec.ts`, falling back to the existing deterministic `translateStep` codegen on failure. Outputs are still standard `@playwright/test` files; the AI is an authoring-time aid, not a CI dependency.
-- **v0.6.x** — **multi-tab / cross-origin + more agents + Chrome extension.**
+- **v0.6.x** — **Voice mode** ✓. Push-to-talk speech input + spoken progress narration, fully browser-native (Web Speech API). 中文 / English autodetect across STT, TTS phrasing, and voice picker (prefers Siri / Premium / Google over legacy system voices). Chrome 139+ runs the recogniser on-device via SODA. Settings panel (⚙ in the header) lets the user mute narration; state persists across reloads. Zero service-side change — STT text feeds the existing `{type:'command'}` WS message, TTS reads off the existing `{type:'event'}` downstream. **(you are here)**
+- **v0.7.x** — **multi-tab / cross-origin + more agents + Chrome extension.**
   - Multi-tab / cross-origin flows (Stripe, OAuth, "Pay with PayHover") — `examples/payment-provider` already stresses the `window.open` → `postMessage` path, but the agent's handling of `browser_tabs(list/select)` is brittle in the wild.
   - More agents wired into the [registry](./packages/core/src/agents/registry.ts) — `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`.
   - Chrome extension (drops the Vite-plugin dependency for non-Vite stacks).
 
-v0.5.x A is what you can use today.
+v0.6.x is what you can use today.
 
 ## Project status
 
-🟢 **v0.4.x + v0.5.x stage A shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. The recording workflow gained the Playwright-codegen-style sub-toolbar (`Record / Exists / Says / Equals`) and a dedicated Fix prompt button; Fix is enterable mid-recording (pauses capture, auto-resumes on close). A Vite transform stamps `data-hover-source` for the Fix prompt's element resolution.
+🟢 **v0.6.0 shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. v0.4–0.5 brought the Playwright-codegen-style sub-toolbar (`Record / Exists / Says / Equals`), a dedicated Fix prompt button (Fix enterable mid-recording — pauses capture, auto-resumes on close), and the Vite source-attribution transform. v0.6 adds Voice mode: push-to-talk STT + spoken step narration via the browser-native Web Speech API, 中文 / English autodetect, on-device on Chrome 139+, with a new ⚙ settings panel to mute.
 
 Tracking issues at [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues).
 
