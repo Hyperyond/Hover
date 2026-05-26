@@ -12,7 +12,7 @@ build/
 .nuxt/
 .output/
 .next
-.vitepress/cache
+.vitepress/cache/
 .vitepress/dist/
 
 # Test artifacts
