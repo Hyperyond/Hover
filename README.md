@@ -18,6 +18,7 @@
 
 <!-- Project-meta badges: release / community / architecture -->
 <p>
+  <a href="https://hover-docs.vercel.app"><img alt="Documentation" src="https://img.shields.io/badge/docs-hover--docs.vercel.app-7CFFA8?style=flat-square&logo=readthedocs&logoColor=white" /></a>
   <a href="https://github.com/Hyperyond/Hover/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Hyperyond/Hover?style=flat-square&label=release&color=blueviolet" /></a>
   <a href="https://github.com/Hyperyond/Hover/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Hyperyond/Hover?style=flat-square&color=ffd700" /></a>
   <a href="https://github.com/Hyperyond/Hover/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Hyperyond/Hover?style=flat-square&color=2ecc71" /></a>
