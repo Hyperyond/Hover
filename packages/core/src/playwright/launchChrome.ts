@@ -24,6 +24,18 @@ export interface LaunchOptions {
   readyTimeoutMs?: number;
   /** Poll interval while waiting (default 300ms). */
   pollMs?: number;
+  /** Security-mode proxy config. When provided, Chrome is launched with
+   *  `--proxy-server=127.0.0.1:<proxyPort>` and the given SPKI pinned via
+   *  `--ignore-certificate-errors-spki-list` so HTTPS certs from the
+   *  Hover MITM CA validate without polluting the OS trust store. The
+   *  caller is expected to pick a different `userDataDir` and `port` from
+   *  the normal-mode launch so the two profiles don't share state. */
+  proxy?: {
+    /** Local mockttp port the proxy is listening on. */
+    port: number;
+    /** Base64 SHA-256 of the MITM CA's SubjectPublicKeyInfo. */
+    spki: string;
+  };
 }
 
 export type LaunchResult =
@@ -140,8 +152,14 @@ export async function launchDebugChrome(opts: LaunchOptions = {}): Promise<Launc
     `--user-data-dir=${userDataDir}`,
     '--no-first-run',
     '--no-default-browser-check',
-    url,
   ];
+  if (opts.proxy) {
+    args.push(
+      `--proxy-server=127.0.0.1:${opts.proxy.port}`,
+      `--ignore-certificate-errors-spki-list=${opts.proxy.spki}`,
+    );
+  }
+  args.push(url);
 
   const child = spawn(chrome, args, {
     detached: true,
