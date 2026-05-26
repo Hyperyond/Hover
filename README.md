@@ -199,6 +199,10 @@ Adding `cursor-agent` / `aider` / `gemini-cli` / your own coding-agent CLI is on
 
 ## Fix prompt
 
+<p align="center">
+  <img src="docs/screenshots/09-fix-prompt-comparison.png" alt="Vibe coding prompt comparison — vague natural-language ask vs. a structured, source-attributed Fix prompt" width="80%" />
+</p>
+
 The widget knows the source location of every host element on your page — a Vite transform stamps `data-hover-source="file:line:col"` onto every `<button>` / `<div>` / `<input>` you authored in JSX. Click the **⌖ Fix** button next to Record, click any element, type what you'd like to change, hit ⌘↵, and Hover assembles a precise prompt into your clipboard. Paste it into Cursor / Claude Code / Windsurf and your agent has exact context.
 
 The prompt is **fact-only** — no leading instructions for the agent to echo back, no "please open the right file" boilerplate. Just your intent (as a markdown blockquote) followed by what Hover observed:
