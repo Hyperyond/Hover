@@ -12,7 +12,9 @@ export const WIDGET_DIR = resolve(HERE, 'widget');
 export const WIDGET_HTML = resolve(WIDGET_DIR, 'template.html');
 export const WIDGET_CSS = resolve(WIDGET_DIR, 'style.css');
 export const WIDGET_JS = resolve(WIDGET_DIR, 'client.js');
-// Extracted pure-function module (reducer + helpers). Authored as a real
-// ES module with `export` so it can be unit-tested from vitest; the export
-// keywords are stripped during concatenation into the browser widget IIFE.
+// Extracted pure-function modules. Both are authored as real ES modules
+// with `export` so they can be unit-tested from vitest; the export keywords
+// are stripped during concatenation into the browser widget IIFE (see
+// transforms.ts:stripModuleExports).
 export const WIDGET_REDUCER = resolve(WIDGET_DIR, 'reducer.js');
+export const WIDGET_VOICE = resolve(WIDGET_DIR, 'voice.js');

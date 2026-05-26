@@ -1,10 +1,11 @@
 import { readWidget } from './reader.js';
-import { jsonStringify, stripReducerExports } from './transforms.js';
+import { jsonStringify, stripModuleExports } from './transforms.js';
 import {
   WIDGET_CSS,
   WIDGET_HTML,
   WIDGET_JS,
   WIDGET_REDUCER,
+  WIDGET_VOICE,
 } from './assets.js';
 
 export interface WidgetScriptOptions {
@@ -72,10 +73,11 @@ export function buildWidgetBundle(opts: WidgetScriptOptions): { preamble: string
     `window.__HOVER_HTML__ = ${readWidget(WIDGET_HTML, jsonStringify)};`,
   ].join('\n');
 
-  const reducerInlined = readWidget(WIDGET_REDUCER, stripReducerExports);
+  const reducerInlined = readWidget(WIDGET_REDUCER, stripModuleExports);
+  const voiceInlined = readWidget(WIDGET_VOICE, stripModuleExports);
   const js = readWidget(WIDGET_JS);
 
-  const rawBody = `${reducerInlined}\n${js}`;
+  const rawBody = `${reducerInlined}\n${voiceInlined}\n${js}`;
   const body = opts.transformBody ? opts.transformBody(rawBody) : rawBody;
 
   return { preamble, body };
@@ -107,11 +109,12 @@ export function getWidgetScript(opts: WidgetScriptOptions): WidgetScriptTag {
  * If you concatenate it into an IIFE you must strip those yourself — or
  * call `buildWidgetBundle` / `getWidgetScript` which do this for you.
  */
-export function readWidgetAssets(): { html: string; css: string; js: string; reducer: string } {
+export function readWidgetAssets(): { html: string; css: string; js: string; reducer: string; voice: string } {
   return {
     html: readWidget(WIDGET_HTML),
     css: readWidget(WIDGET_CSS),
     js: readWidget(WIDGET_JS),
     reducer: readWidget(WIDGET_REDUCER),
+    voice: readWidget(WIDGET_VOICE),
   };
 }
