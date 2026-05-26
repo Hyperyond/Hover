@@ -347,16 +347,23 @@ export function createRecognizer({ onInterim, onFinal, onError, onEnd, lang = 'z
   const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
   if (!SR) return null;
 
-  // Best-effort on-device pack install. We don't await it — the very first
-  // start() might still hit the cloud, but subsequent starts will be local
-  // once the pack lands. Errors here never block STT.
-  if (typeof SR.install === 'function') {
+  // SODA on-device pack install is deferred to the first start() call (i.e.
+  // user-gesture context) and gated by a one-shot flag. Calling install()
+  // at module-eval time crashed the Playwright Chromium renderer in the
+  // dogfood e2e suite (the call appears to kick off a large background
+  // resource fetch that the test process can't tolerate). Tying it to a
+  // real user gesture also makes future Chrome consent prompts a non-issue.
+  let installAttempted = false;
+  const tryInstallSoda = () => {
+    if (installAttempted) return;
+    installAttempted = true;
+    if (typeof SR.install !== 'function') return;
     try {
       SR.install({ langs: ['zh-CN', 'en-US'], processLocally: true });
     } catch {
       /* non-fatal: cloud mode keeps working */
     }
-  }
+  };
 
   // Push-to-talk semantics: while the user holds the button, we want a single
   // utterance from start() to stop(), even across mid-sentence pauses. This
@@ -454,6 +461,7 @@ export function createRecognizer({ onInterim, onFinal, onError, onEnd, lang = 'z
 
   const start = (overrideLang) => {
     if (active) return;
+    tryInstallSoda();
     currentLang = overrideLang || lang;
     reset();
     active = true;

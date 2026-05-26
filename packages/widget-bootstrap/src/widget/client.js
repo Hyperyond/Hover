@@ -263,13 +263,17 @@
 
   // Chrome loads voices async — the very first speechSynthesis.getVoices()
   // returns [] and the real list arrives on a voiceschanged event. Without
-  // an await here, the first utterance picks a null voice and the engine
-  // reads Chinese text with an English voice. waitForVoices() resolves
-  // immediately when voices are already loaded, on the event when they
-  // arrive, or after a 2s hard timeout.
-  if (voiceCaps.tts) {
-    waitForVoices(window.speechSynthesis).catch(() => {});
-  }
+  // a primer here, the first utterance picks a null voice and the engine
+  // reads Chinese text with an English voice. We trigger the wait lazily
+  // (after the first WS open) so module-load never touches speechSynthesis —
+  // some embedded Chromiums (e.g. the Playwright dogfood runner) crash the
+  // renderer when speech APIs are touched at page-load time.
+  let voicesPrimed = false;
+  const primeVoices = () => {
+    if (voicesPrimed || !voiceCaps.tts) return;
+    voicesPrimed = true;
+    try { waitForVoices(window.speechSynthesis).catch(() => {}); } catch {}
+  };
 
   const speaker = voiceCaps.tts
     ? createSpeaker({
@@ -2805,6 +2809,10 @@
       // Ask the service whether we're in the debug Chrome. Until we hear
       // back, cdpState stays 'unknown' (overlay hidden, launcher normal).
       sendCheckCdp();
+      // Now that the page is alive and we know we'll likely be using the
+      // widget, kick off the voiceschanged race so the first utterance
+      // doesn't trip into a wrong-language voice.
+      primeVoices();
     });
     ws.addEventListener('close', () => {
       setStatus('disconnected', 'disconnected');
