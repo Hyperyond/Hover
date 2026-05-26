@@ -306,9 +306,6 @@ importers:
       cross-spawn:
         specifier: ^7.0.6
         version: 7.0.6
-      mockttp:
-        specifier: ^4.4.2
-        version: 4.4.2
       playwright-core:
         specifier: ^1.50.0
         version: 1.60.0
@@ -363,6 +360,22 @@ importers:
       nuxt:
         specifier: ^4.0.0
         version: 4.4.6(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@babel/plugin-syntax-typescript@7.28.6(@babel/core@7.29.0))(@parcel/watcher@2.5.6)(@types/node@25.9.1)(@vue/compiler-sfc@3.5.34)(cac@6.7.14)(db0@0.3.4)(ioredis@5.10.1)(magicast@0.5.3)(rollup-plugin-visualizer@7.0.1(rollup@4.60.4))(rollup@4.60.4)(terser@5.48.0)(tsx@4.22.3)(typescript@5.9.3)(vite@7.3.3(@types/node@25.9.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))(yaml@2.9.0)
+
+  packages/security:
+    dependencies:
+      mockttp:
+        specifier: ^4.4.2
+        version: 4.4.2
+    devDependencies:
+      '@hover-dev/core':
+        specifier: workspace:*
+        version: link:../core
+      playwright-core:
+        specifier: ^1.50.0
+        version: 1.60.0
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
 
   packages/vite-plugin:
     dependencies:

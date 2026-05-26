@@ -1,18 +1,16 @@
 /**
- * Smoke test for packages/core/src/mitm.
+ * Smoke test for @hover-dev/security mitm internals.
  *
  * - boots the proxy in a tmp devRoot, confirms it binds + emits the lifecycle
  * - manually pushes a synthetic request into the FlowStore, confirms events
  * - replays it with a header mutation against a real public URL
  *
- * Skipping the "Node fetch -> mockttp" leg because undici's package name isn't
- * directly importable from tsx; we already verified mockttp + Chrome in the
- * Stage 0 demo (see scripts in /tmp/hover-mitm-demo).
+ * The "real Chrome through the proxy" leg is in e2e-smoke.ts.
  */
 import { tmpdir } from 'node:os';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { startProxy, replayFlow, type FlowEvent } from '../mitm/index.js';
+import { startProxy, replayFlow, type FlowEvent } from '../src/mitm/index.js';
 
 const devRoot = mkdtempSync(join(tmpdir(), 'hover-mitm-smoke-'));
 console.log('[smoke] devRoot =', devRoot);

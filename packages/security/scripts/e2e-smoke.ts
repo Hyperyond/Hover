@@ -12,8 +12,8 @@ import { tmpdir } from 'node:os';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
-import { startProxy } from '../mitm/index.js';
-import { launchDebugChrome } from '../playwright/launchChrome.js';
+import { startProxy } from '../src/mitm/index.js';
+import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { spawnSync } from 'node:child_process';
 
 const SEC_CDP_PORT = 9333;
