@@ -34,6 +34,12 @@
  *
  *   server → client (in addition to those documented in the file body):
  *     { type: 'agents',        payload: { current: string, available: AgentAvailability[] } }
+ *     { type: 'modes',         payload: { current: string|null, available: ModeEntry[] } }
+ *     { type: '<plugin-namespaced>', payload: <plugin-specific> }
+ *
+ *   client → server (plugin-aware additions):
+ *     { type: 'set-mode',      payload: { modeId: string|null } }   // null = exit moded operation
+ *     { type: 'list-modes' }
  */
 import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
@@ -60,6 +66,11 @@ import {
   SPEC_CONFIG,
   CASE_CSV_CONFIG,
 } from './service/saveHandlers.js';
+import {
+  CURRENT_API_VERSION,
+  type HoverPluginManifest,
+  type ModeActivateCtx,
+} from './plugin-api.js';
 
 export interface ServiceOptions {
   port: number;
@@ -74,6 +85,12 @@ export interface ServiceOptions {
    *  In Vite plugin context, set to `server.config.root` so Claude
    *  auto-discovers skills the user previously saved from this project. */
   devRoot?: string;
+  /** Plugins contributed by the bundler-plugin wrapper. Each manifest can
+   *  add a widget mode, MCP servers, Chrome flags, and lifecycle hooks.
+   *  Empty array (default) means "no plugins, behaviour identical to
+   *  pre-plugin Hover" — important for the long tail of users who never
+   *  install one. */
+  plugins?: HoverPluginManifest[];
 }
 
 export interface ServiceHandle {
@@ -179,6 +196,126 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     process.stderr.write(`[hover] WebSocketServer error: ${err.message}\n`);
   });
 
+  // ──────────────────────────────────────────────────────────────────
+  // Plugin registry
+  // ──────────────────────────────────────────────────────────────────
+  // Validate + index plugins once at startup. Reasons we fail loud here
+  // (rather than at first use): mode-id collisions are a configuration
+  // bug, not a runtime one — the widget mode-picker would silently miss
+  // entries, which is worse than a startup error the user has to fix.
+  const plugins = opts.plugins ?? [];
+  const pluginsByName = new Map<string, HoverPluginManifest>();
+  const pluginsByModeId = new Map<string, HoverPluginManifest>();
+  for (const p of plugins) {
+    if (p.apiVersion !== CURRENT_API_VERSION) {
+      throw new Error(
+        `[hover] plugin "${p.name}" targets apiVersion ${String(
+          p.apiVersion,
+        )} but this Hover supports ${CURRENT_API_VERSION}.`,
+      );
+    }
+    if (pluginsByName.has(p.name)) {
+      throw new Error(`[hover] duplicate plugin name: ${p.name}`);
+    }
+    pluginsByName.set(p.name, p);
+    if (p.mode) {
+      if (pluginsByModeId.has(p.mode.id)) {
+        throw new Error(
+          `[hover] two plugins contribute the same mode id "${p.mode.id}": ` +
+            `${pluginsByModeId.get(p.mode.id)?.name} and ${p.name}`,
+        );
+      }
+      pluginsByModeId.set(p.mode.id, p);
+    }
+  }
+
+  /** id of the currently-active mode, or null for normal (unmoded) mode. */
+  let currentModeId: string | null = null;
+  /** Chrome-proxy settings the active mode's activate hook set on us.
+   *  Surfaced to launchDebugChrome calls when the widget asks us to
+   *  launch a debug Chrome. */
+  let modeChromeProxy: { port: number; spki: string } | null = null;
+
+  /** Send the current mode catalogue to one ws (or all if undefined). */
+  const broadcastModes = (target?: WebSocket): void => {
+    const available = plugins
+      .filter((p): p is HoverPluginManifest & { mode: NonNullable<HoverPluginManifest['mode']> } =>
+        Boolean(p.mode),
+      )
+      .map((p) => ({
+        id: p.mode.id,
+        label: p.mode.label,
+        description: p.mode.description,
+        pluginName: p.name,
+      }));
+    const payload = { current: currentModeId, available };
+    const targets = target ? [target] : [...wss.clients];
+    for (const client of targets) {
+      if (client.readyState === WebSocket.OPEN) {
+        send(client, { type: 'modes', payload });
+      }
+    }
+  };
+
+  /** Broadcast helper passed to plugin hooks. Plugin-side events should
+   *  be namespaced ("security:flow:added") to avoid collisions with
+   *  core's protocol vocabulary. */
+  const broadcastPluginEvent = (event: { type: string; payload?: unknown }): void => {
+    for (const client of wss.clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        send(client, event);
+      }
+    }
+  };
+
+  const switchMode = async (newModeId: string | null): Promise<void> => {
+    if (newModeId === currentModeId) return;
+
+    // Tear down old mode
+    if (currentModeId) {
+      const old = pluginsByModeId.get(currentModeId);
+      if (old?.hooks?.['hover:mode:deactivate']) {
+        try {
+          await old.hooks['hover:mode:deactivate']({
+            devRoot,
+            broadcast: broadcastPluginEvent,
+            modeId: currentModeId,
+          });
+        } catch (err) {
+          process.stderr.write(
+            `[hover] plugin "${old.name}" deactivate failed: ${
+              err instanceof Error ? err.message : String(err)
+            }\n`,
+          );
+        }
+      }
+    }
+    modeChromeProxy = null;
+    currentModeId = null;
+
+    // Bring up new mode
+    if (newModeId) {
+      const next = pluginsByModeId.get(newModeId);
+      if (!next) {
+        throw new Error(`[hover] unknown modeId "${newModeId}"`);
+      }
+      currentModeId = newModeId;
+      if (next.hooks?.['hover:mode:activate']) {
+        const ctx: ModeActivateCtx = {
+          devRoot,
+          broadcast: broadcastPluginEvent,
+          modeId: newModeId,
+          setChromeProxy(proxy) {
+            modeChromeProxy = proxy;
+          },
+        };
+        await next.hooks['hover:mode:activate'](ctx);
+      }
+    }
+
+    broadcastModes();
+  };
+
   // Cache the agent-availability list. The PATH scan is cheap (one `which`
   // per registered agent) but we still don't want to re-run it on every
   // hello; a single Vite dev server typically sees the widget connect and
@@ -216,6 +353,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     void getAvailability(false).then(available => {
       send(ws, { type: 'agents', payload: { current: currentAgentId, available } });
     });
+    // Send the mode catalogue too, so the widget can render the mode
+    // toggle immediately. Empty list when no plugins are loaded.
+    broadcastModes(ws);
 
     let busy = false;
     let inflight: AbortController | null = null;
@@ -261,6 +401,45 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       }
       if (msg.type === 'cancel') {
         cancel();
+        return;
+      }
+      if (msg.type === 'list-modes') {
+        broadcastModes(ws);
+        return;
+      }
+      if (msg.type === 'set-mode') {
+        if (busy) {
+          send(ws, {
+            type: 'error',
+            payload: { message: 'set-mode: a command is already running; stop it first' },
+          });
+          return;
+        }
+        const wanted = msg.payload?.modeId ?? null;
+        if (wanted !== null && typeof wanted !== 'string') {
+          send(ws, {
+            type: 'error',
+            payload: { message: 'set-mode: modeId must be a string or null' },
+          });
+          return;
+        }
+        if (wanted !== null && !pluginsByModeId.has(wanted)) {
+          send(ws, {
+            type: 'error',
+            payload: { message: `set-mode: unknown modeId "${wanted}"` },
+          });
+          return;
+        }
+        try {
+          await switchMode(wanted);
+        } catch (err) {
+          send(ws, {
+            type: 'error',
+            payload: {
+              message: `set-mode failed: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          });
+        }
         return;
       }
       if (msg.type === 'list-agents') {
@@ -382,9 +561,26 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // re-sending them fragments Anthropic's prompt-cache fingerprint
         // (cache hits require byte-identical system prompts across turns).
         // See cdpHint.ts for the why.
-        const appendSystemPrompt = resumeSessionId
+        let appendSystemPrompt = resumeSessionId
           ? buildCdpHintResume(cdp.tabs)
           : buildCdpHint(cdp.tabs);
+        // Add the active mode's plugin prompt additions, if any. We only
+        // include additions whose `activeInModes` is the current mode or
+        // '*' (always-on); plugins that contribute prompts but no mode
+        // are treated as mode-scoped to their own plugin's mode by
+        // default (handled by the empty activeInModes case below).
+        const activePlugin = currentModeId ? pluginsByModeId.get(currentModeId) : null;
+        if (activePlugin?.systemPromptAdditions) {
+          for (const add of activePlugin.systemPromptAdditions) {
+            const inMode =
+              !add.activeInModes ||
+              add.activeInModes.includes('*') ||
+              (currentModeId !== null && add.activeInModes.includes(currentModeId));
+            if (inMode) {
+              appendSystemPrompt = `${appendSystemPrompt}\n\n${add.text}`;
+            }
+          }
+        }
 
         // Snapshot the agent id so a switch-agent message during the run
         // can't smear two agents across one invocation. (We also gate
@@ -462,9 +658,39 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
 
   return {
     port,
-    close: () =>
-      new Promise<void>((res, rej) => {
+    async close() {
+      // Deactivate the active mode first, then run every plugin's
+      // shutdown hook (regardless of which mode is active — a plugin may
+      // own background state even outside its mode). Best-effort: log
+      // and continue on individual failures so one buggy plugin doesn't
+      // strand the others' sidecars.
+      if (currentModeId) {
+        try {
+          await switchMode(null);
+        } catch (err) {
+          process.stderr.write(
+            `[hover] error deactivating mode during shutdown: ${
+              err instanceof Error ? err.message : String(err)
+            }\n`,
+          );
+        }
+      }
+      for (const p of plugins) {
+        const hook = p.hooks?.['hover:service:shutdown'];
+        if (!hook) continue;
+        try {
+          await hook({ devRoot, broadcast: broadcastPluginEvent });
+        } catch (err) {
+          process.stderr.write(
+            `[hover] plugin "${p.name}" shutdown failed: ${
+              err instanceof Error ? err.message : String(err)
+            }\n`,
+          );
+        }
+      }
+      await new Promise<void>((res, rej) => {
         wss.close(err => (err ? rej(err) : res()));
-      }),
+      });
+    },
   };
 }

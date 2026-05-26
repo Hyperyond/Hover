@@ -376,6 +376,9 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
+      ws:
+        specifier: ^8.20.1
+        version: 8.20.1
 
   packages/vite-plugin:
     dependencies:

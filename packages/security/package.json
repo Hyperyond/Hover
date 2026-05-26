@@ -38,6 +38,7 @@
     "prepack": "pnpm run clean && pnpm run build",
     "smoke": "tsx scripts/smoke.ts",
     "smoke:e2e": "tsx scripts/e2e-smoke.ts",
+    "smoke:plugin": "tsx scripts/plugin-smoke.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -50,7 +51,8 @@
   "devDependencies": {
     "@hover-dev/core": "workspace:*",
     "playwright-core": "^1.50.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "ws": "^8.20.1"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
