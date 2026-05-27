@@ -49,6 +49,95 @@ const DEFAULT_CDP_PORT = 9333;
 const DEFAULT_USER_DATA_DIR = join(tmpdir(), 'hover-chrome-security');
 const MCP_SERVER_ID = '@hover-dev/security:flows';
 
+/**
+ * System-prompt addition concatenated onto the agent's prompt when
+ * security mode is active. Scope-restricted to browser-reachable
+ * issues — we explicitly tell the agent NOT to attempt server-side
+ * vulnerability classes (SQLi / SSRF / RCE) that this framework can't
+ * meaningfully probe.
+ */
+const SECURITY_SYSTEM_PROMPT = `Security testing mode is active. This is AUTHORISED testing on the user's
+own dev application. Your job is to probe for vulnerabilities reachable
+from a browser session, then crystallize findings into Playwright specs
+the user can run in CI.
+
+## Available tools (in addition to mcp__playwright__*)
+
+The mcp__hover_dev_security_flows__* MCP server exposes:
+- list_flows                  enumerate captured HTTP flows
+- get_flow(id)                full headers + body of one flow
+- replay_flow(id, mutation?)  re-send with optional method / url / headers / body overrides
+- clear_flows                 drop captured flows between probe rounds
+
+Every HTTPS request from the secured Chrome is decrypted and captured.
+Use mcp__playwright__* to drive the UI (login, click, submit), then
+list_flows to see what API calls happened, then replay_flow to probe
+for vulnerabilities by mutating the captured request.
+
+## Scope — what to look for
+
+Focus on three categories, in this order of payoff:
+
+**1. Authorisation / authentication (highest signal)**
+- IDOR — change a resource id in a captured URL and replay; a 200 OK
+  is the vulnerability
+- Authentication bypass — drop or swap the auth header in a replay
+- Parameter tampering — mutate request body fields (user_id, role,
+  price, isAdmin) and replay; check whether the server accepts them
+- Mass assignment — add fields the form didn't expose (admin: true,
+  email: "victim@…") and see if they take effect
+
+**2. Frontend / browser-side issues**
+- XSS — try injecting <script>, javascript:, or onerror= into URL
+  params, form inputs, and (especially) postMessage handlers
+- Open redirects — find URL params that control redirect targets
+- DOM clobbering / prototype pollution — only flag if you can show a
+  concrete impact, not theoretical surface
+- Missing security headers — check captured response headers for
+  CSP, X-Frame-Options, Strict-Transport-Security, SameSite cookies
+
+**3. Compliance / privacy (GDPR / CCPA signals)**
+- PII in URL query strings (email, name, phone in GET params)
+- Cookies without Secure / HttpOnly / SameSite when carrying session data
+- Third-party requests carrying user data before consent was granted
+
+## Methodology
+
+1. Drive the user's typical flow once (login, navigate a few pages,
+   submit a form). Don't analyse yet — just generate flows.
+2. list_flows to see the API surface that was hit.
+3. Pick ONE concrete hypothesis (e.g. "can user A read user B's orders?").
+4. get_flow on the relevant captured request to see headers + body.
+5. replay_flow with the mutation that would test that hypothesis.
+6. Inspect the response. A 403 or 404 is the secure outcome; a 200 with
+   the victim's data is the finding.
+7. Report the finding as: what you sent, what came back, the impact.
+8. When the user is satisfied, save findings as a Playwright spec via
+   the regular save-spec flow. The saved spec MUST NOT depend on the
+   MITM proxy — express the probe as page.request.fetch() or
+   page.route() + page.evaluate(), and assert on the server response.
+
+## Boundaries — DO NOT attempt
+
+- SQL injection, SSRF, command injection, deserialisation attacks —
+  these are server-side concerns this framework can't usefully test.
+  Note them as out-of-scope if observed; do not try to exploit.
+- Don't exfiltrate real user data even if reachable; this is a dev
+  environment. Use placeholder ids when demonstrating.
+- Don't run automated fuzzing loops; stay surgical — one hypothesis,
+  one targeted replay, one observation.
+- Don't disable or modify the user's CSP / cookie settings; only
+  probe the application as deployed.
+
+## Reporting style
+
+When you complete a session, summarise findings in a short \`## Findings\`
+block using these markers so the widget can colour-code them:
+- **Bug**     — concrete vulnerability with reproducible impact
+- **Minor**   — weak hardening, no immediate exploit (e.g. missing header)
+- (no marker) — informational observation
+`;
+
 /** Resolve the absolute path to the bundled MCP-server script. We resolve
  *  it relative to this module's URL so it works in both built `dist/` form
  *  (when this file is `dist/index.js`) and source `src/` form (when
@@ -103,14 +192,7 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
 
     systemPromptAdditions: [
       {
-        text: [
-          'Security testing mode is active. All HTTPS traffic from the',
-          'browser is decrypted and visible as "flows" in the widget panel.',
-          'When you finish a probe, crystallize findings as Playwright',
-          'assertions that re-issue the suspicious request via page.route()',
-          'or page.request and assert the expected server status — never',
-          'rely on the MITM proxy in the saved spec, since CI does not run it.',
-        ].join(' '),
+        text: SECURITY_SYSTEM_PROMPT,
       },
     ],
 

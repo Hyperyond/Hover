@@ -210,6 +210,8 @@ header {
   padding: 2px 7px;
   border-radius: 999px;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
   letter-spacing: 0.02em;
   text-transform: lowercase;
   background: var(--accent-dim);
@@ -230,6 +232,8 @@ header {
   color: var(--text-mute);
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
   opacity: 0;
   transform: scale(0.92);
   transition: opacity 0.18s ease, transform 0.18s ease, background 0.2s ease, color 0.2s ease;
@@ -321,7 +325,12 @@ header {
   border-color: var(--accent);
   color: var(--accent);
 }
-.agentbtn .agent-label { font-variant-numeric: tabular-nums; }
+.agentbtn .agent-label {
+  font-variant-numeric: tabular-nums;
+  /* Header is dense — never wrap, otherwise the whole pill grows tall and
+   * shoves the trailing icons + status pill into a second row. */
+  white-space: nowrap;
+}
 .agentbtn .agent-warn[hidden] { display: none; }
 .agentbtn .agent-warn { color: var(--warn); font-size: 11px; }
 .agentbtn .agent-caret {
@@ -475,7 +484,11 @@ header {
   border-color: var(--link);
   color: var(--link);
 }
-.modebtn .mode-label { font-variant-numeric: tabular-nums; }
+.modebtn .mode-label {
+  font-variant-numeric: tabular-nums;
+  /* Same no-wrap rule as .agent-label — see comment there. */
+  white-space: nowrap;
+}
 .modebtn .mode-caret {
   color: var(--text-dim);
   font-size: 9px;

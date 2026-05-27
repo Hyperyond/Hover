@@ -1427,7 +1427,11 @@
   const renderAgentButton = () => {
     const a = findAgent(state.currentAgent);
     const label = a?.label || state.currentAgent || 'agent';
-    agentLabelEl.textContent = label;
+    // Header is tight; show just the first word ("Claude", "OpenAI") so
+    // we don't wrap when modes / cost / running pills are all visible.
+    // Full label still lands in the tooltip + overlay rows.
+    const shortLabel = label.split(/\s+/)[0];
+    agentLabelEl.textContent = shortLabel;
     const showWarn = a?.sandboxStrength === 'soft';
     agentWarnEl.hidden = !showWarn;
     agentBtn.title = showWarn
@@ -1591,10 +1595,14 @@
     modeBtn.hidden = !hasModes;
     if (!hasModes) return;
     const cur = state.availableModes.find((m) => m.id === state.currentMode);
-    modeLabelEl.textContent = cur?.label || 'default';
+    // Header is tight; show just the first word of the label
+    // ("Security" instead of "Security testing"). Full label lives in
+    // the tooltip + overlay rows.
+    const full = cur?.label || 'default';
+    modeLabelEl.textContent = full.split(/\s+/)[0];
     modeBtn.classList.toggle('engaged', state.currentMode !== null);
     modeBtn.title = state.currentMode
-      ? `Mode: ${cur?.label} — click to change`
+      ? `Mode: ${full} — click to change`
       : 'Select a plugin-contributed mode';
     // Network glyph rides alongside the mode pill — visible when the
     // active mode is one that publishes flow events. For this iteration
