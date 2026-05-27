@@ -155,7 +155,8 @@ Hover **要**做的事：**让落盘的产物就是纯 `@playwright/test` 代码
 
 ## 你现在就能用的
 
-- **Vite 插件** —— 通过 `transformIndexHtml` 往 dev 页面注入一个 Shadow DOM widget。生产构建里完全是 no-op。`data-hover="true"` 标记让你自己的 Playwright 跑测试时自动跳过它。
+- **每个 bundler 各一份插件。** Vite、Astro、Nuxt、Next.js（Turbopack）、webpack 5、React Native Web 全覆盖。插件往 dev 页面注入一个 Shadow DOM widget，生产构建里完全 no-op，并打上 `data-hover="true"` 标记让你自己的 Playwright 跑测试时自动跳过它。
+- **🛡️ Security testing 模式（v0.7 新）。** 在原插件基础上装 `@hover-dev/security`，widget 会多出一个 Security 模式。debug Chrome 走本地 HTTPS MITM 代理；agent 能看到所有 API 调用、做 mutation 重放，探测 IDOR / 越权 / 参数篡改 / 缺失安全 header / PII 泄漏等问题。最终结晶为不依赖代理就能在 CI 跑的 Playwright 测试。详见下文 [Security testing](#security-testing-1)。
 - **无需 API key、无需 `.env`、不按 token 计费。** Hover 调用你 `PATH` 上已经装好的 coding-agent CLI，跑在你已经付费的订阅里（Claude Pro / Max、ChatGPT Pro）。`@hover-dev/core` 这个包里没有任何 LLM SDK 代码——没有需要 auth 的东西。把你已付费的 agent 额度榨干。
 - **多 agent。** `claude`（硬沙箱，推荐）和 `codex`（软沙箱）都已接入。服务启动时自动检测你 PATH 上装的哪个；widget 头部显示当前 agent 为 pill (`claude ▾`)，下拉可即时切换。`cursor-agent` / `aider` / `gemini-cli` 都是单文件加 registry 就能扩展。
 - **按 agent 不同的沙箱策略。** 硬沙箱 agent（claude）显式 allow/deny，只剩 Playwright MCP 能被调用；`Bash` / `Edit` / `Write` / `Read` / `WebFetch` 等全部明确 deny；支持 `--max-budget-usd` 硬上限。软沙箱 agent（codex）CLI 没有内置工具 deny list，我们用 `--sandbox read-only` + 严格 `developer_instructions` 系统提示约束；widget 会给软沙箱 agent 加 ⚠ 标，让你知道工具面更宽。
@@ -174,6 +175,40 @@ Hover **要**做的事：**让落盘的产物就是纯 `@playwright/test` 代码
   Check 模式是 one-shot —— 提交断言后自动跳回 Record。下游 Save 路径不在乎 step 是 AI 跑出来的还是你点出来的，action 和 check 一起烘焙进同一个 `.spec.ts`。
 - **Fix prompt 按钮** —— Record 旁边一个独立的 **⌖ Fix** 按钮。点它，再点页面上任意元素，写下 *想改成什么*，Hover 把精准 prompt —— 源码 `file:line:col`、祖先源码链、React 组件链、Playwright selector、outer HTML —— 复制到剪贴板。粘贴到 Cursor / Claude Code / Windsurf，agent 拿到完整上下文。详见下文 [Fix prompt](#fix-prompt)。
 - **会话持久化 + resume** —— widget 状态通过 `localStorage` 跨页面刷新存活；下次提示会接上同一个 `claude --session-id`。
+
+### Security testing
+
+> ⚠️ **仅限授权测试。** Hover 的 Security 模式针对的是你本机上的 dev server。把它指向你不拥有、未被书面授权测试的系统在大多数司法管辖区都违法，也违反本项目的 [Security Policy](./SECURITY.md)。agent 的系统提示词里已经约束了边界，但**最终责任在使用者本人**。
+
+`@hover-dev/security` 是 Hover 的第一个可选插件。装上之后，widget 顶部会多一条模式切换条 —— 切到 **Security testing**，panel 边框和 launcher 都会变橙色，提示你处于"非默认状态"。
+
+```bash
+pnpm add -D @hover-dev/security
+```
+
+```ts
+// vite.config.ts（Astro / Nuxt / Next / Webpack 同款形状）
+import { hover } from 'vite-plugin-hover';
+import securityMode from '@hover-dev/security';
+
+export default defineConfig({
+  plugins: [hover({}, securityMode())],
+});
+```
+
+零外部依赖 —— 不需要 mitmproxy、Python、不污染系统 CA。底层用 [mockttp](https://github.com/httptoolkit/mockttp)（HTTP Toolkit 那个产品的引擎）做 HTTPS MITM，第一次启动时生成一次性 CA，通过 Chrome 的 `--ignore-certificate-errors-spki-list` 精准 pin —— OS trust store 完全不动。CA 私钥落在 `<项目>/.hover/ca/` 下，自带 `.gitignore` 已经把它排除。
+
+**Agent 重点探测的范围**（优先级从高到低）：
+
+1. **授权 / 认证** —— IDOR（改捕获到的 URL 里的资源 id 重发）、auth bypass（去掉或换 auth header）、参数篡改（mutate `user_id` / `role` / `price` / `isAdmin`）、mass assignment（POST body 里加 `admin: true`）。
+2. **前端** —— XSS 注入、open redirect、缺失安全 header（CSP / X-Frame-Options / HSTS / SameSite）。
+3. **合规 / 隐私** —— URL query string 里的 PII、未设 `Secure / HttpOnly / SameSite` 的会话 cookie、第三方请求在用户同意前就携带 PII。
+
+**明确不在范围内** —— 系统提示词禁止 SQL 注入、SSRF、命令注入、反序列化攻击、自动 fuzzing 循环。浏览器驱动的测试无法有效覆盖这些类别；需要的话请用服务端扫描器（`sqlmap`、ZAP 等）。
+
+模式启用期间 agent 会多拿到四个 MCP 工具：`list_flows`（枚举 API surface）、`get_flow`（完整 headers + body）、`replay_flow`（带 method / url / headers / body mutation 的重发）、`clear_flows`。发现的问题落盘成纯 Playwright spec，用 `page.request.fetch()` 复现 —— 你的 CI 用普通 `@playwright/test` 跑就行，不需要 Hover、不需要 mockttp。
+
+完整教程见 [docs/features/security](https://hover-docs.vercel.app/features/security)。
 
 ### Bug 发现是一等输出
 
@@ -233,30 +268,35 @@ Outer HTML:
 
 ## 快速开始
 
-第一次需要两个终端。Chrome 和 Vite 起来之后会一直跑，跨多次 loop 都不用关。
+把 Hover 装进你已经在跑的项目里。一条命令、改一行配置，然后照常 `pnpm dev`。
+
+**前置：** Node 22+，以及 `claude`（[安装](https://docs.claude.com/claude-code)）或 `codex`（[安装](https://developers.openai.com/codex)）任一在 `PATH` 上。**不需要新 API key** —— Hover 蹭你已付费的订阅。
+
+**安装：**
 
 ```bash
-git clone https://github.com/Hyperyond/Hover.git
-cd Hover
-pnpm install
-pnpm --filter basic-app exec playwright install chromium   # 仅 `pnpm test:e2e` 需要
+npx @hover-dev/cli add
 ```
+
+CLI 自动识别你的 bundler（Vite / Astro / Nuxt / Next.js / Webpack），装好对应的 Hover 包，并 AST 改你的 config 文件。幂等 —— 重跑安全。
+
+**照常启动 dev server：**
 
 ```bash
-# 终端 1 —— basic-app 跑在 http://localhost:5173。仓库里的 examples 都传了
-# `autoLaunchChrome: true`，所以这一步也会顺带拉起 debug Chrome（9222 端口，
-# 隔离 profile 在 <tmpdir>/hover-chrome）并打开 dev URL。
-pnpm dev:example:basic-app
+pnpm dev          # 或者 `npm run dev` / `yarn dev` / `bun dev`
 ```
 
-```bash
-# 终端 2 —— 跑 AI 烟雾测试（CDP 预检 → 调起 claude → 流式输出事件）
-pnpm smoke
-# 或者自定义目标 + 提示：
-pnpm smoke http://localhost:5173/ "登录然后加一条名为 'verify hover' 的 todo"
+在任意 Chrome 打开你的 dev URL。右下角出现 ✨ launcher；点它，widget 会引导你启动一个隔离的 debug Chrome（9222 端口，跟你日常用的浏览器分开）。输入文字、或者按住 🎙 说出来：
+
+```
+登录，然后加一条名为 "verify hover" 的 todo
 ```
 
-或者直接在 debug Chrome 里打开 `http://localhost:5173/`，点 ✨ 浮动按钮，往 widget 里输入指令。
+Agent 通过 CDP 操作 debug Chrome，每一步都有叙述，结束时渲染 Result + Findings 卡。点 **Save as Spec**，验证过的流程就落盘成 `__vibe_tests__/<slug>.spec.ts` —— 一个普通的 Playwright 测试，CI 跑它不需要 Hover、不需要 agent、不需要 API key。
+
+> 想让 Hover 在 `pnpm dev` 时就预先把 debug Chrome 启好？给插件传 `autoLaunchChrome: true`，详见 [插件选项](#插件选项)。
+
+想给 Hover 自己开发（不是用它）？看 [Development](https://hover-docs.vercel.app/development/) 章节。
 
 ## 安装
 
@@ -437,22 +477,22 @@ hover({
 - **v0.2.x** —— Phase 2 —— 多 agent（claude + codex）、深色 widget v2、Result + Findings 卡、自定义 tooltip、代码质量重构 ✓
 - **v0.3.x** —— **`@hover-dev/next` —— Next.js 16+ Turbopack 原生集成** ✓。三件套 —— `withHover(nextConfig, opts)` 包 `next.config.mjs`、`<HoverScript />` Server Component 放进 `app/layout.tsx`、`register()` helper 放进 `instrumentation.ts`。现有 `webpack-plugin-hover` 只覆盖 `next dev --webpack`；这个包是 Turbopack 原生路径。`npx @hover-dev/cli add` 会自动把 Next 项目路由到这里。
 - **v0.4.x** —— **点击元素 → 生成精准修复提示词。** ✓ 独立 footer Fix 按钮 + 元素 picker + 意图弹窗 + clipboard 传递。Vite transform 在每个 host JSX 元素上打 `data-hover-source="file:line:col"`（兼容 React 19 —— 用 `enforce: 'pre'` 跑在 `@vitejs/plugin-react` 把 JSX 折叠之前）。Picker 走 DOM ancestor chain 兜底 wrapper-rendered 元素（styled-components、className-forwarding、多层嵌套、Radix Slot/asChild —— 五种形态都在 `examples/basic-app/src/wrapper-lab.tsx` 实测过）。React 组件链来自 `_debugOwner`。Vue / Svelte 源码归因已规划但尚未发布。
-- **v0.5.x** —— **Record + Assert 工作流合并 + AI 编译 spec 输出。** 三阶段：
-  - **A** ✓ —— Record 模式内置 sub-toolbar，四种 mode：`● Record / ✓ Exists / ¶ Says / = Equals`。Check sub-mode 是 one-shot，跟 Playwright codegen 一致。隐藏的 `⌥click=assert` chord 已删，Record 和 Fix 通过 pause-insert-resume 共存：录制中点 Fix 自动暂停 capture，Fix popover 关闭后录制自动恢复。**（你在这里）**
-  - **B** 规划中 —— Record 步骤将带上跟 Fix prompt 同样的源码归因元数据（自身 `data-hover-source` + ancestor chain + `_debugOwner` 链），喂给 C。
-  - **C** 规划中 —— `writeSpec.ts` 重写为调用本地 CLI agent（claude / codex）把 `state.messages` + `state.assertions` AI 编译成精致的 `.spec.ts`，失败时 fallback 到当前确定性的 `translateStep` codegen。输出仍是标准 `@playwright/test` 文件，AI 只在 authoring 时介入，不是 CI 依赖。
-- **v0.6.x** —— **多 tab / 跨 origin + 更多 agent + Chrome 扩展。**
-  - 多 tab / 跨 origin 场景（Stripe、OAuth、"Pay with PayHover"）—— `examples/payment-provider` 已经压 `window.open` → `postMessage` 回调路径，但 agent 实际处理 `browser_tabs(list/select)` 在野外还是脆。
+- **v0.5.x** —— **Record + Assert 工作流合并** ✓。Record 模式内置 sub-toolbar：`● Record / ✓ Exists / ¶ Says / = Equals`。Check sub-mode 是 one-shot，跟 Playwright codegen 一致。Record 和 Fix 通过 pause-insert-resume 共存。
+- **v0.6.x** —— **Voice mode** ✓。Push-to-talk 语音输入 + 进度朗读，纯浏览器原生（Web Speech API）。中文 / 英文 STT / TTS 自动检测，Chrome 139+ 通过 SODA 在本地跑识别引擎。⚙ 设置面板可关闭朗读。
+- **v0.7.x** —— **Security testing + 插件 API** ✓ **（你在这里）**。`@hover-dev/security` 作为第一个可选插件发布：HTTPS MITM 代理（mockttp，零外部依赖）、widget 抓包面板、给 agent 的 MCP server（`list_flows / get_flow / replay_flow / clear_flows`），系统提示词限定在 authz / 前端 / 合规三类漏洞。背后的插件 API（`defineHoverPlugin` + 声明式 manifest + namespaced hooks）让第三方包能贡献 mode / MCP / Chrome 启动参数 / 提示词片段，不动 `@hover-dev/core`。
+- **v0.8.x** —— 规划中 —— **多 tab / 跨 origin 完善 + 更多 agent + Chrome 扩展。**
+  - 多 tab / 跨 origin 场景（Stripe、OAuth、"Pay with PayHover"）—— `examples/payment-provider` 已经压 `window.open` → `postMessage` 路径，但 agent 实际处理 `browser_tabs(list/select)` 在野外还是脆。
   - 更多 agent 接入 [registry](./packages/core/src/agents/registry.ts) —— `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`。
   - Chrome 扩展（脱离 Vite 插件依赖，支持非 Vite 栈）。
+- **v0.9.x** —— 规划中 —— **Security 模式下的录制语义。** 在 security 或其它探测模式启用时，把 Record 按钮重新定义：捕获 agent 的 replay 操作 + 断言服务端响应 shape，落盘成 security regression spec。
 
-v0.5.x A 是你今天就能用的。
+v0.7.x 是你今天能用的。
 
 ## 项目状态
 
-🟢 **v0.4.x + v0.5.x A 阶段已发布。** 全部六个宿主 bundler 都 dogfood 可用：Vite、Astro、Nuxt、Next.js (Turbopack)、webpack 5 和 React Native Web。录制工作流加入了 Playwright-codegen 风格的 sub-toolbar（`Record / Exists / Says / Equals`）和独立的 Fix prompt 按钮；录制中可以直接点 Fix（自动暂停 capture，popover 关闭后自动 resume）。Vite transform 给 Fix prompt 的元素归因打 `data-hover-source` 标记。
+🟢 **v0.7.0 已发布。** 全部六个宿主 bundler 都 dogfood 可用：Vite、Astro、Nuxt、Next.js (Turbopack)、webpack 5 和 React Native Web。v0.7 引入插件 API 并发布第一个可选插件 `@hover-dev/security` —— HTTPS MITM 代理 + 抓包面板 + agent 驱动的 IDOR / 越权 / 参数篡改探测，落盘为 Playwright 回归测试。前面的 arc：v0.6（Voice mode）、v0.5（Record + Exists / Says / Equals）、v0.4（点击 → Fix prompt + Vite 源码归因）、v0.3（Next.js Turbopack 原生集成）。
 
-Issue 跟踪：[github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues)。
+Issue 跟踪：[github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues)。安全问题报告走 [Security Policy](./SECURITY.md)。
 
 ## 贡献
 

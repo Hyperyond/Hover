@@ -88,7 +88,7 @@ Ten real example apps live under [`examples/`](./examples/). Four stress differe
 
 ### Bundler coverage
 
-Each of the six targets below pairs the same counter + todo smoke page with a different host bundler / framework, so each Hover integration package has a dedicated dogfood ground.
+Each of the targets below pairs a simple counter + todo smoke page with a different host bundler / framework, so each Hover integration package has a dedicated dogfood ground. The richer surfaces above (`stock-registration`, `e-commerce`, `canvas-paint`) run on Vite + React.
 
 | Example | Bundler / framework | Hover package | Port |
 |---|---|---|---|
@@ -156,7 +156,8 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
 
 ## What you get today
 
-- **Vite plugin** that injects a Shadow-DOM widget into your dev page. No-op in production. Marked `data-hover="true"` so your own Playwright runs can skip it.
+- **One bundler plugin per stack.** Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web are all covered. The plugin injects a Shadow-DOM widget into your dev page, runs as no-op in production, and is marked `data-hover="true"` so your own Playwright runs skip it.
+- **🛡️ Security testing mode (NEW in v0.7).** Install `@hover-dev/security` alongside the base plugin and the widget grows a Security mode. The debug Chrome runs through a local HTTPS MITM proxy; the agent inspects captured API calls and replays them with mutations to probe for IDOR, authz bypass, parameter tampering, missing security headers, and PII leakage. Crystallises into Playwright specs that run in CI without the proxy. See [Security testing](#security-testing) below.
 - **No API key, no `.env`, no per-token billing.** Hover spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for (Claude Pro / Max, ChatGPT Pro). The `@hover-dev/core` package contains zero LLM SDK code — there's nothing to authenticate against. Get the most out of the agent quota you've already bought.
 - **Multi-agent.** `claude` (hard sandbox, recommended) and `codex` (soft sandbox) are both wired. Service auto-detects which one you have on PATH; the widget header shows the active agent as a pill (`claude ▾`) with a dropdown to switch on the fly. `cursor-agent` / `aider` / `gemini-cli` are one-file additions to the registry.
 - **Per-agent sandbox policy.** Hard-sandbox agents (claude) get an explicit allow/deny list so only Playwright MCP is callable; `Bash`, `Edit`, `Write`, `Read`, `WebFetch`, etc. all explicitly denied; `--max-budget-usd` ceiling supported. Soft-sandbox agents (codex) can't disable their built-in tools at the CLI level, so we use `--sandbox read-only` + a strict `developer_instructions` system prompt; the widget marks these with a ⚠ badge so you know the surface is broader.
@@ -186,6 +187,40 @@ The agent's verification report and any bugs it finds get their own cards at the
 </p>
 
 The system prompt teaches the agent to emit this structured block at the end of every run, so QA reading the saved spec can scan the bug list without scrolling through tool calls.
+
+### Security testing
+
+> ⚠️ **Authorised testing only.** Hover's Security mode operates on the dev server running on your own machine. Pointing it at systems you do not own or have written authorisation to test is illegal in most jurisdictions and against the project's [Security Policy](./SECURITY.md). The agent is prompt-instructed to operate within these boundaries; you are responsible for keeping it there.
+
+`@hover-dev/security` is Hover's first optional plugin. Install it next to the base plugin, and the widget grows a mode bar above the panel header — flip into **Security testing** and the panel border + launcher ring turn orange to signal altered state.
+
+```bash
+pnpm add -D @hover-dev/security
+```
+
+```ts
+// vite.config.ts (Astro / Nuxt / Next / Webpack mirror the same pattern)
+import { hover } from 'vite-plugin-hover';
+import securityMode from '@hover-dev/security';
+
+export default defineConfig({
+  plugins: [hover({}, securityMode())],
+});
+```
+
+Zero external dependencies — no `mitmproxy`, no Python, no system CA install. The plugin uses [mockttp](https://github.com/httptoolkit/mockttp) (the engine behind HTTP Toolkit) to MITM HTTPS, generates a one-off CA on first run, and pins it via Chrome's `--ignore-certificate-errors-spki-list` so your OS trust store stays untouched. The CA private key persists under `<project>/.hover/ca/` (the shipped `.gitignore` excludes it).
+
+**What the agent looks for**, in priority order:
+
+1. **Authz / authn** — IDOR (replay a captured URL with a swapped resource id), auth bypass (drop or swap the auth header), parameter tampering (mutate `user_id` / `role` / `price` / `isAdmin`), mass assignment (add `admin: true` to a POST body).
+2. **Frontend** — XSS injection, open redirects, missing security headers (CSP / X-Frame-Options / HSTS / SameSite cookies).
+3. **Compliance / privacy** — PII in URL query strings, cookies without `Secure / HttpOnly / SameSite`, third-party requests carrying user data before consent.
+
+**Explicitly out of scope** — the system prompt forbids SQL injection, SSRF, command injection, deserialisation attacks, and automated fuzzing loops. Browser-driven testing can't usefully probe these classes; run a server-side scanner (`sqlmap`, ZAP, etc.) if you need them.
+
+The agent gets four extra MCP tools while the mode is active: `list_flows` (enumerate captured API surface), `get_flow` (full headers + body), `replay_flow` (re-issue with optional method / url / headers / body mutations), and `clear_flows`. Findings save as plain Playwright specs that reproduce the probe via `page.request.fetch()` — your CI runs them with vanilla `@playwright/test`, no Hover, no mockttp.
+
+See [docs/features/security](https://hover-docs.vercel.app/features/security) for the full walkthrough + reporting markers + honest limitations.
 
 ### Voice mode
 
@@ -247,30 +282,35 @@ Clicking **Fix mid-recording is allowed** — Record pauses while the popover is
 
 ## Quick start
 
-You need two terminals on first run. Once Chrome and Vite are up, they stay running across many loops.
+Add Hover to a project you already have running. One command, one config edit, then your normal `pnpm dev`.
+
+**Prerequisites:** Node 22+, and either `claude` ([install](https://docs.claude.com/claude-code)) or `codex` ([install](https://developers.openai.com/codex)) on your `PATH`. No new API keys — Hover rides on the subscription you already pay for.
+
+**Install:**
 
 ```bash
-git clone https://github.com/Hyperyond/Hover.git
-cd Hover
-pnpm install
-pnpm --filter basic-app exec playwright install chromium   # for `pnpm test:e2e` only
+npx @hover-dev/cli add
 ```
+
+The CLI detects your bundler (Vite / Astro / Nuxt / Next.js / Webpack), installs the matching Hover package, and AST-edits your config file. Idempotent — safe to re-run.
+
+**Start your dev server as usual:**
 
 ```bash
-# Terminal 1 — basic-app on http://localhost:5173. Examples pass
-# `autoLaunchChrome: true`, so this ALSO spawns a debug Chrome on port 9222
-# (isolated profile under <tmpdir>/hover-chrome) navigated to the dev URL.
-pnpm dev:example:basic-app
+pnpm dev          # or `npm run dev` / `yarn dev` / `bun dev`
 ```
 
-```bash
-# Terminal 2 — run the AI smoke loop (CDP preflight → invoke claude → stream events)
-pnpm smoke
-# or with custom target + prompt:
-pnpm smoke http://localhost:5173/ "log in then add a todo named 'verify hover'"
+Open your dev URL in any Chrome. The ✨ launcher appears bottom-right; click it and the widget walks you through launching an isolated debug Chrome on port 9222 (separate from your everyday browser). Type — or hold 🎙 and speak — your first prompt:
+
+```
+log in, then add a todo named "verify hover"
 ```
 
-Or just open `http://localhost:5173/` in the debug Chrome, click the ✨ floating button, and type into the widget.
+The agent drives the debug Chrome over CDP, narrates each step, and renders a Result + Findings card when done. Click **Save as Spec** and the verified flow becomes a `__vibe_tests__/<slug>.spec.ts` file that runs in your CI like any other Playwright test — no Hover dependency, no agent, no API key.
+
+> Want Hover to pre-warm the debug Chrome at `pnpm dev`? Pass `autoLaunchChrome: true` to the plugin. See [Plugin options](#plugin-options).
+
+Working **on** Hover (the project, not with it)? See [Development](https://hover-docs.vercel.app/development/) on the docs site for the monorepo workflow.
 
 ## Install
 
@@ -323,53 +363,75 @@ Open your dev URL in any Chrome. The ✨ launcher appears bottom-right and tells
 
 Prefer it to pre-warm Chrome at `vite dev`? `hover({ autoLaunchChrome: true })`. Prefer to start Chrome yourself? `pnpm exec hover-chrome` (or `npx hover-chrome`).
 
-## Use it in a React (Vite) project
+## Use it in your project
+
+The CLI handles install + config edit for you. If you prefer to wire it manually, here's the shape per bundler.
+
+**Vite** (React / Vue / Svelte / Solid / Qwik — anything whose Vite dev server runs `transformIndexHtml`):
 
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import { hover } from 'vite-plugin-hover';
 
 export default defineConfig({
   plugins: [
-    react(),
+    /* your framework plugin: react() / vue() / svelte() / … */
     hover(),                 // 👈 add this line
   ],
 });
 ```
 
-That's the whole integration. `vite dev` as usual; open your app; click ✨. The launcher colour tells you what (if anything) it needs from you.
-
-> Verified specs that you save via the widget land in `__vibe_tests__/` at your project root. Run them with `npx playwright test`. They import only `@playwright/test` and have no runtime dependency on Hover — so CI can run them with the widget completely disabled.
-
-## Use it in a Vue (Vite) project
+**Astro 5+** — uses its own integration because Astro's HTML pipeline bypasses Vite's `transformIndexHtml`:
 
 ```ts
-// vite.config.ts
-import { defineConfig } from 'vite';
-import vue from '@vitejs/plugin-vue';
-import { hover } from 'vite-plugin-hover';
+import hover from '@hover-dev/astro';
+export default defineConfig({ integrations: [hover()] });
+```
 
+**Nuxt 4+** — uses a Nitro module because Nuxt renders HTML through Nitro, not Vite:
+
+```ts
+export default defineNuxtConfig({ modules: ['@hover-dev/nuxt'] });
+```
+
+**Next.js 16+** (App Router, Turbopack default) — three pieces because Next's instrumentation is split:
+
+```ts
+// next.config.ts
+import { withHover } from '@hover-dev/next';
+export default withHover({ /* your Next config */ });
+```
+
+```ts
+// instrumentation.ts
+export { register } from '@hover-dev/next/instrumentation';
+```
+
+```tsx
+// app/layout.tsx
+import { HoverScript } from '@hover-dev/next';
+// inside <body>: render {children} then <HoverScript />
+```
+
+**Webpack 5** (vanilla `webpack-dev-server`, Rspack, Rsbuild, legacy CRA / Vue CLI):
+
+```js
+const Hover = require('webpack-plugin-hover');
+module.exports = { plugins: [new Hover()] };
+```
+
+**Optional: Security mode** — install alongside any of the above:
+
+```ts
+import { hover } from 'vite-plugin-hover';
+import securityMode from '@hover-dev/security';
 export default defineConfig({
-  plugins: [
-    vue(),
-    hover(),                 // 👈 add this line
-  ],
+  plugins: [hover({}, securityMode())],
 });
 ```
 
-Same flow. Vite dev server → debug Chrome → ✨.
-
-> Works the same in Svelte / Solid / Qwik / vanilla — anything whose Vite dev server actually runs user Vite plugins' `transformIndexHtml`. The plugin is framework-agnostic at that layer.
->
-> **Astro** has its own HTML pipeline that bypasses `transformIndexHtml` on `.astro` pages — use the [`@hover-dev/astro`](./packages/astro-integration/) integration instead, which wraps the same service + widget bundle behind Astro's `injectScript` API.
->
-> **Nuxt** renders HTML through Nitro, not Vite, so `transformIndexHtml` is a no-op for Nuxt's SSR responses — use the [`@hover-dev/nuxt`](./packages/nuxt-integration/) module, which pushes the widget into `nuxt.options.app.head.script` (Nitro inlines it into the SSR'd HTML).
->
-> **Webpack-based projects** (vanilla `webpack-dev-server`, Rspack, Rsbuild, legacy CRA via `craco`, legacy Vue CLI via `configureWebpack`) — use [`webpack-plugin-hover`](./packages/webpack-plugin/), which taps `HtmlWebpackPlugin`'s `alterAssetTagGroups` hook.
->
-> **Next.js** ships Turbopack as the default bundler since Next 16 and Turbopack does not load webpack plugins. Users on `next dev --webpack` can wire `webpack-plugin-hover` manually (see the package README). A Turbopack-native `@hover-dev/next` is on the roadmap.
+Verified specs you save via the widget land in `__vibe_tests__/` at your project root. Run them with `npx playwright test` — they import only `@playwright/test` and have no runtime dependency on Hover, so CI runs them with the widget completely disabled.
 
 ## Plugin options
 
@@ -386,55 +448,55 @@ hover({
 });
 ```
 
-## The ten example apps
+<!-- Example apps belong to contributors who clone the monorepo, not to users
+     installing Hover from npm. The list lives at docs/development/running-examples
+     so users reading this README aren't asked to context-switch into the
+     monorepo. The four "testing surfaces" cards higher up cover the user-facing
+     showcase. -->
 
-Each one is a real, runnable app under `examples/` — together they cover both testing surfaces and bundler/framework integrations:
-
-| App | Port | Stresses |
-|---|---|---|
-| [basic-app](./examples/basic-app) | 5173 | Login + counter + todos. Baseline smoke · Vite + React |
-| [e-commerce](./examples/e-commerce) | 5174 | Long action chains: product list → cart → checkout, cross-tab payment popup · Vite + React |
-| [stock-registration](./examples/stock-registration) | 5175 | ~50-field brokerage form with conditional reveals — AI form-fill on rich controls · Vite + React |
-| [canvas-paint](./examples/canvas-paint) | 5176 | DOM toolbar amidst `<canvas>` pixels — semantic selectors when snapshots are opaque · Vite + React |
-| [payment-provider](./examples/payment-provider) | 5177 | Deliberately **no** Hover plugin — simulates a third-party origin in cross-tab flows · Vite |
-| [astro-app](./examples/astro-app) | 5178 | Astro 5 static smoke page — verifies `@hover-dev/astro` via `injectScript` |
-| [nuxt-app](./examples/nuxt-app) | 5179 | Nuxt 4 SSR smoke page — verifies `@hover-dev/nuxt` via `app.head.script` |
-| [next-app](./examples/next-app) | 5182 | Next.js 16 App Router smoke page (Turbopack default) — verifies `@hover-dev/next` via `withHover` + `instrumentation.ts` + `<HoverScript />` |
-| [webpack-app](./examples/webpack-app) | 5180 | Vanilla webpack 5 + `webpack-dev-server`, plain JS no React — verifies `webpack-plugin-hover` via `alterAssetTagGroups` |
-| [rn-web-app](./examples/rn-web-app) | 5181 | React Native Web — `react-native` imports aliased to `react-native-web`, compiled to DOM via Vite. Demonstrates RN Web is in scope (RN native is not) |
-
-Run any of them with `pnpm dev:example:<name>`.
 
 ## How it works
 
 ```
 ┌────────────────┐   chat (WebSocket)   ┌──────────────────┐
-│  Widget        │ ───────────────────▶ │  @hover/core     │
-│  (Shadow DOM,  │ ◀─────────────────── │  Node service    │
-│   in dev page) │   step events        │  (127.0.0.1)     │
-└────────────────┘                      └────────┬─────────┘
+│  Widget        │ ───────────────────▶ │  @hover-dev/core │
+│  (Shadow DOM,  │ ◀─────────────────── │  Node service    │ ◀── plugins
+│   in dev page) │   step events        │  (127.0.0.1)     │     (mode, MCPs,
+└────────────────┘                      └────────┬─────────┘      Chrome flags)
                                                  │ spawn
                                                  ▼
                                         ┌──────────────────┐
-                                        │  claude (CLI)    │
+                                        │  claude / codex  │
                                         │  --strict-mcp,   │
                                         │  --allowedTools  │
                                         │  mcp__playwright │
-                                        └────────┬─────────┘
-                                                 │ MCP
-                                                 ▼
-                                        ┌──────────────────┐
-                                        │  Playwright MCP  │
-                                        └────────┬─────────┘
-                                                 │ CDP (port 9222)
-                                                 ▼
-                                        ┌──────────────────┐
-                                        │  Your Chrome     │
-                                        │  (existing tab)  │
-                                        └──────────────────┘
+                                        │  mcp__<plugin>__*│
+                                        └─────┬────────┬───┘
+                                              │ MCP    │ MCP
+                                              ▼        ▼
+                                  ┌─────────────────┐  ┌────────────────────┐
+                                  │ Playwright MCP  │  │ Plugin MCP server  │
+                                  └────────┬────────┘  │ (e.g. flows /      │
+                                           │           │  replay / inspect) │
+                                           │           └─────────┬──────────┘
+                                           │                     │ HTTP
+                                           │                     ▼
+                                           │           ┌─────────────────────┐
+                                           │           │  Plugin control     │
+                                           │           │  plane (in core)    │
+                                           │           └─────────┬───────────┘
+                                           │ CDP                 │ proxy
+                                           ▼                     ▼
+                                  ┌────────────────────────────────────────┐
+                                  │  Isolated debug Chrome (port 9222 or   │
+                                  │  9333 for security mode), via your    │
+                                  │  /tmp/hover-chrome profile dir         │
+                                  └────────────────────────────────────────┘
 ```
 
-Architecture and boundary constraints live in [CLAUDE.md](./CLAUDE.md). Per-package internals in [packages/core/README.md](./packages/core/README.md).
+The plugin slot is what makes optional packages like [`@hover-dev/security`](./packages/security/) extend the agent's tool surface without touching `@hover-dev/core`. See [Plugin API](https://hover-docs.vercel.app/reference/plugin-api) for the manifest shape.
+
+Architecture details, package boundaries, and contribution workflow live on the [docs site](https://hover-docs.vercel.app/development/).
 
 ## Built on the shoulders of
 
@@ -450,24 +512,23 @@ If your favourite agent (`codex`, `cursor-agent`, `aider`, `gemini`, `qwen-code`
 - **v0.1.x** — Phase 1 — Vite plugin + chat UI + persistent service + Save as Spec ✓
 - **v0.2.x** — Phase 2 — multi-agent (claude + codex), dark widget v2, Result + Findings cards, custom tooltip, code-quality pass ✓
 - **v0.3.x** — **`@hover-dev/next` — Next.js 16+ Turbopack-native integration** ✓. Three pieces — `withHover(nextConfig, opts)` wrapper for `next.config.mjs`, a `<HoverScript />` Server Component for `app/layout.tsx`, and a `register()` helper for `instrumentation.ts`. The existing `webpack-plugin-hover` only covers `next dev --webpack`; this package is the Turbopack-native path. `npx @hover-dev/cli add` routes Next projects here automatically.
-- **v0.4.x** — **Click → Suggest fix prompt.** ✓ Independent footer Fix button + element picker + intent popover + clipboard handoff. A Vite transform stamps `data-hover-source="file:line:col"` on every host JSX element (React 19 compatible — runs `enforce: 'pre'` so it sees JSX before `@vitejs/plugin-react` collapses it). The picker walks the DOM ancestor chain to catch wrapper-rendered hosts (styled-components, className-forwarding, multi-layer nested, Radix Slot/asChild — all five shapes verified against `examples/basic-app/src/wrapper-lab.tsx`). React component chain comes from `_debugOwner`. Vue / Svelte source-attribution is planned but not yet shipped.
-- **v0.5.x** — **Merged Record + Assert workflow + AI-compiled spec output.** Three stages:
-  - **A** ✓ — Record mode now contains a sub-toolbar with four modes: `● Record / ✓ Exists / ¶ Says / = Equals`. Check sub-modes are one-shot and follow Playwright codegen's pattern. The hidden `⌥click=assert` chord is gone — Record and Fix coexist via pause-insert-resume: clicking Fix mid-recording pauses capture, and recording resumes automatically when the Fix popover closes.
-  - **B** planned — Record steps will carry the same source-attribution metadata as the Fix prompt (own `data-hover-source` + ancestor chain + `_debugOwner` chain), feeding C.
-  - **C** planned — `writeSpec.ts` rewritten to call your local CLI agent (claude / codex) to AI-compile `state.messages` + `state.assertions` into a polished `.spec.ts`, falling back to the existing deterministic `translateStep` codegen on failure. Outputs are still standard `@playwright/test` files; the AI is an authoring-time aid, not a CI dependency.
-- **v0.6.x** — **Voice mode** ✓. Push-to-talk speech input + spoken progress narration, fully browser-native (Web Speech API). 中文 / English autodetect across STT, TTS phrasing, and voice picker (prefers Siri / Premium / Google over legacy system voices). Chrome 139+ runs the recogniser on-device via SODA. Settings panel (⚙ in the header) lets the user mute narration; state persists across reloads. Zero service-side change — STT text feeds the existing `{type:'command'}` WS message, TTS reads off the existing `{type:'event'}` downstream. **(you are here)**
-- **v0.7.x** — **multi-tab / cross-origin + more agents + Chrome extension.**
+- **v0.4.x** — **Click → Suggest fix prompt.** ✓ Independent footer Fix button + element picker + intent popover + clipboard handoff. A Vite transform stamps `data-hover-source="file:line:col"` on every host JSX element (React 19 compatible — runs `enforce: 'pre'` so it sees JSX before `@vitejs/plugin-react` collapses it). React component chain comes from `_debugOwner`. Vue / Svelte source-attribution is planned but not yet shipped.
+- **v0.5.x** — **Merged Record + Assert workflow.** ✓ Record mode contains a sub-toolbar with four modes: `● Record / ✓ Exists / ¶ Says / = Equals`. Check sub-modes are one-shot and follow Playwright codegen's pattern. Record and Fix coexist via pause-insert-resume.
+- **v0.6.x** — **Voice mode** ✓. Push-to-talk speech input + spoken progress narration, fully browser-native (Web Speech API). 中文 / English autodetect across STT, TTS phrasing, and voice picker. Chrome 139+ runs the recogniser on-device via SODA. Settings panel (⚙ in the header) lets the user mute narration.
+- **v0.7.x** — **Security testing + plugin API.** ✓ **(you are here)** `@hover-dev/security` ships as the first optional plugin: HTTPS MITM proxy (mockttp, no Python / system CA), captured-flow inspector in the widget, MCP server giving the agent `list_flows / get_flow / replay_flow / clear_flows`, system prompt scoped to authz / frontend / compliance vulnerability classes. The plugin API behind it — `defineHoverPlugin` + declarative manifest + namespaced hooks — lets third-party packages contribute modes, MCP servers, Chrome flags, and prompt fragments without touching `@hover-dev/core`.
+- **v0.8.x** — planned — **multi-tab / cross-origin polish + more agents + Chrome extension.**
   - Multi-tab / cross-origin flows (Stripe, OAuth, "Pay with PayHover") — `examples/payment-provider` already stresses the `window.open` → `postMessage` path, but the agent's handling of `browser_tabs(list/select)` is brittle in the wild.
   - More agents wired into the [registry](./packages/core/src/agents/registry.ts) — `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`.
   - Chrome extension (drops the Vite-plugin dependency for non-Vite stacks).
+- **v0.9.x** — planned — **Recording semantics for security mode.** Re-purpose the Record button while a security mode (or future probing mode) is active so a session captures the agent's replay decisions + asserts the server response shape, crystallising into a security regression spec.
 
-v0.6.x is what you can use today.
+v0.7.x is what you can use today.
 
 ## Project status
 
-🟢 **v0.6.0 shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. v0.4–0.5 brought the Playwright-codegen-style sub-toolbar (`Record / Exists / Says / Equals`), a dedicated Fix prompt button (Fix enterable mid-recording — pauses capture, auto-resumes on close), and the Vite source-attribution transform. v0.6 adds Voice mode: push-to-talk STT + spoken step narration via the browser-native Web Speech API, 中文 / English autodetect, on-device on Chrome 139+, with a new ⚙ settings panel to mute.
+🟢 **v0.7.0 shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. v0.7 introduces a plugin API and ships `@hover-dev/security` as the first optional plugin — HTTPS MITM proxy, captured-flow inspector, agent-driven IDOR / authz / parameter tampering probes, crystallising into Playwright regression specs. Earlier arcs: v0.6 (Voice mode — push-to-talk STT + spoken step narration, browser-native Web Speech API), v0.5 (Record + Exists / Says / Equals sub-toolbar), v0.4 (Click → Fix prompt + Vite source-attribution transform), v0.3 (Next.js Turbopack-native integration).
 
-Tracking issues at [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues).
+Tracking issues at [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues). Security reports go to the [Security Policy](./SECURITY.md).
 
 ## Contributing
 
