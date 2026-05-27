@@ -64,8 +64,9 @@
   const agentsListEl = $('.agents-list-items');
   const agentsCountEl = $('.agents-overlay .count');
   const agentsCloseBtn = $('.agents-close');
-  const modeBtn = $('.modebtn');
-  const modeLabelEl = $('.mode-label');
+  const modeBtn = $('.modebar');
+  const modeLabelEl = $('.modebar-label');
+  const modeHintEl = $('.modebar-hint');
   const modesOverlay = $('.modes-overlay');
   const modesListEl = $('.modes-list-items');
   const modesCountEl = $('.modes-overlay .count');
@@ -1593,23 +1594,37 @@
   const renderModeButton = () => {
     const hasModes = state.availableModes.length > 0;
     modeBtn.hidden = !hasModes;
+    // Mirror the engaged state on .panel and .launcher so they tint
+    // alongside the modebar — the user spots the altered state without
+    // needing the panel open.
+    const engaged = state.currentMode !== null;
+    panel.classList.toggle('mode-engaged', engaged);
+    launcher.classList.toggle('mode-engaged', engaged);
     if (!hasModes) return;
     const cur = state.availableModes.find((m) => m.id === state.currentMode);
-    // Header is tight; show just the first word of the label
-    // ("Security" instead of "Security testing"). Full label lives in
-    // the tooltip + overlay rows.
-    const full = cur?.label || 'default';
-    modeLabelEl.textContent = full.split(/\s+/)[0];
-    modeBtn.classList.toggle('engaged', state.currentMode !== null);
-    modeBtn.title = state.currentMode
-      ? `Mode: ${full} — click to change`
+    modeLabelEl.textContent = cur?.label || 'Default';
+    if (modeHintEl) {
+      modeHintEl.textContent = engaged
+        ? cur?.description || 'click to switch'
+        : 'click to switch';
+    }
+    modeBtn.classList.toggle('engaged', engaged);
+    modeBtn.title = engaged
+      ? `Mode: ${cur?.label} — click to change`
       : 'Select a plugin-contributed mode';
-    // Network glyph rides alongside the mode pill — visible when the
-    // active mode is one that publishes flow events. For this iteration
-    // we treat any non-default mode as flow-capable; future modes that
-    // don't publish flows can flip this off via a manifest hint.
-    networkBtn.hidden = state.currentMode === null;
+    // Network glyph rides in the header — visible when the active mode
+    // publishes flow events. For this iteration any non-default mode is
+    // treated as flow-capable; future modes that don't publish flows
+    // can flip this off via a manifest hint.
+    networkBtn.hidden = !engaged;
     updateNetworkBadge();
+    // Record button is for the Playwright-spec recording flow — its
+    // semantics ("record clicks/fills → save as spec") don't match the
+    // security-mode workflow (which captures HTTP flows instead and
+    // crystallizes via the security MCP). Hide it in any non-default
+    // mode for now; future iteration will redesign recording for
+    // security mode specifically.
+    if (recordBtn) recordBtn.hidden = engaged;
   };
 
   const renderModesOverlay = () => {

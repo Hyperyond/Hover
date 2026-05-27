@@ -20,6 +20,21 @@
 </button>
 
 <div class="panel" role="dialog" aria-label="Hover">
+  <!--
+    Mode bar — only shown when at least one plugin contributes a mode.
+    Sits above the regular header so the colour-coded "we're in a
+    non-default mode" hint reads as a top-level state indicator rather
+    than a header control. Clicking opens the modes overlay (which slides
+    over the body, same as agents/skills overlays). The data-mode
+    attribute mirrors state.currentMode so CSS can theme the whole
+    panel border + launcher glow accordingly.
+  -->
+  <button class="modebar" type="button" hidden aria-label="Switch mode">
+    <span class="modebar-dot" aria-hidden="true"></span>
+    <span class="modebar-label">Default</span>
+    <span class="modebar-hint">click to switch</span>
+    <span class="modebar-caret" aria-hidden="true">▾</span>
+  </button>
   <header>
     <!-- The agent pill itself ("claude ▾") effectively brands the panel —
          showing the current agent is more useful than redundantly labelling
@@ -29,18 +44,6 @@
       <span class="agent-label">claude</span>
       <span class="agent-warn" hidden aria-label="Soft sandbox">⚠</span>
       <span class="agent-caret" aria-hidden="true">▾</span>
-    </button>
-    <!--
-      Mode pill — only shown when at least one plugin contributes a mode
-      (see plugin-api manifest in @hover-dev/core). Hidden by default;
-      `hidden` is cleared when the server's `modes` payload has a non-
-      empty `available` array. When no mode is active the label reads
-      "default" — clicking opens the modes overlay (modeled after the
-      agents overlay) so the user can switch into e.g. Security testing.
-    -->
-    <button class="modebtn" type="button" hidden aria-label="Switch mode" data-tooltip="Switch mode">
-      <span class="mode-label">default</span>
-      <span class="mode-caret" aria-hidden="true">▾</span>
     </button>
     <!--
       Network glyph — appears alongside the other header icons only when

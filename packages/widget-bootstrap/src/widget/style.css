@@ -448,55 +448,87 @@ header {
   width: 16px; flex-shrink: 0; color: var(--accent); font-weight: 700; text-align: center;
 }
 
-/* ───────────────────────── mode picker pill + overlay ───────────────────────── */
+/* ───────────────────────── mode bar (above panel header) ───────────────────────── */
 
-/* Same shape as .agentbtn — the two pills sit side-by-side in the header
- * (claude ▾) (default ▾). Width is hugged to content; hidden by default
- * until the service tells us at least one plugin contributed a mode. */
-.modebtn {
-  height: 22px;
-  padding: 0 6px 0 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+/* Sits as the topmost row of .panel, full-width, ~28px tall. Hidden when
+ * no plugins are loaded. Tints orange-red when a non-default mode is
+ * active so the user can never forget they're in "altered" mode —
+ * matches the panel border + launcher ring treatment below. */
+.modebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
   background: var(--bg-2);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 1;
-  font-weight: 500;
-  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--text-mute);
+  font: 500 11px/1 inherit;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.modebtn[hidden] { display: none; }
-.modebtn:not(:disabled):hover { background: var(--bg-3); border-color: #3a3a3c; }
-.modebtn:disabled { opacity: 0.5; cursor: not-allowed; }
-.modebtn.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
+.modebar[hidden] { display: none; }
+.modebar:hover { background: var(--bg-3); color: var(--text); }
+.modebar:focus-visible { outline: none; background: var(--bg-3); color: var(--text); }
+.modebar > * { pointer-events: none; }
+.modebar .modebar-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
 }
-/* When a plugin mode is on (not "default"), tint the whole pill so the
- * non-default state reads at a glance. The class is set by client.js
- * whenever state.currentMode !== null. */
-.modebtn.engaged {
-  background: rgba(125, 211, 252, 0.14);
-  border-color: var(--link);
-  color: var(--link);
-}
-.modebtn .mode-label {
-  font-variant-numeric: tabular-nums;
-  /* Same no-wrap rule as .agent-label — see comment there. */
+.modebar .modebar-label {
+  font-weight: 600;
+  color: var(--text);
   white-space: nowrap;
 }
-.modebtn .mode-caret {
+.modebar .modebar-hint {
+  flex: 1;
+  color: var(--text-dim);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modebar .modebar-caret {
   color: var(--text-dim);
   font-size: 9px;
-  transition: color 0.12s ease;
+  flex-shrink: 0;
 }
-.modebtn:not(:disabled):hover .mode-caret,
-.modebtn:focus-visible .mode-caret { color: var(--text); }
-.modebtn > * { pointer-events: none; }
+
+/* Engaged state — non-default mode is active. Orange-red (warn-ish) so
+ * it reads as "you're in altered state, be aware" without being
+ * actually-danger red. Pattern borrowed from Burp's "intercept on"
+ * banner — a persistent toolbar tint, not a transient flash. */
+.modebar.engaged {
+  background: linear-gradient(180deg, rgba(251, 146, 60, 0.18), rgba(251, 146, 60, 0.08));
+  border-bottom-color: rgba(251, 146, 60, 0.55);
+  color: #fed7aa;
+}
+.modebar.engaged .modebar-dot {
+  background: #fb923c;
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.18);
+}
+.modebar.engaged .modebar-label { color: #fed7aa; }
+.modebar.engaged .modebar-hint  { color: rgba(254, 215, 170, 0.6); }
+.modebar.engaged .modebar-caret { color: rgba(254, 215, 170, 0.7); }
+.modebar.engaged:hover { background: linear-gradient(180deg, rgba(251, 146, 60, 0.26), rgba(251, 146, 60, 0.14)); }
+
+/* Panel + launcher mirror the engaged tint so the user spots it from
+ * across the page. We hook the state via a class on .panel set by the
+ * widget JS — that's the same element that holds the existing
+ * .open class, so no extra layout. */
+.panel.mode-engaged {
+  border-color: rgba(251, 146, 60, 0.55);
+  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.25), 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.launcher.mode-engaged {
+  border-color: rgba(251, 146, 60, 0.7);
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.18), 0 6px 22px rgba(0, 0, 0, 0.5);
+  color: #fb923c;
+}
 
 .modes-overlay {
   position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
