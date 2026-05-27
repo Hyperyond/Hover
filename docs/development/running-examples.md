@@ -17,6 +17,20 @@ pnpm dev:example:next-app            # http://localhost:5182 — Next 16 App Rou
 
 Each example sets `autoLaunchChrome: true` so a debug Chrome opens on `:9222` pointed at the dev URL on first run. The profile dir under `<tmpdir>/hover-chrome` reuses session state across runs.
 
+## Manual-validation example: `turbo-monorepo`
+
+`examples/turbo-monorepo/` is a minimal turbo + pnpm-workspace monorepo with two Next.js 15 apps (`apps/web`, `apps/game`). It exists to reproduce the shape real users have when they run `npx @hover-dev/cli add` on a turbo project — and to surface bugs that hide in the single-package examples above. Not part of `pnpm dev:example:*` because the install step requires real-network npm to bring in `next` / `react`. Validate by hand from the example's own root:
+
+```bash
+cd examples/turbo-monorepo
+npx @hover-dev/cli@latest add                 # interactive picker (apps/web vs apps/game)
+npx @hover-dev/cli@latest add --cwd apps/web  # or skip the picker
+pnpm install                                   # bring in the per-app next/react deps
+pnpm dev                                       # turbo run dev — apps/web on :5183
+```
+
+See [`examples/turbo-monorepo/README.md`](https://github.com/Hyperyond/Hover/tree/main/examples/turbo-monorepo) for the specific install-path edge cases this example was built to verify.
+
 ## Auxiliary commands
 
 ```bash

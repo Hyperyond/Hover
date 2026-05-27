@@ -1,6 +1,27 @@
 # Install
 
-The fastest path is the zero-config CLI — it reads your `package.json`, picks the right Hover integration, and edits your bundler config in place.
+This page walks through getting Hover into a project you already have. For the absolute fastest path, the [Quick start](./quick-start) is the shorter version of the same steps; come back here if anything goes sideways.
+
+## Before you start
+
+You need three things:
+
+1. **Node 22+** on your `PATH`. `node --version` should print `v22.x` or higher.
+2. **A supported bundler in your project** — Vite, Astro, Nuxt, Next.js 15 / 16, or Webpack 5 (incl. Rspack / Rsbuild / CRA / Vue CLI).
+3. **One coding-agent CLI installed and logged in.** Hover spawns whichever you have on `PATH`; it doesn't bundle an LLM and doesn't take API keys.
+
+::: tip Don't have an agent CLI yet?
+- **Claude Code** — `npm install -g @anthropic-ai/claude-code`, then `claude login`. Uses your Claude Pro / Max subscription.
+- **OpenAI Codex** — `npm install -g @openai/codex`, then `codex login`. Uses your ChatGPT plan.
+
+Either one works. You can switch between agents from the widget header any time.
+:::
+
+No `.env` file, no `.npmrc` for npm auth — every Hover package is public on npmjs.com.
+
+## Option A — the zero-config CLI (recommended)
+
+Run inside your project root:
 
 ```bash
 npx @hover-dev/cli add
@@ -8,42 +29,35 @@ npx @hover-dev/cli add
 
 That single command:
 
-1. Detects your bundler (Vite / Astro / Nuxt / Next / Webpack) from `package.json`.
-2. Sniffs your lockfile to pick the package manager (pnpm / yarn / bun / npm).
-3. Installs the right Hover package (`vite-plugin-hover`, `@hover-dev/astro`, `@hover-dev/nuxt`, `@hover-dev/next`, or `webpack-plugin-hover`).
-4. Uses [magicast](https://github.com/unjs/magicast) to AST-mutate your bundler config so the plugin is registered.
-5. Is **idempotent** — running it twice on the same project no-ops the second time.
+1. Reads `package.json` and detects your bundler (Vite / Astro / Nuxt / Next / Webpack).
+2. Sniffs your lockfile to pick the right package manager (pnpm / yarn / bun / npm).
+3. Installs the matching Hover package as a **dev dependency** (`vite-plugin-hover`, `@hover-dev/astro`, `@hover-dev/nuxt`, `@hover-dev/next`, or `webpack-plugin-hover`).
+4. Uses [magicast](https://github.com/unjs/magicast) to **AST-mutate your bundler config** so the plugin is registered.
+5. Is **idempotent** — running it twice is a no-op.
 
-Force a specific framework with a flag, or preview with `--dry-run`:
+### Preview without changing anything
+
+```bash
+npx @hover-dev/cli add --dry-run
+```
+
+Prints what would be installed + which file would be edited, then exits clean. Useful when you're not sure what the CLI will pick.
+
+### Force a specific bundler
+
+If auto-detect picks the wrong one (rare, but happens in projects with multiple bundlers in `devDependencies`):
 
 ```bash
 npx @hover-dev/cli add --vite
-npx @hover-dev/cli add --next --dry-run
+npx @hover-dev/cli add --astro
+npx @hover-dev/cli add --nuxt
+npx @hover-dev/cli add --next
+npx @hover-dev/cli add --webpack
 ```
 
-## Monorepos (turbo / pnpm-workspace / yarn workspaces)
+## Option B — manual install
 
-Run the CLI from the repo root. It enumerates workspaces and:
-
-- **One match** — installs into that workspace automatically.
-- **Multiple matches in a TTY** — shows an interactive picker (`↑/↓`, Enter).
-- **Multiple matches in CI** — lists candidates and asks you to re-run with `--cwd apps/web`.
-
-The package manager is detected by walking up to find a lockfile, so a single root `pnpm-lock.yaml` is enough — sub-workspaces don't need their own.
-
-```bash
-# From the repo root — picker appears if more than one app matches
-npx @hover-dev/cli add
-
-# Or target a specific workspace directly
-npx @hover-dev/cli add --cwd apps/web
-```
-
-See the [CLI reference](/reference/cli) for the full monorepo behaviour.
-
-## Manual install
-
-If you'd rather not run the CLI, here's the per-bundler shape.
+Skip the CLI entirely. You'll do exactly what the CLI does, by hand.
 
 ### Vite
 
@@ -59,13 +73,15 @@ import hover from 'vite-plugin-hover';
 
 export default defineConfig({
   plugins: [
-    react(),
+    react(),                     // or vue() / svelte() / solid() / qwik()…
     hover({ autoLaunchChrome: true }),
   ],
 });
 ```
 
-### Astro
+### Astro 5+
+
+Astro's HTML pipeline bypasses Vite's `transformIndexHtml`, so it needs its own integration shim.
 
 ```bash
 pnpm add -D @hover-dev/astro
@@ -81,7 +97,9 @@ export default defineConfig({
 });
 ```
 
-### Nuxt
+### Nuxt 4+
+
+Nuxt renders HTML through Nitro (not Vite), so it needs a Nitro module.
 
 ```bash
 pnpm add -D @hover-dev/nuxt
@@ -95,27 +113,40 @@ export default defineNuxtConfig({
 });
 ```
 
-### Next.js (Turbopack)
+### Next.js (15 / 16)
 
-Next 16+ ships Turbopack as the default bundler. Turbopack does not load webpack plugins, so use `@hover-dev/next` instead of `webpack-plugin-hover`.
+Three pieces because Next splits its dev-server lifecycle. Verified end-to-end on **Next 15 + webpack**, **Next 15 + Turbopack**, **Next 16 + Turbopack**, **Next 16 + webpack** — with any of `next.config.{ts,mjs,js}`.
 
 ```bash
 pnpm add -D @hover-dev/next
 ```
 
+**1. Wrap your Next config** — adds Hover's options-to-env serialisation. Pure config wrapper, no side effects, safe to run at `next build` too.
+
 ```ts
 // next.config.ts
 import { withHover } from '@hover-dev/next';
+import type { NextConfig } from 'next';
 
-export default withHover({
+const nextConfig: NextConfig = {
   // your existing Next config
-}, { autoLaunchChrome: true });
+};
+
+export default withHover(nextConfig, { autoLaunchChrome: true });
 ```
+
+**2. Register the runtime hook** — Next's blessed init point. Fires on `next dev` / `next start`, NOT on `next build` (so no orphan service from CI).
 
 ```ts
-// instrumentation.ts
-export { register } from '@hover-dev/next/instrumentation';
+// instrumentation.ts        ← project root, OR under src/ if your app uses src/
+import { register as registerHover } from '@hover-dev/next/instrumentation';
+
+export async function register() {
+  await registerHover();
+}
 ```
+
+**3. Render the widget script** — add `<HoverScript />` to your root layout. The CLI prints this exact snippet for you to paste because AST-editing user JSX is fragile.
 
 ```tsx
 // app/layout.tsx
@@ -133,7 +164,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-### Webpack 5 (also Rspack / CRA)
+::: tip Async server component
+`HoverScript` is an async Server Component (React 19 / App Router renders these natively). It's a no-op in production builds — `process.env.NODE_ENV !== 'development'` returns `null` so nothing ships to your end users.
+:::
+
+### Webpack 5 (including Rspack / Rsbuild / CRA / Vue CLI)
 
 ```bash
 pnpm add -D webpack-plugin-hover
@@ -144,18 +179,135 @@ pnpm add -D webpack-plugin-hover
 const Hover = require('webpack-plugin-hover');
 
 module.exports = {
+  // ... your config
   plugins: [
     new Hover({ autoLaunchChrome: true }),
   ],
 };
 ```
 
+::: warning Next.js with `--webpack`?
+If you're on Next and want the webpack code path (`next dev --webpack`), still use `@hover-dev/next`, not `webpack-plugin-hover`. `@hover-dev/next` covers both bundlers; the webpack plugin only covers vanilla webpack / Rspack setups.
+:::
+
+## Monorepos (turbo / pnpm-workspace / yarn workspaces)
+
+Hover's CLI knows about workspace monorepos. **Run from the repo root**, not from inside `apps/*`:
+
+```bash
+npx @hover-dev/cli add
+```
+
+The CLI:
+
+- Detects the monorepo from `pnpm-workspace.yaml`, the `workspaces` field in `package.json`, or `turbo.json`.
+- Enumerates declared workspaces (`apps/*`, `packages/*`, explicit paths).
+- Looks for a supported bundler in each.
+
+What happens next depends on how many apps matched:
+
+| Match count | Behaviour |
+|---|---|
+| **0** | "No supported bundler" — you're at a monorepo root with only tooling; point the CLI at an app: `--cwd apps/web` |
+| **1** | Installs into that workspace automatically. Tells you which one it picked. |
+| **2+** in a TTY | Interactive picker (↑/↓ or `j`/`k` to move, Enter to select, Esc to cancel) |
+| **2+** in CI / piped | Lists candidates and exits 1, asks you to re-run with `--cwd <path>` |
+
+Skip auto-detect entirely and target a specific workspace:
+
+```bash
+npx @hover-dev/cli add --cwd apps/web
+```
+
+Path is absolute or relative to where you ran the command.
+
+::: tip Single root lockfile
+Sub-workspaces under a turbo / pnpm-workspace setup almost never carry their own lockfile. Hover's CLI walks up the directory tree until it finds one, so a single root `pnpm-lock.yaml` correctly picks pnpm — not a fallback to npm.
+:::
+
+::: tip Run dev however you already run it
+After install, `pnpm dev` from the monorepo root (`turbo run dev`), `pnpm --filter web dev`, or `cd apps/web && pnpm dev` all behave the same — Next sees its app, the Hover service boots once per app, the widget injects into the served HTML. There's nothing turbo-specific to configure.
+:::
+
+A worked, committed example lives at [`examples/turbo-monorepo/`](https://github.com/Hyperyond/Hover/tree/main/examples/turbo-monorepo) — turbo + pnpm-workspace + two Next.js 15 apps + `next.config.ts`, exactly the shape that surfaced the v0.7.3 / v0.7.4 install bugs.
+
+## Verify the install worked
+
+Start your dev server the way you already do:
+
+```bash
+pnpm dev          # or npm run dev / yarn dev / bun dev / turbo run dev
+```
+
+You should see two new log lines:
+
+```
+[@hover-dev/<bundler>] service ready · ws://127.0.0.1:51789 · agent=claude model=sonnet
+[hover] launching debug Chrome on :9222              # only with autoLaunchChrome
+```
+
+If those are present, open your dev URL. The floating ✨ launcher appears in the bottom-right corner of every page. Click it; the panel slides up. **That's it — install is done.**
+
+What the ✨ colour tells you on first click:
+
+| Colour | Means | What to do |
+|---|---|---|
+| 🔵 Blue | You're already in a debug Chrome. | Click and start chatting. |
+| 🟠 Amber | No debug Chrome yet. | Click; the widget spawns one (isolated profile under `<tmpdir>/hover-chrome`, port 9222), navigates it to your dev URL. Switch over. |
+| ⚪ Gray | A debug Chrome is running but you're not in it. | Click to bring the right window to the front. |
+
+> The debug Chrome is **completely separate** from your everyday browser. Different profile dir, no shared cookies, no shared extensions. Hover never touches your normal Chrome session.
+
+Skip ahead to [First session](./first-session) to send your first prompt.
+
+## Troubleshooting
+
+### `Couldn't detect a supported bundler in package.json`
+
+You ran the CLI from a directory whose `package.json` declares no bundler dep. Either:
+
+- You're at a monorepo root and the actual app is in `apps/web` — re-run with `--cwd apps/web`, or just run from the monorepo root (Hover will detect the workspaces).
+- Your project's bundler isn't in our list — open an issue, or pass an explicit `--vite` / `--next` / etc. if you're using one of the supported bundlers but have an unusual dep graph.
+
+### `EADDRINUSE: address already in use :::5173` (or 5183, etc.)
+
+Something else is on the port. Most often: a prior `next dev` / `vite` that didn't shut down cleanly. Kill it:
+
+```bash
+lsof -i :5173 -t | xargs kill         # replace 5173 with your dev port
+```
+
+If `lsof` shows a stale Hover service on 51789–51798 too, kill those: `lsof -i :51789 -t | xargs kill`.
+
+### Widget doesn't appear in the page
+
+Open browser devtools → Console. If you see a WebSocket connection error to `ws://127.0.0.1:51789`, the Hover service didn't boot. Common causes:
+
+- The bundler integration wasn't registered. Re-run `npx @hover-dev/cli add --dry-run` to confirm the config has the plugin / integration.
+- You ran `pnpm build` instead of `pnpm dev` — Hover is **deliberately a no-op in production builds**.
+- For Next.js: forgot to add `<HoverScript />` to `app/layout.tsx`. The CLI prints this snippet at the end of `add`; if you missed it, see [Option B → Next.js](#next-js-15-16).
+
+### Next 15 + `next.config.ts` previously errored with `ERR_PACKAGE_PATH_NOT_EXPORTED`
+
+Fixed in v0.7.3 (dual ESM + CJS build). Make sure you're on `@hover-dev/next@>=0.7.3`.
+
+### Next 15 instrumentation errored with `Cannot find module './register-node.js'`
+
+Fixed in v0.7.4 (package-subpath specifier + opaque dynamic import that webpack can't stub). Upgrade to `@hover-dev/next@>=0.7.4`.
+
 ## What gets installed
+
+Whichever bundler shim you pick pulls these as transitive deps:
 
 | Package | Purpose |
 |---|---|
-| `@hover-dev/core` | Node service — agent invocation, Playwright CDP preflight, WebSocket bridge. |
-| `@hover-dev/widget-bootstrap` | Shared widget assets — every bundler plugin emits a byte-identical widget. |
-| `vite-plugin-hover` *(or your bundler's shim)* | Wires the service + widget into your dev server. |
+| `@hover-dev/core` | Node service — agent invocation, Playwright CDP preflight, WebSocket bridge between the widget and the agent. |
+| `@hover-dev/widget-bootstrap` | Shared widget assets — every bundler emits a byte-identical widget bundle so behaviour stays uniform across Vite / Astro / Nuxt / Next / Webpack. |
+| `vite-plugin-hover` *(or your bundler's shim — `@hover-dev/astro`, `@hover-dev/nuxt`, `@hover-dev/next`, `webpack-plugin-hover`)* | Wires the service + widget into your dev server. |
 
-See [Plugin options](/reference/plugin-options) for the full configuration surface.
+Optional extras:
+
+- `@hover-dev/security` — adds [Security testing mode](/features/security) (MITM proxy + replay) to the same widget.
+- `@hover-dev/cli` — what `npx @hover-dev/cli add` runs. You don't need to install it explicitly; `npx` runs the latest published version on demand.
+
+See [Plugin options](/reference/plugin-options) for the full configuration surface (port, agent, model, budget, source-attribution, …).
