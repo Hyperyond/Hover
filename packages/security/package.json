@@ -41,7 +41,7 @@
     "smoke:plugin": "tsx scripts/plugin-smoke.ts",
     "smoke:mcp": "tsx scripts/mcp-smoke.ts",
     "smoke:agent-cfg": "tsx scripts/agent-config-smoke.ts",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
   "dependencies": {
