@@ -53,7 +53,7 @@ import type { InvokeEvent } from './agents/types.js';
 import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
 import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
 import { listSkills } from './skills/writeSkill.js';
-import { send, type ClientMessage } from './service/types.js';
+import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
 import {
   handleCheckCdp,
@@ -451,10 +451,20 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION },
     });
     // Send the agent list as a follow-up event so the widget can render the
-    // dropdown immediately on connect / reconnect (e.g. after HMR).
-    void getAvailability(false).then(available => {
-      send(ws, { type: 'agents', payload: { current: currentAgentId, available } });
-    });
+    // dropdown immediately on connect / reconnect (e.g. after HMR). The
+    // socket may have closed between scheduling and firing, so guard the
+    // send and catch any availability-probe rejection — otherwise it
+    // surfaces as an unhandled rejection in strict-mode Node.
+    void getAvailability(false)
+      .then(available => {
+        sendIfOpen(ws, {
+          type: 'agents',
+          payload: { current: currentAgentId, available },
+        });
+      })
+      .catch(err => {
+        console.warn('[hover] agents broadcast failed:', err);
+      });
     // Send the mode catalogue too, so the widget can render the mode
     // toggle immediately. Empty list when no plugins are loaded.
     broadcastModes(ws);

@@ -90,6 +90,12 @@ export class HoverPlugin {
         : this.options.enabled;
     const enabled = customEnabled ?? mode === 'development';
     if (!enabled) return;
+    // Hard floor: regardless of what the custom `enabled` callback returned,
+    // never inject the widget into a production build's HTML. The widget
+    // expects a running local WS service (boot is deferred to `watchRun`,
+    // so prod builds never start one) and shipping a dev-only client to
+    // end users is always wrong.
+    if (mode !== 'development') return;
 
     const requestedPort = this.options.port ?? 51789;
     const chromeDebugPort = this.options.chromeDebugPort ?? 9222;

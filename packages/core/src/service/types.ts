@@ -10,7 +10,7 @@
  * one place.
  */
 
-import type { WebSocket } from 'ws';
+import { WebSocket } from 'ws';
 import type { SkillStep } from '../skills/writeSkill.js';
 import type { SpecAssertion } from '../specs/writeSpec.js';
 
@@ -42,4 +42,18 @@ export interface ClientMessage {
 
 export function send(ws: WebSocket, message: { type: string; payload?: unknown }): void {
   ws.send(JSON.stringify(message));
+}
+
+/** Send a message only if the socket is still open. Use this from delayed
+ *  callbacks (promise `.then`, timers) where the client may have disconnected
+ *  between scheduling and firing — calling `ws.send` on a closed socket
+ *  is a silent no-op for some states and throws for others, so a single
+ *  guarded helper makes the intent obvious and prevents surprises. */
+export function sendIfOpen(
+  ws: WebSocket,
+  message: { type: string; payload?: unknown },
+): boolean {
+  if (ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(message));
+  return true;
 }
