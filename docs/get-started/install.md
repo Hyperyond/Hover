@@ -59,6 +59,12 @@ npx @hover-dev/cli add --webpack
 
 Skip the CLI entirely. You'll do exactly what the CLI does, by hand.
 
+::: tip About `autoLaunchChrome: true` in the snippets below
+`autoLaunchChrome` spawns Hover's **isolated debug Chrome** at dev-server boot — `--remote-debugging-port=9222` with a clean profile under `<tmpdir>/hover-chrome`. **Not your everyday browser.** Hover never relaunches or touches your normal Chrome session.
+
+Leave it `false` (the default) and the first ✨ widget click will prompt you to launch on demand instead. See [Plugin options → autoLaunchChrome](/reference/plugin-options#about-the-debug-chrome-faq).
+:::
+
 ### Vite
 
 ```bash
@@ -239,12 +245,19 @@ Start your dev server the way you already do:
 pnpm dev          # or npm run dev / yarn dev / bun dev / turbo run dev
 ```
 
-You should see two new log lines:
+You should see one or two new log lines from Hover. The first one **always** appears:
 
 ```
 [@hover-dev/<bundler>] service ready · ws://127.0.0.1:51789 · agent=claude model=sonnet
-[hover] launching debug Chrome on :9222              # only with autoLaunchChrome
 ```
+
+If you set `autoLaunchChrome: true`, a second line appears as Hover pre-warms the isolated debug Chrome:
+
+```
+[hover] launching debug Chrome on :9222
+```
+
+> Hover's debug Chrome is a **separate, temp-profile Chrome** — not your everyday browser. Different cookies, different sessions, no shared extensions. If 9222 already has a debug Chrome (e.g. from a previous `pnpm dev` whose window you didn't close), Hover reuses it and skips the launch, which is why you'll only see the launch log once per Chrome lifetime.
 
 If those are present, open your dev URL. The floating ✨ launcher appears in the bottom-right corner of every page. Click it; the panel slides up. **That's it — install is done.**
 

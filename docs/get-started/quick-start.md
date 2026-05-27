@@ -53,7 +53,7 @@ Hover starts a local service on `127.0.0.1:51789` and injects a floating widget 
 ::: tip First-run debug Chrome
 On first ✨ click, the widget prompts you to launch an **isolated debug Chrome** on port 9222 (separate from your everyday browser — a clean profile under `<tmpdir>/hover-chrome`). Click the prompt and a debug Chrome opens, navigated to your dev URL. Subsequent runs reuse it.
 
-You can opt into auto-launch on `pnpm dev` by passing `autoLaunchChrome: true` to the plugin. See [Plugin options](/reference/plugin-options).
+Want it to pre-warm at dev-server boot? Pass `autoLaunchChrome: true` to the plugin. **Note:** this still launches the *isolated* debug Chrome — not your everyday browser. Hover never touches your normal Chrome session. See [Plugin options](/reference/plugin-options#about-the-debug-chrome-faq).
 :::
 
 ## Send your first prompt

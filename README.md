@@ -401,7 +401,7 @@ Open your dev URL in **any Chrome** (your everyday browser is fine for this firs
 - 🟠 **Amber** — no debug Chrome yet. Click the launcher; Hover spawns an **isolated debug Chrome** on port 9222 (clean profile under `<tmpdir>/hover-chrome`, completely separate from your everyday browsing), navigated to your dev URL. Switch over and click ✨ again.
 - ⚪ **Gray** — a debug Chrome is running, but you're not in it right now. Click to bring it to the front.
 
-> **Want Hover to pre-warm the debug Chrome at `pnpm dev`?** Pass `autoLaunchChrome: true` to the plugin (see [Plugin options](#plugin-options)). Prefer to start the debug Chrome by hand? `pnpm exec hover-chrome` (or `npx hover-chrome`) any time.
+> **Want Hover to pre-warm the debug Chrome at `pnpm dev`?** Pass `autoLaunchChrome: true` to the plugin (see [Plugin options](#plugin-options)). This still launches the **isolated** debug Chrome on `:9222` — never your everyday browser. Prefer to start it by hand? `pnpm exec hover-chrome` (or `npx hover-chrome`) any time.
 
 Type — or hold 🎙 and speak — your first prompt:
 

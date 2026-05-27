@@ -296,7 +296,7 @@ pnpm dev          # 或者 `npm run dev` / `yarn dev` / `bun dev`
 
 Agent 通过 CDP 操作 debug Chrome，每一步都有叙述，结束时渲染 Result + Findings 卡。点 **Save as Spec**，验证过的流程就落盘成 `__vibe_tests__/<slug>.spec.ts` —— 一个普通的 Playwright 测试，CI 跑它不需要 Hover、不需要 agent、不需要 API key。
 
-> 想让 Hover 在 `pnpm dev` 时就预先把 debug Chrome 启好？给插件传 `autoLaunchChrome: true`，详见 [插件选项](#插件选项)。
+> 想让 Hover 在 `pnpm dev` 时就预先把 debug Chrome 启好？给插件传 `autoLaunchChrome: true`，详见 [插件选项](#插件选项)。**它启的是 `:9222` 上的隔离 debug Chrome，永远不会动你的日常浏览器**。也可以随时手动启动：`pnpm exec hover-chrome`（或 `npx hover-chrome`）。
 
 想给 Hover 自己开发（不是用它）？看 [Development](https://hover-docs.vercel.app/development/) 章节。
 
