@@ -21,6 +21,14 @@ const ROOT = resolve(HERE, '..');
 const PACKAGES = [
   { name: '@hover-dev/core', dir: join(ROOT, 'packages/core') },
   { name: '@hover-dev/widget-bootstrap', dir: join(ROOT, 'packages/widget-bootstrap') },
+  // Security ships as a `main: dist/...` package because examples that
+  // import it (basic-app's vite.config.ts) typecheck against the
+  // published .d.ts, not the source .ts. A fresh-clone workflow that
+  // runs `pnpm install` + `pnpm typecheck` would otherwise fail with
+  // "Cannot find module '@hover-dev/security' or its corresponding
+  // type declarations" — surfaced when this combination landed in CI's
+  // publish.yml release gate for v0.7.0.
+  { name: '@hover-dev/security', dir: join(ROOT, 'packages/security') },
 ];
 
 function newestMtime(dir) {
