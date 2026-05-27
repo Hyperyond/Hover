@@ -1,4 +1,52 @@
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vitepress';
+
+/**
+ * Resolve the version label that goes into the top-right nav dropdown.
+ *
+ * Source priority (first hit wins):
+ *   1. `HOVER_DOCS_VERSION` env var — explicit override for one-off builds.
+ *   2. Latest annotated git tag — `git describe --tags --abbrev=0`. Works in
+ *      Vercel's default full-clone build environment. Strips the leading `v`.
+ *   3. `npm view @hover-dev/core version` — registry fallback. Hits network
+ *      but build-time only; the resolved string is baked into the static
+ *      site, no runtime cost. Useful if the build is run from a shallow
+ *      checkout where tags aren't present.
+ *   4. The string 'edge' — last-resort sentinel so a build never fails
+ *      just because the version couldn't be resolved.
+ *
+ * Resolution is synchronous + side-effect-free: VitePress evaluates this
+ * config once per build, and the resulting string is interpolated into the
+ * generated HTML. No runtime fetch.
+ */
+function resolveVersion(): string {
+  if (process.env.HOVER_DOCS_VERSION) return process.env.HOVER_DOCS_VERSION;
+  try {
+    const tag = execSync('git describe --tags --abbrev=0', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+    if (tag.startsWith('v')) return tag.slice(1);
+    if (tag) return tag;
+  } catch {
+    /* fall through to npm registry */
+  }
+  try {
+    const v = execSync('npm view @hover-dev/core version', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000,
+    })
+      .toString()
+      .trim();
+    if (v) return v;
+  } catch {
+    /* fall through to sentinel */
+  }
+  return 'edge';
+}
+
+const HOVER_VERSION = resolveVersion();
 
 // VitePress config for Hover's user-facing docs site.
 //
@@ -54,7 +102,7 @@ export default defineConfig({
       { text: 'Reference', link: '/reference/' },
       { text: 'Development', link: '/development/' },
       {
-        text: 'v0.6.0',
+        text: `v${HOVER_VERSION}`,
         items: [
           { text: 'Roadmap', link: '/reference/roadmap' },
           { text: 'Changelog', link: 'https://github.com/Hyperyond/Hover/releases' },
