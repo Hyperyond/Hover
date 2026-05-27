@@ -31,6 +31,8 @@
 
 在你的 dev 页面打开浮动聊天框，用中文（或者你喜欢的任何语言）描述要验证什么，看着 AI 真实地操作你的应用。一遍跑通后，点 **Save as spec** —— Hover 会写出一份标准的 `@playwright/test` 文件，CI 跑它的时候**完全不需要 AI 在场**。
 
+**v0.7 新功能：** 装上 `@hover-dev/security`，同一个 widget 多出一个 **Security testing 模式** —— agent 检查捕获到的 API 调用并做 mutation 重放，探测 IDOR、越权、参数篡改、PII 泄漏。发现的问题同样落盘成 Playwright 测试。详见下文 [Security testing](#security-testing)。
+
 **无需 API key，不按 token 计费。** Hover 调用你 `PATH` 上已经装好的 coding-agent CLI（claude / codex），跑在你已经付费的订阅里。
 
 ```

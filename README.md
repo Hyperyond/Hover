@@ -32,6 +32,8 @@
 
 Open the floating chat in your dev page, describe what you want to verify in plain English, watch AI operate your app for real. When the run is clean, click **Save as spec** — Hover writes a standard `@playwright/test` file you can run in CI without an agent in the loop, forever.
 
+**New in v0.7:** add `@hover-dev/security` and the same widget grows a **Security testing mode** — the agent inspects captured API calls and replays them with mutations to find IDOR, authz bypass, parameter tampering, and PII leakage. Findings crystallise into Playwright specs too. See [Security testing](#security-testing) below.
+
 **No API key, no per-token billing.** Hover spawns the coding-agent CLI already on your `PATH` (claude / codex) and rides on the subscription you already pay for.
 
 ```
