@@ -62,13 +62,12 @@ export async function handleSaveArtifact<TWriteResult extends { slug: string; pa
     return;
   }
 
+  let result: TWriteResult;
   try {
-    const result = await cfg.write({
+    result = await cfg.write({
       devRoot, name, description, steps, assertions,
       payload: msg.payload!, overwrite,
     });
-    send(ws, { type: cfg.savedType, payload: { name: result.slug, path: result.path } });
-    if (cfg.onSaved) await cfg.onSaved(ws, devRoot);
   } catch (err) {
     if (err instanceof cfg.ExistsError) {
       send(ws, { type: cfg.existsType, payload: { slug: err.slug, existingPath: err.path } });
@@ -76,6 +75,18 @@ export async function handleSaveArtifact<TWriteResult extends { slug: string; pa
     }
     const message = err instanceof Error ? err.message : String(err);
     send(ws, { type: 'error', payload: { message: `${cfg.requestName} failed: ${message}` } });
+    return;
+  }
+  send(ws, { type: cfg.savedType, payload: { name: result.slug, path: result.path } });
+  // The artifact is already on disk; an onSaved failure (e.g. listSkills
+  // re-scan) shouldn't surface as if the save itself failed — log and move on.
+  if (cfg.onSaved) {
+    try {
+      await cfg.onSaved(ws, devRoot);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[hover] ${cfg.requestName} onSaved failed: ${message}`);
+    }
   }
 }
 

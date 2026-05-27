@@ -107,23 +107,35 @@ export async function raiseChromeWindow(pid: number): Promise<void> {
 function runCapture(cmd: string, args: string[]): Promise<string | null> {
   return new Promise(resolve => {
     let out = '';
+    let settled = false;
+    const finish = (v: string | null): void => {
+      if (settled) return;
+      settled = true;
+      resolve(v);
+    };
     const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'] });
     child.stdout.on('data', chunk => {
       out += chunk.toString();
     });
-    child.on('error', () => resolve(null));
-    child.on('close', code => resolve(code === 0 ? out : null));
+    child.on('error', () => finish(null));
+    child.on('close', code => finish(code === 0 ? out : null));
   });
 }
 
 function runDetached(cmd: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const child = spawn(cmd, args, { stdio: 'ignore' });
-    child.on('error', reject);
-    child.on('close', code => {
+    child.on('error', err => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
+    child.on('close', () => {
+      if (settled) return;
+      settled = true;
       // Don't treat non-zero as fatal — caller already wraps in try/catch.
       resolve();
-      void code;
     });
   });
 }

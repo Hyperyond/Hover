@@ -61,16 +61,33 @@ const seededId = list1.flows[0].id;
 const full = await api<{ id: string; request: { url: string } }>(`/flows/${seededId}`);
 console.log(`[mcp-smoke] ✓ GET /flows/:id → ${full.request.url}`);
 
-// Replay against a real public URL so the test is end-to-end honest
+// Same-origin guard check: source flow is on api.example.com; replay
+// without allowCrossOrigin to example.com must be refused.
+const refusedRes = await fetch(`http://127.0.0.1:${control.port}/flows/${seededId}/replay`, {
+  method: 'POST',
+  headers: { authorization: `Bearer ${control.token}`, 'content-type': 'application/json' },
+  body: JSON.stringify({ url: 'https://example.com/' }),
+});
+const refusedBody = (await refusedRes.json()) as { error?: string };
+if (refusedRes.status !== 404 || !refusedBody.error?.includes('cross-origin')) {
+  throw new Error(`expected cross-origin refusal, got ${refusedRes.status}: ${JSON.stringify(refusedBody)}`);
+}
+console.log(`[mcp-smoke] ✓ POST /flows/:id/replay (cross-origin) → refused as expected`);
+
+// Now with allowCrossOrigin: true — should succeed against the public URL.
 const replayed = await api<{ replayId: string; flow: { response: { statusCode: number } } }>(
   `/flows/${seededId}/replay`,
   {
     method: 'POST',
-    body: JSON.stringify({ url: 'https://example.com/', headers: { authorization: null } }),
+    body: JSON.stringify({
+      url: 'https://example.com/',
+      headers: { authorization: null },
+      allowCrossOrigin: true,
+    }),
   },
 );
 console.log(
-  `[mcp-smoke] ✓ POST /flows/:id/replay → replayId=${replayed.replayId} status=${replayed.flow.response?.statusCode}`,
+  `[mcp-smoke] ✓ POST /flows/:id/replay (allowCrossOrigin) → replayId=${replayed.replayId} status=${replayed.flow.response?.statusCode}`,
 );
 
 const cleared = await api<{ cleared: number }>('/flows', { method: 'DELETE' });

@@ -20,6 +20,25 @@ export interface MutateOptions {
   headers?: Record<string, string | null>;
   /** Replace the request body entirely with this UTF-8 string. */
   bodyText?: string;
+  /** Bypass the same-origin guard. By default replay refuses to hit a
+   *  target whose origin differs from the source flow's origin — this
+   *  prevents an agent from accidentally probing a third-party API
+   *  (Stripe, Sentry, …) that the dev app happens to call. Pass true
+   *  only when the user explicitly authorises cross-origin replay. */
+  allowCrossOrigin?: boolean;
+}
+
+/** Default per-replay timeout. Most authz probes return in <1s; 30s is
+ *  generous for "the server is slow" without letting a hung target
+ *  block the agent forever. */
+const REPLAY_TIMEOUT_MS = 30_000;
+
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
 }
 
 function mergeHeaders(
@@ -62,6 +81,22 @@ export async function replayFlow(
   const bodyText = mutate?.bodyText ?? source.request.bodyText ?? undefined;
   const hasBody = bodyText !== undefined && method !== 'GET' && method !== 'HEAD';
 
+  // Same-origin guard: an agent should not, by default, probe a third-
+  // party API (Stripe, Sentry, analytics) the dev app happens to call.
+  // The mutated URL must share an origin with the source flow's URL,
+  // unless the caller explicitly opts in with `allowCrossOrigin`.
+  if (!mutate?.allowCrossOrigin) {
+    const sourceOrigin = originOf(source.request.url);
+    const targetOrigin = originOf(url);
+    if (sourceOrigin && targetOrigin && sourceOrigin !== targetOrigin) {
+      return {
+        error:
+          `replay refused: cross-origin (source ${sourceOrigin}, target ${targetOrigin}). ` +
+          `Pass allowCrossOrigin: true if you own / are authorised to test the target.`,
+      };
+    }
+  }
+
   const newFlowReq: FlowRequest = {
     method,
     url,
@@ -78,6 +113,7 @@ export async function replayFlow(
       method,
       headers,
       body: hasBody ? bodyText : undefined,
+      signal: AbortSignal.timeout(REPLAY_TIMEOUT_MS),
     });
     const resText = await res.text();
     const resHeaders: Record<string, string> = {};

@@ -15,15 +15,16 @@
  *   - chromeFlags routing the secured Chrome (port 9333, separate profile)
  *     through a local mockttp proxy so HTTPS traffic is decrypted into a
  *     FlowStore that the widget renders as a Network panel
- *   - `hover:mode:activate` hook that boots mockttp and broadcasts
- *     `security:flow:added` / `security:flow:updated` events
+ *   - mcpServers exposing list_flows / get_flow / replay_flow /
+ *     clear_flows to the agent (see src/mcp/server.ts)
+ *   - systemPromptAdditions teaching the agent the security workflow,
+ *     scope (authz / frontend / compliance), and explicit forbidden
+ *     attack classes (SQLi / SSRF / RCE / fuzzing loops)
+ *   - `hover:mode:activate` hook that boots mockttp + the control plane
+ *     and broadcasts `security:flow:added` / `security:flow:updated`
  *   - `hover:mode:deactivate` / `hover:service:shutdown` hooks that stop
- *     the proxy cleanly (no orphan listeners across reloads)
- *
- * What it does NOT do yet:
- *   - register an MCP server giving the agent replay/mutate tools — that
- *     lives in a follow-up step.
- *   - emit Playwright spec assertions on the captured flows.
+ *     the proxy + control plane cleanly (no orphan listeners or sockets
+ *     across reloads)
  */
 import {
   defineHoverPlugin,

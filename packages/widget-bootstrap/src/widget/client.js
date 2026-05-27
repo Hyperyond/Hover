@@ -164,6 +164,18 @@
   });
   window.addEventListener('pagehide', flushSaveState);
 
+  // Release voice / mic resources when the page goes away so HMR cycles and
+  // tab closes don't leave orphan setIntervals or a live MediaStream that
+  // keeps the browser's "this tab is using your microphone" indicator on.
+  // Refs (speaker, recognizer, stopMicTimer) are declared later in this
+  // IIFE; the listener fires post-init so resolution is safe.
+  const releaseVoiceResources = () => {
+    try { if (typeof stopMicTimer === 'function') stopMicTimer(); } catch {}
+    try { if (recognizer && typeof recognizer.stop === 'function') recognizer.stop(); } catch {}
+    try { if (speaker && typeof speaker.cancel === 'function') speaker.cancel(); } catch {}
+  };
+  window.addEventListener('pagehide', releaseVoiceResources);
+
   const loadState = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -1120,12 +1132,16 @@
         closeMenu();
       }
     };
+    let attachTimer = null;
     function openMenu() {
       menu.hidden = false;
       trigger.setAttribute('aria-expanded', 'true');
       // Listeners attached on next tick so the click that opened the
-      // menu doesn't immediately bubble to closeOnOutside.
-      setTimeout(() => {
+      // menu doesn't immediately bubble to closeOnOutside. Track the
+      // pending timer so a closeMenu() inside the same tick cancels it
+      // — otherwise the listeners attach after close and leak.
+      attachTimer = setTimeout(() => {
+        attachTimer = null;
         document.addEventListener('click', closeOnOutside, { capture: true });
         root.addEventListener('keydown', closeOnEsc, { capture: true });
       }, 0);
@@ -1133,6 +1149,10 @@
     function closeMenu() {
       menu.hidden = true;
       trigger.setAttribute('aria-expanded', 'false');
+      if (attachTimer != null) {
+        clearTimeout(attachTimer);
+        attachTimer = null;
+      }
       document.removeEventListener('click', closeOnOutside, { capture: true });
       root.removeEventListener('keydown', closeOnEsc, { capture: true });
     }
@@ -3080,6 +3100,7 @@
 
   let ws = null;
   let backoff = 500;
+  let reconnectTimer = null;
 
   const sendLabel = $('.send .send-label');
   const setRunning = (r) => {
@@ -3110,7 +3131,19 @@
     if (changed) renderAll();
   };
 
+  const detachWs = (sock) => {
+    if (!sock) return;
+    sock.onopen = null;
+    sock.onclose = null;
+    sock.onerror = null;
+    sock.onmessage = null;
+  };
+
   const connect = () => {
+    // Unbind the previous socket's handlers before swapping the reference,
+    // so a late 'close' on the old socket can't schedule a second reconnect
+    // or mutate UI state for the new connection.
+    detachWs(ws);
     setStatus('connecting…', 'disconnected');
     try {
       ws = new WebSocket(WS_URL);
@@ -3118,7 +3151,9 @@
       scheduleReconnect();
       return;
     }
-    ws.addEventListener('open', () => {
+    const sock = ws;
+    sock.onopen = () => {
+      if (sock !== ws) return;
       backoff = 500;
       setStatus('connected', 'connected');
       sendBtn.disabled = running;
@@ -3130,17 +3165,18 @@
       // widget, kick off the voiceschanged race so the first utterance
       // doesn't trip into a wrong-language voice.
       primeVoices();
-    });
-    ws.addEventListener('close', () => {
+    };
+    sock.onclose = () => {
+      if (sock !== ws) return;
       setStatus('disconnected', 'disconnected');
       sendBtn.disabled = true;
       textarea.disabled = true;
       scheduleReconnect();
-    });
-    ws.addEventListener('error', () => {
-      try { ws.close(); } catch {}
-    });
-    ws.addEventListener('message', (e) => {
+    };
+    sock.onerror = () => {
+      try { sock.close(); } catch {}
+    };
+    sock.onmessage = (e) => {
       let msg;
       try { msg = JSON.parse(e.data); } catch { return; }
       if (msg.type === 'event' && msg.payload) {
@@ -3220,11 +3256,15 @@
           upsertFlow(msg.payload);
         }
       }
-    });
+    };
   };
 
   const scheduleReconnect = () => {
-    setTimeout(connect, backoff);
+    if (reconnectTimer != null) return; // already scheduled
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, backoff);
     backoff = Math.min(backoff * 1.7, 10000);
   };
 

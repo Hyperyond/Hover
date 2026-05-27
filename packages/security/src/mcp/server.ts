@@ -169,7 +169,7 @@ server.registerTool(
   'replay_flow',
   {
     description:
-      'Replay a captured flow against the real server, optionally mutating method, URL, headers, or body. The replayed flow is added to the store as a NEW flow with its own id (returned). Use this to probe for IDOR (mutate the resource id in the URL), parameter tampering (rewrite request body), or authorization bypass (drop or swap the auth header). Always check the response status: 200 OK to a mutated request often indicates the server accepted unauthorized input.',
+      'Replay a captured flow against the real server, optionally mutating method, URL, headers, or body. The replayed flow is added to the store as a NEW flow with its own id (returned). Use this to probe for IDOR (mutate the resource id in the URL), parameter tampering (rewrite request body), or authorization bypass (drop or swap the auth header). Always check the response status: 200 OK to a mutated request often indicates the server accepted unauthorized input. The replay is gated to the source flow\'s origin by default — set allowCrossOrigin only when the user has explicitly authorised testing the third-party target.',
     inputSchema: {
       id: z.string().describe('Source flow id from list_flows.'),
       method: z.string().optional().describe('Override HTTP method (e.g. switch GET to DELETE).'),
@@ -179,10 +179,16 @@ server.registerTool(
         .optional()
         .describe('Header overrides. Value null deletes the header. Case-insensitive.'),
       bodyText: z.string().optional().describe('Replace the request body with this UTF-8 string.'),
+      allowCrossOrigin: z
+        .boolean()
+        .optional()
+        .describe(
+          'Set true to allow replaying against an origin different from the source flow. Off by default to prevent accidental probes of third-party APIs (Stripe, Sentry, analytics). Only set when the user has explicitly authorised the target.',
+        ),
     },
   },
-  async ({ id, method, url, headers, bodyText }) => {
-    const mutate = { method, url, headers, bodyText };
+  async ({ id, method, url, headers, bodyText, allowCrossOrigin }) => {
+    const mutate = { method, url, headers, bodyText, allowCrossOrigin };
     const result = await api<{ replayId: string; flow: FullFlow }>(
       `/flows/${encodeURIComponent(id)}/replay`,
       { method: 'POST', body: JSON.stringify(mutate) },
