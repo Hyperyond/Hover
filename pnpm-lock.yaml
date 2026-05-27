@@ -76,6 +76,9 @@ importers:
         specifier: ^6.4.2
         version: 6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
     devDependencies:
+      '@hover-dev/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       '@playwright/test':
         specifier: ^1.50.0
         version: 1.60.0

@@ -29,6 +29,13 @@ console.log('[agent-cfg] devRoot =', devRoot);
 const service = await startService({
   port: 51820,
   devRoot,
+  // Force preflight failure: point at a port that's guaranteed not to host CDP.
+  // Without this, an unrelated debug Chrome on :9222 (e.g. one left behind by
+  // `pnpm dev:example:basic-app`) makes preflight succeed and the smoke
+  // proceeds to actually spawn claude — which blocks until the run finishes
+  // or the budget runs out. We only want to verify the mcp-config writeout,
+  // not exercise the agent itself.
+  cdpUrl: 'http://127.0.0.1:1',
   plugins: [securityMode()],
 });
 console.log(`[agent-cfg] service on :${service.port}`);
