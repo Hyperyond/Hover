@@ -28,17 +28,30 @@ import type { HoverOptions } from './options.js';
  * sees nothing Node-shaped and stays free of "A Node.js API is used"
  * warnings.
  */
+// Construct an *opaque* dynamic-import function at module load. Built with
+// `new Function` so webpack / Turbopack don't see the literal `import(...)`
+// expression inside this file — they can't statically analyse a string
+// passed to `Function`, so they neither trace the target into the bundle
+// nor replace the dynamic import with a webpack stub that throws
+// MODULE_NOT_FOUND at runtime (the failure mode that surfaced in Next 15
+// app-router instrumentation when we used a plain `await import(variable)`).
+//
+// At runtime this returns Node's real ESM dynamic-import, which honours
+// the consumer's node_modules and our package's `exports` map — so the
+// `@hover-dev/next/internal/register-node` subpath resolves correctly
+// even from `.next/server/instrumentation.js` after Next inlines us.
+const dynamicImport: (specifier: string) => Promise<unknown> =
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  new Function('s', 'return import(s)') as (s: string) => Promise<unknown>;
+
 export async function register(overrides: HoverOptions = {}): Promise<void> {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
-  // Indirection: a string variable defeats Turbopack's static-import
-  // tracer. `await import('./register-node.js')` would be eagerly traced
-  // and bundled into BOTH the Node and the Edge runtimes — and the Edge
-  // bundle then fails on Node-only transitive deps (`playwright-core`'s
-  // CJS require of `chromium-bidi`). With the specifier hidden behind a
-  // variable, only the Node runtime resolves it at execution time. (See
-  // Next 16's instrumentation tracing behaviour — vercel/next.js does
-  // not honour `process.env.NEXT_RUNTIME` checks as compile-time DCE.)
-  const specifier = './register-node.js';
-  const { registerNode } = (await import(/* @vite-ignore */ specifier)) as typeof import('./register-node.js');
-  await registerNode(overrides);
+  // Package-subpath specifier, not a relative path. Next compiles this
+  // file into `.next/server/instrumentation.js`, where any `./` import
+  // would resolve relative to `.next/server/` — which doesn't contain
+  // our dist files. Package-subpath routes through node_modules + our
+  // `exports` map and finds `dist/register-node.{js,cjs}`.
+  const mod = (await dynamicImport('@hover-dev/next/internal/register-node')) as
+    typeof import('./register-node.js');
+  await mod.registerNode(overrides);
 }

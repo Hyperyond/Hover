@@ -340,6 +340,8 @@ npx @hover-dev/cli add --webpack   # webpack-plugin-hover
 npx @hover-dev/cli add --cwd apps/web   # target a specific workspace directly
 ```
 
+A worked example lives under [`examples/turbo-monorepo/`](./examples/turbo-monorepo) — turbo + pnpm-workspace + two Next.js 15 apps + `next.config.ts`, the exact shape that surfaced the v0.7.3 / v0.7.4 install bugs.
+
 Preview without changing anything: `npx @hover-dev/cli add --dry-run`.
 
 <details>

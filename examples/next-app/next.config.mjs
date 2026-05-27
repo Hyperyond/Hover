@@ -5,12 +5,11 @@ import { withHover } from '@hover-dev/next';
 // It writes the user's Hover options onto process.env so the
 // instrumentation register() hook can read them at server boot.
 //
-// Why .mjs and not .ts: Next 16's `next.config.ts` path runs a CJS
-// `transpile-config` step that does `require()` on the compiled config,
-// which doesn't honour the `"import"` condition in ESM-only packages'
-// `exports` field — so it can't load `@hover-dev/next`'s ESM build. A
-// `.mjs` config goes through Node's native `import()` instead, which
-// resolves ESM exports correctly. See @hover-dev/next README.
+// `.mjs` here is mostly historical — Next 15's `.ts` config path used
+// to fail with ERR_PACKAGE_PATH_NOT_EXPORTED against our ESM-only
+// `exports` map, which is why this example stuck with `.mjs`. v0.7.3+
+// ships dual ESM + CJS so `.ts` works too (see
+// `examples/turbo-monorepo/apps/web/next.config.ts` for the `.ts` path).
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
