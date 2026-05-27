@@ -12,12 +12,26 @@ npx @hover-dev/cli add
 
 That's it. The CLI:
 
-1. **Reads your `package.json`** to figure out your bundler (Vite, Astro, Nuxt, or Webpack).
+1. **Reads your `package.json`** to figure out your bundler (Vite, Astro, Nuxt, Next.js, or Webpack).
 2. **Reads your lockfile** to pick the right package manager (pnpm, yarn, bun, or npm).
 3. **Installs** the matching Hover package as a dev dependency.
-4. **Updates** your config file (`vite.config.ts` / `astro.config.mjs` / `nuxt.config.ts` / `webpack.config.js`) to load the plugin.
+4. **Updates** your config file (`vite.config.ts` / `astro.config.mjs` / `nuxt.config.ts` / `next.config.{ts,mjs,js}` / `webpack.config.js`) to load the plugin.
 
 Then run your dev server and click the floating ✨ in the bottom-right corner.
+
+## Monorepos (turbo / pnpm-workspace / yarn workspaces)
+
+Run from the repo root. The CLI enumerates the workspaces declared in `pnpm-workspace.yaml` / `package.json` `workspaces` / `turbo.json` and looks for a supported bundler in each:
+
+- **One match** — dispatches into that workspace automatically.
+- **Multiple matches in a TTY** — interactive picker (`↑/↓`, Enter). `Esc` to cancel.
+- **Multiple matches in CI / piped invocation** — lists candidates and asks for `--cwd apps/web`.
+
+```bash
+npx @hover-dev/cli add --cwd apps/web   # target a specific workspace
+```
+
+Sub-workspaces don't need their own lockfile — the CLI walks up to find one, so a pnpm-managed monorepo with a single root `pnpm-lock.yaml` works without surprise.
 
 ## Force a specific bundler
 
@@ -27,6 +41,7 @@ If detection picks the wrong one (e.g. your project has multiple bundlers, or yo
 npx @hover-dev/cli add --vite        # vite-plugin-hover
 npx @hover-dev/cli add --astro       # @hover-dev/astro
 npx @hover-dev/cli add --nuxt        # @hover-dev/nuxt
+npx @hover-dev/cli add --next        # @hover-dev/next
 npx @hover-dev/cli add --webpack     # webpack-plugin-hover
 ```
 

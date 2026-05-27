@@ -1,11 +1,19 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { detectFramework, detectPackageManager, readUserPackageJson } from './detect.js';
-import { findFrameworkById, FRAMEWORKS, type FrameworkId } from './frameworks.js';
+import {
+  detectFramework,
+  detectPackageManager,
+  findWorkspaces,
+  isMonorepoRoot,
+  readUserPackageJson,
+  type PackageJson,
+} from './detect.js';
+import { findFrameworkById, FRAMEWORKS, type Framework, type FrameworkId } from './frameworks.js';
 import { installPackage } from './install.js';
 import { mutateConfig } from './mutate.js';
+import { isInteractive, pick } from './picker.js';
 import { bold, cyan, dim, err, info, ok, spark, warn } from './log.js';
 
 /**
@@ -29,6 +37,7 @@ import { bold, cyan, dim, err, info, ok, spark, warn } from './log.js';
 interface ParsedArgs {
   command: string | null;
   framework: FrameworkId | null;
+  cwd: string | null;
   dryRun: boolean;
   help: boolean;
   version: boolean;
@@ -38,15 +47,27 @@ function parseArgs(argv: string[]): ParsedArgs {
   const out: ParsedArgs = {
     command: null,
     framework: null,
+    cwd: null,
     dryRun: false,
     help: false,
     version: false,
   };
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
     if (arg === '--help' || arg === '-h') out.help = true;
     else if (arg === '--version' || arg === '-v') out.version = true;
     else if (arg === '--dry-run') out.dryRun = true;
-    else if (arg.startsWith('--')) {
+    else if (arg === '--cwd' || arg === '-C') {
+      const next = argv[i + 1];
+      if (!next || next.startsWith('-')) {
+        err(`${arg} requires a directory argument.`);
+        process.exit(2);
+      }
+      out.cwd = next;
+      i++;
+    } else if (arg.startsWith('--cwd=')) {
+      out.cwd = arg.slice('--cwd='.length);
+    } else if (arg.startsWith('--')) {
       const candidate = arg.slice(2) as FrameworkId;
       if (FRAMEWORKS.some(f => f.id === candidate)) {
         out.framework = candidate;
@@ -68,13 +89,14 @@ function printUsage(): void {
   console.log(`${bold('@hover-dev/cli')} — wire Hover into your dev workflow
 
 Usage:
-  npx @hover-dev/cli add              ${dim('# auto-detect bundler, install, wire')}
-  npx @hover-dev/cli add --vite       ${dim('# force a specific bundler')}
+  npx @hover-dev/cli add                ${dim('# auto-detect bundler, install, wire')}
+  npx @hover-dev/cli add --vite         ${dim('# force a specific bundler')}
   npx @hover-dev/cli add --astro
   npx @hover-dev/cli add --nuxt
   npx @hover-dev/cli add --next
   npx @hover-dev/cli add --webpack
-  npx @hover-dev/cli add --dry-run    ${dim('# show what would happen, change nothing')}
+  npx @hover-dev/cli add --cwd apps/web ${dim('# target a specific workspace')}
+  npx @hover-dev/cli add --dry-run      ${dim('# show what would happen, change nothing')}
   npx @hover-dev/cli --help
   npx @hover-dev/cli --version
 
@@ -84,33 +106,120 @@ What it does:
   3. Installs the matching Hover integration as a dev dependency.
   4. Adds the plugin/integration to your config file.
 
+Monorepo support (turbo / pnpm-workspace / yarn workspaces):
+  Run from the repo root. If exactly one workspace declares a supported
+  bundler, the CLI dispatches into it automatically. If several do, an
+  interactive picker (↑/↓, Enter) appears in a TTY — or in non-TTY
+  contexts (CI) the CLI lists candidates and asks you to re-run with
+  --cwd <path>.
+
 For more: https://github.com/Hyperyond/Hover
 `);
 }
 
 async function runAdd(args: ParsedArgs): Promise<number> {
-  const found = readUserPackageJson();
+  // --cwd lets the user point us at an app inside a monorepo without changing
+  // shell directories. Resolve it before walking up so we land in the right
+  // package, not the parent monorepo root.
+  const startDir = args.cwd
+    ? (isAbsolute(args.cwd) ? args.cwd : resolve(process.cwd(), args.cwd))
+    : process.cwd();
+  if (args.cwd && !existsSync(startDir)) {
+    err(`--cwd path does not exist: ${startDir}`);
+    return 1;
+  }
+
+  const found = readUserPackageJson(startDir);
   if (!found) {
-    err(`No package.json found in the current directory or any parent.`);
+    err(`No package.json found in ${startDir} or any parent.`);
     err(`Run this command from your project root, or run \`npm init\` first.`);
     return 1;
   }
-  const { pkg, rootDir } = found;
+  let { pkg, rootDir } = found;
 
-  // Step 1: pick framework — explicit flag wins over detection.
-  const framework = args.framework
+  // Step 1: pick framework. Explicit flag wins. Otherwise, when the
+  // detected root is a monorepo and the root package.json itself doesn't
+  // declare a bundler, look inside the declared workspaces and use the
+  // unique one that does. Multiple matches → ask the user to disambiguate.
+  let framework: Framework | null = args.framework
     ? findFrameworkById(args.framework)!
     : detectFramework(pkg);
+
+  if (!framework && !args.cwd && isMonorepoRoot(rootDir, pkg)) {
+    const workspaces = findWorkspaces(rootDir, pkg);
+    const matches: { dir: string; pkg: PackageJson; framework: Framework }[] = [];
+    for (const wsDir of workspaces) {
+      try {
+        const wsPkgRaw = readFileSync(join(wsDir, 'package.json'), 'utf-8');
+        const wsPkg = JSON.parse(wsPkgRaw) as PackageJson;
+        const f = detectFramework(wsPkg);
+        if (f) matches.push({ dir: wsDir, pkg: wsPkg, framework: f });
+      } catch { /* skip unreadable workspace */ }
+    }
+    if (matches.length === 1) {
+      const m = matches[0];
+      info(
+        `Monorepo detected — using workspace ${bold(relative(rootDir, m.dir) || '.')} ` +
+        `(${m.framework.label}).`,
+      );
+      rootDir = m.dir;
+      pkg = m.pkg;
+      framework = m.framework;
+    } else if (matches.length > 1) {
+      // Interactive picker when running in a TTY; non-interactive fall-back
+      // (CI, piped invocations) prints the list and asks for --cwd. The
+      // picker's own isInteractive() check is duplicated here so the
+      // non-TTY branch can print a more specific message + non-zero exit.
+      if (isInteractive()) {
+        info(`Monorepo detected — found ${matches.length} candidate workspaces.`);
+        const picked = await pick({
+          title: 'Which workspace should Hover wire into?',
+          items: matches.map(m => ({
+            label: `${relative(rootDir, m.dir) || '.'}  (${m.framework.label})`,
+            detail: m.dir,
+            value: m,
+          })),
+        });
+        if (!picked) {
+          warn(`Cancelled.`);
+          return 130; // 128 + SIGINT, conventional cancel exit code
+        }
+        rootDir = picked.dir;
+        pkg = picked.pkg;
+        framework = picked.framework;
+        info(`Wiring ${bold(framework.label)} into ${cyan(relative(process.cwd(), rootDir) || '.')}.`);
+      } else {
+        err(`Monorepo detected with ${matches.length} candidate workspaces:`);
+        for (const m of matches) {
+          info(`  - ${cyan(relative(rootDir, m.dir))} (${m.framework.label})`);
+        }
+        info(`Pick one with --cwd <path>, e.g.:`);
+        info(`  npx @hover-dev/cli add --cwd ${relative(rootDir, matches[0].dir)}`);
+        return 1;
+      }
+    }
+  }
+
   if (!framework) {
     err(`Couldn't detect a supported bundler in package.json.`);
+    if (isMonorepoRoot(rootDir, pkg)) {
+      info(`This looks like a monorepo root but no workspace declares a supported bundler.`);
+      info(`If your app lives elsewhere, point us at it: --cwd <path>.`);
+    }
     info(`Supported: ${FRAMEWORKS.map(f => f.id).join(', ')}.`);
     info(`Force one with --vite / --astro / --nuxt / --next / --webpack.`);
     return 1;
   }
   if (args.framework) {
     info(`Using ${bold(framework.label)} (forced via --${framework.id}).`);
+  } else if (!args.cwd) {
+    // Quietly omit the "Detected …" line in monorepo-dispatch mode — the
+    // workspace-selection line above already told the user what we picked.
+    if (rootDir === (args.cwd ?? startDir) || rootDir === startDir) {
+      info(`Detected ${bold(framework.label)} project.`);
+    }
   } else {
-    info(`Detected ${bold(framework.label)} project.`);
+    info(`Detected ${bold(framework.label)} project at ${cyan(rootDir)}.`);
   }
 
   // Step 2: pick package manager.

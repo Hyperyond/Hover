@@ -21,6 +21,26 @@ npx @hover-dev/cli add --vite
 npx @hover-dev/cli add --next --dry-run
 ```
 
+## Monorepos (turbo / pnpm-workspace / yarn workspaces)
+
+Run the CLI from the repo root. It enumerates workspaces and:
+
+- **One match** — installs into that workspace automatically.
+- **Multiple matches in a TTY** — shows an interactive picker (`↑/↓`, Enter).
+- **Multiple matches in CI** — lists candidates and asks you to re-run with `--cwd apps/web`.
+
+The package manager is detected by walking up to find a lockfile, so a single root `pnpm-lock.yaml` is enough — sub-workspaces don't need their own.
+
+```bash
+# From the repo root — picker appears if more than one app matches
+npx @hover-dev/cli add
+
+# Or target a specific workspace directly
+npx @hover-dev/cli add --cwd apps/web
+```
+
+See the [CLI reference](/reference/cli) for the full monorepo behaviour.
+
 ## Manual install
 
 If you'd rather not run the CLI, here's the per-bundler shape.

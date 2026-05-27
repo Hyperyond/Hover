@@ -1,5 +1,4 @@
 import type { ReactElement } from 'react';
-import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
 import { ENV_KEYS } from './options.js';
 
 /**
@@ -45,7 +44,7 @@ import { ENV_KEYS } from './options.js';
  *   (auto-bump in the service) and that would cause a hydration mismatch.
  *   The bundle's `preamble` itself sets the globals, in one atomic <script>.
  */
-export function HoverScript(): ReactElement | null {
+export async function HoverScript(): Promise<ReactElement | null> {
   if (process.env.NODE_ENV !== 'development') return null;
 
   // The service writes its actual bound port to RESOLVED_PORT after auto-bump.
@@ -55,6 +54,13 @@ export function HoverScript(): ReactElement | null {
   const requested = process.env[ENV_KEYS.PORT];
   const port = resolved ? Number(resolved) : requested ? Number(requested) : 51789;
 
+  // Dynamic import — keeps `@hover-dev/widget-bootstrap` out of the
+  // top-level require() graph in our CJS bundle. Next 15 loads
+  // `next.config.ts` through a CJS require step that pulls in
+  // `@hover-dev/next` synchronously; widget-bootstrap is ESM-only and
+  // would throw ERR_PACKAGE_PATH_NOT_EXPORTED if reachable via require.
+  // Async server components are first-class in App Router.
+  const { buildWidgetBundle } = await import('@hover-dev/widget-bootstrap');
   const { preamble, body } = buildWidgetBundle({ port });
   const inline = `${preamble}\n${body}`;
 

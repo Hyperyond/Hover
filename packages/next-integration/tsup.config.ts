@@ -39,7 +39,17 @@ import { defineConfig } from 'tsup';
  */
 export default defineConfig({
   entry: ['src/index.ts', 'src/instrumentation.ts', 'src/register-node.ts'],
-  format: ['esm'],
+  // ESM + CJS. ESM is the long-term shape (Next 16+ Turbopack loads
+  // `next.config.mjs` via native `import()`); CJS exists for Next 15's
+  // `next.config.ts` loader, which transpiles the user's .ts config to
+  // CommonJS and then `require()`s any package it imports — including
+  // ours. Without a `"require"` condition in `exports`, Node's resolver
+  // throws ERR_PACKAGE_PATH_NOT_EXPORTED before our register() ever runs.
+  // The CJS output is genuinely callable: every Hover code path that
+  // uses dynamic `import()` (instrumentation.ts string-variable
+  // indirection, register-node's await import) still works under CJS —
+  // dynamic import returns a Promise<ESM module namespace> in both runtimes.
+  format: ['esm', 'cjs'],
   dts: true,
   clean: true,
   sourcemap: true,

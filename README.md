@@ -322,7 +322,7 @@ Working **on** Hover (the project, not with it)? See [Development](https://hover
 npx @hover-dev/cli add
 ```
 
-The CLI detects your bundler (Vite / Astro / Nuxt / Webpack), reads your lockfile to pick the right package manager (pnpm / yarn / bun / npm), installs the matching Hover package as a dev dep, and AST-edits your config file. Idempotent — safe to re-run.
+The CLI detects your bundler (Vite / Astro / Nuxt / Next / Webpack), reads your lockfile to pick the right package manager (pnpm / yarn / bun / npm), installs the matching Hover package as a dev dep, and AST-edits your config file. Idempotent — safe to re-run.
 
 Force a specific bundler if detection picks wrong:
 
@@ -330,7 +330,14 @@ Force a specific bundler if detection picks wrong:
 npx @hover-dev/cli add --vite      # vite-plugin-hover
 npx @hover-dev/cli add --astro     # @hover-dev/astro
 npx @hover-dev/cli add --nuxt      # @hover-dev/nuxt
+npx @hover-dev/cli add --next      # @hover-dev/next
 npx @hover-dev/cli add --webpack   # webpack-plugin-hover
+```
+
+**Monorepos (turbo / pnpm-workspace / yarn workspaces)**: run from the repo root. If exactly one workspace declares a supported bundler, the CLI dispatches into it automatically. If several do, an interactive picker (↑/↓, Enter) appears in a TTY — or in CI you'll be asked to re-run with `--cwd apps/web`.
+
+```bash
+npx @hover-dev/cli add --cwd apps/web   # target a specific workspace directly
 ```
 
 Preview without changing anything: `npx @hover-dev/cli add --dry-run`.
@@ -397,7 +404,7 @@ export default defineConfig({ integrations: [hover()] });
 export default defineNuxtConfig({ modules: ['@hover-dev/nuxt'] });
 ```
 
-**Next.js 16+** (App Router, Turbopack default) — three pieces because Next's instrumentation is split:
+**Next.js 15 + 16** (App Router) — three pieces because Next's instrumentation is split. Works with `next.config.{ts,mjs,js}` on both Next 15 (webpack default) and Next 16 (Turbopack default):
 
 ```ts
 // next.config.ts
