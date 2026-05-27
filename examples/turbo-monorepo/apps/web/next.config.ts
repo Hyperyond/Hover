@@ -8,6 +8,9 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {};
 
 export default withHover(nextConfig, {
-  autoLaunchChrome: false,
+  // Match the other Hover examples — first `next dev` auto-launches a
+  // debug Chrome on :9222 navigated to this app, so the user sees the
+  // floating ✨ widget immediately without an extra setup step.
+  autoLaunchChrome: true,
   devUrl: 'http://localhost:5183/',
 });
