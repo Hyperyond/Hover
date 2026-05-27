@@ -141,6 +141,11 @@ export interface AgentDescriptor {
   streamFormat: StreamFormat;
   sandboxStrength: SandboxStrength;
   display: AgentDisplay;
+  /** Hard-sandbox agents pass this list to `disallowedTools` when the
+   *  service-level allow/deny config isn't explicitly overridden. Lets the
+   *  per-CLI deny list live alongside its descriptor instead of as a magic
+   *  array in the service. Soft-sandbox agents leave this undefined. */
+  defaultDisallowedTools?: readonly string[];
   buildArgs(opts: InvokeOptions): string[];
   /**
    * Parse a single line of agent stdout into normalised InvokeEvents.

@@ -757,24 +757,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             ? ['mcp__playwright', 'Skill', ...activePluginMcpIds]
             : undefined,
           disallowedTools: isHardSandbox
-            ? [
-                // file / shell / data access — never appropriate for browser driving
-                'Bash', 'BashOutput', 'KillBash',
-                'Edit', 'MultiEdit', 'Write', 'Read', 'NotebookEdit',
-                'Grep', 'Glob', 'Task', 'TodoWrite',
-                'WebFetch', 'WebSearch',
-                // plan / worktree / cron / notification — irrelevant in -p mode
-                'EnterPlanMode', 'ExitPlanMode',
-                'EnterWorktree', 'ExitWorktree',
-                'CronCreate', 'CronDelete', 'CronList',
-                'PushNotification', 'RemoteTrigger',
-                // task & tool introspection added in claude 2.1.x — let through and
-                // the agent will burn turns exploring instead of executing
-                'ToolSearch',
-                'Monitor', 'TaskOutput', 'TaskStop',
-                'AskUserQuestion',
-                'ShareOnboardingGuide',
-              ]
+            ? (invokedDescriptor?.defaultDisallowedTools
+                ? [...invokedDescriptor.defaultDisallowedTools]
+                : undefined)
             : undefined,
           maxBudgetUsd,
           model,
@@ -784,26 +769,32 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           send(ws, { type: 'event', payload: ev });
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        const errorEvent: InvokeEvent = {
-          kind: 'session_end',
-          isError: true,
-          summary: message,
-        };
-        if (ws.readyState === WebSocket.OPEN) {
-          send(ws, { type: 'event', payload: errorEvent });
+        // A user-initiated cancel() already sent a synthetic session_end
+        // {cancelled:true}. The subsequent AbortError surfacing here would
+        // otherwise produce a second session_end{isError:true}, leaving the
+        // widget to reconcile two terminal events for one run. CDP isn't
+        // suspect either — the user just stopped — so skip preflight
+        // invalidation too.
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : String(err);
+          const errorEvent: InvokeEvent = {
+            kind: 'session_end',
+            isError: true,
+            summary: message,
+          };
+          sendIfOpen(ws, { type: 'event', payload: errorEvent });
+          // Force the next command to re-probe CDP. The error could be from
+          // Chrome dying, MCP spawning a stray Chromium, the user closing
+          // their debug window — anything that would make a cached "all
+          // healthy" result lie. Invalidate the mode-effective URL (see
+          // preflightCdpUrl above) — not the static cdpUrl — so security
+          // mode invalidations don't no-op against the default port.
+          const invalExtras = effectiveLaunchExtras();
+          const invalCdpUrl = invalExtras?.cdpPort
+            ? `http://localhost:${invalExtras.cdpPort}`
+            : cdpUrl;
+          invalidatePreflight(invalCdpUrl);
         }
-        // Force the next command to re-probe CDP. The error could be from
-        // Chrome dying, MCP spawning a stray Chromium, the user closing
-        // their debug window — anything that would make a cached "all
-        // healthy" result lie. Invalidate the mode-effective URL (see
-        // preflightCdpUrl above) — not the static cdpUrl — so security
-        // mode invalidations don't no-op against the default port.
-        const invalExtras = effectiveLaunchExtras();
-        const invalCdpUrl = invalExtras?.cdpPort
-          ? `http://localhost:${invalExtras.cdpPort}`
-          : cdpUrl;
-        invalidatePreflight(invalCdpUrl);
       } finally {
         busy = false;
         inflight = null;

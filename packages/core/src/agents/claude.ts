@@ -84,12 +84,36 @@ function claudeState(state: ParserState): ClaudeParserState {
   return state as ClaudeParserState;
 }
 
+/** Every built-in claude-code tool that has nothing to do with driving a
+ *  browser. Combined with `--strict-mcp-config` + an allow-list of mcp__*
+ *  ids, this leaves Claude with only the Playwright MCP (plus any
+ *  plugin-contributed MCPs) as a usable tool surface. */
+const CLAUDE_DEFAULT_DISALLOWED_TOOLS: readonly string[] = [
+  // file / shell / data access — never appropriate for browser driving
+  'Bash', 'BashOutput', 'KillBash',
+  'Edit', 'MultiEdit', 'Write', 'Read', 'NotebookEdit',
+  'Grep', 'Glob', 'Task', 'TodoWrite',
+  'WebFetch', 'WebSearch',
+  // plan / worktree / cron / notification — irrelevant in -p mode
+  'EnterPlanMode', 'ExitPlanMode',
+  'EnterWorktree', 'ExitWorktree',
+  'CronCreate', 'CronDelete', 'CronList',
+  'PushNotification', 'RemoteTrigger',
+  // task & tool introspection added in claude 2.1.x — let through and
+  // the agent will burn turns exploring instead of executing
+  'ToolSearch',
+  'Monitor', 'TaskOutput', 'TaskStop',
+  'AskUserQuestion',
+  'ShareOnboardingGuide',
+];
+
 export const claudeAgent: AgentDescriptor = {
   id: 'claude',
   binName: 'claude',
   protocol: 'argv',
   streamFormat: 'stream-json',
   sandboxStrength: 'hard',
+  defaultDisallowedTools: CLAUDE_DEFAULT_DISALLOWED_TOOLS,
   display: {
     label: 'Claude Code',
     tagline: 'Anthropic — best-in-class browser driving, hard tool sandbox',
