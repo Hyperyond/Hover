@@ -15,7 +15,7 @@
     "dev:docs": "pnpm --filter @hover-dev/docs dev",
     "build:docs": "pnpm --filter @hover-dev/docs build",
     "preview:docs": "pnpm --filter @hover-dev/docs preview",
-    "typecheck": "pnpm -r exec tsc --noEmit",
+    "typecheck": "pnpm -r --filter './packages/*' --filter './examples/*' --filter '!@hover-dev/docs' exec tsc --noEmit",
     "build": "pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro --filter @hover-dev/nuxt --filter @hover-dev/next --filter webpack-plugin-hover --filter @hover-dev/cli build",
     "clean": "pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro --filter @hover-dev/nuxt --filter @hover-dev/next --filter webpack-plugin-hover --filter @hover-dev/cli clean",
     "test": "pnpm -r --if-present test",
