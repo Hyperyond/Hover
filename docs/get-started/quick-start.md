@@ -30,7 +30,15 @@ That command:
 3. AST-edits your bundler config (`vite.config.ts`, `astro.config.mjs`, `nuxt.config.ts`, `next.config.ts`, or `webpack.config.js`) to register the plugin.
 4. Is idempotent — running it twice is a no-op.
 
-Prefer to do it by hand? See the [manual install per bundler](./install#manual-install).
+::: tip Monorepo (turbo / pnpm-workspace / yarn workspaces)
+Run from the repo root. If one workspace declares a bundler the CLI installs there automatically; if several do, an interactive picker (↑/↓, Enter) appears. Or target an app directly: `npx @hover-dev/cli add --cwd apps/web`. See [Monorepos](./install#monorepos-turbo-pnpm-workspace-yarn-workspaces) for the full breakdown.
+:::
+
+::: tip Next.js
+The CLI handles `next.config.*` and `instrumentation.ts` for you, then prints one final line to paste into `app/layout.tsx` — `<HoverScript />` inside `<body>`. Works on Next 15 + 16, with Turbopack or webpack, any of `.ts` / `.mjs` / `.js` configs.
+:::
+
+Prefer to do it by hand? See the [manual install per bundler](./install#option-b-manual-install).
 
 ## Start your dev server
 

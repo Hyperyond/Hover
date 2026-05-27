@@ -282,49 +282,44 @@ Two parts of this matter:
 
 Clicking **Fix mid-recording is allowed** — Record pauses while the popover is open and resumes automatically when you close it (Submit or Cancel). The Record button is disabled during Fix so you can't accidentally end the paused session; Fix's Submit / Cancel is the only path back.
 
-## Quick start
-
-Add Hover to a project you already have running. One command, one config edit, then your normal `pnpm dev`.
-
-**Prerequisites:** Node 22+, and either `claude` ([install](https://docs.claude.com/claude-code)) or `codex` ([install](https://developers.openai.com/codex)) on your `PATH`. No new API keys — Hover rides on the subscription you already pay for.
-
-**Install:**
-
-```bash
-npx @hover-dev/cli add
-```
-
-The CLI detects your bundler (Vite / Astro / Nuxt / Next.js / Webpack), installs the matching Hover package, and AST-edits your config file. Idempotent — safe to re-run.
-
-**Start your dev server as usual:**
-
-```bash
-pnpm dev          # or `npm run dev` / `yarn dev` / `bun dev`
-```
-
-Open your dev URL in any Chrome. The ✨ launcher appears bottom-right; click it and the widget walks you through launching an isolated debug Chrome on port 9222 (separate from your everyday browser). Type — or hold 🎙 and speak — your first prompt:
-
-```
-log in, then add a todo named "verify hover"
-```
-
-The agent drives the debug Chrome over CDP, narrates each step, and renders a Result + Findings card when done. Click **Save as Spec** and the verified flow becomes a `__vibe_tests__/<slug>.spec.ts` file that runs in your CI like any other Playwright test — no Hover dependency, no agent, no API key.
-
-> Want Hover to pre-warm the debug Chrome at `pnpm dev`? Pass `autoLaunchChrome: true` to the plugin. See [Plugin options](#plugin-options).
-
-Working **on** Hover (the project, not with it)? See [Development](https://hover-docs.vercel.app/development/) on the docs site for the monorepo workflow.
-
 ## Install
 
-**One command, zero global installs:**
+Three steps, all copy-paste. Detailed walkthrough in the [install docs](https://hover-docs.vercel.app/get-started/install).
+
+### 1 · Prerequisites
+
+- **Node 22+** on PATH.
+- One coding-agent CLI installed and logged in:
+
+  | Agent | Install + login | What it costs |
+  |---|---|---|
+  | Claude Code | `npm install -g @anthropic-ai/claude-code` then `claude login` | rides on your Claude Pro / Max subscription |
+  | OpenAI Codex | `npm install -g @openai/codex` then `codex login` | rides on your ChatGPT plan |
+
+  Either one works. You can switch from the widget header anytime — Hover detects both on `PATH`.
+
+No new API keys, no `.env` file, no `.npmrc` for npm auth — all Hover packages are public on npmjs.com.
+
+### 2 · Add Hover to your project
 
 ```bash
 npx @hover-dev/cli add
 ```
 
-The CLI detects your bundler (Vite / Astro / Nuxt / Next / Webpack), reads your lockfile to pick the right package manager (pnpm / yarn / bun / npm), installs the matching Hover package as a dev dep, and AST-edits your config file. Idempotent — safe to re-run.
+That one command:
 
-Force a specific bundler if detection picks wrong:
+1. Detects your bundler from `package.json` (Vite / Astro / Nuxt / Next.js / Webpack).
+2. Detects your package manager from your lockfile (pnpm / yarn / bun / npm).
+3. Installs the right Hover package as a `devDependency`.
+4. AST-edits your bundler config to register the plugin / integration.
+
+It's **idempotent** — running it twice is a no-op. **Dry-run** prints what would change without touching anything:
+
+```bash
+npx @hover-dev/cli add --dry-run
+```
+
+Force a specific bundler if auto-detect picks the wrong one:
 
 ```bash
 npx @hover-dev/cli add --vite      # vite-plugin-hover
@@ -334,45 +329,89 @@ npx @hover-dev/cli add --next      # @hover-dev/next
 npx @hover-dev/cli add --webpack   # webpack-plugin-hover
 ```
 
-**Monorepos (turbo / pnpm-workspace / yarn workspaces)**: run from the repo root. If exactly one workspace declares a supported bundler, the CLI dispatches into it automatically. If several do, an interactive picker (↑/↓, Enter) appears in a TTY — or in CI you'll be asked to re-run with `--cwd apps/web`.
-
-```bash
-npx @hover-dev/cli add --cwd apps/web   # target a specific workspace directly
-```
-
-A worked example lives under [`examples/turbo-monorepo/`](./examples/turbo-monorepo) — turbo + pnpm-workspace + two Next.js 15 apps + `next.config.ts`, the exact shape that surfaced the v0.7.3 / v0.7.4 install bugs.
-
-Preview without changing anything: `npx @hover-dev/cli add --dry-run`.
-
 <details>
-<summary>Or install the package manually</summary>
+<summary><b>Monorepo? turbo / pnpm-workspace / yarn-workspace</b></summary>
+
+Run from the **repo root**, not from inside `apps/*`:
 
 ```bash
-pnpm add -D vite-plugin-hover     # for Vite projects
-# or `@hover-dev/astro`, `@hover-dev/nuxt`, `webpack-plugin-hover`
+npx @hover-dev/cli add
 ```
 
-Then add the plugin/integration to your bundler config — see the per-package READMEs under [`packages/`](./packages).
+The CLI:
+- Finds your workspaces from `pnpm-workspace.yaml` / `package.json` `workspaces` / `turbo.json`
+- If **exactly one** workspace has a bundler → installs there automatically
+- If **multiple** workspaces have bundlers → interactive picker (↑/↓, Enter) appears, or in CI you re-run with `--cwd`:
+
+```bash
+npx @hover-dev/cli add --cwd apps/web
+```
+
+The package manager is detected by walking up to find a lockfile, so a single root `pnpm-lock.yaml` is enough — sub-workspaces don't need their own. A worked example lives under [`examples/turbo-monorepo/`](./examples/turbo-monorepo) — turbo + pnpm-workspace + two Next.js 15 apps + `next.config.ts`.
 
 </details>
 
-No `.npmrc`, no auth tokens. All packages are public on npmjs.com.
+<details>
+<summary><b>Next.js: one extra manual step</b></summary>
 
-**No `.env` to fill out either.** Hover doesn't ship an LLM SDK; it shells out to whichever coding-agent CLI is on your `PATH` — `claude` ([install](https://docs.claude.com/claude-code)) or `codex` ([install](https://developers.openai.com/codex)). Whatever you're already logged into covers it.
+For Next, the CLI writes `next.config.*` and `instrumentation.ts` automatically but prints a one-liner for you to paste into `app/layout.tsx` — modifying user JSX with an AST is fragile, so we leave the human in charge of that one:
 
-Then just run your dev server:
+```tsx
+// app/layout.tsx
+import { HoverScript } from '@hover-dev/next';
 
-```bash
-pnpm dev
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <HoverScript />   {/* 👈 add this */}
+      </body>
+    </html>
+  );
+}
 ```
 
-Open your dev URL in any Chrome. The ✨ launcher appears bottom-right and tells you what to do via its colour:
+Works on **Next 15 + 16**, with both Turbopack and webpack, and any of `next.config.{ts,mjs,js}`. See the [Next install guide](https://hover-docs.vercel.app/get-started/install#next-js-15-16) for the full breakdown.
 
-- **Blue** — you're already in a debug Chrome. Click and chat.
-- **Amber** — no debug Chrome yet. Click and the widget launches one for you (isolated profile under `<tmpdir>/hover-chrome`, navigated to your dev URL), then prompts you to switch over.
-- **Gray** — a debug Chrome is running, but this window isn't it. Click to bring the right window to the front.
+</details>
 
-Prefer it to pre-warm Chrome at `vite dev`? `hover({ autoLaunchChrome: true })`. Prefer to start Chrome yourself? `pnpm exec hover-chrome` (or `npx hover-chrome`).
+<details>
+<summary><b>Prefer to wire it manually</b></summary>
+
+```bash
+pnpm add -D vite-plugin-hover     # or @hover-dev/astro / @hover-dev/nuxt / @hover-dev/next / webpack-plugin-hover
+```
+
+Then drop the plugin / integration into your bundler config — see [Use it in your project](#use-it-in-your-project) below for the per-bundler snippets.
+
+</details>
+
+### 3 · Start your dev server
+
+Exactly as you already do:
+
+```bash
+pnpm dev          # or npm run dev / yarn dev / bun dev
+```
+
+Open your dev URL in **any Chrome** (your everyday browser is fine for this first step). A floating ✨ launcher appears in the bottom-right. Its colour tells you what to do next:
+
+- 🔵 **Blue** — Hover already has a debug Chrome wired up. Click and start chatting.
+- 🟠 **Amber** — no debug Chrome yet. Click the launcher; Hover spawns an **isolated debug Chrome** on port 9222 (clean profile under `<tmpdir>/hover-chrome`, completely separate from your everyday browsing), navigated to your dev URL. Switch over and click ✨ again.
+- ⚪ **Gray** — a debug Chrome is running, but you're not in it right now. Click to bring it to the front.
+
+> **Want Hover to pre-warm the debug Chrome at `pnpm dev`?** Pass `autoLaunchChrome: true` to the plugin (see [Plugin options](#plugin-options)). Prefer to start the debug Chrome by hand? `pnpm exec hover-chrome` (or `npx hover-chrome`) any time.
+
+Type — or hold 🎙 and speak — your first prompt:
+
+```
+log in, then add a todo named "verify hover"
+```
+
+The agent drives the debug Chrome over CDP, narrates each step, and renders a Result + Findings card. Click **Save as Spec** and the verified flow becomes a `__vibe_tests__/<slug>.spec.ts` file that runs in CI like any other Playwright test — no Hover dependency, no agent in the loop, no API key.
+
+Working **on** Hover itself (not with it)? See [Development](https://hover-docs.vercel.app/development/) on the docs site for the monorepo workflow.
 
 ## Use it in your project
 
