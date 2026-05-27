@@ -13,8 +13,17 @@
 
 import type { WebSocket } from 'ws';
 import { checkCdpStatus, focusDebugTab } from '../playwright/cdpStatus.js';
-import { launchDebugChrome } from '../playwright/launchChrome.js';
+import { launchDebugChrome, type LaunchOptions } from '../playwright/launchChrome.js';
 import { send, type ClientMessage } from './types.js';
+
+/** Extra launch options surfaced from the active mode (security plugin
+ *  needs proxy + spki + separate profile + non-default CDP port). When
+ *  none are set, behaviour is identical to pre-v0.7 normal-mode launch. */
+export type LaunchExtras = Pick<LaunchOptions, 'userDataDir' | 'proxy'> & {
+  /** Override CDP port (mode-specific, e.g. 9333 for security). When set,
+   *  this also wins over the `port` parsed from cdpUrl. */
+  cdpPort?: number;
+};
 
 /**
  * "Is this widget running inside the debug Chrome?" The widget asks this on
@@ -28,13 +37,17 @@ export async function handleCheckCdp(
   ws: WebSocket,
   msg: ClientMessage,
   cdpUrl: string,
+  extras?: LaunchExtras,
 ): Promise<void> {
   const pageUrl = msg.payload?.pageUrl;
   if (typeof pageUrl !== 'string' || !pageUrl) {
     send(ws, { type: 'error', payload: { message: 'check-cdp: pageUrl is required' } });
     return;
   }
-  const status = await checkCdpStatus(cdpUrl, pageUrl);
+  const effectiveCdpUrl = extras?.cdpPort
+    ? `http://localhost:${extras.cdpPort}`
+    : cdpUrl;
+  const status = await checkCdpStatus(effectiveCdpUrl, pageUrl);
   send(ws, { type: 'cdp-status', payload: status });
 }
 
@@ -48,6 +61,7 @@ export async function handleLaunchChrome(
   ws: WebSocket,
   msg: ClientMessage,
   cdpUrl: string,
+  extras?: LaunchExtras,
 ): Promise<void> {
   const pageUrl = msg.payload?.pageUrl;
   if (typeof pageUrl !== 'string' || !pageUrl) {
@@ -58,20 +72,29 @@ export async function handleLaunchChrome(
   // findChromeBinary + spawn + ready-poll can take a few seconds.
   send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', launching: true } });
 
-  const port = (() => {
+  const port = extras?.cdpPort ?? (() => {
     try {
       return Number(new URL(cdpUrl).port) || 9222;
     } catch {
       return 9222;
     }
   })();
-  const result = await launchDebugChrome({ url: pageUrl, port });
+  const result = await launchDebugChrome({
+    url: pageUrl,
+    port,
+    userDataDir: extras?.userDataDir,
+    proxy: extras?.proxy,
+  });
   if (!result.ok) {
     send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', reason: result.reason } });
     return;
   }
-  // Re-check after launch so the widget gets the real status.
-  const status = await checkCdpStatus(cdpUrl, pageUrl);
+  // Re-check status against the port we actually launched on, so a mode-
+  // specific port (9333 for security) doesn't get probed at 9222.
+  const effectiveCdpUrl = extras?.cdpPort
+    ? `http://localhost:${extras.cdpPort}`
+    : cdpUrl;
+  const status = await checkCdpStatus(effectiveCdpUrl, pageUrl);
   send(ws, { type: 'cdp-status', payload: status });
 }
 
@@ -86,13 +109,17 @@ export async function handleFocusDebug(
   ws: WebSocket,
   msg: ClientMessage,
   cdpUrl: string,
+  extras?: LaunchExtras,
 ): Promise<void> {
   const pageUrl = msg.payload?.pageUrl;
   if (typeof pageUrl !== 'string' || !pageUrl) {
     send(ws, { type: 'error', payload: { message: 'focus-debug: pageUrl is required' } });
     return;
   }
-  const result = await focusDebugTab(cdpUrl, pageUrl);
+  const effectiveCdpUrl = extras?.cdpPort
+    ? `http://localhost:${extras.cdpPort}`
+    : cdpUrl;
+  const result = await focusDebugTab(effectiveCdpUrl, pageUrl);
   if (!result.ok) {
     send(ws, { type: 'error', payload: { message: `focus-debug: ${result.reason}` } });
   }

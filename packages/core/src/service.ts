@@ -59,6 +59,7 @@ import {
   handleCheckCdp,
   handleLaunchChrome,
   handleFocusDebug,
+  type LaunchExtras,
 } from './service/cdpHandlers.js';
 import {
   handleSaveArtifact,
@@ -224,8 +225,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
       }
     }
+    // In an active mode, the Playwright MCP must point at THAT mode's
+    // Chrome (e.g. security mode's 9333), not the default 9222.
+    // effectiveLaunchExtras().cdpPort is the source of truth.
+    const extras = effectiveLaunchExtras();
+    const effectiveCdpUrl = extras?.cdpPort
+      ? `http://localhost:${extras.cdpPort}`
+      : cdpUrl;
     return resolveMcpConfig({
-      cdpUrl,
+      cdpUrl: effectiveCdpUrl,
       port,
       extra,
       // Suffix the filename by the mode so different mode toggles within
@@ -275,14 +283,43 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   /** id of the currently-active mode, or null for normal (unmoded) mode. */
   let currentModeId: string | null = null;
   /** Chrome-proxy settings the active mode's activate hook set on us.
-   *  Surfaced to launchDebugChrome calls when the widget asks us to
-   *  launch a debug Chrome. */
+   *  Read by `effectiveLaunchExtras()` and threaded into the cdp handlers
+   *  (check-cdp / launch-chrome / focus-debug) so the secured Chrome on
+   *  9333 actually gets `--proxy-server` + SPKI pin when the user clicks
+   *  Launch from the widget. */
   let modeChromeProxy: { port: number; spki: string } | null = null;
   /** Runtime env overrides keyed by mcpServer id, set by plugin
    *  activate hooks (via ctx.setMcpServerEnv). Cleared on mode change.
    *  Merged with the manifest-declared env when the agent's spawn-time
    *  MCP config is built. */
   const mcpEnvOverrides = new Map<string, Record<string, string>>();
+
+  /** The cdp-handler extras (port, userDataDir, proxy) for the active
+   *  mode's chromeFlags manifest field, or undefined when no mode is
+   *  active. The widget's launch-chrome / check-cdp / focus-debug paths
+   *  all consume these so a Chrome relaunch obeys the mode's needs. */
+  const effectiveLaunchExtras = (): LaunchExtras | undefined => {
+    if (!currentModeId) return undefined;
+    const plugin = pluginsByModeId.get(currentModeId);
+    const flags = plugin?.chromeFlags;
+    if (!flags && !modeChromeProxy) return undefined;
+    // Belt + suspenders — flags.activeInModes is honoured if set, but
+    // since chromeFlags lives on the plugin that contributed this mode,
+    // the default of "applies in own mode" matches what we want.
+    if (flags?.activeInModes && !flags.activeInModes.includes('*') && !flags.activeInModes.includes(currentModeId)) {
+      // Plugin explicitly restricted its chromeFlags to a different mode.
+      // Honour that and only carry modeChromeProxy (set by setChromeProxy).
+      return modeChromeProxy ? { proxy: modeChromeProxy } : undefined;
+    }
+    return {
+      cdpPort: flags?.cdpPort,
+      userDataDir: flags?.userDataDir,
+      // modeChromeProxy wins over flags.proxy because it's the runtime
+      // value the activate hook computed (after starting mockttp);
+      // flags.proxy is only ever set by tests stubbing the manifest.
+      proxy: modeChromeProxy ?? flags?.proxy,
+    };
+  };
 
   /** Send the current mode catalogue to one ws (or all if undefined). */
   const broadcastModes = (target?: WebSocket): void => {
@@ -361,7 +398,20 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             mcpEnvOverrides.set(id, env);
           },
         };
-        await next.hooks['hover:mode:activate'](ctx);
+        try {
+          await next.hooks['hover:mode:activate'](ctx);
+        } catch (err) {
+          // Activate failed half-way — roll back state so we don't
+          // pretend to be in `newModeId` with no sidecars running.
+          // Widget still trusts the broadcast below to learn we're back
+          // to default. The error is rethrown so the caller can surface
+          // it to the user.
+          modeChromeProxy = null;
+          mcpEnvOverrides.clear();
+          currentModeId = null;
+          broadcastModes();
+          throw err;
+        }
       }
     }
 
@@ -554,15 +604,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         return;
       }
       if (msg.type === 'check-cdp') {
-        await handleCheckCdp(ws, msg, cdpUrl);
+        await handleCheckCdp(ws, msg, cdpUrl, effectiveLaunchExtras());
         return;
       }
       if (msg.type === 'launch-chrome') {
-        await handleLaunchChrome(ws, msg, cdpUrl);
+        await handleLaunchChrome(ws, msg, cdpUrl, effectiveLaunchExtras());
         return;
       }
       if (msg.type === 'focus-debug') {
-        await handleFocusDebug(ws, msg, cdpUrl);
+        await handleFocusDebug(ws, msg, cdpUrl, effectiveLaunchExtras());
         return;
       }
       if (msg.type !== 'command') return;
@@ -594,7 +644,13 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Playwright MCP server would silently launch its own Chromium —
         // and Hover's premise is to drive the user's existing Chrome (with
         // their dev state, cookies, devtools open), never spawn a fresh one.
-        const cdp = await getPreflight(cdpUrl);
+        // In an active mode, the relevant CDP endpoint may be the mode's
+        // own port (e.g. 9333 for security), not the default cdpUrl.
+        const preflightExtras = effectiveLaunchExtras();
+        const preflightCdpUrl = preflightExtras?.cdpPort
+          ? `http://localhost:${preflightExtras.cdpPort}`
+          : cdpUrl;
+        const cdp = await getPreflight(preflightCdpUrl);
         if (!cdp.ok) {
           send(ws, {
             type: 'event',
@@ -622,19 +678,22 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         let appendSystemPrompt = resumeSessionId
           ? buildCdpHintResume(cdp.tabs)
           : buildCdpHint(cdp.tabs);
-        // Add the active mode's plugin prompt additions, if any. We only
-        // include additions whose `activeInModes` is the current mode or
-        // '*' (always-on); plugins that contribute prompts but no mode
-        // are treated as mode-scoped to their own plugin's mode by
-        // default (handled by the empty activeInModes case below).
-        const activePlugin = currentModeId ? pluginsByModeId.get(currentModeId) : null;
-        if (activePlugin?.systemPromptAdditions) {
-          for (const add of activePlugin.systemPromptAdditions) {
-            const inMode =
-              !add.activeInModes ||
-              add.activeInModes.includes('*') ||
-              (currentModeId !== null && add.activeInModes.includes(currentModeId));
-            if (inMode) {
+        // Add plugin-contributed prompt additions whose scope includes the
+        // current mode (or '*' for always-on). Walks ALL loaded plugins,
+        // not just the active-mode plugin — a plugin that contributes
+        // an always-on prompt without contributing a mode is a valid
+        // shape (e.g. a future "always remind the agent of these
+        // project conventions" plugin).
+        for (const p of plugins) {
+          for (const add of p.systemPromptAdditions ?? []) {
+            // Default scope: if the plugin has a mode, the prompt is
+            // gated to that mode; if it doesn't have a mode, the prompt
+            // is always-on (treated as if activeInModes was '*').
+            const scope = add.activeInModes ?? (p.mode ? [p.mode.id] : ['*']);
+            const inScope =
+              scope.includes('*') ||
+              (currentModeId !== null && scope.includes(currentModeId));
+            if (inScope) {
               appendSystemPrompt = `${appendSystemPrompt}\n\n${add.text}`;
             }
           }
@@ -727,8 +786,14 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Force the next command to re-probe CDP. The error could be from
         // Chrome dying, MCP spawning a stray Chromium, the user closing
         // their debug window — anything that would make a cached "all
-        // healthy" result lie.
-        invalidatePreflight(cdpUrl);
+        // healthy" result lie. Invalidate the mode-effective URL (see
+        // preflightCdpUrl above) — not the static cdpUrl — so security
+        // mode invalidations don't no-op against the default port.
+        const invalExtras = effectiveLaunchExtras();
+        const invalCdpUrl = invalExtras?.cdpPort
+          ? `http://localhost:${invalExtras.cdpPort}`
+          : cdpUrl;
+        invalidatePreflight(invalCdpUrl);
       } finally {
         busy = false;
         inflight = null;
