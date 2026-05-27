@@ -1,4 +1,25 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve as resolvePath } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { ENV_KEYS, readOptionsFromEnv, type HoverOptions } from './options.js';
+import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
+
+/**
+ * How a user specifies a Hover plugin from `instrumentation.ts`.
+ *
+ * We accept the module specifier as a *string* (or a `{ module, options }`
+ * pair) rather than letting the user write `import securityMode from
+ * '@hover-dev/security'` at the top of `instrumentation.ts`. The reason is
+ * Edge-runtime isolation: Next compiles `instrumentation.ts` for both
+ * runtimes, and a static `import` of `@hover-dev/security` would drag the
+ * package's Node-only transitive deps (mockttp / playwright-core / etc.)
+ * into the Edge bundle and break the build. Keeping the specifier as a
+ * string string defers the resolve to runtime, which only happens on the
+ * Node side via this file's opaque dynamic-import helper.
+ */
+export type PluginSpec =
+  | string
+  | { module: string; options?: unknown };
 
 /**
  * Node.js-runtime implementation of Hover's instrumentation hook.
@@ -12,6 +33,17 @@ import { ENV_KEYS, readOptionsFromEnv, type HoverOptions } from './options.js';
  * statically analyses imports — Edge bundling stops at the dynamic
  * `await import('./register-node.js')` boundary.
  */
+// Same opaque dynamic-import trick as `instrumentation.ts` uses to reach
+// this file. We build the import function with `new Function` so neither
+// webpack nor Turbopack can fold the specifier into a static trace — that
+// matters here because user-supplied plugin packages (`@hover-dev/security`,
+// future third-party plugins) must NOT end up traced into Next's server
+// bundle: the agent ecosystem assumes plugins are resolved at runtime from
+// the user's `node_modules`, not bundled.
+const dynamicImport: (specifier: string) => Promise<unknown> =
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  new Function('s', 'return import(s)') as (s: string) => Promise<unknown>;
+
 // Module-scoped guard. Next dev hot-reloads instrumentation when the file
 // changes, and the user might also call register() from multiple places.
 // `RESOLVED_PORT` on env is the cross-runtime signal HoverScript reads, but
@@ -21,7 +53,114 @@ import { ENV_KEYS, readOptionsFromEnv, type HoverOptions } from './options.js';
 // startService before either sets RESOLVED_PORT).
 let didRegister = false;
 
-export async function registerNode(overrides: HoverOptions = {}): Promise<void> {
+/** Walk up from `startDir` looking for `node_modules/<moduleId>/package.json`.
+ *  This is what Node's resolver does internally — we duplicate it here
+ *  because the package-subpath / exports-map dance of standard ESM
+ *  resolution refuses to load packages from arbitrary roots, and we
+ *  specifically need to root at the user's project (`process.cwd()`),
+ *  not at this file's `node_modules/@hover-dev/next/dist/` location.
+ *  Returns the absolute package.json path, or throws. */
+function findPackageJson(moduleId: string, startDir: string): string {
+  let dir = startDir;
+  // Safety: bail at filesystem root.
+  while (true) {
+    const candidate = join(dir, 'node_modules', moduleId, 'package.json');
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error(`could not locate "${moduleId}" in any node_modules above ${startDir}`);
+}
+
+/** Resolve a bare specifier (e.g. `@hover-dev/security`) to an absolute
+ *  ESM entry filesystem path, rooted at the user's project. We can't
+ *  just `await import('@hover-dev/security')` because the importer would
+ *  be this file's location inside `node_modules/@hover-dev/next/dist/`,
+ *  which only finds packages hoisted to our own dep closure. We also
+ *  can't use Node's standard resolver on the package directly: plugin
+ *  packages like `@hover-dev/security` only declare an `import`
+ *  condition in their exports map AND don't expose `./package.json`,
+ *  so both `createRequire().resolve('<pkg>')` (no require condition)
+ *  and `createRequire().resolve('<pkg>/package.json')` (subpath not in
+ *  exports) error out. Walking node_modules manually and parsing the
+ *  package.json ourselves sidesteps the conditional-exports machinery
+ *  entirely — once we have the package directory and its `exports['.']
+ *  .import` / `main` field, the absolute entry path goes through a
+ *  plain `file://` dynamic import that the loader accepts unconditionally. */
+function resolvePluginEntry(moduleId: string): string {
+  const pkgJsonPath = findPackageJson(moduleId, process.cwd());
+  const pkgDir = dirname(pkgJsonPath);
+  const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as {
+    main?: string;
+    module?: string;
+    exports?: unknown;
+  };
+  // Prefer exports['.']{ import | default } if present, fall back to
+  // legacy `module` / `main`. Plugin packages we care about all set
+  // `exports['.']{ import }` to their ESM build.
+  const exportsField = pkg.exports as
+    | string
+    | { import?: string | { default?: string }; default?: string | { default?: string }; [k: string]: unknown }
+    | undefined;
+  let entry: string | undefined;
+  if (typeof exportsField === 'string') {
+    entry = exportsField;
+  } else if (exportsField && typeof exportsField === 'object') {
+    const dot = (exportsField as Record<string, unknown>)['.'] ?? exportsField;
+    if (typeof dot === 'string') {
+      entry = dot;
+    } else if (dot && typeof dot === 'object') {
+      const imp = (dot as Record<string, unknown>).import ?? (dot as Record<string, unknown>).default;
+      if (typeof imp === 'string') entry = imp;
+      else if (imp && typeof imp === 'object') entry = (imp as Record<string, string>).default;
+    }
+  }
+  entry = entry ?? pkg.module ?? pkg.main;
+  if (!entry) {
+    throw new Error(`package "${moduleId}" has no resolvable ESM entry (no exports, module, or main field)`);
+  }
+  return resolvePath(pkgDir, entry);
+}
+
+async function resolvePlugins(specs: PluginSpec[]): Promise<HoverPluginManifest[]> {
+  const manifests: HoverPluginManifest[] = [];
+  for (const spec of specs) {
+    const moduleId = typeof spec === 'string' ? spec : spec.module;
+    const options = typeof spec === 'string' ? undefined : spec.options;
+    try {
+      const entryPath = resolvePluginEntry(moduleId);
+      const mod = (await dynamicImport(pathToFileURL(entryPath).href)) as {
+        default?: unknown;
+      };
+      // Plugin packages expose `defineHoverPlugin(...)`-wrapped default
+      // exports: a factory `(opts) => HoverPluginManifest`. Tolerate
+      // bare-manifest exports too, in case a plugin doesn't need a factory.
+      const factory = mod.default;
+      const manifest =
+        typeof factory === 'function'
+          ? (factory as (o?: unknown) => HoverPluginManifest)(options)
+          : (factory as HoverPluginManifest);
+      if (!manifest || typeof manifest !== 'object' || !('name' in manifest)) {
+        console.warn(
+          `[@hover-dev/next] plugin "${moduleId}" did not export a Hover plugin manifest; skipping`,
+        );
+        continue;
+      }
+      manifests.push(manifest);
+    } catch (err) {
+      console.warn(
+        `[@hover-dev/next] failed to load plugin "${moduleId}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  return manifests;
+}
+
+export async function registerNode(
+  overrides: HoverOptions = {},
+  pluginSpecs: PluginSpec[] = [],
+): Promise<void> {
   if (didRegister) return;
   if (process.env[ENV_KEYS.RESOLVED_PORT]) return;
   didRegister = true;
@@ -41,6 +180,8 @@ export async function registerNode(overrides: HoverOptions = {}): Promise<void> 
 
   const { startService } = await import('@hover-dev/core/service');
 
+  const plugins = await resolvePlugins(pluginSpecs);
+
   let service: Awaited<ReturnType<typeof startService>>;
   try {
     service = await startService({
@@ -50,6 +191,7 @@ export async function registerNode(overrides: HoverOptions = {}): Promise<void> 
       maxBudgetUsd,
       cdpUrl: `http://localhost:${chromeDebugPort}`,
       devRoot: process.cwd(),
+      plugins,
     });
   } catch (err) {
     console.error(
@@ -62,8 +204,11 @@ export async function registerNode(overrides: HoverOptions = {}): Promise<void> 
   process.env[ENV_KEYS.RESOLVED_PORT] = String(service.port);
 
   const bumped = service.port !== requestedPort;
+  const pluginNote = plugins.length
+    ? ` · plugins=[${plugins.map((p) => p.name).join(', ')}]`
+    : '';
   console.info(
-    `[@hover-dev/next] service ready · ws://127.0.0.1:${service.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}`,
+    `[@hover-dev/next] service ready · ws://127.0.0.1:${service.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}${pluginNote}`,
   );
 
   // Tear down on process exit. Next manages the dev-server lifecycle and

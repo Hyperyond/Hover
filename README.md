@@ -201,7 +201,8 @@ pnpm add -D @hover-dev/security
 ```
 
 ```ts
-// vite.config.ts (Astro / Nuxt / Next / Webpack mirror the same pattern)
+// vite.config.ts — Astro / Nuxt / Webpack mirror this exact shape:
+// the plugin manifest goes as additional arguments to hover().
 import { hover } from 'vite-plugin-hover';
 import securityMode from '@hover-dev/security';
 
@@ -209,6 +210,31 @@ export default defineConfig({
   plugins: [hover({}, securityMode())],
 });
 ```
+
+**Next.js is different.** Next compiles `instrumentation.ts` for both
+the Node and Edge runtimes, so importing `@hover-dev/security` at the
+top of any file Next traces would drag the package's Node-only deps
+(mockttp, playwright-core, …) into the Edge bundle. Pass plugins as
+**module specifier strings** to `register()` instead — they're resolved
+behind a dynamic-import wall that the Edge tracer can't see:
+
+```ts
+// next.config.mjs — same as without security mode.
+import { withHover } from '@hover-dev/next';
+export default withHover({}, { autoLaunchChrome: true });
+```
+
+```ts
+// instrumentation.ts — second argument to register() carries plugins.
+import { register as registerHover } from '@hover-dev/next/instrumentation';
+
+export async function register() {
+  await registerHover({}, ['@hover-dev/security']);
+}
+```
+
+Use the object form `{ module, options }` to pass options to a plugin
+factory: e.g. `{ module: '@hover-dev/security', options: { cdpPort: 9444 } }`.
 
 Zero external dependencies — no `mitmproxy`, no Python, no system CA install. The plugin uses [mockttp](https://github.com/httptoolkit/mockttp) (the engine behind HTTP Toolkit) to MITM HTTPS, generates a one-off CA on first run, and pins it via Chrome's `--ignore-certificate-errors-spki-list` so your OS trust store stays untouched. The CA private key persists under `<project>/.hover/ca/` (the shipped `.gitignore` excludes it).
 
@@ -471,7 +497,7 @@ const Hover = require('webpack-plugin-hover');
 module.exports = { plugins: [new Hover()] };
 ```
 
-**Optional: Security mode** — install alongside any of the above:
+**Optional: Security mode** — install alongside any of the above. Vite, Astro, Nuxt, and Webpack accept the plugin as an additional argument to `hover()` / `new HoverPlugin()`:
 
 ```ts
 import { hover } from 'vite-plugin-hover';
@@ -479,6 +505,16 @@ import securityMode from '@hover-dev/security';
 export default defineConfig({
   plugins: [hover({}, securityMode())],
 });
+```
+
+For Next.js, plugins are passed to `register()` in `instrumentation.ts` as module-specifier strings (to keep Node-only plugin deps out of the Edge bundle):
+
+```ts
+// instrumentation.ts
+import { register as registerHover } from '@hover-dev/next/instrumentation';
+export async function register() {
+  await registerHover({}, ['@hover-dev/security']);
+}
 ```
 
 Verified specs you save via the widget land in `__vibe_tests__/` at your project root. Run them with `npx playwright test` — they import only `@playwright/test` and have no runtime dependency on Hover, so CI runs them with the widget completely disabled.

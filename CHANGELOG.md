@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Dates are ISO 
 
 All notable changes to Hover are recorded here. Conventional Commits in the git log are the source of truth; this file groups them by user-visible impact.
 
+## [Unreleased]
+
+### Added
+
+- **`@hover-dev/next` plugins via `register()` second argument.** Plugins like `@hover-dev/security` are now wired into Next projects by passing a `PluginSpec[]` to `register()` in `instrumentation.ts` — either a bare module-specifier string `'@hover-dev/security'` or an `{ module, options }` object. Vite / Astro / Nuxt / Webpack continue to accept plugins as additional arguments to `hover()` / `new HoverPlugin()`; Next is the outlier because Next compiles `instrumentation.ts` for both the Node and Edge runtimes and a top-level import would drag plugin packages' Node-only deps (mockttp, playwright-core) into the Edge bundle. Specifiers are resolved at runtime inside `@hover-dev/next/internal/register-node` via a `new Function('s','return import(s)')` opaque dynamic import — Turbopack's static tracer can't follow it, so plugin code stays strictly Node-runtime-only. `examples/next-app/instrumentation.ts` and `examples/turbo-monorepo/apps/web/instrumentation.ts` are the reference shapes.
+- **`packages/next-integration/README.md`.** Brings `@hover-dev/next` in line with the other four integration packages, each of which already shipped a README on npm.
+
+### Fixed
+
+- **Plugin-spec resolver walks `node_modules` from `process.cwd()`, not from the integration package.** Earlier prototype used `createRequire(...).resolve('<plugin>')`, but plugin packages' `exports` maps don't declare a `require` condition (their npm publish is ESM-only), so the CJS resolver errored with "No exports main defined". The resolver now walks up from the user's project root looking for `node_modules/<plugin>/package.json`, reads `exports['.']{import}` / `module` / `main` itself, and loads the resulting absolute path via a `file://` dynamic import. Sidesteps both monorepo hoisting surprises and conditional-exports edge cases. Verified in `examples/next-app` (flat) and `examples/turbo-monorepo/apps/web` (monorepo).
+
 ## [0.5.0] — 2026-05-26
 
 Two big additions land together: a **Suggest fix prompt** button that copies a precise source-attribution prompt into the user's coding agent, and a **Record + Assert merge** that consolidates the two separate workflows into one sub-toolbar. Plus seven release-audit fixes including one critical monorepo dev-mode unblock.

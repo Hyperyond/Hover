@@ -15,6 +15,7 @@ This example is dogfood for the CLI. It is not configured to "just run" out-of-t
 3. **Next 15 + `next.config.ts` loads cleanly** (v0.7.3) — `@hover-dev/next` ships dual ESM + CJS so the CJS require step doesn't trip on missing `exports.require`.
 4. **`instrumentation.ts` resolves `register-node` from `.next/server/`** (v0.7.4) — Next inlines the file into its build output, breaking relative paths. The fix uses a package-subpath specifier (`@hover-dev/next/internal/register-node`) that routes through node_modules.
 5. **`turbo run dev` from the root works** — Next reads `apps/web/instrumentation.ts` (NOT the monorepo root), the Hover service boots, the widget injects into pages served on port 5183.
+6. **Plugin specifiers resolve from `apps/web/` in a monorepo** — `apps/web/instrumentation.ts` calls `registerHover({}, ['@hover-dev/security'])`. The resolver in `@hover-dev/next/internal/register-node` walks up from `process.cwd()` (which is `apps/web/` under `pnpm --filter web dev` / `turbo run dev`) and finds the workspace-linked plugin under `apps/web/node_modules/`. Service log on boot confirms `plugins=[@hover-dev/security]`.
 
 ## Local validation steps
 
