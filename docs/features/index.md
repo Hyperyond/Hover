@@ -2,9 +2,13 @@
 
 Everything Hover does today.
 
+## Modes
+
+- **[Security testing](./security)** ✨ NEW — install `@hover-dev/security` to route the debug Chrome through a local HTTPS MITM. The agent can list / inspect / replay captured API calls with mutations, probing for IDOR / authz bypass / parameter tampering / missing security headers / PII leakage. Crystallises into Playwright specs that run in CI without the proxy.
+
 ## Input
 
-- **[Voice mode](./voice-mode)** ✨ NEW — push-to-talk speech input + spoken step narration. 中文 / English autodetect, browser-native, no API keys.
+- **[Voice mode](./voice-mode)** — push-to-talk speech input + spoken step narration. 中文 / English autodetect, browser-native, no API keys.
 - **[Record mode](./record-mode)** — record your own clicks / fills / selects as Playwright steps, with built-in Exists / Says / Equals assertion sub-modes.
 - **[Fix prompt](./fix-prompt)** — click any element on the page, type what to change, get a precise prompt (source line:col + ancestor chain + Playwright selector) on your clipboard.
 

@@ -1,0 +1,66 @@
+# Releasing
+
+Pushing a `v*` tag triggers `.github/workflows/publish.yml`, which publishes all nine packages to npm and creates a matching GitHub Release.
+
+## What ships per release
+
+| Package | npm |
+|---|---|
+| `@hover-dev/core` | <https://www.npmjs.com/package/@hover-dev/core> |
+| `@hover-dev/widget-bootstrap` | <https://www.npmjs.com/package/@hover-dev/widget-bootstrap> |
+| `vite-plugin-hover` | <https://www.npmjs.com/package/vite-plugin-hover> |
+| `@hover-dev/astro` | <https://www.npmjs.com/package/@hover-dev/astro> |
+| `@hover-dev/nuxt` | <https://www.npmjs.com/package/@hover-dev/nuxt> |
+| `@hover-dev/next` | <https://www.npmjs.com/package/@hover-dev/next> |
+| `webpack-plugin-hover` | <https://www.npmjs.com/package/webpack-plugin-hover> |
+| `@hover-dev/cli` | <https://www.npmjs.com/package/@hover-dev/cli> |
+| `@hover-dev/security` | <https://www.npmjs.com/package/@hover-dev/security> |
+
+All scoped packages publish under the `@hover-dev` npm org (public access). Unscoped packages follow the community `vite-plugin-*` / `webpack-*-plugin` convention.
+
+## Cutting a release
+
+1. Land all the PRs you want shipped on `main`. `main` must stay runnable — every commit on it should leave `pnpm typecheck` + `pnpm test` + `pnpm smoke` intact.
+2. Confirm `pnpm build` + the relevant smokes are clean locally.
+3. Tag with an annotated message (the message becomes the leading body of the GitHub Release):
+
+   ```bash
+   git tag -a v0.7.0 -m "v0.7.0 — Security testing mode
+
+   - @hover-dev/security: HTTPS MITM + flow inspector + MCP server
+   - Plugin API for declarative manifest-based extensions
+   - …"
+   git push --tags
+   ```
+
+4. Tag push triggers the workflow. It:
+   - Re-installs dependencies in CI.
+   - Resolves the version from the tag (`v0.7.0` → `0.7.0`).
+   - Rewrites every publishable `package.json` in place via `npm version --no-git-tag-version`.
+   - Runs `pnpm typecheck` + `pnpm test` as a release gate.
+   - Builds every package.
+   - Publishes each one to npm with `--access public`.
+   - Packs the same tarballs and attaches them to a GitHub Release.
+
+## If the workflow fails
+
+Tags are immutable for everyone who already pulled. **Don't retag** — re-trigger:
+
+```bash
+gh workflow run publish.yml --ref v0.7.0 -f version=0.7.0
+```
+
+`--ref` checks out the tag's commit (not the moving default-branch HEAD). The workflow has a `workflow_dispatch` input for exactly this case. The Release won't be re-created on a manual rerun (the workflow's `if: startsWith(github.ref, 'refs/tags/')` gate skips it); if the original failed before the Release step, create it manually with `gh release create`.
+
+## Version policy
+
+Pre-1.0 we use **thematic patches**: `v0.6.x` = Voice mode arc, `v0.7.x` = Security testing arc, etc. Strict SemVer kicks in at `v1.0.0`. See [Roadmap](/reference/roadmap).
+
+## Permissions
+
+The workflow uses:
+
+- `NPM_TOKEN` — granular automation token with read+write on `@hover-dev/*` and `vite-plugin-hover` / `webpack-plugin-hover`. Set in repo secrets.
+- `GITHUB_TOKEN` — auto-injected, used by `softprops/action-gh-release` to create the Release.
+
+Never `--no-verify`, never `git config` changes, never force-push to `main`. Hooks must stay green.

@@ -6,10 +6,16 @@ The differentiator vs. Stagehand / Midscene / Playwright codegen is the **AI exp
 
 ## What's inside this section
 
-- [Quick start](./quick-start) — Two terminals, you're running in 60 seconds.
+- [Quick start](./quick-start) — Install in your existing project. 60 seconds.
 - [Install](./install) — Pick your bundler. `npx @hover-dev/cli add` auto-detects.
-- [Your first session](./first-session) — A guided walkthrough of the basic-app flow.
+- [Your first session](./first-session) — A guided walkthrough of every widget control.
 - [Pick an agent](./agents) — Claude (hard sandbox) or Codex (soft). One-line registry to add more.
+
+::: tip Going further
+Hover has optional plugins for specialised workflows. The first is **[Security testing](/features/security)** — installs alongside the base plugin and adds a mode that captures HTTPS traffic + lets the agent probe for authz / authn / parameter-tampering issues, crystallising findings into Playwright regression specs.
+
+Building Hover itself? See **[Development](/development/)** for the monorepo workflow.
+:::
 
 ## At a glance
 

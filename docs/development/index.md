@@ -1,0 +1,33 @@
+# Development
+
+Pages in this section are for **contributors and integrators** working *on* Hover — not for end users who just want to use Hover in their project. If you're here to install Hover and try it, head to [Get started](/get-started/) instead.
+
+## What's inside
+
+- [Monorepo layout](./monorepo-layout) — `packages/*` and `examples/*` overview, who depends on whom, how the Vite/Astro/Nuxt/Next/Webpack shims share the same widget bundle.
+- [Running examples](./running-examples) — `pnpm dev:example:basic-app` / `e-commerce` / `stock-registration` / `canvas-paint` / `payment-provider` / `astro-app` / `nuxt-app` / `next-app` / `webpack-app` / `rn-web-app` — the smoke targets bundled with the repo.
+- [Smoke tests](./smoke-tests) — `pnpm smoke` (end-to-end agent in the loop), `pnpm ws-smoke`, `pnpm verify-widget`, per-package `pnpm test`.
+- [Releasing](./releasing) — How tags push triggers `.github/workflows/publish.yml` and what `pnpm publish` does to each of the nine packages.
+
+## Quick reference
+
+```bash
+# Clone + install (workspace install, no per-package step)
+git clone https://github.com/Hyperyond/Hover.git
+cd Hover
+pnpm install
+
+# Build everything (postinstall already handles this for fresh clones)
+pnpm build
+
+# Type-check the workspace
+pnpm typecheck
+
+# Run unit tests across every package that has them
+pnpm test
+
+# Bring up an example + start working on Hover internals
+pnpm dev:example:basic-app
+```
+
+Edit Hover source files under `packages/*` while an example dev server is running and HMR reloads the widget for you. For `@hover-dev/core` and `@hover-dev/widget-bootstrap` — the two packages that point `main` at `dist/` rather than `src/` — see [Monorepo layout § Next-tax](./monorepo-layout#nextjs-entry-point-tax) for why.

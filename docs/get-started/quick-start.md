@@ -1,53 +1,72 @@
 # Quick start
 
-You need two terminals on first run. Once Chrome and Vite are up they stay running across many smoke loops.
+Add Hover to a project you already have running. One command, one config edit, then `pnpm dev` like usual.
 
-## Clone and install
+## Prerequisites
 
-```bash
-git clone https://github.com/Hyperyond/Hover.git
-cd Hover
-pnpm install
-pnpm --filter basic-app exec playwright install chromium   # for `pnpm test:e2e` only
-```
+- A Vite / Astro / Nuxt / Next.js / Webpack project — any framework Hover supports.
+- Node 22+ on PATH.
+- Either `claude` (Claude Code) or `codex` (OpenAI Codex) on PATH — Hover spawns whichever coding-agent CLI you already have. No new API keys.
 
-## Terminal 1 — dev server + debug Chrome
+::: tip Don't have an agent CLI yet?
+- **Claude Code** — `npm install -g @anthropic-ai/claude-code`, then `claude login`. Uses the Claude Pro / Max subscription you might already pay for.
+- **OpenAI Codex** — `npm install -g @openai/codex`, then `codex login`.
 
-```bash
-pnpm dev:example:basic-app
-```
-
-This boots the basic-app example at <http://localhost:5173>. Because the example passes `autoLaunchChrome: true`, this also spawns an isolated debug Chrome on port `9222` (profile dir under `<tmpdir>/hover-chrome`) navigated to the dev URL.
-
-::: tip
-Hover deliberately does *not* attach to your everyday Chrome — your normal browsing session stays separate. You'll log in once inside the debug Chrome and the profile dir reuses session state across runs.
+Either works. You can switch from the widget header any time.
 :::
 
-## Terminal 2 — invoke the agent
+## Install
+
+Run inside your project root:
 
 ```bash
-pnpm smoke
+npx @hover-dev/cli add
 ```
 
-End-to-end: detect agents → CDP preflight → invoke `claude` → stream events.
+That command:
 
-Custom target + prompt:
+1. Reads your `package.json` and detects your bundler.
+2. Installs the right Hover integration package.
+3. AST-edits your bundler config (`vite.config.ts`, `astro.config.mjs`, `nuxt.config.ts`, `next.config.ts`, or `webpack.config.js`) to register the plugin.
+4. Is idempotent — running it twice is a no-op.
+
+Prefer to do it by hand? See the [manual install per bundler](./install#manual-install).
+
+## Start your dev server
+
+Use whatever command you already use:
 
 ```bash
-pnpm smoke http://localhost:5173/ "log in, then add a todo named 'verify hover'"
+pnpm dev          # or `npm run dev`, `yarn dev`, `bun dev`
 ```
 
-Environment overrides:
+Hover starts a local service on `127.0.0.1:51789` and injects a floating widget (Shadow DOM, marked `data-hover="true"`) into your dev page. The widget connects on its own.
 
-```bash
-HOVER_AGENT=claude HOVER_MODEL=sonnet HOVER_CDP=http://localhost:9222 pnpm smoke
+::: tip First-run debug Chrome
+On first ✨ click, the widget prompts you to launch an **isolated debug Chrome** on port 9222 (separate from your everyday browser — a clean profile under `<tmpdir>/hover-chrome`). Click the prompt and a debug Chrome opens, navigated to your dev URL. Subsequent runs reuse it.
+
+You can opt into auto-launch on `pnpm dev` by passing `autoLaunchChrome: true` to the plugin. See [Plugin options](/reference/plugin-options).
+:::
+
+## Send your first prompt
+
+Click the ✨ launcher in the corner of the page. Type, or hold the 🎙 button and speak:
+
+```
+log in, then add a todo named "verify hover"
 ```
 
-## What you'll see
+Press <kbd>↵</kbd> or **Send**. The agent drives the debug Chrome, narrates each tool call, and renders a Result + Findings card when done.
 
-1. The widget renders in the bottom-right of the dev page (Shadow DOM, marked `data-hover="true"`).
-2. Step events stream into the panel as the agent drives the debug Chrome.
-3. At the end, a Result card holds the verification summary; a Findings card lists any bugs / issues the agent flagged.
-4. **Save as Spec** turns the session into `__vibe_tests__/<slug>.spec.ts`.
+## Save the session
 
-Next: [your first session](./first-session) walks through the basic-app flow step by step.
+Click **Save as Spec** on the Result card. The verified flow becomes a `__vibe_tests__/<slug>.spec.ts` file — plain `@playwright/test` code that runs in your CI with no Hover dependency.
+
+That's the loop: speak / type → agent verifies → crystallize once → CI replays forever.
+
+## What's next
+
+- [Your first session](./first-session) — A guided walkthrough of every widget control on a real flow.
+- [Pick an agent](./agents) — Differences between Claude and Codex, and how to add others.
+- [Security testing](/features/security) — Probe your dev app for authz / authn / parameter-tampering issues, then crystallize findings as regression specs.
+- [Voice mode](/features/voice-mode) — Push-to-talk speech in 中文 / English, browser-native, no API keys.

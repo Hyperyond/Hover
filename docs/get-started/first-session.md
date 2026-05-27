@@ -1,11 +1,12 @@
 # Your first session
 
-Walk through the basic-app login flow end-to-end. Estimated time: 5 minutes.
+A guided walkthrough of every widget control. Estimated time: 5 minutes.
 
 ## Prerequisites
 
-- Followed [Quick start](./quick-start) — `pnpm dev:example:basic-app` is running, debug Chrome is open on port 9222.
-- The Hover widget is visible in the bottom-right of <http://localhost:5173/>.
+- Followed [Quick start](./quick-start) — Hover is installed in your project and `pnpm dev` (or your equivalent) is running.
+- The floating ✨ launcher is visible in the bottom-right of your dev page.
+- The debug Chrome is open on port 9222 (the widget walks you through launching it if not).
 
 ## Step 1 — Open the widget
 
@@ -19,10 +20,20 @@ You'll see:
 
 ## Step 2 — Send your first prompt
 
-Type:
+Type a natural-language instruction describing a flow you want to verify on your app. For example:
 
 ```
-log in, then click + 1 three times and verify the counter, then add a todo named "verify hover"
+log in with the test account, navigate to the dashboard, and verify
+the user's name appears in the header
+```
+
+```
+add a product to cart, go to checkout, verify the total is correct
+```
+
+```
+submit the contact form with empty fields, verify each required-field
+error appears
 ```
 
 Press <kbd>↵</kbd> or click **Send**. The button switches to **Stop** while the agent runs.
@@ -50,8 +61,10 @@ Click the dropdown on the Result card. Three formats:
 
 ## Step 5 — Run the spec without Hover
 
+The saved file is a plain `@playwright/test` spec. Run it like any other Playwright test in your project:
+
 ```bash
-pnpm --filter basic-app exec playwright test __vibe_tests__/<slug>.spec.ts
+pnpm exec playwright test __vibe_tests__/<slug>.spec.ts
 ```
 
 This is the point of crystallization: the AI authored the test once, but the saved spec runs forever in CI with zero agent involvement.

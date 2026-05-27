@@ -52,6 +52,7 @@ export default defineConfig({
       { text: 'Get started', link: '/get-started/' },
       { text: 'Features', link: '/features/' },
       { text: 'Reference', link: '/reference/' },
+      { text: 'Development', link: '/development/' },
       {
         text: 'v0.6.0',
         items: [
@@ -79,6 +80,7 @@ export default defineConfig({
           text: 'Features',
           items: [
             { text: 'Overview', link: '/features/' },
+            { text: 'Security testing', link: '/features/security' },
             { text: 'Voice mode', link: '/features/voice-mode' },
             { text: 'Save as Spec', link: '/features/save-as-spec' },
             { text: 'Save as Skill', link: '/features/save-as-skill' },
@@ -95,11 +97,24 @@ export default defineConfig({
           items: [
             { text: 'Overview', link: '/reference/' },
             { text: 'Plugin options', link: '/reference/plugin-options' },
+            { text: 'Plugin API', link: '/reference/plugin-api' },
             { text: 'CLI (npx @hover-dev/cli)', link: '/reference/cli' },
             { text: 'Agent registry', link: '/reference/agent-registry' },
             { text: 'WebSocket protocol', link: '/reference/websocket-protocol' },
             { text: 'Architecture', link: '/reference/architecture' },
             { text: 'Roadmap', link: '/reference/roadmap' },
+          ],
+        },
+      ],
+      '/development/': [
+        {
+          text: 'Development',
+          items: [
+            { text: 'Overview', link: '/development/' },
+            { text: 'Monorepo layout', link: '/development/monorepo-layout' },
+            { text: 'Running examples', link: '/development/running-examples' },
+            { text: 'Smoke tests', link: '/development/smoke-tests' },
+            { text: 'Releasing', link: '/development/releasing' },
           ],
         },
       ],
