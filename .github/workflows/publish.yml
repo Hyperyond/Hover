@@ -11,7 +11,7 @@ name: Publish
 #             — must be added before the first run. GITHUB_TOKEN is
 #             auto-injected (used for the Release).
 #
-# Packages (8 total):
+# Packages (9 total):
 #   Scoped, the @hover-dev org on npmjs.com
 #     - @hover-dev/core              — the Node service
 #     - @hover-dev/widget-bootstrap  — shared widget assets + bundle builder
@@ -19,6 +19,7 @@ name: Publish
 #     - @hover-dev/nuxt              — Nuxt module
 #     - @hover-dev/next              — Next.js (App Router, Turbopack) integration
 #     - @hover-dev/cli               — `npx @hover-dev/cli add` setup CLI
+#     - @hover-dev/security          — security-testing plugin (MITM proxy + MCP)
 #   Unscoped (follows the community vite-plugin-* / webpack-*-plugin convention)
 #     - vite-plugin-hover            — Vite plugin
 #     - webpack-plugin-hover         — Webpack 5 plugin
@@ -76,6 +77,7 @@ env:
     --filter @hover-dev/next
     --filter webpack-plugin-hover
     --filter @hover-dev/cli
+    --filter @hover-dev/security
 
 jobs:
   publish:

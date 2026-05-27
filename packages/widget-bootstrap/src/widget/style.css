@@ -210,6 +210,8 @@ header {
   padding: 2px 7px;
   border-radius: 999px;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
   letter-spacing: 0.02em;
   text-transform: lowercase;
   background: var(--accent-dim);
@@ -230,6 +232,8 @@ header {
   color: var(--text-mute);
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
   opacity: 0;
   transform: scale(0.92);
   transition: opacity 0.18s ease, transform 0.18s ease, background 0.2s ease, color 0.2s ease;
@@ -321,7 +325,12 @@ header {
   border-color: var(--accent);
   color: var(--accent);
 }
-.agentbtn .agent-label { font-variant-numeric: tabular-nums; }
+.agentbtn .agent-label {
+  font-variant-numeric: tabular-nums;
+  /* Header is dense — never wrap, otherwise the whole pill grows tall and
+   * shoves the trailing icons + status pill into a second row. */
+  white-space: nowrap;
+}
 .agentbtn .agent-warn[hidden] { display: none; }
 .agentbtn .agent-warn { color: var(--warn); font-size: 11px; }
 .agentbtn .agent-caret {
@@ -437,6 +446,236 @@ header {
 .agent-row .agent-badge.hard      { background: rgba(125, 211, 252, 0.16); color: var(--link); }
 .agent-row .agent-rowcheck {
   width: 16px; flex-shrink: 0; color: var(--accent); font-weight: 700; text-align: center;
+}
+
+/* ───────────────────────── mode bar (above panel header) ───────────────────────── */
+
+/* Sits as the topmost row of .panel, full-width, ~28px tall. Hidden when
+ * no plugins are loaded. Tints orange-red when a non-default mode is
+ * active so the user can never forget they're in "altered" mode —
+ * matches the panel border + launcher ring treatment below. */
+.modebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+  background: var(--bg-2);
+  color: var(--text-mute);
+  font: 500 11px/1 inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.modebar[hidden] { display: none; }
+.modebar:hover { background: var(--bg-3); color: var(--text); }
+.modebar:focus-visible { outline: none; background: var(--bg-3); color: var(--text); }
+.modebar > * { pointer-events: none; }
+.modebar .modebar-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
+}
+.modebar .modebar-label {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.modebar .modebar-caret {
+  color: var(--text-dim);
+  font-size: 9px;
+  flex-shrink: 0;
+}
+/* margin-left: auto pushes the hint to the right edge while keeping the
+ * primary identity group (dot · label · caret) left-aligned. min-width:0
+ * + overflow rules let the hint truncate gracefully if it's long. */
+.modebar .modebar-hint {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Engaged state — non-default mode is active. Orange-red (warn-ish) so
+ * it reads as "you're in altered state, be aware" without being
+ * actually-danger red. Pattern borrowed from Burp's "intercept on"
+ * banner — a persistent toolbar tint, not a transient flash. */
+.modebar.engaged {
+  background: linear-gradient(180deg, rgba(251, 146, 60, 0.18), rgba(251, 146, 60, 0.08));
+  border-bottom-color: rgba(251, 146, 60, 0.55);
+  color: #fed7aa;
+}
+.modebar.engaged .modebar-dot {
+  background: #fb923c;
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.18);
+}
+.modebar.engaged .modebar-label { color: #fed7aa; }
+.modebar.engaged .modebar-hint  { color: rgba(254, 215, 170, 0.6); }
+.modebar.engaged .modebar-caret { color: rgba(254, 215, 170, 0.7); }
+.modebar.engaged:hover { background: linear-gradient(180deg, rgba(251, 146, 60, 0.26), rgba(251, 146, 60, 0.14)); }
+
+/* Panel + launcher mirror the engaged tint so the user spots it from
+ * across the page. We hook the state via a class on .panel set by the
+ * widget JS — that's the same element that holds the existing
+ * .open class, so no extra layout. */
+.panel.mode-engaged {
+  border-color: rgba(251, 146, 60, 0.55);
+  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.25), 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* When the modebar is present, every overlay that anchored its top at
+ * 40px (header height) needs another 28px clearance so it doesn't peek
+ * out underneath the bar. Listing them by class beats touching each
+ * overlay block individually. */
+.panel.has-modebar .skills-overlay,
+.panel.has-modebar .agents-overlay,
+.panel.has-modebar .modes-overlay,
+.panel.has-modebar .network-overlay,
+.panel.has-modebar .settings-overlay,
+.panel.has-modebar .cdp-overlay {
+  top: 68px;
+}
+.launcher.mode-engaged {
+  border-color: rgba(251, 146, 60, 0.7);
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.18), 0 6px 22px rgba(0, 0, 0, 0.5);
+  color: #fb923c;
+}
+
+.modes-overlay {
+  position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  display: none;
+  flex-direction: column;
+  z-index: 5;
+}
+.modes-overlay.open { display: flex; }
+.modes-overlay .modes-header {
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-mute);
+}
+.modes-overlay .modes-header .count { font-weight: 600; color: var(--text); }
+.modes-overlay .modes-list-items { flex: 1; overflow-y: auto; padding: 8px; }
+.mode-row {
+  padding: 10px 12px; border-radius: 6px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--bg-2);
+}
+.mode-row:hover { background: var(--bg-3); border-color: var(--line); }
+.mode-row.current {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  cursor: default;
+}
+.mode-row .mode-main { flex: 1; min-width: 0; }
+.mode-row .mode-rowlabel {
+  font-weight: 600; color: var(--text); font-size: 13px;
+}
+.mode-row .mode-rowtag {
+  font-size: 12px; color: var(--text-mute); margin-top: 2px;
+  line-height: 1.4;
+}
+.mode-row .mode-pluginname {
+  font-size: 11px; color: var(--text-dim); margin-top: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.mode-row .mode-rowcheck {
+  width: 16px; flex-shrink: 0; color: var(--accent); font-weight: 700; text-align: center;
+}
+
+/* ───────────────────────── network overlay (captured flows) ───────────────────────── */
+
+/* The networkbtn re-uses the .iconbtn shape; the only addition is a tiny
+ * count badge in the top-right corner, dim until populated. */
+.networkbtn { position: relative; }
+.networkbtn[hidden] { display: none; }
+.networkbtn .network-badge[hidden] { display: none; }
+.networkbtn .network-badge {
+  position: absolute;
+  top: -2px; right: -2px;
+  min-width: 14px; height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--link);
+  color: var(--bg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.network-overlay {
+  position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  display: none;
+  flex-direction: column;
+  z-index: 5;
+}
+.network-overlay.open { display: flex; }
+.network-overlay .network-header {
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-mute);
+}
+.network-overlay .network-header .count { font-weight: 600; color: var(--text); }
+.network-overlay .network-list-items { flex: 1; overflow-y: auto; padding: 4px; }
+.network-overlay .network-empty {
+  padding: 20px 16px; text-align: center;
+  color: var(--text-dim); font-size: 12px; line-height: 1.5;
+}
+.flow-row {
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  cursor: default;
+  display: grid;
+  grid-template-columns: 32px 38px 1fr auto;
+  align-items: baseline;
+  gap: 6px;
+  background: var(--bg-2);
+}
+.flow-row:hover { background: var(--bg-3); border-color: var(--line); }
+.flow-row.mutated {
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+.flow-row .flow-status {
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.flow-row .flow-status.s2xx { color: var(--accent); }
+.flow-row .flow-status.s3xx { color: var(--link); }
+.flow-row .flow-status.s4xx { color: var(--warn); }
+.flow-row .flow-status.s5xx { color: #f87171; }
+.flow-row .flow-status.pending { color: var(--text-dim); }
+.flow-row .flow-method {
+  color: var(--text-mute);
+  font-weight: 600;
+}
+.flow-row .flow-url {
+  color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.flow-row .flow-meta {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ───────────────────────── CDP overlay (dark) ───────────────────────── */

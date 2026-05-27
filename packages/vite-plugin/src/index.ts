@@ -1,5 +1,6 @@
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
+import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
 import { getWidgetScript } from '@hover-dev/widget-bootstrap';
 import type { Plugin } from 'vite';
 import { parse } from '@babel/parser';
@@ -100,18 +101,19 @@ export interface HoverOptions {
   sourceAttribution?: boolean;
 }
 
-export function hover(options: HoverOptions = {}): Plugin {
-  const port = options.port ?? 51789;
-  const chromeDebugPort = options.chromeDebugPort ?? 9222;
-  const autoLaunchChrome = options.autoLaunchChrome ?? false;
-  const agentId = options.agentId ?? 'claude';
-  const model = options.model ?? 'sonnet';
+export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[]): Plugin {
+  const opts = options ?? {};
+  const port = opts.port ?? 51789;
+  const chromeDebugPort = opts.chromeDebugPort ?? 9222;
+  const autoLaunchChrome = opts.autoLaunchChrome ?? false;
+  const agentId = opts.agentId ?? 'claude';
+  const model = opts.model ?? 'sonnet';
   // No default cap — real flows (form filling, multi-step checkouts) used
   // to die mid-run at the old $0.50 ceiling. The widget shows the running $
   // counter in its header so the user can Stop when they've seen enough.
   // Pass an explicit number here to reinstate a hard ceiling.
-  const maxBudgetUsd = options.maxBudgetUsd;
-  const sourceAttribution = options.sourceAttribution ?? true;
+  const maxBudgetUsd = opts.maxBudgetUsd;
+  const sourceAttribution = opts.sourceAttribution ?? true;
 
   let enabled = true;
   let service: ServiceHandle | null = null;
@@ -129,9 +131,9 @@ export function hover(options: HoverOptions = {}): Plugin {
 
     configResolved(config) {
       enabled =
-        typeof options.enabled === 'function'
-          ? options.enabled({ mode: config.mode })
-          : options.enabled ?? config.mode === 'development';
+        typeof opts.enabled === 'function'
+          ? opts.enabled({ mode: config.mode })
+          : opts.enabled ?? config.mode === 'development';
       viteRoot = config.root;
     },
 
@@ -156,11 +158,15 @@ export function hover(options: HoverOptions = {}): Plugin {
           // The Vite project root is where the agent runs (cwd) and where
           // `Save as Skill` writes `.claude/skills/<slug>/SKILL.md`.
           devRoot: server.config.root,
+          plugins,
         });
         servicePort = service.port;
         const bumped = servicePort !== port;
+        const pluginNote = plugins.length
+          ? ` · plugins=[${plugins.map((p) => p.name).join(', ')}]`
+          : '';
         server.config.logger.info(
-          `[hover] service ready · ws://127.0.0.1:${servicePort}${bumped ? ` (auto-bumped from ${port})` : ''} · agent=${agentId} model=${model} · root=${server.config.root}`,
+          `[hover] service ready · ws://127.0.0.1:${servicePort}${bumped ? ` (auto-bumped from ${port})` : ''} · agent=${agentId} model=${model}${pluginNote} · root=${server.config.root}`,
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

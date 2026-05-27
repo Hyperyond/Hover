@@ -17,6 +17,7 @@
     "styled-components": "^6.4.2"
   },
   "devDependencies": {
+    "@hover-dev/security": "workspace:*",
     "@playwright/test": "^1.50.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

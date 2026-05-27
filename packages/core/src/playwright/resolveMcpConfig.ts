@@ -24,11 +24,29 @@ import process from 'node:process';
  * which lets multiple Hover services (one per example app) coexist
  * without stepping on each other's CDP endpoint.
  */
+export interface ExtraMcpServer {
+  /** Stable id of the server. Becomes the JSON key under mcpServers; also
+   *  the prefix Claude exposes its tools under (`mcp__<id>__<tool>`). */
+  id: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
 export function resolveMcpConfig(opts: {
   /** CDP URL passed to the MCP server's `--cdp-endpoint` flag. */
   cdpUrl: string;
   /** Service port — used to namespace the temp config file. */
   port: number;
+  /** Additional MCP servers contributed by active plugins. Each becomes
+   *  a key under the mcpServers object. The id is also used to name the
+   *  tool prefix Claude exposes (e.g. `mcp__hover_security__list_flows`),
+   *  but Claude sanitises non-alphanumeric chars to underscores, so the
+   *  caller does NOT need to do that. */
+  extra?: ExtraMcpServer[];
+  /** Suffix for the output filename so multiple parallel configs from
+   *  the same service (e.g. mode toggle round-trips) don't share state. */
+  suffix?: string;
 }): string {
   // Resolve the package's main file, then walk back to its package root.
   // Using `package.json` as the resolution target is the documented
@@ -53,18 +71,28 @@ export function resolveMcpConfig(opts: {
   // bin shim on PATH and we skip yet another resolution layer.
   const cliPath = resolve(pkgRoot, 'cli.js');
 
-  const config = {
-    mcpServers: {
-      playwright: {
-        command: process.execPath, // current Node binary
-        args: [cliPath, '--cdp-endpoint', opts.cdpUrl],
-      },
+  const mcpServers: Record<string, { command: string; args?: string[]; env?: Record<string, string> }> = {
+    playwright: {
+      command: process.execPath, // current Node binary
+      args: [cliPath, '--cdp-endpoint', opts.cdpUrl],
     },
   };
+  for (const extra of opts.extra ?? []) {
+    // Claude sanitises the key for tool naming; we keep the raw id here
+    // because mcp-config consumers (claude / codex) accept arbitrary
+    // strings and do their own normalisation.
+    mcpServers[extra.id] = {
+      command: extra.command,
+      args: extra.args,
+      env: extra.env,
+    };
+  }
+  const config = { mcpServers };
 
   const outDir = resolve(tmpdir(), 'hover');
   mkdirSync(outDir, { recursive: true });
-  const outPath = resolve(outDir, `mcp-config-${opts.port}.json`);
+  const suffix = opts.suffix ? `-${opts.suffix}` : '';
+  const outPath = resolve(outDir, `mcp-config-${opts.port}${suffix}.json`);
   writeFileSync(outPath, JSON.stringify(config, null, 2), 'utf-8');
   return outPath;
 }
