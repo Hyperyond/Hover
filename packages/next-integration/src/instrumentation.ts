@@ -1,4 +1,5 @@
 import type { HoverOptions } from './options.js';
+import type { PluginSpec } from './register-node.js';
 
 /**
  * Hover's `instrumentation.ts` register hook.
@@ -44,7 +45,10 @@ const dynamicImport: (specifier: string) => Promise<unknown> =
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
   new Function('s', 'return import(s)') as (s: string) => Promise<unknown>;
 
-export async function register(overrides: HoverOptions = {}): Promise<void> {
+export async function register(
+  overrides: HoverOptions = {},
+  plugins: PluginSpec[] = [],
+): Promise<void> {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
   // Package-subpath specifier, not a relative path. Next compiles this
   // file into `.next/server/instrumentation.js`, where any `./` import
@@ -53,5 +57,5 @@ export async function register(overrides: HoverOptions = {}): Promise<void> {
   // `exports` map and finds `dist/register-node.{js,cjs}`.
   const mod = (await dynamicImport('@hover-dev/next/internal/register-node')) as
     typeof import('./register-node.js');
-  await mod.registerNode(overrides);
+  await mod.registerNode(overrides, plugins);
 }

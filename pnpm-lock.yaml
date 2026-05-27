@@ -163,6 +163,9 @@ importers:
       '@hover-dev/next':
         specifier: workspace:*
         version: link:../../packages/next-integration
+      '@hover-dev/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
@@ -310,6 +313,9 @@ importers:
       '@hover-dev/next':
         specifier: workspace:*
         version: link:../../../../packages/next-integration
+      '@hover-dev/security':
+        specifier: workspace:*
+        version: link:../../../../packages/security
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1

@@ -37,6 +37,14 @@ import { writeOptionsToEnv, type HoverOptions } from './options.js';
  * Or with options:
  *
  *   export default withHover({ // your config }, { autoLaunchChrome: true });
+ *
+ * Plugins (e.g. `@hover-dev/security`) are NOT configured here — they
+ * are passed as the 2nd argument to `register()` in `instrumentation.ts`.
+ * Why: plugin packages bring Node-only deps (mockttp, playwright-core, …)
+ * that must never end up traced into Next's Edge bundle, and they aren't
+ * JSON-serialisable so env-var smuggling doesn't help. The
+ * instrumentation hook is already Node-runtime-gated, so that's where
+ * plugins belong. See `examples/next-app/instrumentation.ts`.
  */
 export function withHover<T extends Record<string, unknown>>(
   nextConfig: T,
