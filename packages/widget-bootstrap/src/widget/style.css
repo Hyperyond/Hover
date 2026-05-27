@@ -484,18 +484,22 @@ header {
   color: var(--text);
   white-space: nowrap;
 }
+.modebar .modebar-caret {
+  color: var(--text-dim);
+  font-size: 9px;
+  flex-shrink: 0;
+}
+/* margin-left: auto pushes the hint to the right edge while keeping the
+ * primary identity group (dot · label · caret) left-aligned. min-width:0
+ * + overflow rules let the hint truncate gracefully if it's long. */
 .modebar .modebar-hint {
-  flex: 1;
+  margin-left: auto;
   color: var(--text-dim);
   font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.modebar .modebar-caret {
-  color: var(--text-dim);
-  font-size: 9px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 /* Engaged state — non-default mode is active. Orange-red (warn-ish) so
@@ -523,6 +527,19 @@ header {
 .panel.mode-engaged {
   border-color: rgba(251, 146, 60, 0.55);
   box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.25), 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* When the modebar is present, every overlay that anchored its top at
+ * 40px (header height) needs another 28px clearance so it doesn't peek
+ * out underneath the bar. Listing them by class beats touching each
+ * overlay block individually. */
+.panel.has-modebar .skills-overlay,
+.panel.has-modebar .agents-overlay,
+.panel.has-modebar .modes-overlay,
+.panel.has-modebar .network-overlay,
+.panel.has-modebar .settings-overlay,
+.panel.has-modebar .cdp-overlay {
+  top: 68px;
 }
 .launcher.mode-engaged {
   border-color: rgba(251, 146, 60, 0.7);

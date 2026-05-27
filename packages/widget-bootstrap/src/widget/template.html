@@ -30,10 +30,13 @@
     panel border + launcher glow accordingly.
   -->
   <button class="modebar" type="button" hidden aria-label="Switch mode">
+    <!-- Primary identity (dot · label · caret) is grouped left-aligned so
+         the user's eye lands on "what mode am I in" first. The hint sits
+         after a flex spacer and stays as supporting copy on the right. -->
     <span class="modebar-dot" aria-hidden="true"></span>
     <span class="modebar-label">Default</span>
-    <span class="modebar-hint">click to switch</span>
     <span class="modebar-caret" aria-hidden="true">▾</span>
+    <span class="modebar-hint">click to switch</span>
   </button>
   <header>
     <!-- The agent pill itself ("claude ▾") effectively brands the panel —
@@ -51,7 +54,7 @@
       (e.g. security:flow:added). One glyph for any mode that surfaces
       network captures so we don't grow the header per plugin.
     -->
-    <button class="iconbtn networkbtn" type="button" hidden aria-label="Network" data-tooltip="Captured network flows">
+    <button class="iconbtn networkbtn" type="button" hidden aria-label="Network" data-tooltip="Captured network flows" data-tooltip-side="below">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <!-- Two horizontal arrows facing opposite directions — request/response -->
         <path d="M2.5 5.5h10M10.5 3.5l2 2-2 2"/>

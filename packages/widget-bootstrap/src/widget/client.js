@@ -1594,6 +1594,11 @@
   const renderModeButton = () => {
     const hasModes = state.availableModes.length > 0;
     modeBtn.hidden = !hasModes;
+    // `has-modebar` flips on whenever the mode bar is showing — CSS uses
+    // it to push the overlays down by 28px so they don't peek out under
+    // the bar. Independent of `mode-engaged`, which is the colour-tint
+    // state for when a non-default mode is active.
+    panel.classList.toggle('has-modebar', hasModes);
     // Mirror the engaged state on .panel and .launcher so they tint
     // alongside the modebar — the user spots the altered state without
     // needing the panel open.
@@ -1603,15 +1608,16 @@
     if (!hasModes) return;
     const cur = state.availableModes.find((m) => m.id === state.currentMode);
     modeLabelEl.textContent = cur?.label || 'Default';
+    // Hint is a short affordance ("click to switch") or a short engaged
+    // tag ("plugin active") — NOT the full description, which pushed the
+    // primary label out of view. Description still lands in the modes
+    // overlay rows where there's room for it.
     if (modeHintEl) {
-      modeHintEl.textContent = engaged
-        ? cur?.description || 'click to switch'
-        : 'click to switch';
+      modeHintEl.textContent = engaged ? 'active' : 'click to switch';
     }
     modeBtn.classList.toggle('engaged', engaged);
-    modeBtn.title = engaged
-      ? `Mode: ${cur?.label} — click to change`
-      : 'Select a plugin-contributed mode';
+    // Deliberately no tooltip — the bar's own text already says the
+    // mode name + affordance, so a hover bubble repeating it adds noise.
     // Network glyph rides in the header — visible when the active mode
     // publishes flow events. For this iteration any non-default mode is
     // treated as flow-capable; future modes that don't publish flows
