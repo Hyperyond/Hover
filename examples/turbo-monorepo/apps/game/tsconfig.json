@@ -1,6 +1,22 @@
 {
   "extends": "../../../../tsconfig.base.json",
   "files": [],
-  "include": [],
-  "exclude": [".next", "node_modules", "dist"]
+  "include": [
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    ".next",
+    "node_modules",
+    "dist"
+  ],
+  "compilerOptions": {
+    "allowJs": true,
+    "incremental": true,
+    "jsx": "preserve",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  }
 }

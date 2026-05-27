@@ -12,6 +12,9 @@ build/
 .nuxt/
 .output/
 .next
+# Next emits this typing shim into each app on first `next dev` / `next build`.
+# Generated, not authored — covered by Next's docs on initial-setup files.
+next-env.d.ts
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 
