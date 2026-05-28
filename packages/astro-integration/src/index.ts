@@ -2,6 +2,12 @@ import { fileURLToPath } from 'node:url';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
+import {
+  transformAstro,
+  transformJsx,
+  transformSvelte,
+  transformVue,
+} from '@hover-dev/transform-source';
 import type { AstroIntegration } from 'astro';
 
 export interface HoverOptions {
@@ -51,12 +57,25 @@ export function hover(options: HoverOptions = {}): AstroIntegration {
   return {
     name: '@hover-dev/astro',
     hooks: {
-      'astro:config:setup': async ({ command, config, injectScript, logger }) => {
+      'astro:config:setup': async ({ command, config, injectScript, updateConfig, logger }) => {
         const enabled =
           typeof options.enabled === 'function'
             ? options.enabled({ command })
             : options.enabled ?? command === 'dev';
         if (!enabled) return;
+
+        // Source-attribution Vite sub-plugin. Astro runs Vite under the
+        // hood for `.jsx`/`.tsx`/`.vue`/`.svelte` + handles `.astro`
+        // through its own compiler internally — but `.astro` files
+        // also pass through Vite's `transform` hook before Astro's
+        // compiler runs, so a single Vite plugin can stamp host
+        // elements across every file shape Astro hosts.
+        const projectRoot = fileURLToPath(config.root);
+        updateConfig({
+          vite: {
+            plugins: [makeAttributionPlugin(projectRoot)],
+          },
+        });
 
         try {
           service = await startService({
@@ -131,4 +150,28 @@ export default hover;
  */
 function guessAstroPort(config: { server?: { port?: number } }): number {
   return config.server?.port ?? 4321;
+}
+
+/** Tiny Vite plugin: stamps `data-hover-source` on host elements in
+ *  every file shape the Astro pipeline hands to Vite. Mirrors the
+ *  per-extension dispatch used by `vite-plugin-hover` — same input
+ *  shape, same outputs, same `enforce: 'pre'` requirement so the
+ *  patch lands before framework compilers (React / Vue / Svelte / Astro)
+ *  collapse the JSX/template AST. */
+function makeAttributionPlugin(root: string) {
+  return {
+    name: 'hover:source-attribution',
+    enforce: 'pre' as const,
+    apply: 'serve' as const,
+    transform(code: string, id: string) {
+      const cleanId = id.split('?')[0];
+      if (cleanId.includes('/node_modules/')) return null;
+      const input = { code, filename: cleanId, root };
+      if (/\.(jsx|tsx)$/.test(cleanId)) return transformJsx(input);
+      if (cleanId.endsWith('.vue')) return transformVue(input);
+      if (cleanId.endsWith('.svelte')) return transformSvelte(input);
+      if (cleanId.endsWith('.astro')) return transformAstro(input);
+      return null;
+    },
+  };
 }

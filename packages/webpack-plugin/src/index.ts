@@ -103,6 +103,37 @@ export class HoverPlugin {
     const model = this.options.model ?? 'sonnet';
     const devRoot = this.options.devRoot ?? compiler.context;
 
+    // Register the source-attribution loader for React/Vue/Svelte/Astro
+    // source files. Resolve the loader path via require.resolve so we
+    // pass an absolute path — webpack's loader API runs loaders via
+    // Node's resolver and a bare specifier ('webpack-plugin-hover/loader')
+    // would resolve from the user's project, not from us.
+    const loaderReq = createRequire(import.meta.url);
+    let loaderPath: string | null;
+    try {
+      loaderPath = loaderReq.resolve('webpack-plugin-hover/loader');
+    } catch {
+      // Monorepo dev path: when consumed via `main: src/index.ts`, the
+      // package's own exports map points at .ts files which Node's CJS
+      // resolver rejects (no .ts extension). Fall back to a direct path
+      // off our own location.
+      try {
+        loaderPath = loaderReq.resolve('./loader.ts');
+      } catch {
+        loaderPath = null;
+      }
+    }
+    if (loaderPath) {
+      compiler.options.module ??= { rules: [] } as typeof compiler.options.module;
+      compiler.options.module.rules ??= [];
+      compiler.options.module.rules.unshift({
+        test: /\.(jsx|tsx|vue|svelte|astro)$/,
+        exclude: /node_modules/,
+        enforce: 'pre',
+        use: [{ loader: loaderPath }],
+      });
+    }
+
     // Boot the service lazily: only when we observe an actual watch-mode
     // run. `webpack --mode development` (one-shot) would otherwise spawn
     // a service nothing connects to. `webpack serve` taps the `watchRun`

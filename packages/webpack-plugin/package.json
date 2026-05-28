@@ -15,7 +15,8 @@
   "type": "module",
   "main": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./loader": "./src/loader.ts"
   },
   "files": [
     "dist",
@@ -61,6 +62,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./loader": {
+        "types": "./dist/loader.d.ts",
+        "import": "./dist/loader.js"
       }
     }
   }

@@ -2,7 +2,7 @@ import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
 import { getWidgetScript } from '@hover-dev/widget-bootstrap';
-import { transformJsx } from '@hover-dev/transform-source';
+import { transformJsx, transformVue, transformSvelte, transformAstro } from '@hover-dev/transform-source';
 import type { Plugin } from 'vite';
 
 export interface HoverOptions {
@@ -73,10 +73,18 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
     transform(code, id) {
       if (!enabled || !sourceAttribution) return null;
       // Strip Vite's `?query` / `#hash` suffixes before extension check.
+      // `.vue` ships through Vite as `App.vue?vue&type=template&...` for
+      // sub-blocks once @vitejs/plugin-vue rewrites them; we only want
+      // the top-level SFC pass, so the query-strip + extension check
+      // is enough to filter out the sub-block requests.
       const cleanId = id.split('?')[0];
-      if (!/\.(jsx|tsx)$/.test(cleanId)) return null;
       if (cleanId.includes('/node_modules/')) return null;
-      return transformJsx({ code, filename: cleanId, root: viteRoot });
+      const input = { code, filename: cleanId, root: viteRoot };
+      if (/\.(jsx|tsx)$/.test(cleanId)) return transformJsx(input);
+      if (cleanId.endsWith('.vue')) return transformVue(input);
+      if (cleanId.endsWith('.svelte')) return transformSvelte(input);
+      if (cleanId.endsWith('.astro')) return transformAstro(input);
+      return null;
     },
 
     async configureServer(server) {
