@@ -14,7 +14,7 @@ describe('transformJsx', () => {
   return <button onClick={() => {}}>hi</button>;
 }`);
     expect(out).not.toBeNull();
-    expect(out!.code).toMatch(/<button data-hover-source="src\/App\.tsx:2:11" onClick/);
+    expect(out!.code).toMatch(/<button data-hover-source="src\/App\.tsx:2:10" onClick/);
   });
 
   it('does not stamp component elements (PascalCase)', () => {

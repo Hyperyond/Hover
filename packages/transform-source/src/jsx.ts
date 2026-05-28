@@ -40,11 +40,17 @@ export function transformJsx(input: AttributionInput): AttributionResult | null 
         (a) => a.type === 'JSXAttribute' && a.name.type === 'JSXIdentifier' && a.name.name === SOURCE_ATTR,
       );
       if (hasExisting) return;
-      const loc = node.name.loc;
-      if (!loc) return;
+      // Report the `<` position (not the tag name's first char) so
+      // every framework transform speaks the same coordinate language:
+      // Vue / Svelte / Astro all use `<`-relative line/col, JSX should
+      // too. The patch itself still goes right after the tag name —
+      // that's the cleanest insertion point and unrelated to what we
+      // report.
+      const openLoc = node.loc;
+      if (!openLoc) return;
       const insertAt = (node.name as { end?: number }).end;
       if (insertAt == null) return;
-      const value = `${relPath}:${loc.start.line}:${loc.start.column + 1}`;
+      const value = `${relPath}:${openLoc.start.line}:${openLoc.start.column + 1}`;
       s.appendLeft(insertAt, ` ${SOURCE_ATTR}="${value}"`);
       touched = true;
     },
