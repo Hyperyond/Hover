@@ -49,6 +49,9 @@
     "mockttp": "^4.4.2",
     "zod": "^4.4.3"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "peerDependencies": {
     "@hover-dev/core": "workspace:*"
   },

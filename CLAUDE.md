@@ -261,3 +261,19 @@ Two reasons: (1) style isolation from the host app, so Hover's CSS does not blee
 ## Why `--max-budget-usd 0.50`?
 
 A safety belt against runaway prompts. Phase 0 sessions empirically complete a 5-step task on the example frontend for well under $0.10; $0.50 is generous but still catches a runaway loop before it becomes expensive. Tune up only with explicit reason.
+
+## "ERR_REQUIRE_ESM" when loading `@hover-dev/security` under Next?
+
+Symptom: `require() of ES Module .../get-port/index.js from .../mockttp/dist/server/mockttp-server.js not supported`. Chain is `@hover-dev/security` → `mockttp@4.4.2` → `require('get-port')` → `get-port@7.x` (ESM-only). `mockttp` upstream is aware — see [httptoolkit/mockttp#200](https://github.com/httptoolkit/mockttp/issues/200) (open as of 2026-05) — but ships no fix yet.
+
+Workarounds, by preference:
+
+1. **Upgrade to Node ≥ 22.12** — Node added sync `require(ESM)` in 22.12, so the load succeeds out of the box. `@hover-dev/security` declares `engines.node >= 22.12.0` for this reason. Older Node still emits the runtime error.
+2. **Pin `get-port` to v6 in your project's overrides**:
+   ```json
+   { "pnpm": { "overrides": { "get-port": "^6.1.2" } } }
+   ```
+   (npm: `"overrides"` at top level; yarn: `"resolutions"`.) get-port@6.x is CJS and `mockttp`'s `require()` works.
+3. **Remove the `@hover-dev/security` plugin from your `register()` call** if you don't need MITM mode — Hover works fine without it.
+
+We can't fix this from inside `@hover-dev/security`: npm overrides only flow from the consumer's root package.json, so a published dep can't override a sibling dep's resolution.
