@@ -456,6 +456,9 @@ importers:
 
   packages/transform-source:
     dependencies:
+      '@astrojs/compiler':
+        specifier: ^2.10.0
+        version: 2.13.1
       '@babel/parser':
         specifier: ^7.29.3
         version: 7.29.3

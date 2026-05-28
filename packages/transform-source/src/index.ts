@@ -14,3 +14,4 @@ export { SOURCE_ATTR, type AttributionInput, type AttributionResult } from './ty
 export { transformJsx } from './jsx.js';
 export { transformVue } from './vue.js';
 export { transformSvelte } from './svelte.js';
+export { transformAstro } from './astro.js';
