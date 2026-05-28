@@ -1,7 +1,13 @@
 import { createRequire } from 'node:module';
 import { writeOptionsToEnv, type HoverOptions } from './options.js';
 
-const HOVER_LOADER_SPECIFIER = '@hover-dev/next/source-loader';
+// Built at runtime from two halves so Turbopack's static analyser can't
+// fold the call to `createRequire().resolve()` below into a trace edge.
+// Without this, Turbopack pulls `dist/source-loader.cjs` into every
+// Server Component that imports anything from `@hover-dev/next`, even
+// when only `HoverScript` is referenced. The loader is a build-time
+// artefact — it must NOT end up in any runtime bundle.
+const HOVER_LOADER_SPECIFIER = ['@hover-dev/next', 'source-loader'].join('/');
 
 /**
  * Next.js `next.config.{mjs,ts}` wrapper. Idiomatic shape — matches

@@ -14,7 +14,12 @@
  * and pass the absolute path to Turbopack's `rules`.
  */
 
-import { transformJsx } from '@hover-dev/transform-source';
+// Sub-path import (not barrel) so tsup's `noExternal` only inlines the
+// JSX transform — not the Vue / Svelte / Astro siblings. Without this
+// distinction, Turbopack's import trace would walk into @vue/compiler-sfc
+// from inside the loader bundle and choke on Vue's optional-engine
+// require() chain (atpl / liquor / twig / …).
+import { transformJsx } from '@hover-dev/transform-source/jsx';
 
 interface LoaderContext {
   resourcePath: string;
