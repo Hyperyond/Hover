@@ -38,7 +38,7 @@ import { defineConfig } from 'tsup';
  * the source of truth for their version.
  */
 export default defineConfig({
-  entry: ['src/index.ts', 'src/instrumentation.ts', 'src/register-node.ts'],
+  entry: ['src/index.ts', 'src/instrumentation.ts', 'src/register-node.ts', 'src/source-loader.ts'],
   // ESM + CJS. ESM is the long-term shape (Next 16+ Turbopack loads
   // `next.config.mjs` via native `import()`); CJS exists for Next 15's
   // `next.config.ts` loader, which transpiles the user's .ts config to

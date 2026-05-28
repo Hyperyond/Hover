@@ -34,6 +34,12 @@ export interface HoverOptions {
   model?: string;
   /** Hard $ ceiling per command. No default. */
   maxBudgetUsd?: number;
+  /** Stamp `data-hover-source="<file>:<line>:<col>"` on host JSX elements
+   *  in user code so the widget's Fix picker can produce a precise file
+   *  location. Wired via Turbopack's `turbopack.rules` (or webpack's
+   *  module rules if you run `next dev --webpack`). Default true.
+   *  No-op outside development. */
+  sourceAttribution?: boolean;
 }
 
 /** Env var keys the config wrapper writes and the runtime helpers read.

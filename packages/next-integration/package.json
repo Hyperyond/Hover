@@ -53,6 +53,16 @@
         "types": "./dist/register-node.d.cts",
         "default": "./dist/register-node.cjs"
       }
+    },
+    "./source-loader": {
+      "import": {
+        "types": "./dist/source-loader.d.ts",
+        "default": "./dist/source-loader.js"
+      },
+      "require": {
+        "types": "./dist/source-loader.d.cts",
+        "default": "./dist/source-loader.cjs"
+      }
     }
   },
   "files": [
