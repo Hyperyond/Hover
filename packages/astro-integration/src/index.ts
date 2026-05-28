@@ -1,3 +1,4 @@
+import { readFile as fsReadFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
@@ -125,6 +126,31 @@ export function hover(options: HoverOptions = {}): AstroIntegration {
             logger.warn(`Chrome auto-launch error: ${err instanceof Error ? err.message : String(err)}`);
           });
       },
+      'astro:server:setup': async ({ server, logger }) => {
+        // Astro's own `astro:build` Vite plugin registers itself with
+        // `enforce: 'pre'` and runs the `.astro` compiler in its
+        // `transform()` — turning raw `.astro` source into JavaScript.
+        // Any user-registered `enforce: 'pre'` plugin (us, via
+        // updateConfig above) ends up AFTER it in the chain, so by the
+        // time our transform runs the file is already JS and we have
+        // no `.astro` source to stamp. (Tracked: withastro/roadmap#120.)
+        //
+        // Workaround: at `astro:server:setup` we have direct access to
+        // the Vite server's resolved plugin list. Splice our plugin
+        // out of wherever it landed and put it at index 0 so it sees
+        // the raw `.astro` source first. This is unsupported and may
+        // break on internal Astro refactors; we tolerate that for now
+        // and document the version coverage in CLAUDE.md.
+        const plugins = server.config.plugins as unknown as Array<{ name?: string }>;
+        const idx = plugins.findIndex((p) => p?.name === 'hover:source-attribution');
+        if (idx > 0) {
+          const [ours] = plugins.splice(idx, 1);
+          plugins.unshift(ours);
+          logger.info('source-attribution plugin moved to position 0 (pre-Astro compile)');
+        } else if (idx === -1) {
+          logger.warn('source-attribution plugin not found in Vite chain — .astro stamps will be no-op');
+        }
+      },
       'astro:server:done': async ({ logger }) => {
         if (!service) return;
         try {
@@ -163,14 +189,40 @@ function makeAttributionPlugin(root: string) {
     name: 'hover:source-attribution',
     enforce: 'pre' as const,
     apply: 'serve' as const,
+    // `load` hook: Astro's `astro:build` plugin loads `.astro` files via
+    // its own `load(id)` which reads the source from disk and compiles
+    // it to JS in one step — so by the time `transform()` runs, the
+    // `code` argument is already JS. To stamp host elements in the
+    // *original* `.astro` source we have to intercept at `load`: read
+    // the raw file ourselves, transform, and return the modified
+    // source. Astro's `load` then sees our stamped output and compiles
+    // it normally.
+    //
+    // Only handles `.astro` here; other extensions still go through
+    // `transform` below where the standard Vite contract applies.
+    async load(id: string) {
+      const cleanId = id.split('?')[0];
+      if (cleanId.includes('/node_modules/')) return null;
+      if (!cleanId.endsWith('.astro')) return null;
+      let code: string;
+      try {
+        code = await fsReadFile(cleanId, 'utf8');
+      } catch {
+        return null;
+      }
+      const out = await transformAstro({ code, filename: cleanId, root });
+      if (!out) return code; // Return raw source so Astro's load doesn't re-read.
+      return { code: out.code, map: out.map as unknown as null };
+    },
     transform(code: string, id: string) {
       const cleanId = id.split('?')[0];
       if (cleanId.includes('/node_modules/')) return null;
+      // .astro handled by `load` above. Others go through transform.
+      if (cleanId.endsWith('.astro')) return null;
       const input = { code, filename: cleanId, root };
       if (/\.(jsx|tsx)$/.test(cleanId)) return transformJsx(input);
       if (cleanId.endsWith('.vue')) return transformVue(input);
       if (cleanId.endsWith('.svelte')) return transformSvelte(input);
-      if (cleanId.endsWith('.astro')) return transformAstro(input);
       return null;
     },
   };
