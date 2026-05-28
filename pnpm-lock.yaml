@@ -454,7 +454,7 @@ importers:
         specifier: ^8.20.1
         version: 8.20.1
 
-  packages/vite-plugin:
+  packages/transform-source:
     dependencies:
       '@babel/parser':
         specifier: ^7.29.3
@@ -465,12 +465,6 @@ importers:
       '@babel/types':
         specifier: ^7.29.0
         version: 7.29.0
-      '@hover-dev/core':
-        specifier: workspace:*
-        version: link:../core
-      '@hover-dev/widget-bootstrap':
-        specifier: workspace:*
-        version: link:../widget-bootstrap
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
@@ -478,6 +472,22 @@ importers:
       '@types/babel__traverse':
         specifier: ^7.28.0
         version: 7.28.0
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
+
+  packages/vite-plugin:
+    dependencies:
+      '@hover-dev/core':
+        specifier: workspace:*
+        version: link:../core
+      '@hover-dev/transform-source':
+        specifier: workspace:*
+        version: link:../transform-source
+      '@hover-dev/widget-bootstrap':
+        specifier: workspace:*
+        version: link:../widget-bootstrap
+    devDependencies:
       vite:
         specifier: ^7.0.0
         version: 7.3.3(@types/node@25.9.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
