@@ -65,6 +65,19 @@ export default defineConfig({
   // Inline the private transform-source package; its npm dep chain
   // (@babel/*, @vue/compiler-sfc, svelte, @astrojs/compiler, magic-string)
   // stays external — listed below alongside the existing runtime deps.
+  // Per-format build options. For the CJS output we statically replace
+  // `import.meta.url` with `undefined` so esbuild stops emitting the
+  // "import.meta is not available with cjs" warning at build time.
+  // Runtime is unaffected: the call sites are already gated on falsy
+  // anchors and fall back to `__filename` (which only exists in CJS),
+  // so undefined-url + present-filename takes the CJS branch correctly.
+  esbuildOptions(opts, ctx) {
+    if (ctx.format === 'cjs') {
+      opts.supported ??= {};
+      opts.define ??= {};
+      opts.define['import.meta.url'] = 'undefined';
+    }
+  },
   noExternal: ['@hover-dev/transform-source'],
   external: [
     'react',

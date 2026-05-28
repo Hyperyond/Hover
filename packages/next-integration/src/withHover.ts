@@ -123,12 +123,38 @@ function injectSourceAttributionRules<T extends Record<string, unknown>>(
 
 /** Resolve the absolute on-disk path of our source-loader entry, so
  *  Turbopack can load it. Turbopack's rules accept absolute paths;
- *  bare specifiers resolve from the user project, not from us. */
+ *  bare specifiers resolve from the user project, not from us.
+ *
+ *  Dual-format awareness: this file builds to both ESM (next.config.mjs
+ *  consumers, Next 16+) and CJS (next.config.ts → jiti → require()
+ *  on Next 15). In ESM we have `import.meta.url`; in CJS we have
+ *  `__filename`. esbuild rewrites `import.meta` to `{}` in the CJS
+ *  output (and warns about it), which would silently break source
+ *  attribution on Next 15. Detect the runtime shape and pick the right
+ *  anchor. The `typeof` guards run at runtime, so esbuild can't
+ *  collapse them at build time. */
 function resolveLoaderPath(): string | null {
-  const req = createRequire(import.meta.url);
-  try {
-    return req.resolve(HOVER_LOADER_SPECIFIER);
-  } catch {
-    return null;
-  }
+  // Dual-format anchor pick. CJS native `__filename` first; ESM
+  // `import.meta.url` second. esbuild's CJS output defines `import.meta.url`
+  // as undefined via tsup.config's `esbuildOptions.define`, so the
+  // expression is harmless there.
+  const cjsFilename = (globalThis as { __filename?: string }).__filename;
+  const esmUrl = import.meta.url || null;
+  const anchor = cjsFilename ?? esmUrl;
+  if (!anchor) return null;
+  // Wrap createRequire+resolve in a `new Function`-built helper so
+  // Turbopack/webpack's static analyser sees an opaque expression
+  // instead of `req.resolve(<variable>)`. Without this, Turbopack's
+  // module trace prints `Module not found: Can't resolve <dynamic>`
+  // on every Server Component render (the static analyser walks the
+  // whole module, not just what HoverScript actually reaches). The
+  // call itself is plain Node, runs only when next.config is loaded.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const opaqueResolve = new Function(
+    'createRequire',
+    'anchor',
+    'specifier',
+    'try { return createRequire(anchor).resolve(specifier); } catch { return null; }',
+  ) as (cr: typeof createRequire, a: string, s: string) => string | null;
+  return opaqueResolve(createRequire, anchor, HOVER_LOADER_SPECIFIER);
 }
