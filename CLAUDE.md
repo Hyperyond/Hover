@@ -278,3 +278,21 @@ Workarounds, by preference:
 3. **Remove the `@hover-dev/security` plugin from your `register()` call** if you don't need MITM mode — Hover works fine without it.
 
 We can't fix this from inside `@hover-dev/security`: npm overrides only flow from the consumer's root package.json, so a published dep can't override a sibling dep's resolution.
+
+## "Cannot get schema for 'PrivateKeyInfo' target" when enabling security mode?
+
+Symptom: the widget reports `[hover/mitm] CA generation failed: @peculiar/asn1-schema schema-registry collision`. Root cause: `@peculiar/asn1-schema` keeps its ASN.1 schema definitions on a per-module-instance singleton. When two copies of the package end up in the consumer's `node_modules` (pnpm hoisting + Next 15's module-resolution combine produces this readily), PKI deps register schemas into copy A's registry but the runtime lookup walks copy B's empty one → schema not found.
+
+`@hover-dev/security` declares `@peculiar/asn1-schema@2.6.0` as a direct dependency to give pnpm a strong hint, but inside the consumer's tree mockttp's own sub-deps may still pull in a sibling copy.
+
+Fix from the consumer's root package.json:
+
+```json
+{ "pnpm": { "overrides": { "@peculiar/asn1-schema": "2.6.0" } } }
+```
+
+(npm: `"overrides"` at top level; yarn: `"resolutions"`.) Then `rm -rf node_modules && pnpm install` to collapse to one copy. Verify with `pnpm why @peculiar/asn1-schema` — should show exactly one resolved version.
+
+The startProxy() loop now detects this exact error message and rewrites it into the fix recipe, so the widget panel shows a useful error instead of a generic `no free port` swallowed-error trail.
+
+Tracking upstream: [PeculiarVentures/asn1-schema#111](https://github.com/PeculiarVentures/asn1-schema/issues/111).

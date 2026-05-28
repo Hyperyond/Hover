@@ -156,10 +156,9 @@ async function resolvePlugins(specs: PluginSpec[]): Promise<HoverPluginManifest[
 }
 
 /** Catch known plugin-load failure shapes and print actionable
- *  diagnostics. Right now this targets one specific upstream bug:
- *  mockttp@4.x's CJS `require('get-port')` chokes on the ESM-only
- *  get-port@7 on Node < 22.12. The raw stack ("ERR_REQUIRE_ESM…")
- *  doesn't tell the user how to fix it — this does. */
+ *  diagnostics. Targeted at recurrent upstream bugs that surface as
+ *  cryptic errors from inside transitive deps. Each branch matches one
+ *  specific failure mode and prints a focused fix recipe. */
 function printPluginLoadError(moduleId: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack ?? '' : '';
@@ -169,6 +168,7 @@ function printPluginLoadError(moduleId: string, err: unknown): void {
     /require\(\) of ES Module/i.test(message);
   const mentionsGetPort = /get-port/i.test(message) || /get-port/i.test(stack);
   const mentionsMockttp = /mockttp/i.test(message) || /mockttp/i.test(stack);
+  const mentionsPrivateKeyInfo = /Cannot get schema for ['"]PrivateKeyInfo['"]/i.test(message);
 
   if (isErrRequireEsm && mentionsGetPort && mentionsMockttp) {
     const nodeVersion = process.versions.node;

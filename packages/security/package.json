@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@peculiar/asn1-schema": "2.6.0",
     "mockttp": "^4.4.2",
     "zod": "^4.4.3"
   },

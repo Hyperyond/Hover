@@ -512,6 +512,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
+      '@peculiar/asn1-schema':
+        specifier: 2.6.0
+        version: 2.6.0
       mockttp:
         specifier: ^4.4.2
         version: 4.4.2

@@ -95,7 +95,10 @@ export async function startProxy(devRoot: string): Promise<ProxyHandle> {
     },
   });
 
-  // Find a free port. mockttp's start(port) throws on EADDRINUSE.
+  // Find a free port. mockttp's start(port) throws on EADDRINUSE — every
+  // other failure shape (bad CA key, missing crypto support, peculiar
+  // schema-registry collisions) is fatal and should NOT be swallowed by
+  // the port retry loop. Distinguish on the error message.
   let boundPort = 0;
   let lastErr: unknown = null;
   for (let i = 0; i < PROXY_PORT_RETRIES; i++) {
@@ -106,6 +109,10 @@ export async function startProxy(devRoot: string): Promise<ProxyHandle> {
       break;
     } catch (err) {
       lastErr = err;
+      if (!isPortBusy(err)) {
+        // Not a port issue — escalate immediately with diagnostics.
+        throw augmentStartError(err);
+      }
     }
   }
   if (!boundPort) {
@@ -130,4 +137,36 @@ export async function startProxy(devRoot: string): Promise<ProxyHandle> {
       }
     },
   };
+}
+
+function isPortBusy(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  if (code === 'EADDRINUSE' || code === 'EACCES') return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /EADDRINUSE|EACCES|address already in use/i.test(message);
+}
+
+/** Translate the most common mockttp.start() failure shapes into an
+ *  error message the user can act on. Detect-and-rewrite rather than
+ *  raw stack — these errors come from deep inside transitive deps and
+ *  the original messages are useless on their own. */
+function augmentStartError(err: unknown): Error {
+  const original = err instanceof Error ? err : new Error(String(err));
+  const message = original.message;
+  if (/Cannot get schema for ['"]PrivateKeyInfo['"]/i.test(message)) {
+    const e = new Error(
+      [
+        '[hover/mitm] CA generation failed: @peculiar/asn1-schema schema-registry collision.',
+        'Multiple copies of @peculiar/asn1-schema are loaded in the same process; PKI deps register schemas into one copy and look them up in another.',
+        'Tracking upstream: https://github.com/PeculiarVentures/asn1-schema/issues/111',
+        'Fix: pin a single version in your project root package.json:',
+        '  { "pnpm": { "overrides": { "@peculiar/asn1-schema": "2.6.0" } } }',
+        '  (npm: "overrides" at top level; yarn: "resolutions")',
+        'Then: rm -rf node_modules && pnpm install',
+      ].join('\n  '),
+    );
+    e.cause = original;
+    return e;
+  }
+  return original;
 }
