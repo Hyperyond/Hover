@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
@@ -196,7 +197,20 @@ export class HoverPlugin {
     // optional peer dep. Almost every webpack dev pipeline uses it
     // (vanilla wds, CRA, Vue CLI, Rspack, Rsbuild), but we ship a
     // processAssets fallback for the edge case where it's missing.
-    const req = createRequire(import.meta.url);
+    //
+    // Critical: resolve from the *user's* compiler.context, not from
+    // our own package location. Under pnpm the user's html-webpack-plugin
+    // and ours are two physically distinct installs (different peer-dep
+    // permutations -> different .pnpm/...@<hash>/ folders), and
+    // HtmlWebpackPlugin.getHooks() keys its hook table on a per-module
+    // WeakMap<Compilation, Hooks>. If we hand it a Compilation that was
+    // registered against the user's copy, our copy's WeakMap is empty
+    // and getHooks() returns undefined — silently falling through to
+    // the processAssets fallback, where the .html asset doesn't yet
+    // exist (HtmlWebpackPlugin emits it at a later stage). Net effect:
+    // the widget script never lands in the HTML and the user sees a
+    // dev server that boots cleanly but has no Hover UI.
+    const req = createRequire(join(compiler.context, '_'));
     let HtmlWebpackPlugin: { getHooks?: (c: Compilation) => HtmlPluginHooks | undefined } | undefined;
     try {
       HtmlWebpackPlugin = req('html-webpack-plugin');
