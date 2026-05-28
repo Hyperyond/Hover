@@ -13,3 +13,4 @@
 export { SOURCE_ATTR, type AttributionInput, type AttributionResult } from './types.js';
 export { transformJsx } from './jsx.js';
 export { transformVue } from './vue.js';
+export { transformSvelte } from './svelte.js';
