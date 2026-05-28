@@ -349,16 +349,43 @@ importers:
 
   packages/astro-integration:
     dependencies:
+      '@astrojs/compiler':
+        specifier: ^2.10.0
+        version: 2.13.1
+      '@babel/parser':
+        specifier: ^7.29.3
+        version: 7.29.3
+      '@babel/traverse':
+        specifier: ^7.29.0
+        version: 7.29.0
+      '@babel/types':
+        specifier: ^7.29.0
+        version: 7.29.0
       '@hover-dev/core':
         specifier: workspace:*
         version: link:../core
       '@hover-dev/widget-bootstrap':
         specifier: workspace:*
         version: link:../widget-bootstrap
+      '@vue/compiler-sfc':
+        specifier: ^3.5.0
+        version: 3.5.34
+      magic-string:
+        specifier: ^0.30.21
+        version: 0.30.21
+      svelte:
+        specifier: ^5.0.0
+        version: 5.55.10
     devDependencies:
+      '@hover-dev/transform-source':
+        specifier: workspace:*
+        version: link:../transform-source
       astro:
         specifier: ^5.0.0
         version: 5.18.1(@types/node@25.9.1)(db0@0.3.4)(ioredis@5.10.1)(jiti@2.7.0)(rollup@4.60.4)(terser@5.48.0)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
 
   packages/cli:
     dependencies:
@@ -393,13 +420,37 @@ importers:
 
   packages/next-integration:
     dependencies:
+      '@astrojs/compiler':
+        specifier: ^2.10.0
+        version: 2.13.1
+      '@babel/parser':
+        specifier: ^7.29.3
+        version: 7.29.3
+      '@babel/traverse':
+        specifier: ^7.29.0
+        version: 7.29.0
+      '@babel/types':
+        specifier: ^7.29.0
+        version: 7.29.0
       '@hover-dev/core':
         specifier: workspace:*
         version: link:../core
       '@hover-dev/widget-bootstrap':
         specifier: workspace:*
         version: link:../widget-bootstrap
+      '@vue/compiler-sfc':
+        specifier: ^3.5.0
+        version: 3.5.34
+      magic-string:
+        specifier: ^0.30.21
+        version: 0.30.21
+      svelte:
+        specifier: ^5.0.0
+        version: 5.55.10
     devDependencies:
+      '@hover-dev/transform-source':
+        specifier: workspace:*
+        version: link:../transform-source
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.15
@@ -415,6 +466,18 @@ importers:
 
   packages/nuxt-integration:
     dependencies:
+      '@astrojs/compiler':
+        specifier: ^2.10.0
+        version: 2.13.1
+      '@babel/parser':
+        specifier: ^7.29.3
+        version: 7.29.3
+      '@babel/traverse':
+        specifier: ^7.29.0
+        version: 7.29.0
+      '@babel/types':
+        specifier: ^7.29.0
+        version: 7.29.0
       '@hover-dev/core':
         specifier: workspace:*
         version: link:../core
@@ -424,10 +487,25 @@ importers:
       '@nuxt/kit':
         specifier: ^4.0.0
         version: 4.4.6(magicast@0.5.3)
+      '@vue/compiler-sfc':
+        specifier: ^3.5.0
+        version: 3.5.34
+      magic-string:
+        specifier: ^0.30.21
+        version: 0.30.21
+      svelte:
+        specifier: ^5.0.0
+        version: 5.55.10
     devDependencies:
+      '@hover-dev/transform-source':
+        specifier: workspace:*
+        version: link:../transform-source
       nuxt:
         specifier: ^4.0.0
         version: 4.4.6(@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.0))(@babel/plugin-syntax-typescript@7.28.6(@babel/core@7.29.0))(@parcel/watcher@2.5.6)(@types/node@25.9.1)(@vue/compiler-sfc@3.5.34)(cac@6.7.14)(db0@0.3.4)(ioredis@5.10.1)(magicast@0.5.3)(rollup-plugin-visualizer@7.0.1(rollup@4.60.4))(rollup@4.60.4)(terser@5.48.0)(tsx@4.22.3)(typescript@5.9.3)(vite@7.3.3(@types/node@25.9.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))(yaml@2.9.0)
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
 
   packages/security:
     dependencies:
@@ -487,16 +565,40 @@ importers:
 
   packages/vite-plugin:
     dependencies:
+      '@astrojs/compiler':
+        specifier: ^2.10.0
+        version: 2.13.1
+      '@babel/parser':
+        specifier: ^7.29.3
+        version: 7.29.3
+      '@babel/traverse':
+        specifier: ^7.29.0
+        version: 7.29.0
+      '@babel/types':
+        specifier: ^7.29.0
+        version: 7.29.0
       '@hover-dev/core':
         specifier: workspace:*
         version: link:../core
-      '@hover-dev/transform-source':
-        specifier: workspace:*
-        version: link:../transform-source
       '@hover-dev/widget-bootstrap':
         specifier: workspace:*
         version: link:../widget-bootstrap
+      '@vue/compiler-sfc':
+        specifier: ^3.5.0
+        version: 3.5.34
+      magic-string:
+        specifier: ^0.30.21
+        version: 0.30.21
+      svelte:
+        specifier: ^5.0.0
+        version: 5.55.10
     devDependencies:
+      '@hover-dev/transform-source':
+        specifier: workspace:*
+        version: link:../transform-source
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
       vite:
         specifier: ^7.0.0
         version: 7.3.3(@types/node@25.9.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
@@ -506,22 +608,49 @@ importers:
 
   packages/webpack-plugin:
     dependencies:
+      '@astrojs/compiler':
+        specifier: ^2.10.0
+        version: 2.13.1
+      '@babel/parser':
+        specifier: ^7.29.3
+        version: 7.29.3
+      '@babel/traverse':
+        specifier: ^7.29.0
+        version: 7.29.0
+      '@babel/types':
+        specifier: ^7.29.0
+        version: 7.29.0
       '@hover-dev/core':
         specifier: workspace:*
         version: link:../core
       '@hover-dev/widget-bootstrap':
         specifier: workspace:*
         version: link:../widget-bootstrap
+      '@vue/compiler-sfc':
+        specifier: ^3.5.0
+        version: 3.5.34
+      magic-string:
+        specifier: ^0.30.21
+        version: 0.30.21
+      svelte:
+        specifier: ^5.0.0
+        version: 5.55.10
     devDependencies:
+      '@hover-dev/transform-source':
+        specifier: workspace:*
+        version: link:../transform-source
       '@types/html-webpack-plugin':
         specifier: ^3.2.9
         version: 3.2.9
       html-webpack-plugin:
         specifier: ^5.6.0
-        version: 5.6.7(webpack@5.107.1)
+        version: 5.6.7(webpack@5.107.1(postcss@8.5.15))
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
       webpack:
         specifier: ^5.95.0
-        version: 5.107.1(webpack-cli@5.1.4)
+        version: 5.107.1(postcss@8.5.15)
 
   packages/widget-bootstrap:
     devDependencies:
@@ -12413,6 +12542,16 @@ snapshots:
 
   html-void-elements@3.0.0: {}
 
+  html-webpack-plugin@5.6.7(webpack@5.107.1(postcss@8.5.15)):
+    dependencies:
+      '@types/html-minifier-terser': 6.1.0
+      html-minifier-terser: 6.1.0
+      lodash: 4.18.1
+      pretty-error: 4.0.0
+      tapable: 2.3.3
+    optionalDependencies:
+      webpack: 5.107.1(postcss@8.5.15)
+
   html-webpack-plugin@5.6.7(webpack@5.107.1):
     dependencies:
       '@types/html-minifier-terser': 6.1.0
@@ -15022,6 +15161,16 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
 
+  terser-webpack-plugin@5.6.0(postcss@8.5.15)(webpack@5.107.1(postcss@8.5.15)):
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      jest-worker: 27.5.1
+      schema-utils: 4.3.3
+      terser: 5.48.0
+      webpack: 5.107.1(postcss@8.5.15)
+    optionalDependencies:
+      postcss: 8.5.15
+
   terser-webpack-plugin@5.6.0(webpack@5.107.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
@@ -15752,6 +15901,45 @@ snapshots:
   webpack-sources@3.5.0: {}
 
   webpack-virtual-modules@0.6.2: {}
+
+  webpack@5.107.1(postcss@8.5.15):
+    dependencies:
+      '@types/estree': 1.0.8
+      '@types/json-schema': 7.0.15
+      '@webassemblyjs/ast': 1.14.1
+      '@webassemblyjs/wasm-edit': 1.14.1
+      '@webassemblyjs/wasm-parser': 1.14.1
+      acorn: 8.16.0
+      acorn-import-phases: 1.0.4(acorn@8.16.0)
+      browserslist: 4.28.2
+      chrome-trace-event: 1.0.4
+      enhanced-resolve: 5.22.0
+      es-module-lexer: 2.1.0
+      eslint-scope: 5.1.1
+      events: 3.3.0
+      glob-to-regexp: 0.4.1
+      graceful-fs: 4.2.11
+      loader-runner: 4.3.2
+      mime-db: 1.54.0
+      neo-async: 2.6.2
+      schema-utils: 4.3.3
+      tapable: 2.3.3
+      terser-webpack-plugin: 5.6.0(postcss@8.5.15)(webpack@5.107.1(postcss@8.5.15))
+      watchpack: 2.5.1
+      webpack-sources: 3.5.0
+    transitivePeerDependencies:
+      - '@minify-html/node'
+      - '@swc/core'
+      - '@swc/css'
+      - '@swc/html'
+      - clean-css
+      - cssnano
+      - csso
+      - esbuild
+      - html-minifier-terser
+      - lightningcss
+      - postcss
+      - uglify-js
 
   webpack@5.107.1(webpack-cli@5.1.4):
     dependencies:

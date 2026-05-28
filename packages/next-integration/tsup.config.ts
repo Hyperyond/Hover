@@ -62,5 +62,24 @@ export default defineConfig({
   // dynamic `require('chromium-bidi/...')`), and (2) it acts as a
   // canary — if someone removes one of these from `dependencies` and
   // forgets to update this list, the bundle still works the same way.
-  external: ['react', 'react-dom', 'next', 'playwright-core', 'ws', 'cross-spawn'],
+  // Inline the private transform-source package; its npm dep chain
+  // (@babel/*, @vue/compiler-sfc, svelte, @astrojs/compiler, magic-string)
+  // stays external — listed below alongside the existing runtime deps.
+  noExternal: ['@hover-dev/transform-source'],
+  external: [
+    'react',
+    'react-dom',
+    'next',
+    'playwright-core',
+    'ws',
+    'cross-spawn',
+    '@babel/parser',
+    '@babel/traverse',
+    '@babel/types',
+    '@vue/compiler-sfc',
+    '@astrojs/compiler',
+    'svelte',
+    'svelte/compiler',
+    'magic-string',
+  ],
 });
