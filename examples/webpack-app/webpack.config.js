@@ -12,6 +12,12 @@ export default {
   // webpack-cli passes `--mode` via argv; we set defaults so importing this
   // config from `node` for inspection still works.
   mode: 'development',
+  // Quiet the per-build module dump — webpack-dev-server still prints
+  // it on the first compile by default, which clutters the dev loop.
+  // 'errors-warnings' keeps everything the user actually needs to see
+  // (errors, hover service logs printed via console.info) and drops
+  // the asset/module table.
+  stats: 'errors-warnings',
   entry: resolve(__dirname, 'src/main.js'),
   output: {
     path: resolve(__dirname, 'dist'),
