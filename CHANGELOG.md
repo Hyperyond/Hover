@@ -6,14 +6,32 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-05-29
+
+The "multi-framework source attribution" release. The v0.4.x JSX stamp generalises to four frameworks (JSX / Vue / Svelte / Astro) through a new private workspace package, plus `@hover-dev/next` gains first-class plugin support so `@hover-dev/security` and future third-party plugins wire into Next without dragging Node-only deps into the Edge bundle.
+
 ### Added
 
+- **Multi-framework source attribution.** The v0.4.x `data-hover-source="<file>:<line>:<col>"` stamp now covers four file shapes, one transform per framework, all reporting the `<` character's 1-indexed line + column for cross-framework consistency:
+  - `.jsx` / `.tsx` — Babel parser (covers React / Solid / Preact). Unchanged from v0.4.x.
+  - `.vue` — `@vue/compiler-sfc`, filters via `tagType === ELEMENT_TYPE_HOST` so PascalCase and kebab-case components are skipped.
+  - `.svelte` — `svelte/compiler`'s `parse({ modern: true })`, gates on `type === 'RegularElement'` so `Component` / `SvelteHead` / `TitleElement` are skipped.
+  - `.astro` — `@astrojs/compiler` (async because the underlying parser is WASM-backed), filters via `type === 'element'` so PascalCase components AND kebab-case custom-elements are both skipped.
+- **`@hover-dev/transform-source` — private workspace package.** Owns all four per-framework transforms (`transformJsx` / `transformVue` / `transformSvelte` / `transformAstro`). Marked `private: true` and never published to npm. **Distributed by inlining**: each of the 5 integration shims (vite / astro / nuxt / next / webpack) runs `tsup` with `noExternal: ['@hover-dev/transform-source']`, so the transform code lands inside the shim's own `dist/` and the published bundle has no bare `@hover-dev/transform-source` import. Transform-source's npm-side deps (`@babel/*`, `@vue/compiler-sfc`, `svelte`, `@astrojs/compiler`, `magic-string`) get promoted into each shim's `dependencies` so they resolve normally at install time.
+- **Per-shim transform dispatch by extension.** Each integration's `transform` hook now dispatches on file extension: `.jsx`/`.tsx` → JSX, `.vue` → Vue SFC, `.svelte` → Svelte 5, `.astro` → Astro. `vite-plugin-hover`, `@hover-dev/astro`, `@hover-dev/nuxt`, `@hover-dev/next` (via Turbopack `turbopack.rules['*.{jsx,tsx}']`), and `webpack-plugin-hover` (via a `module.rules` loader) all go through the same code path.
+- **Astro `.astro` files intercept at `load()`, not `transform()`.** Astro's internal `astro:build` Vite plugin does the SFC compile in its `load()` step, so by the time user `transform()` hooks see the file it's already-compiled JS. The Astro integration now reads the raw file from disk in `load()`, runs `transformAstro` (parse → mutate AST → serialise round-trip via `@astrojs/compiler`), and returns stamped source. `.jsx`/`.tsx`/`.vue`/`.svelte` continue through `transform()` because they don't have an upstream `load()` step.
 - **`@hover-dev/next` plugins via `register()` second argument.** Plugins like `@hover-dev/security` are now wired into Next projects by passing a `PluginSpec[]` to `register()` in `instrumentation.ts` — either a bare module-specifier string `'@hover-dev/security'` or an `{ module, options }` object. Vite / Astro / Nuxt / Webpack continue to accept plugins as additional arguments to `hover()` / `new HoverPlugin()`; Next is the outlier because Next compiles `instrumentation.ts` for both the Node and Edge runtimes and a top-level import would drag plugin packages' Node-only deps (mockttp, playwright-core) into the Edge bundle. Specifiers are resolved at runtime inside `@hover-dev/next/internal/register-node` via a `new Function('s','return import(s)')` opaque dynamic import — Turbopack's static tracer can't follow it, so plugin code stays strictly Node-runtime-only. `examples/next-app/instrumentation.ts` and `examples/turbo-monorepo/apps/web/instrumentation.ts` are the reference shapes.
 - **`packages/next-integration/README.md`.** Brings `@hover-dev/next` in line with the other four integration packages, each of which already shipped a README on npm.
 
 ### Fixed
 
+- **`@hover-dev/next` `register-node` resolves from `.next/server` (Next 15).** v0.7.4 fix. Next 15's runtime layout puts `instrumentation.js` in a deeper `.next/server` subtree, so the prior `import.meta.url`-relative resolution of `register-node.js` missed the file. The resolver now walks for `register-node.js` from a known stable anchor.
 - **Plugin-spec resolver walks `node_modules` from `process.cwd()`, not from the integration package.** Earlier prototype used `createRequire(...).resolve('<plugin>')`, but plugin packages' `exports` maps don't declare a `require` condition (their npm publish is ESM-only), so the CJS resolver errored with "No exports main defined". The resolver now walks up from the user's project root looking for `node_modules/<plugin>/package.json`, reads `exports['.']{import}` / `module` / `main` itself, and loads the resulting absolute path via a `file://` dynamic import. Sidesteps both monorepo hoisting surprises and conditional-exports edge cases. Verified in `examples/next-app` (flat) and `examples/turbo-monorepo/apps/web` (monorepo).
+
+### Documentation
+
+- **`autoLaunchChrome` clarified.** Docs now state explicitly that `autoLaunchChrome` spawns the isolated debug Chrome under `<tmpdir>/hover-chrome` (not the user's primary Chrome profile).
+- **Docs site nav version resolves from the git tag at build time.** The version pill in the docs site nav is no longer hand-edited per release — it reads from the latest git tag during the docs build.
 
 ## [0.5.0] — 2026-05-26
 
