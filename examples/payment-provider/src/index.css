@@ -250,6 +250,82 @@ dl dd {
   font-family: var(--font-ui);
 }
 
+.footer-note code {
+  font-family: var(--font-mono);
+  background: var(--glass);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--ink-mute);
+}
+
+/* Card + OTP forms */
+
+.card-form,
+.otp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 18px 0 0;
+}
+
+.card-form label,
+.otp-form label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  margin-top: 8px;
+}
+
+.card-form input,
+.otp-form input {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.card-form input::placeholder,
+.otp-form input::placeholder {
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+
+.card-form input:focus,
+.otp-form input:focus {
+  border-color: var(--emerald-2);
+  background: var(--glass-strong);
+}
+
+.otp-form .error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--crimson);
+  font-family: var(--font-ui);
+}
+
+/* Disabled approve button — keep readable, drop the gradient. */
+.actions .approve:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  transform: none;
+}
+.actions .approve:disabled:hover {
+  transform: none;
+}
+
+.card-form .actions,
+.otp-form .actions {
+  margin-top: 18px;
+}
+
 /* Result states */
 
 .result { text-align: center; padding: 16px 0; }
