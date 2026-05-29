@@ -42,6 +42,25 @@ Same shape as `vite-plugin-hover` / `@hover-dev/astro`:
 | `model` | `string` | `'sonnet'` | Default model |
 | `maxBudgetUsd` | `number` | none | Hard $ ceiling per command |
 
+## Plugins (e.g. `@hover-dev/security`)
+
+Since v0.9, the Nuxt module accepts Hover plugins via a `plugins?:` field on its options. (Nuxt's `defineNuxtModule` setup contract can't take varargs the way `vite-plugin-hover` / `@hover-dev/astro` do, so the shape is slightly different — but the wiring is the same.)
+
+```ts
+// nuxt.config.ts
+import securityMode from '@hover-dev/security';
+
+export default defineNuxtConfig({
+  modules: ['@hover-dev/nuxt'],
+  hover: {
+    autoLaunchChrome: true,
+    plugins: [securityMode()],
+  },
+});
+```
+
+Older configs without `plugins` continue to work unchanged.
+
 ## How it composes
 
 ```

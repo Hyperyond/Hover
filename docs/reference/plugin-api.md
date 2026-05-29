@@ -67,6 +67,7 @@ interface HoverPluginManifest {
   chromeFlags?: HoverPluginChromeFlags;           // launch overrides
   systemPromptAdditions?: HoverPluginSystemPromptAddition[];
   widgetEventTypes?: string[];                    // namespaces of events you'll broadcast
+  widgetEntry?: string;                           // absolute path to plugin widget JS module (v0.9+)
   hooks?: HoverHooks;
 }
 ```
@@ -133,6 +134,105 @@ widgetEventTypes?: string[];                      // e.g. ['security:flow:added'
 
 Documents the event types this plugin broadcasts. Today this is informational — the widget side accepts unknown event types but knows nothing about them. Future iterations will use this for tree-shaking the widget bundle.
 
+### widgetEntry (v0.9+)
+
+```ts
+widgetEntry?: string;                             // absolute path to a JS module
+```
+
+Resolves to an absolute path on disk pointing at a JS module that runs **inside the widget's Shadow DOM**. The host reads this file at bundle-assembly time, inlines it as a `<script type="module">` after the widget core, and the module looks up `window.__HOVER_WIDGET__` (set by `packages/widget-bootstrap/src/widget/host.js`) to contribute its UI.
+
+Plugin authors typically resolve the absolute path inside the server-side entry, e.g.:
+
+```ts
+import { fileURLToPath } from 'node:url';
+
+const widgetEntry = fileURLToPath(new URL('./widget.js', import.meta.url));
+```
+
+If absent, the plugin contributes no widget code (server-side-only plugin).
+
+## Widget host API (v0.9+)
+
+Plugin widget modules see one global: `window.__HOVER_WIDGET__`. Its surface is:
+
+```ts
+interface WidgetHost {
+  apiVersion: 1;
+  registerPlugin(spec: WidgetPluginSpec): void;
+  getState(): Record<string, unknown>;           // union of every plugin's namespaced state
+  setState(patch: Record<string, unknown>): void; // merged into the active plugin's slot
+  openOverlay(overlayId: string): void;          // namespaced id, e.g. '@hover-dev/security:network'
+  closeOverlay(overlayId: string): void;
+  send(msg: object): void;                       // push a message to the service over WS
+}
+```
+
+`getState()` returns the full union (`{ [pluginName]: { ... } }`); plugins are expected to read only their own entry. `setState(patch)` merges into the namespace of whichever plugin owns the currently-active mode — there's no need to repeat your name in every call. Calling `setState` while no plugin mode is active is a silent no-op.
+
+### WidgetPluginSpec
+
+```ts
+interface WidgetPluginSpec {
+  apiVersion: 1;
+  name: string;                                   // matches the server-side manifest name
+  modeId: string;                                 // matches the server-side mode.id
+
+  css?: string;                                   // auto-namespaced — every selector becomes
+                                                  //   `[data-plugin-active="<name>"] <selector>`
+
+  domMutations?: {                                // applied on activate, reverted on deactivate
+    hide?: string[];                              //   set .hidden = true on each match
+    addClass?: Record<string, string>;            //   { selector: className }
+  };
+
+  toolbarButtons?: Array<{
+    id: string;
+    tooltip?: string;
+    icon?: string;                                // inline-SVG string or unicode
+    onClick?: (api: WidgetHost) => void;
+    badge?: (api: WidgetHost) => string | number | null;
+  }>;
+
+  overlays?: Array<{
+    id: string;                                   // namespace it — '@you/plugin:panel'
+    title?: string;
+    actions?: Array<{
+      icon?: string;
+      tooltip?: string;
+      onClick?: (api: WidgetHost) => void;
+    }>;
+    render?: (container: HTMLElement, state: Record<string, unknown>) => void;
+  }>;
+
+  onMessage?: Record<string, (payload: unknown, api: WidgetHost) => void>;
+  onActivate?: (api: WidgetHost) => void;
+  onDeactivate?: (api: WidgetHost) => void;
+}
+```
+
+### `domMutations` is for plugin-owned DOM
+
+`hide` / `addClass` look like they could target any element — but they're intended for the plugin's own contributions (toolbar buttons, overlay bodies, etc.). The default-mode widget core (Record, Fix, Send, footer, overlays, the mode bar itself) is **not** a target. Core owns its own visibility — it listens for `modes` payload changes and applies `applyDefaultModeVisibility` to its own widgets internally.
+
+The host doesn't enforce this — pointing `hide` at `.record-btn` technically works — but it produces a two-sided coupling where the plugin tracks core selector names and core could refactor at any time. The `@hover-dev/security` widget module explicitly declares "no domMutations targeting core widget elements" in its source code; new plugins should follow the same discipline.
+
+### Single-mode exclusivity
+
+At most one plugin's contributions are visible at any moment. Server-side `currentModeId: string | null` is the source of truth; the widget host's `applyMode(newModeId)` deactivates the prior owner (revert DOM mutations, remove overlays, remove toolbar buttons, remove `<style>`, call `onDeactivate`) before activating the new one (inject namespaced CSS, append toolbar buttons + overlays, apply `domMutations`, call `onActivate`). When `newModeId === null`, the widget looks identical to a build with no plugins — that's the symmetric "default mode" state.
+
+### Symmetric mode ownership
+
+Default mode (Record / Fix / Send / etc.) and plugin modes share a symmetric protocol: each side owns its own widgets and listens for `modes` payload changes to show/hide them itself. Plugins **never** need to know default mode's selectors; default mode never knows about any specific plugin. Adding a new plugin no longer requires listing "what core buttons should I hide."
+
+### Failure mode
+
+Every plugin-supplied callback runs inside a try/catch inside the host. A plugin crashing in `registerPlugin` / `onMessage` / `overlay.render` / `onActivate` / `onDeactivate` produces a structured `[hover/plugin "<name>"] <where> failed: <msg>` console error, but never blocks the WS pump or other plugins.
+
+### Reference: `packages/security/src/widget.js`
+
+The 187-line `packages/security/src/widget.js` is the canonical example. It registers `@hover-dev/security` against `modeId: 'security'`, contributes ~120 lines of namespaced CSS (the orange theme, flow row grid, status code colours, plugin-toolbar-badge), one toolbar button (`network` — opens the captured-flows overlay, badge counts captured flows), one overlay (`@hover-dev/security:network` — renders one row per captured flow), and two WS message handlers (`security:flow:added` / `security:flow:updated`). `onDeactivate` drops the captured flow list so re-entering security mode starts with a clean slate.
+
 ## Hooks
 
 Namespaced (Astro-style). Adding a new hook name is non-breaking; renaming an existing one bumps the apiVersion.
@@ -184,4 +284,6 @@ Mode `conflictsWith` is currently informational; runtime enforcement lands in a 
 
 ## Reference implementation
 
-Read `packages/security/src/index.ts` end-to-end — it exercises every field above except `widgetEventTypes` enforcement. It's ~140 lines.
+Read `packages/security/src/index.ts` end-to-end (~270 lines) — it exercises the manifest, mode, MCP server, Chrome flags, system prompt additions, hooks, and `widgetEntry` resolution.
+
+For the widget side of the same plugin, `packages/security/src/widget.js` (~190 lines) is the canonical example — see the [Widget host API](#widget-host-api-v0-9) section above.

@@ -17,7 +17,9 @@ The local Node service. Owns:
 | `detect.ts` | `detectAgents()`, `resolveBinForAgent()`, `resolveOnPath()` — PATH scanning |
 | `argv.ts` | `buildArgv()` — protocol-aware argv construction, throws `UnsupportedAgentProtocolError` for `acp` / `pi-rpc` |
 | `invoke.ts` | `invokeAgent()` — async-iterable spawning + stdout streaming |
-| `claude.ts` | Claude Code descriptor: `claude -p`, stream-json parser, sandbox flags |
+| `claude.ts` | Claude Code descriptor: `claude -p`, stream-json parser, hard sandbox flags |
+| `codex.ts` | OpenAI Codex CLI descriptor: `codex exec --json`, JSONL parser, soft sandbox (`--sandbox read-only`) |
+| `cursor.ts` | Cursor CLI descriptor (v0.9): stream-JSON / NDJSON parser, soft sandbox |
 
 To add an agent: implement an `AgentDescriptor`, register it in `registry.ts`. Done.
 
@@ -43,7 +45,7 @@ pnpm smoke http://localhost:5173/ "log in then add a todo named 'verify hover'"
 Environment variables:
 
 - `HOVER_CDP` — CDP URL (default `http://localhost:9222`)
-- `HOVER_AGENT` — agent id (omit to auto-detect; tries the user's stated preference, then the first installed agent in registry order — `claude` → `codex` today)
+- `HOVER_AGENT` — agent id (omit to auto-detect; tries the user's stated preference, then the first installed agent in registry order — `claude` → `codex` → `cursor-agent` today)
 - `HOVER_MODEL` — model for the agent (default `sonnet`, much cheaper than opus)
 
 ## Sandboxing (what the smoke test enforces)
