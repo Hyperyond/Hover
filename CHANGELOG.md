@@ -6,6 +6,31 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-05-29
+
+The "multi-tab agent reliability + more agents" release. Hardens the cross-origin / popup-checkout / OAuth-redirect path that v0.7-v0.9 left wobbly — the agent now has explicit system-prompt rules for `browser_tabs(list/select)`, post-`window.close` refocus, and the postMessage handoff back to the original tab. The `examples/payment-provider` sandbox upgrades from a one-button approve/decline to a realistic two-step card + OTP flow with simulated 3DS latency, and a new `pnpm bench-multi-tab` benchmark scores the full end-to-end run across N iterations. Plus `aider`, `gemini-cli`, and `qwen-code` join the agent registry — six supported agents now.
+
+### Added
+
+- **Multi-tab system-prompt addendum** in `packages/core/src/service/cdpHint.ts`. Three new explicit rules teaching the agent to: (5) handle popup-opening clicks by listing tabs, selecting the popup, and refocusing the opener after it closes; (6) follow OAuth-style redirect chains where the same tab index changes origin underneath the agent; (7) handle cross-origin cookie / session updates without forcing a same-origin reload (rule #2 still applies — wait for the postMessage handler instead).
+- **`pnpm bench-multi-tab`** — new benchmark script (`packages/core/src/scripts/bench-multi-tab.ts`, 200 lines). Runs N iterations of the full e-commerce → PayHover checkout flow, reports success rate, median wall time, median turns, median cost. Companion to `pnpm bench-ttfb`. Exits non-zero only when ALL runs fail (partial-pass exits 0 to keep signal flowing across branches).
+- **`aider` agent in the registry** (`packages/core/src/agents/aider.ts`, 242 lines). Soft sandbox, ⚠ in the dropdown. Install: `pipx install aider-chat`. Stream is plain-text only (aider doesn't ship structured tool-call events), and aider has no MCP integration today — so picking aider from the Hover dropdown gets you an LLM chat with no browser-driving ability. The file header marks this prominently as a degraded mode.
+- **`gemini-cli` agent in the registry** (`packages/core/src/agents/gemini.ts`, 336 lines). Soft sandbox. Install: `npm install -g @google/gemini-cli`. Real `--output-format stream-json` with documented `init / message / tool_use / tool_result / error / result` event types. MCP support via `~/.gemini/settings.json` (not per-invocation `--mcp-config`). Per-invocation system-prompt override isn't possible (no CLI flag — only `GEMINI_SYSTEM_MD` env-var pointing at a markdown file), so the HOVER-mode preface prepends to the user prompt.
+- **`qwen-code` agent in the registry** (`packages/core/src/agents/qwen.ts`, 329 lines). Soft sandbox. Install: `npm install -g @qwen-code/qwen-code@latest`. `--output-format stream-json` with an Anthropic Messages-style envelope (`tool_use` in assistant content blocks, `tool_result` in user content blocks). Crucially has a real `--append-system-prompt` flag — the cleanest of the four soft-sandbox descriptors. Also exposes `--max-wall-time` / `--max-tool-calls` / `--max-session-turns` budget caps (not USD-denominated; not surfaced by default).
+- **3 new vitest suites** (aider/gemini/qwen) — +53 tests on top of the prior 110, total 163.
+- **`examples/payment-provider` two-step flow.** Step 1: card number (16-digit `4242 4242 4242 4242`) + CVV (3 or 4 digits) → Continue with simulated 600ms 3DS pre-check. Step 2: 6-digit OTP (always `123456` in the sandbox) → Confirm → postMessage + `window.close()` after 1.5s. Decline button on each step short-circuits to the same `payment-result: declined` path. New `data-testid` selectors on every interactive control (`card-number`, `cvv`, `continue`, `otp`, `confirm`, `decline`) so e2e specs and benches can target them deterministically.
+
+### Changed
+
+- **Roadmap reshuffled.** v0.10 now reflects the multi-tab + agent-registry work that's shipped here. v0.11 keeps its "security recording semantics" target. **Chrome extension moved from v0.10 to v0.12+ (or a sibling repo)** — Web Store releases are manual and the extension's cadence shouldn't gate on monorepo PRs.
+- **`examples/payment-provider` CSS** gained card-form / OTP-form input styles + a disabled-button style. No host-app changes — same postMessage shape, same return origin allow-list.
+- **README + README.zh-CN** updated to reflect six supported agents (was three).
+
+### Internal
+
+- Roadmap subsections in `docs/reference/roadmap.md` and zh-CN counterparts updated alongside this release.
+- The widget plugin-UI protocol (v0.9) means no widget changes were needed for this release — all the multi-tab work is prompt + bench + example.
+
 ## [0.9.0] — 2026-05-29
 
 The "widget plugin-UI protocol" release. Plugins can now contribute their own widget surface (CSS, toolbar buttons, overlays, WS message handlers, lifecycle callbacks) via a new `window.__HOVER_WIDGET__` host API — not just server-side mode / MCP / prompt contributions. `@hover-dev/security` migrates off the hardcoded `client.js` branches that v0.7 added; default mode and plugin modes now share a symmetric protocol where each side owns its own widgets. Bonus: `cursor-agent` joins the agent registry alongside `claude` + `codex`.

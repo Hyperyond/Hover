@@ -13,19 +13,18 @@ What's shipped, what's in flight.
 | **v0.6.x** | **Voice mode** — push-to-talk STT + spoken progress narration, browser-native, zh/en autodetect, Chrome 139+ on-device | ✅ Shipped |
 | **v0.7.x** | **Security testing + plugin API** — `@hover-dev/security` (HTTPS MITM, captured-flow inspector, IDOR / authz probing MCP) + `defineHoverPlugin` manifest API behind it | ✅ Shipped |
 | **v0.8.x** | **Multi-framework source attribution + integration overhaul** — JSX / Vue / Svelte / Astro `data-hover-source` stamps via the private `@hover-dev/transform-source`; `@hover-dev/next` gains plugin support via `register()`'s second arg | ✅ Shipped |
-| **v0.9.x** | **Widget plugin-UI protocol + cursor-agent** — `window.__HOVER_WIDGET__` host API (namespaced CSS / DOM mutations / toolbar buttons / overlays / WS message handlers / lifecycle); `@hover-dev/security` migrates onto it; `cursor-agent` joins the registry | ✅ Shipped (**you are here**) |
-| **v0.10.x** | Multi-tab / cross-origin polish + more agents + Chrome extension | 🟡 Planned |
+| **v0.9.x** | **Widget plugin-UI protocol + cursor-agent** — `window.__HOVER_WIDGET__` host API (namespaced CSS / DOM mutations / toolbar buttons / overlays / WS message handlers / lifecycle); `@hover-dev/security` migrates onto it; `cursor-agent` joins the registry | ✅ Shipped |
+| **v0.10.x** | **Multi-tab agent reliability + 3 more agents** — system-prompt addendum for popup checkouts / OAuth chains / post-popup state, `pnpm bench-multi-tab` for A/B'ing prompt changes, two-step card+OTP `examples/payment-provider`, `aider` + `gemini-cli` + `qwen-code` in the registry | ✅ Shipped (**you are here**) |
 | **v0.11.x** | Recording semantics for security mode — security regression specs from captured flows + agent replays | 🟡 Planned |
-
-## v0.10.x scope (planned)
-
-- **Multi-tab / cross-origin flows** — Stripe, OAuth, "Pay with PayHover" popup patterns. `examples/payment-provider` already stresses the `window.open → postMessage` path, but the agent's handling of `browser_tabs(list/select)` is brittle in the wild.
-- **More agents in the [registry](./agent-registry)** — `aider`, `gemini-cli`, `qwen-code`. (`cursor-agent` shipped in v0.9.)
-- **Chrome extension** — drops the Vite-plugin dependency for non-Vite stacks. The widget UI is the same.
+| **v0.12.x or sibling repo** | Chrome extension — drops bundler-plugin dependency, drives any tab (staging, third-party). Likely a separate `hover-extension` repo (Web Store cadence shouldn't gate on monorepo PRs). Loses source attribution, gains universal coverage | 🟡 Planned |
 
 ## v0.11.x scope (planned)
 
 - **Recording semantics for security mode.** Re-purpose the Record button while a security mode (or future probing mode) is active so a session captures the agent's replay decisions + asserts the server response shape, crystallising into a security regression spec. Now a security-side change thanks to the v0.9 widget plugin-UI protocol — zero changes to core widget code.
+
+## v0.12.x+ scope (planned)
+
+- **Chrome extension** as a sibling product. Targets the "AI tests any live site" use case (staging URLs, third-party sites, multi-origin flows) — distinct from the Vite-plugin product line which targets "AI rewrites your dev-server's source." Likely a separate `hover-extension` repo because Chrome Web Store releases are manual and would mis-fit this monorepo's auto-publish workflow.
 
 ## Beyond v0.11.x
 
