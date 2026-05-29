@@ -119,10 +119,23 @@ test.describe('widget plugin host', () => {
       /.+/,
     );
 
-    // Record button — the legacy hardcoded `recordBtn.hidden = engaged`
-    // path is gone; security's plugin module now does this declaratively
-    // via spec.domMutations. In default mode (security inactive), record
-    // remains visible.
+    // Record + Fix buttons — the legacy hardcoded `recordBtn.hidden =
+    // engaged` path is gone; security's plugin module declares both via
+    // spec.domMutations.hide on activate. In default mode (security
+    // inactive) both remain visible.
     await expect(widget.locator('.record-btn')).toBeVisible();
+    await expect(widget.locator('.fix-btn')).toBeVisible();
   });
+
+  // TODO: positive test for actually activating a plugin mode.
+  // The widget host's applyMode() isn't exposed on `window.__HOVER_WIDGET__`
+  // (only the plugin-facing surface is). Faithful end-to-end activation
+  // also boots mockttp on the server side — which needs a system-trusted
+  // CA Playwright can't provide. Two options when this gap matters:
+  //   (a) Add a `__hoverApplyModeForTests` escape hatch the host sets
+  //       when NODE_ENV === 'test', call it from here to bypass WS.
+  //   (b) Test against a fake plugin we register from within the test
+  //       page via `window.__HOVER_WIDGET__.registerPlugin(...)`.
+  // For now manual smoke + the existing @hover-dev/security
+  // `smoke:e2e` script cover activation.
 });

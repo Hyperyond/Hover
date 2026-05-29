@@ -121,14 +121,17 @@ if (host) {
       }
     `,
 
-    // Hide the default-mode Record button while engaged. The legacy
-    // "future iteration will redesign recording for security mode"
-    // comment in client.js was about exactly this: the Playwright-spec
-    // record semantics don't match security mode's HTTP replay workflow.
-    // Stage 4 (v0.10) will add a security-specific record button via
-    // toolbarButtons — for now, just hide the default one.
+    // Hide the default-mode Record + Fix buttons while engaged.
+    //   • Record — the Playwright-spec record semantics
+    //     ("click → save as page.click() step") don't match security
+    //     mode's HTTP replay workflow. v0.10 will reintroduce a
+    //     security-specific record button via toolbarButtons.
+    //   • Fix — points the agent at a JSX file:line:col to rewrite,
+    //     which is irrelevant when the user is testing third-party /
+    //     staging surfaces under security mode. Security testing
+    //     doesn't author code from the page.
     domMutations: {
-      hide: ['.record-btn'],
+      hide: ['.record-btn', '.fix-btn'],
     },
 
     toolbarButtons: [{

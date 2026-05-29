@@ -538,7 +538,8 @@ header {
 .panel.has-modebar .modes-overlay,
 .panel.has-modebar .plugin-overlay,
 .panel.has-modebar .settings-overlay,
-.panel.has-modebar .cdp-overlay {
+.panel.has-modebar .cdp-overlay,
+.panel.has-modebar .fix-popover {
   top: 68px;
 }
 .launcher.mode-engaged {

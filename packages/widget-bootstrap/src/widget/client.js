@@ -1825,6 +1825,15 @@
   };
 
   root.addEventListener('mouseover', (ev) => {
+    // Suppress tooltips while any full-panel overlay or popover is
+    // open — they cover the header buttons, but mouseover still fires
+    // on the elements underneath, and tooltips render on a higher
+    // z-index so they punch through visually. Query lazily here
+    // (fixPopover and plugin overlays are declared later in the IIFE
+    // / appended at runtime by the host).
+    const fixOpen = root.querySelector('.fix-popover.visible');
+    const pluginOverlayOpen = root.querySelector('.plugin-overlay.open');
+    if (fixOpen || pluginOverlayOpen) return;
     const target = findTipTarget(ev);
     if (!target || target === tipTarget) return;
     cancelHideTimer();
