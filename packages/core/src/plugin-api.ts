@@ -172,7 +172,37 @@ export interface HoverPluginManifest {
    *  no widget code (server-side-only plugin). */
   widgetEntry?: string;
 
+  /** v0.12 — plugin-contributed save handlers. The widget Save dropdown
+   *  picks up these entries via the host API (`host.registerSaveEntry`)
+   *  and the service routes incoming `save:<type>` WS messages to the
+   *  plugin's handler. Each plugin owns its own write semantics — the
+   *  service does NOT touch the payload, it just delivers it. Letting
+   *  plugins write entirely different artefacts (security regression
+   *  specs, performance reports, …) without forcing them into core's
+   *  SkillStep[] shape. */
+  saveHandlers?: HoverPluginSaveHandler[];
+
   hooks?: HoverHooks;
+}
+
+export interface HoverPluginSaveHandler {
+  /** WS message type the widget sends — the service uses this verbatim
+   *  in its router. Convention: `save:<plugin>:<kind>`. Example:
+   *  `'save:security:spec'`. Must be unique across all loaded plugins. */
+  type: string;
+  /** UI label shown in the widget's Save dropdown. Example: "Security spec". */
+  label: string;
+  /** Optional short hint shown under the label. Example: "Playwright
+   *  regression spec for the IDOR / authz probes the agent recorded." */
+  description?: string;
+  /** Modes in which this Save entry is offered. Defaults to the
+   *  plugin's own mode (or `['*']` if the plugin has no mode). */
+  activeInModes?: string[];
+  /** Server-side handler. Receives the raw payload the widget sent
+   *  alongside `devRoot`. Returns the on-disk path + slug for the
+   *  service to echo back as `<type>:saved`. Throw to signal failure;
+   *  service surfaces the error message to the widget. */
+  handle(ctx: { devRoot: string; payload: unknown }): Promise<{ path: string; slug: string }>;
 }
 
 // ──────────────────────────────────────────────────────────────────────

@@ -1093,6 +1093,23 @@
     const items = source === 'recording'
       ? allItems.filter((it) => !it.agentOnly)
       : allItems;
+    // v0.12 — plugin-contributed save entries are appended after the
+    // core save items. Only the active plugin mode's entries are
+    // returned by hostCtl.getActiveSaveEntries(); when no plugin mode
+    // is engaged, this is an empty list and the dropdown looks
+    // identical to v0.11.
+    const pluginEntries = typeof hostCtl.getActiveSaveEntries === 'function'
+      ? hostCtl.getActiveSaveEntries()
+      : [];
+    for (const e of pluginEntries) {
+      items.push({
+        icon: e.icon || SAVE_ICON_SVG,
+        label: e.label,
+        sub: e.sub,
+        cls: 'item-plugin',
+        run: () => saveAsPluginArtifact(e, trigger),
+      });
+    }
     for (const it of items) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -1279,6 +1296,88 @@
         body: `A test case CSV named "${slug}" already exists.`,
       }),
     },
+  };
+
+  // Plugin Save entries register their pending state here so the core
+  // onmessage handler (below) can route `<type>:saved` responses back to
+  // the right trigger button. Mirrors the `pending` map used by core save
+  // artifacts but keyed by the WS save type so multiple plugins co-exist.
+  const pendingPluginSaves = new Map(); // type -> { button, entry }
+
+  /**
+   * Plugin-contributed Save entry runner (v0.12). Mirrors saveAsArtifact's
+   * shape — prompt for fields, send a WS message keyed by the plugin's
+   * `save:<plugin>:<kind>` type, await the matching `<type>:saved`
+   * response. The service dispatches to the plugin's handler.
+   *
+   * Unlike core save flows, we DO NOT include `steps` / `assertions` in
+   * the payload. Plugin handlers read whatever state they need server-
+   * side (e.g. security checks live in the control plane closure) — the
+   * widget just passes the prompt-form fields.
+   */
+  const saveAsPluginArtifact = async (entry, button) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      addMessage({ kind: 'system', text: 'Cannot save: service disconnected.' });
+      return;
+    }
+    const form = await hoverPrompt({
+      title: entry.title || entry.label,
+      fields: entry.fields,
+      confirmLabel: entry.confirmLabel,
+    });
+    if (!form) return;
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    pendingPluginSaves.set(entry.type, { button, entry, formName: form.name });
+    ws.send(JSON.stringify({
+      type: entry.type,
+      payload: form,
+    }));
+    // Failsafe: re-enable trigger if no response within 15s.
+    setTimeout(() => {
+      const p = pendingPluginSaves.get(entry.type);
+      if (p && p.button.textContent === 'Saving…') {
+        restoreTrigger(p.button);
+        pendingPluginSaves.delete(entry.type);
+      }
+    }, 15000);
+  };
+
+  /**
+   * Called from the core onmessage handler when a `<type>:saved` arrives.
+   * Returns true when this message was a plugin save response (so the
+   * core handler knows to stop processing).
+   */
+  const tryHandlePluginSave = (msg) => {
+    if (typeof msg.type !== 'string') return false;
+    if (msg.type.endsWith(':saved')) {
+      const saveType = msg.type.slice(0, -':saved'.length);
+      const p = pendingPluginSaves.get(saveType);
+      if (!p) return false;
+      pendingPluginSaves.delete(saveType);
+      restoreTrigger(p.button);
+      const text = (p.entry.successMsgTemplate || '✓ saved "{name}" → {path}')
+        .replace('{name}', msg.payload?.name ?? p.formName)
+        .replace('{path}', msg.payload?.path ?? '');
+      addMessage({ kind: 'system', text });
+      return true;
+    }
+    // Plugin-side errors come back as { type: 'error', payload: {
+    // message: '<saveType>: <real reason>' } }. We claim the error if
+    // any pending plugin save's type prefix matches the message — gives
+    // each plugin a clean error path without forcing the service to
+    // emit `<type>:error` separately.
+    if (msg.type === 'error' && typeof msg.payload?.message === 'string') {
+      for (const [type, p] of pendingPluginSaves) {
+        if (msg.payload.message.startsWith(type)) {
+          pendingPluginSaves.delete(type);
+          restoreTrigger(p.button);
+          addMessage({ kind: 'system', text: `✗ ${msg.payload.message}` });
+          return true;
+        }
+      }
+    }
+    return false;
   };
 
   const saveAsArtifact = async (kind, button) => {
@@ -3194,6 +3293,10 @@
     sock.onmessage = (e) => {
       let msg;
       try { msg = JSON.parse(e.data); } catch { return; }
+      // v0.12 — plugin-contributed save flows. Routed first so that a
+      // plugin-save error doesn't trigger setRunning(false) below (saves
+      // don't go through the session lifecycle).
+      if (tryHandlePluginSave(msg)) return;
       if (msg.type === 'event' && msg.payload) {
         handleServerEvent(msg.payload);
         if (msg.payload.kind === 'session_end') setRunning(false);

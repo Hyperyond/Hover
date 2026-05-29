@@ -169,7 +169,7 @@ server.registerTool(
   'replay_flow',
   {
     description:
-      'Replay a captured flow against the real server, optionally mutating method, URL, headers, or body. The replayed flow is added to the store as a NEW flow with its own id (returned). Use this to probe for IDOR (mutate the resource id in the URL), parameter tampering (rewrite request body), or authorization bypass (drop or swap the auth header). Always check the response status: 200 OK to a mutated request often indicates the server accepted unauthorized input. The replay is gated to the source flow\'s origin by default — set allowCrossOrigin only when the user has explicitly authorised testing the third-party target.',
+      'Replay a captured flow against the real server, optionally mutating method, URL, headers, or body. The replayed flow is added to the store as a NEW flow with its own id (returned). Use this to probe for IDOR (mutate the resource id in the URL), parameter tampering (rewrite request body), or authorization bypass (drop or swap the auth header). Always check the response status: 200 OK to a mutated request often indicates the server accepted unauthorized input. The replay is gated to the source flow\'s origin by default — set allowCrossOrigin only when the user has explicitly authorised testing the third-party target.\n\nv0.12: pass `intent` (one-line human description, e.g. "IDOR: access another user\'s order") and `expectStatus` (the status code that proves the control works, e.g. 403) together to RECORD this replay as a security check. Recorded checks accumulate across the session; the user can then "Save as Security spec" to crystallise them into a Playwright regression spec that runs in CI without any agent in the loop. Always supply both intent and expectStatus when you\'re probing for a known vulnerability class — without them the replay still works but isn\'t recordable.',
     inputSchema: {
       id: z.string().describe('Source flow id from list_flows.'),
       method: z.string().optional().describe('Override HTTP method (e.g. switch GET to DELETE).'),
@@ -185,13 +185,29 @@ server.registerTool(
         .describe(
           'Set true to allow replaying against an origin different from the source flow. Off by default to prevent accidental probes of third-party APIs (Stripe, Sentry, analytics). Only set when the user has explicitly authorised the target.',
         ),
+      intent: z
+        .string()
+        .optional()
+        .describe(
+          'One-line human description of what security property this replay tests. Examples: "IDOR: access another user\'s order", "Authz: missing token still allows write", "Parameter tampering: alter price field". When present (with expectStatus), the replay is RECORDED as a security check that can be crystallised into a regression spec.',
+        ),
+      expectStatus: z
+        .number()
+        .optional()
+        .describe(
+          'HTTP status code that proves the security control is working. Example: probing IDOR by changing /orders/me → /orders/999, expectStatus is 403 (the server SHOULD reject the cross-user lookup). When this matches the observed status, the check is recorded as a verified control; when it doesn\'t, the check is recorded as a vulnerability finding.',
+        ),
     },
   },
-  async ({ id, method, url, headers, bodyText, allowCrossOrigin }) => {
-    const mutate = { method, url, headers, bodyText, allowCrossOrigin };
-    const result = await api<{ replayId: string; flow: FullFlow }>(
+  async ({ id, method, url, headers, bodyText, allowCrossOrigin, intent, expectStatus }) => {
+    const payload = { method, url, headers, bodyText, allowCrossOrigin, intent, expectStatus };
+    const result = await api<{
+      replayId: string;
+      flow: FullFlow;
+      check?: { id: number; intent: string; expectStatus: number; matched: boolean };
+    }>(
       `/flows/${encodeURIComponent(id)}/replay`,
-      { method: 'POST', body: JSON.stringify(mutate) },
+      { method: 'POST', body: JSON.stringify(payload) },
     );
     const f = result.flow;
     const r = f.request;
@@ -204,6 +220,22 @@ server.registerTool(
       out.push(`\n\`\`\``);
       out.push(truncate(s.bodyText, 1000));
       out.push(`\`\`\``);
+    }
+    if (result.check) {
+      out.push('');
+      out.push(
+        `🔒 **Security check recorded** (#${result.check.id}): ${result.check.intent}`,
+      );
+      out.push(
+        result.check.matched
+          ? `   ✓ Observed ${s?.statusCode ?? '?'} matches expected ${result.check.expectStatus}. Control is in place.`
+          : `   ✗ Observed ${s?.statusCode ?? '?'} ≠ expected ${result.check.expectStatus}. **Potential vulnerability.** Include this in your Findings + recommend "Save as Security spec" so the regression is caught in CI.`,
+      );
+    } else if (intent || expectStatus) {
+      out.push('');
+      out.push(
+        `_(Not recorded as a check — both \`intent\` and \`expectStatus\` are required together.)_`,
+      );
     }
     return md(out.join('\n'));
   },

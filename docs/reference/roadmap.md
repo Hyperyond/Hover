@@ -15,13 +15,9 @@ What's shipped, what's in flight.
 | **v0.8.x** | **Multi-framework source attribution + integration overhaul** — JSX / Vue / Svelte / Astro `data-hover-source` stamps via the private `@hover-dev/transform-source`; `@hover-dev/next` gains plugin support via `register()`'s second arg | ✅ Shipped |
 | **v0.9.x** | **Widget plugin-UI protocol + cursor-agent** — `window.__HOVER_WIDGET__` host API (namespaced CSS / DOM mutations / toolbar buttons / overlays / WS message handlers / lifecycle); `@hover-dev/security` migrates onto it; `cursor-agent` joins the registry | ✅ Shipped |
 | **v0.10.x** | **Multi-tab agent reliability + 3 more agents** — system-prompt addendum for popup checkouts / OAuth chains / post-popup state, `pnpm bench-multi-tab` for A/B'ing prompt changes, two-step card+OTP `examples/payment-provider`, `aider` + `gemini-cli` + `qwen-code` in the registry | ✅ Shipped |
-| **v0.11.x** | **Spec resilience: ⟳ Re-record + Saved-sessions overlay + FAQ** — when a saved spec breaks (UI changed), Re-record button (widget) or `pnpm hover re-record <spec>` (CLI) replays the JSDoc `Original prompt:` against the current UI and overwrites the file. Widget gains the Skills+Specs tabbed overlay. README + docs site gain a top-level FAQ explaining why we don't self-heal at CI time | ✅ Shipped (**you are here**) |
-| **v0.12.x** | Recording semantics for security mode — security regression specs from captured flows + agent replays | 🟡 Planned |
+| **v0.11.x** | **Spec resilience: ⟳ Re-record + Saved-sessions overlay + FAQ** — when a saved spec breaks (UI changed), Re-record button (widget) or `pnpm hover re-record <spec>` (CLI) replays the JSDoc `Original prompt:` against the current UI and overwrites the file. Widget gains the Skills+Specs tabbed overlay. README + docs site gain a top-level FAQ explaining why we don't self-heal at CI time | ✅ Shipped |
+| **v0.12.x** | **Security spec recording semantics** — `replay_flow` MCP tool gains `intent` + `expectStatus` parameters that record the replay as a security check. Save-as menu sprouts a "Security spec" entry that writes `__vibe_tests__/<slug>.security.spec.ts` — plain Playwright with the `request` fixture, one `test()` per recorded check. Also: server `HoverPluginManifest.saveHandlers` + widget `WidgetPluginSpec.saveEntries` plugin extension points | ✅ Shipped (**you are here**) |
 | **v0.13.x or sibling repo** | Chrome extension — drops bundler-plugin dependency, drives any tab (staging, third-party). Likely a separate `hover-extension` repo (Web Store cadence shouldn't gate on monorepo PRs). Loses source attribution, gains universal coverage | 🟡 Planned |
-
-## v0.12.x scope (planned)
-
-- **Recording semantics for security mode.** Re-purpose the Record button while a security mode (or future probing mode) is active so a session captures the agent's replay decisions + asserts the server response shape, crystallising into a security regression spec. Now a security-side change thanks to the v0.9 widget plugin-UI protocol — zero changes to core widget code.
 
 ## v0.13.x+ scope (planned)
 

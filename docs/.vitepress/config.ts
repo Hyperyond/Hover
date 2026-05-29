@@ -134,6 +134,7 @@ export default defineConfig({
             { text: 'Save as Spec', link: '/features/save-as-spec' },
             { text: 'Re-record a spec', link: '/features/re-record' },
             { text: 'Save as Skill', link: '/features/save-as-skill' },
+            { text: 'Save as Security spec', link: '/features/security-spec' },
             { text: 'Save as Jira case', link: '/features/save-as-jira-case' },
             { text: 'Record mode', link: '/features/record-mode' },
             { text: 'Fix prompt', link: '/features/fix-prompt' },

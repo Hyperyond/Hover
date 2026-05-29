@@ -32,6 +32,30 @@ Both rejected on purpose for v0.11.
 
 For v0.11, the pattern is: CI tells you which specs are red, you re-record them one at a time and review each diff. Slightly slower, much cleaner history.
 
+## Security spec auth setup — how do I run a security spec in CI when the auth cookies live in my debug Chrome?
+
+The agent recorded the IDOR / authz probes with the cookies from your logged-in debug-Chrome session. Playwright in CI is a fresh process — it doesn't have those cookies. Plug them in via Playwright's `storageState` mechanic:
+
+1. Add an auth-setup step to your `playwright.config.ts`:
+
+   ```ts
+   projects: [
+     { name: 'setup', testMatch: /global\.setup\.ts/ },
+     {
+       name: 'security',
+       testMatch: /\.security\.spec\.ts/,
+       dependencies: ['setup'],
+       use: { storageState: '.auth/user.json' },
+     },
+   ],
+   ```
+
+2. In `global.setup.ts`, log in once (via API or UI) and write the resulting cookies to `.auth/user.json` with `await context.storageState({ path: '.auth/user.json' })`.
+
+3. CI now runs your security spec with the same effective auth as Hover recorded.
+
+Same pattern Playwright uses for UI-level e2e auth — see the [official docs](https://playwright.dev/docs/auth) for the full reference. The Hover spec works as long as the `request` fixture has the storageState; the generated spec doesn't try to authenticate on its own.
+
 ## What's the difference between a Skill and a Spec?
 
 Generated from the same Save card on the same Hover session. Used very differently:

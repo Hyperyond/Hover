@@ -630,6 +630,37 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         await handleSaveArtifact(ws, msg, devRoot, CASE_CSV_CONFIG);
         return;
       }
+      // v0.12 — plugin-contributed save handlers. Lookup is O(plugins),
+      // which is fine because there's at most a handful of plugins ever
+      // loaded. Each plugin's manifest declares `saveHandlers[].type`
+      // as the WS message type the widget sends; we match exactly.
+      if (typeof msg.type === 'string' && msg.type.startsWith('save:')) {
+        for (const p of plugins) {
+          const handler = p.saveHandlers?.find((h) => h.type === msg.type);
+          if (!handler) continue;
+          try {
+            const result = await handler.handle({ devRoot, payload: msg.payload });
+            send(ws, {
+              type: `${msg.type}:saved`,
+              payload: { name: result.slug, path: result.path },
+            });
+          } catch (err) {
+            const m = err instanceof Error ? err.message : String(err);
+            send(ws, {
+              type: 'error',
+              payload: { message: `${msg.type}: ${m}` },
+            });
+          }
+          return;
+        }
+        // No plugin matched — surface as a normal error rather than
+        // silently swallowing.
+        send(ws, {
+          type: 'error',
+          payload: { message: `no plugin registered for save type "${msg.type}"` },
+        });
+        return;
+      }
       if (msg.type === 'check-cdp') {
         await handleCheckCdp(ws, msg, cdpUrl, effectiveLaunchExtras());
         return;

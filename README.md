@@ -171,6 +171,7 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
   - **Save as Skill** → `.claude/skills/<slug>/SKILL.md`, replayable by saying *"execute login-as-claude"* in a future conversation.
   - **Save as Jira case** → `__vibe_tests__/<slug>.case.csv`, an Xray-compatible multi-row CSV that imports straight into Jira / Xray / Zephyr Scale as a Manual Test issue.
 - **⟳ Re-record specs (NEW in v0.11).** When the UI shifts enough that a saved spec breaks (button renamed, label split, role changed), use the agent to regenerate selectors instead of editing the `.spec.ts` by hand. Open the widget's **Saved sessions** overlay → **Specs** tab → click **⟳ Re-record** next to any spec. The agent replays the original prompt from the spec's JSDoc header against the current UI, and Hover overwrites the file with new selectors. Or run `pnpm hover re-record <spec>` from a terminal. CI itself stays pure Playwright — no AI in the test loop, just at the *authoring* step. See [FAQ: my UI changed, what happens?](#faq) below.
+- **🛡️ Save as Security spec (NEW in v0.12).** When `@hover-dev/security` is wired, the agent's `replay_flow` tool gains two parameters — `intent` ("IDOR: access another user's order") and `expectStatus` (e.g. 403). Pass them together and Hover **records the replay as a security check**. After a probing session, the Save-as menu on the Result card gets a fourth option: **Security spec**. It writes `__vibe_tests__/<slug>.security.spec.ts` — plain `@playwright/test` using the `request` fixture, one `test()` per recorded check, asserting the expected status + a coarse PII-leak guard for 4xx responses. CI runs it without MITM, without the agent. Now the IDOR you found this morning is a regression gate on every PR forever. See [Security spec](#security-spec) below.
 - **Record mode with built-in checks** — Toggle Record in the footer, do the flow manually, get the same step sequence as if the agent had driven it. While recording, the sub-toolbar lets you switch what the next click captures:
   - **● Record** — record the click / fill / select as a Playwright step (default)
   - **✓ Exists** — check the element appears: `expect(SEL).toBeVisible()`
@@ -308,6 +309,61 @@ Two parts of this matter:
 - **Ancestor chain catches wrapper-rendered hosts** — `<StyledButton>` renders a `<button>` from inside `styled-components`' source; Hover's transform can't reach into a library, so the element's *own* source stamp would point to library internals. But the **DOM ancestor chain** still carries the user's call site — typically the `<div>` that wraps `<StyledButton>` in your component. The agent reads the chain and lands on the right file. [`examples/basic-app/src/wrapper-lab.tsx`](./examples/basic-app/src/wrapper-lab.tsx) exercises five wrapper shapes (bare host, styled-components, className-forwarding, multi-layer nested, Radix Slot/asChild) with measured findings recorded in the file header.
 
 Clicking **Fix mid-recording is allowed** — Record pauses while the popover is open and resumes automatically when you close it (Submit or Cancel). The Record button is disabled during Fix so you can't accidentally end the paused session; Fix's Submit / Cancel is the only path back.
+
+## Security spec
+
+> Requires [`@hover-dev/security`](./packages/security/) — install it alongside any of the bundler integrations. Authorised testing only; see [SECURITY.md](./SECURITY.md).
+
+When the agent is probing your app for IDOR / authz bypass / parameter tampering in Security mode, it uses the `replay_flow` MCP tool to re-send captured requests with mutations (different resource id, missing auth header, etc). In v0.12, that tool gained two parameters:
+
+- `intent` — one-line human description, e.g. `"IDOR: access another user's order"`
+- `expectStatus` — the HTTP status that proves the security control works, e.g. `403`
+
+When the agent passes both together, Hover **records the replay as a security check**: the source flow id, the mutated URL/method/headers/body the agent sent, the actual observed status, and whether observed matched expected. Recorded checks accumulate in the control plane across the session. The widget's Result-card Save-as menu sprouts a **Security spec** entry while security mode is active. Pick it, name the spec, hit save:
+
+```ts
+// __vibe_tests__/orders-idor.security.spec.ts
+import { test, expect } from '@playwright/test';
+
+/**
+ * Hover security regression — generated 2026-05-29.
+ * Original prompt: probe /orders for IDOR vulnerabilities
+ * Outcome: Found one IDOR — /orders/:id returns other users without check.
+ *
+ * Checks:
+ *   1. IDOR: access another user's order
+ *      GET http://localhost:5174/api/orders/999
+ *      → expected 403, observed 200 — **VULNERABILITY**
+ *
+ * Findings:
+ *   • **Vulnerability** — IDOR: access another user's order: expected 403, got 200.
+ *
+ * ⚠ Authentication: the agent recorded these requests with cookies from
+ *   a logged-in debug-Chrome session. CI does not share those cookies.
+ *   Wire your project's auth state into Playwright's `request` fixture
+ *   before running this spec in CI — typically a `storageState` setup
+ *   under `playwright.config.ts`. See the Hover FAQ entry
+ *   "Security spec auth setup" for the recipe.
+ */
+test.describe('security: orders-idor', () => {
+  test('01 — IDOR: access another user\'s order', async ({ request }) => {
+    // Recorded as a vulnerability: observed 200, expected 403.
+    // After fix, this test passes (server now returns 403).
+    const response = await request.get('http://localhost:5174/api/orders/999');
+    expect(response.status()).toBe(403);
+    // Coarse PII-leak guard: a real 4xx should be short.
+    const body = await response.text();
+    expect(body.length).toBeLessThan(500);
+  });
+});
+```
+
+The spec is plain `@playwright/test` — no Hover runtime, no MITM proxy, no agent. `pnpm exec playwright test` runs it like any other regression. Today's IDOR becomes tomorrow's CI gate.
+
+**Caveats**:
+- Auth state needs Playwright's `storageState` mechanic to round-trip cookies into CI. The spec emits a TODO header pointing at the FAQ.
+- The PII-leak guard is coarse (body-length < 500 chars for 4xx) — tighten by hand for high-value endpoints.
+- A check is only recorded when BOTH `intent` and `expectStatus` are present; either alone is treated as a normal replay.
 
 ## Install
 
@@ -601,6 +657,27 @@ This is the central question for any AI-authored e2e test. Hover's answer is thr
 
 **3. Why we don't auto-heal at CI time** (the Stagehand / Midscene model): CI tokens add up — every test run pays an LLM call, every PR, every nightly. Hover keeps CI deterministic and free, and concentrates the LLM cost into deliberate, one-off re-records at the moments you actually need them.
 
+### Security spec auth setup — how do I run a security spec in CI when the auth cookies live in my debug Chrome?
+
+The agent recorded the IDOR / authz probes with the cookies from your logged-in debug-Chrome session. Playwright in CI is a fresh process — it doesn't have those cookies. Plug them in via Playwright's `storageState` mechanic:
+
+1. Add an auth-setup step to your `playwright.config.ts`:
+   ```ts
+   projects: [
+     { name: 'setup', testMatch: /global\.setup\.ts/ },
+     {
+       name: 'security',
+       testMatch: /\.security\.spec\.ts/,
+       dependencies: ['setup'],
+       use: { storageState: '.auth/user.json' },
+     },
+   ],
+   ```
+2. In `global.setup.ts`, log in once (via API or UI) and write the resulting cookies to `.auth/user.json` with `await context.storageState({ path: '.auth/user.json' })`.
+3. CI now runs your security spec with the same effective auth as Hover recorded.
+
+Same pattern Playwright uses for UI-level e2e auth — see the [official docs](https://playwright.dev/docs/auth) for the full reference. The Hover spec works as long as the `request` fixture has the storageState; the generated spec doesn't try to authenticate on its own.
+
 ### What's the difference between a Skill and a Spec?
 
 Generated from the same Save card on the same Hover session. Used very differently:
@@ -647,15 +724,15 @@ If your favourite agent isn't on this list (currently: `claude`, `codex`, `curso
 - **v0.8.x** — **Multi-framework source attribution + integration overhaul.** ✓ The v0.4.x JSX stamp generalises to four frameworks: `.jsx`/`.tsx` (Babel parser, covers React / Solid / Preact), `.vue` (`@vue/compiler-sfc`, host-element filter so PascalCase + kebab-case components are skipped), `.svelte` (`svelte/compiler` modern AST, gates on `RegularElement`), `.astro` (`@astrojs/compiler`, async WASM-backed). All four report the `<` character's 1-indexed line + column for cross-framework consistency. Distribution: a new private `@hover-dev/transform-source` package is inlined into each of the 5 integration shims (vite / astro / nuxt / next / webpack) via `tsup`'s `noExternal`, so consumers `pnpm add` only the shim they need and the transform lands inside the shim's own `dist/`. Plus `@hover-dev/next` gains plugin support via `register()`'s second argument (a `PluginSpec[]` — bare module specifier or `{ module, options }`) so `@hover-dev/security` and future third-party plugins wire into Next without dragging Node-only deps into the Edge bundle. Also includes Next 15 `register-node` resolution fix for `.next/server` layout and docs polish around `autoLaunchChrome` + site nav version.
 - **v0.9.x** — **Widget plugin-UI protocol + cursor-agent.** ✓ Plugins now contribute their own widget surface via a new `window.__HOVER_WIDGET__` host API — namespaced CSS, declarative DOM mutations, toolbar buttons, full-panel overlays, WS message handlers, and `onActivate` / `onDeactivate` callbacks. Single-mode exclusivity invariant: at most one plugin's contributions are visible at any moment, and default mode equals "no plugin active." `@hover-dev/security` migrates off the hardcoded `client.js` branches v0.7 introduced — it now owns its network panel, flow rendering, and orange theme as a real widget plugin. Default mode listens for `modes` changes and hides its own widgets (Record / Fix) when a plugin mode takes over; plugins never need to know default's selectors. Bonus: `cursor-agent` joins the agent registry as a third option alongside `claude` and `codex` (soft sandbox, ⚠ in the dropdown).
 - **v0.10.x** — **Multi-tab / cross-origin agent reliability + 3 more agents.** ✓ System-prompt addendum teaches the agent how to handle popup-based payment flows (Stripe-style Checkout, "Pay with X"), OAuth redirect chains, and post-popup state on the original tab — explicit rules for `browser_tabs(list/select)`, post-`window.close` refocus, and the postMessage handoff. `examples/payment-provider` upgraded from a one-button approve/decline to a realistic two-step card + OTP flow with simulated 3DS latency. New `pnpm bench-multi-tab` benchmark scores agent success rate end-to-end across N runs so prompt changes can be A/B-tested. `aider`, `gemini-cli`, and `qwen-code` join the agent registry (soft sandbox, ⚠ in the dropdown) — `claude` + `codex` + `cursor-agent` + the new three = 6 supported agents.
-- **v0.11.x** — **Spec resilience: ⟳ Re-record + Saved-sessions overlay + FAQ.** ✓ **(you are here)** When the UI shifts enough that a saved spec turns red, instead of editing the `.spec.ts` by hand, hit ⟳ Re-record. The agent reads the JSDoc `Original prompt:` from the spec, replays it against the *current* UI, and Hover overwrites the file with new selectors. Two ways to trigger: the widget's new **📜 Saved sessions** overlay (Skills + Specs tabs), or `pnpm hover re-record <spec>` from a terminal. CI itself remains pure Playwright — AI only at the *authoring* step, never the *running* step. New top-level FAQ in the README + docs site walks through the trade-off vs. Stagehand/Midscene's self-heal-at-CI model.
-- **v0.12.x** — planned — **Recording semantics for security mode.** Re-purpose the Record button while a security mode (or future probing mode) is active so a session captures the agent's replay decisions + asserts the server response shape, crystallising into a security regression spec. Becomes a security-side change now that the widget plugin-UI protocol is in place — zero changes to core widget code.
+- **v0.11.x** — **Spec resilience: ⟳ Re-record + Saved-sessions overlay + FAQ.** ✓ When the UI shifts enough that a saved spec turns red, instead of editing the `.spec.ts` by hand, hit ⟳ Re-record. The agent reads the JSDoc `Original prompt:` from the spec, replays it against the *current* UI, and Hover overwrites the file with new selectors. Two ways to trigger: the widget's new **📜 Saved sessions** overlay (Skills + Specs tabs), or `pnpm hover re-record <spec>` from a terminal. CI itself remains pure Playwright — AI only at the *authoring* step, never the *running* step. New top-level FAQ in the README + docs site walks through the trade-off vs. Stagehand/Midscene's self-heal-at-CI model.
+- **v0.12.x** — **Security spec recording semantics.** ✓ **(you are here)** When `@hover-dev/security` is active, the agent's `replay_flow` MCP tool gains `intent` + `expectStatus` parameters. Pass them together to record the replay as a **security check**. Each recorded check accumulates in the control plane; the widget's Save-as menu sprouts a new **Security spec** entry that crystallises the recorded checks into `__vibe_tests__/<slug>.security.spec.ts` — plain `@playwright/test` using the `request` fixture, one `test()` per check, with a coarse PII-leak guard on 4xx expectations. CI runs the spec without MITM, without the agent. Also added: server-side `saveHandlers` API on `HoverPluginManifest` + widget `saveEntries` extension on `WidgetPluginSpec` — plugins can now register completely custom save flows without touching core's spec/skill/csv pipeline. Closes the security-testing loop opened in v0.7.
 - **v0.13.x or sibling repo** — planned — **Chrome extension.** Drops the bundler-plugin dependency so Hover can drive *any* tab (staging URLs, third-party sites). Likely lives in a separate repo (`hover-extension`) rather than this monorepo because Web Store releases are manual and the extension's release cadence shouldn't gate on monorepo PRs. Loses source attribution (no transform ran) but gains universal page coverage.
 
-v0.11.x is what you can use today.
+v0.12.x is what you can use today.
 
 ## Project status
 
-🟢 **v0.11.0 shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. v0.11's central feature is **spec resilience**: when your UI changes enough that a saved Playwright spec turns red, click **⟳ Re-record** in the widget (or `pnpm hover re-record <spec>` from a terminal) — the agent replays the spec's original natural-language intent against the current UI and overwrites the file with new selectors. CI itself stays pure Playwright, no AI in the test loop. The widget's old **Saved skills** overlay becomes **📜 Saved sessions** with two tabs (Skills + Specs). New top-level FAQ in the README + docs site explains the resilience model. Earlier arcs: v0.10 (multi-tab agent reliability + `aider` / `gemini-cli` / `qwen-code`), v0.9 (widget plugin-UI contribution protocol + `@hover-dev/security` migration), v0.8 (multi-framework source attribution + Next plugin support), v0.7 (Security testing plugin API + `@hover-dev/security` MITM proxy / captured-flow inspector), v0.6 (Voice mode — push-to-talk STT + spoken step narration, browser-native Web Speech API), v0.5 (Record + Exists / Says / Equals sub-toolbar), v0.4 (Click → Fix prompt + Vite source-attribution transform), v0.3 (Next.js Turbopack-native integration).
+🟢 **v0.12.0 shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. v0.12 closes the security-testing loop opened in v0.7: when `@hover-dev/security` is active, the agent's `replay_flow` MCP tool now takes `intent` + `expectStatus` parameters that **record the replay as a security check**. The widget's Save-as menu gains a **Security spec** entry that crystallises recorded checks into `__vibe_tests__/<slug>.security.spec.ts` — plain `@playwright/test`, runs in CI without MITM or agent. Earlier arcs: v0.11 (Spec resilience — ⟳ Re-record button + Saved-sessions overlay + FAQ), v0.10 (multi-tab agent reliability + `aider` / `gemini-cli` / `qwen-code`), v0.9 (widget plugin-UI contribution protocol + `@hover-dev/security` migration), v0.8 (multi-framework source attribution + Next plugin support), v0.7 (Security testing plugin API + `@hover-dev/security` MITM proxy / captured-flow inspector), v0.6 (Voice mode — push-to-talk STT + spoken step narration, browser-native Web Speech API), v0.5 (Record + Exists / Says / Equals sub-toolbar), v0.4 (Click → Fix prompt + Vite source-attribution transform), v0.3 (Next.js Turbopack-native integration).
 
 Tracking issues at [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues). Security reports go to the [Security Policy](./SECURITY.md).
 

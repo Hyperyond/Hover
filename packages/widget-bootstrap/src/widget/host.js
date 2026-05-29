@@ -573,7 +573,48 @@ export function initHost(ctx) {
     return handled;
   };
 
-  const hostExports = { api, applyMode, dispatchMessage };
+  // ─── public surface for plugin-contributed Save entries (v0.12) ──
+  // Plugin manifests can carry `saveEntries: SaveEntrySpec[]`. Each entry
+  // appears in the widget's Save-as dropdown when its mode is active.
+  // Unlike toolbarButtons / overlays / domMutations which mount at
+  // activate, save entries are *queried* by client.js when the user
+  // opens the dropdown — keeps activation light, since the dropdown is
+  // built on demand anyway.
+  const getActiveSaveEntries = () => {
+    if (!activeModeId) return [];
+    const out = [];
+    for (const [name, entry] of plugins) {
+      if (entry.spec.modeId !== activeModeId) continue;
+      const list = entry.spec.saveEntries;
+      if (!Array.isArray(list)) continue;
+      for (const e of list) {
+        // Defensive — a plugin returning garbage shouldn't break the
+        // dropdown for default mode either.
+        if (!e || typeof e !== 'object') continue;
+        if (typeof e.type !== 'string' || typeof e.label !== 'string') continue;
+        out.push({
+          pluginName: name,
+          type: e.type,
+          label: e.label,
+          sub: typeof e.sub === 'string' ? e.sub : '',
+          icon: typeof e.icon === 'string' ? e.icon : '',
+          // Optional list of `{ id, label, placeholder, required }` for the
+          // hoverPrompt modal that captures save metadata before sending.
+          fields: Array.isArray(e.fields) ? e.fields : [
+            { id: 'name', label: 'Name', placeholder: '', required: true },
+          ],
+          confirmLabel: typeof e.confirmLabel === 'string' ? e.confirmLabel : 'Save',
+          title: typeof e.title === 'string' ? e.title : e.label,
+          successMsgTemplate: typeof e.successMsgTemplate === 'string'
+            ? e.successMsgTemplate
+            : '✓ saved "{name}" → {path}',
+        });
+      }
+    }
+    return out;
+  };
+
+  const hostExports = { api, applyMode, dispatchMessage, getActiveSaveEntries };
   window.__HOVER_WIDGET__ = api; // plugin-facing surface
   return hostExports;
 }

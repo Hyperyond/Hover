@@ -6,6 +6,32 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-05-29
+
+The "security spec recording" release. Closes the security-testing loop opened in v0.7: when `@hover-dev/security` is active, the agent's `replay_flow` MCP tool now records replays as security checks (when given `intent` + `expectStatus`), and the widget's Save-as menu gains a **Security spec** entry that crystallises those checks into `__vibe_tests__/<slug>.security.spec.ts`. CI runs the spec without MITM, without the agent. Also adds two plugin extension points (`saveHandlers` server-side + `saveEntries` widget-side) that any plugin can use to register a custom save flow.
+
+### Added
+
+- **`replay_flow` records security checks** — the MCP tool gains two optional parameters, `intent` (one-line human description of what's being probed, e.g. `"IDOR: access another user's order"`) and `expectStatus` (the HTTP status that proves the security control works, e.g. `403`). When both are passed, the control plane records a `SecurityCheckStep` (source flow id, replay id, intent, expected vs observed status, body excerpt, matched flag). Checks accumulate in-process; the widget mirrors them via a new `security:check:recorded` broadcast.
+- **`/checks` HTTP endpoint** on `@hover-dev/security`'s control plane (`GET` returns the recorded list, `DELETE` clears it). `DELETE /flows` now also clears checks since they reference flow ids.
+- **`writeSecuritySpec`** (`packages/security/src/writeSecuritySpec.ts`) — turns a `SecurityCheckStep[]` into `__vibe_tests__/<slug>.security.spec.ts`. Plain `@playwright/test` using the `request` fixture, one `test()` per recorded check, asserting `response.status()` and (for 4xx expectations) a coarse PII-leak guard on body length. The JSDoc header always emits an `⚠ Authentication: …` TODO pointing at the FAQ for the `storageState` recipe.
+- **`HoverPluginManifest.saveHandlers`** (server-side plugin API) — `Array<{ type, label, description?, activeInModes?, handle(ctx) }>`. The service routes incoming `save:<type>` WS messages to the matching plugin handler. Each plugin owns its own write semantics — payload shape isn't forced through core's `SkillStep[]` pipeline.
+- **`WidgetPluginSpec.saveEntries`** (widget-side plugin spec) — `Array<{ type, label, sub?, fields?, confirmLabel?, successMsgTemplate? }>`. The Save-as dropdown queries the active plugin's entries via the host's new `getActiveSaveEntries()` method and appends them. New `saveAsPluginArtifact` runner + `pendingPluginSaves` map mirror the existing core-save flow but route on the plugin-owned WS type (`save:<plugin>:<kind>`).
+- **`@hover-dev/security` Save dropdown integration** — manifest registers `save:security:spec` handler; widget plugin registers the matching `saveEntries[0]`. When security mode is active, the Save-as menu shows a "Security spec" item. Form fields: name (required), description, summary.
+- **`docs/features/security-spec.md`** — feature page with the full when/why/caveats walkthrough.
+- **FAQ entry** "Security spec auth setup" in both READMEs + `docs/faq.md` — the `storageState` recipe for CI auth.
+- **`packages/security/tests/writeSecuritySpec.test.ts`** — 17 vitest cases covering: refuses empty checks / non-alphanumeric names, writes to the correct path, throws SecuritySpecExistsError, overwrite=true behaviour, Original prompt + Outcome emission, Checks block summarisation, Findings only-when-vulnerable rule, always-emit auth TODO, Playwright method mapping (GET/POST/PATCH → method; OPTIONS → fetch fallback), expectStatus assertion, PII-leak guard (only for 4xx + body excerpt present), quote / `*/` escaping, long-prompt truncation.
+
+### Changed
+
+- **MCP `replay_flow` response Markdown** now appends a recorded-check confirmation when intent + expectStatus were supplied: `🔒 Security check recorded (#N): <intent>` followed by either `✓ Control is in place` (matched) or `✗ Potential vulnerability` (mismatched, with a hint to Save as Security spec).
+- **Roadmap reshuffled.** v0.12 ✓ shipped; Chrome extension stays as the v0.13+ / sibling-repo target.
+
+### Internal
+
+- The widget's onmessage chain now routes `<type>:saved` and plugin-related `error` messages through `tryHandlePluginSave` BEFORE the existing skill/spec/csv handlers, so plugin saves don't trigger `setRunning(false)` or other lifecycle side effects.
+- Validation: `pnpm typecheck` clean across all 10 publishable packages; `pnpm --filter @hover-dev/core test` 176 pass; `pnpm --filter @hover-dev/security test` 17 pass; `pnpm test:e2e` 5 Playwright tests pass on `examples/basic-app`.
+
 ## [0.11.0] — 2026-05-29
 
 The "spec resilience" release. Hover's central trade-off vs. Stagehand / Midscene has always been: we ship deterministic Playwright specs that run in CI without AI tokens, but those specs are brittle when the UI changes enough to break semantic selectors. v0.11 closes the loop with a **⟳ Re-record** workflow — read the spec's existing `Original prompt:` JSDoc header, replay it against the current UI, and overwrite the file with new selectors. Two entry points: the widget's new Saved-sessions overlay (Skills + Specs tabs), and a new `pnpm hover re-record <spec>` CLI subcommand. Plus a top-level FAQ in the README and docs site explaining the model.
