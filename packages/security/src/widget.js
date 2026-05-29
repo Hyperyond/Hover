@@ -139,6 +139,25 @@ if (host) {
       },
     }],
 
+    // v0.12 — Save dropdown contribution. Surfaces a "Security spec"
+    // entry in the Result card's Save-as menu whenever security mode is
+    // active. The service side reads the recorded SecurityCheckStep[]
+    // from the control plane closure and writes a `.security.spec.ts`.
+    saveEntries: [{
+      type: 'save:security:spec',
+      label: 'Security spec',
+      sub: '__vibe_tests__/<slug>.security.spec.ts · CI regression for recorded checks',
+      title: 'Save as Security spec',
+      fields: [
+        { id: 'name', label: 'Spec name', placeholder: 'orders-idor', required: true },
+        { id: 'description', label: 'Description', placeholder: 'optional · what you were probing' },
+        { id: 'summary', label: 'Findings', placeholder: 'optional · one-line outcome summary' },
+      ],
+      confirmLabel: 'Save security spec',
+      successMsgTemplate:
+        '✓ saved security spec "{name}" → {path}\n  run it: pnpm exec playwright test {path}',
+    }],
+
     overlays: [{
       id: '@hover-dev/security:network',
       title: 'Network',
@@ -184,13 +203,22 @@ if (host) {
         next[idx] = payload;
         api.setState({ flows: next });
       },
+      // v0.12 — each recordable replay the agent runs broadcasts a check.
+      // The widget tracks the count + the per-check intents so the user
+      // sees "agent has recorded 3 security checks" before clicking
+      // Save as Security spec. State key is `checks` (a SecurityCheckStep[]).
+      'security:check:recorded': (payload, api) => {
+        if (!payload || typeof payload !== 'object' || typeof payload.id !== 'number') return;
+        const checks = api.getState()['@hover-dev/security']?.checks ?? [];
+        api.setState({ checks: [...checks, payload] });
+      },
     },
 
     onDeactivate: (api) => {
-      // Drop captured flows when leaving security mode so re-entering
-      // starts with a clean slate (matches the previous core-side
-      // `state.flows = []` on switchMode).
-      api.setState({ flows: [] });
+      // Drop captured flows + checks when leaving security mode so
+      // re-entering starts with a clean slate (matches the previous
+      // core-side `state.flows = []` on switchMode).
+      api.setState({ flows: [], checks: [] });
     },
   });
 }

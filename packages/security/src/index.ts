@@ -208,7 +208,60 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
       },
     ],
 
-    widgetEventTypes: ['security:flow:added', 'security:flow:updated'],
+    widgetEventTypes: [
+      'security:flow:added',
+      'security:flow:updated',
+      // v0.12 — each agent-driven recordable replay (the agent passed
+      // intent + expectStatus to replay_flow) emits a check event. The
+      // widget's Specs / Findings UI uses it to surface "agent recorded
+      // a security check" rows.
+      'security:check:recorded',
+    ],
+
+    // v0.12 — Save dropdown contribution. Widget surfaces this in the
+    // Save-as menu under the Result card whenever security mode is
+    // active. Handler reads checks live from the control plane (closure)
+    // so we don't have to round-trip the SecurityCheckStep[] through
+    // the widget — which would otherwise force the widget to also
+    // know the full SecurityCheckStep shape.
+    saveHandlers: [
+      {
+        type: 'save:security:spec',
+        label: 'Security spec',
+        description:
+          'Playwright regression spec from the agent\'s recorded replay decisions. Runs in CI without MITM or agent.',
+        handle: async ({ devRoot, payload }) => {
+          if (!control) {
+            throw new Error('Security mode is not active — no control plane to read checks from.');
+          }
+          const checks = control.listChecks();
+          if (checks.length === 0) {
+            throw new Error(
+              'No security checks recorded in this session. Have the agent run replay_flow with intent + expectStatus first.',
+            );
+          }
+          const p = (payload ?? {}) as {
+            name?: string;
+            description?: string;
+            summary?: string;
+            overwrite?: boolean;
+          };
+          if (typeof p.name !== 'string' || !p.name.trim()) {
+            throw new Error('save:security:spec: name is required');
+          }
+          const { writeSecuritySpec } = await import('./writeSecuritySpec.js');
+          const result = await writeSecuritySpec({
+            devRoot,
+            name: p.name,
+            description: p.description,
+            summary: p.summary,
+            checks,
+            overwrite: p.overwrite === true,
+          });
+          return { path: result.path, slug: result.slug };
+        },
+      },
+    ],
 
     widgetEntry: resolveWidgetScriptPath(),
 
@@ -233,6 +286,17 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
           ctx.broadcast({
             type: e.type === 'flow:added' ? 'security:flow:added' : 'security:flow:updated',
             payload: e.flow,
+          });
+        });
+
+        // v0.12 — forward newly recorded security checks. The widget's
+        // Save-as-Security-spec entry uses this to maintain a running
+        // count + the check list itself (the canonical store is the
+        // control plane; widget keeps a mirror for rendering only).
+        control.on('check', (check) => {
+          ctx.broadcast({
+            type: 'security:check:recorded',
+            payload: check,
           });
         });
       },
