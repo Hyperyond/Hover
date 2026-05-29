@@ -21,6 +21,19 @@
 
 :host, * { box-sizing: border-box; }
 
+/* Catch-all hidden rule.
+ *
+ * Browsers' UA stylesheet applies `display: none` to `[hidden]`, but that
+ * has the lowest possible specificity — any author rule with an explicit
+ * display (e.g. `.fix-btn { display: inline-flex }`) wins, leaving
+ * `el.hidden = true` visually no-op until the author rule also covers
+ * `[hidden]`. Several existing rules add `.foo[hidden] { display: none }`
+ * one-by-one (.cost, .modebar, .save-menu, .iconbtn.assertbtn, …) —
+ * fragile and easy to forget. This generic rule covers every widget
+ * element (including plugin-contributed DOM via host.applyDomMutations),
+ * with `!important` to defeat any author display declaration. */
+[hidden] { display: none !important; }
+
 /* ───────────────────────── scrollbars ─────────────────────────
  *
  * The OS default scrollbar (especially on macOS when "Show scroll bars"
