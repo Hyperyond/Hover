@@ -149,12 +149,64 @@ async function resolvePlugins(specs: PluginSpec[]): Promise<HoverPluginManifest[
       }
       manifests.push(manifest);
     } catch (err) {
-      console.warn(
-        `[@hover-dev/next] failed to load plugin "${moduleId}": ${err instanceof Error ? err.message : String(err)}`,
-      );
+      printPluginLoadError(moduleId, err);
     }
   }
   return manifests;
+}
+
+/** Catch known plugin-load failure shapes and print actionable
+ *  diagnostics. Targeted at recurrent upstream bugs that surface as
+ *  cryptic errors from inside transitive deps. Each branch matches one
+ *  specific failure mode and prints a focused fix recipe. */
+function printPluginLoadError(moduleId: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack ?? '' : '';
+  const isErrRequireEsm =
+    (err as { code?: string } | null)?.code === 'ERR_REQUIRE_ESM' ||
+    message.includes('ERR_REQUIRE_ESM') ||
+    /require\(\) of ES Module/i.test(message);
+  const mentionsGetPort = /get-port/i.test(message) || /get-port/i.test(stack);
+  const mentionsMockttp = /mockttp/i.test(message) || /mockttp/i.test(stack);
+  const mentionsPrivateKeyInfo = /Cannot get schema for ['"]PrivateKeyInfo['"]/i.test(message);
+
+  if (isErrRequireEsm && mentionsGetPort && mentionsMockttp) {
+    const nodeVersion = process.versions.node;
+    const major = Number.parseInt(nodeVersion.split('.')[0] ?? '0', 10);
+    const minor = Number.parseInt(nodeVersion.split('.')[1] ?? '0', 10);
+    const nodeTooOld = major < 22 || (major === 22 && minor < 12);
+
+    console.error(
+      `[@hover-dev/next] failed to load plugin "${moduleId}": mockttp + get-port ESM clash`,
+    );
+    console.error(
+      `  Cause: mockttp@4 does \`require('get-port')\` but get-port@7 is ESM-only.`,
+    );
+    console.error(
+      `  Tracked upstream: https://github.com/httptoolkit/mockttp/issues/200`,
+    );
+    if (nodeTooOld) {
+      console.error(
+        `  Your Node ${nodeVersion} is too old. Easiest fix: upgrade to Node ≥ 22.12 (sync require(ESM) lands in 22.12).`,
+      );
+    } else {
+      console.error(
+        `  Your Node ${nodeVersion} should support sync require(ESM). Try clearing node_modules and reinstalling.`,
+      );
+    }
+    console.error(
+      `  Or pin get-port to v6 via project-root overrides:`,
+    );
+    console.error(
+      `    { "pnpm": { "overrides": { "get-port": "^6.1.2" } } }   (or "overrides" for npm, "resolutions" for yarn)`,
+    );
+    console.error(
+      `  Hover will keep running without this plugin. Remove the entry from register() to silence this message.`,
+    );
+    return;
+  }
+
+  console.warn(`[@hover-dev/next] failed to load plugin "${moduleId}": ${message}`);
 }
 
 export async function registerNode(

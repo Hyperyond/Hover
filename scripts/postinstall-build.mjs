@@ -29,6 +29,14 @@ const PACKAGES = [
   // type declarations" — surfaced when this combination landed in CI's
   // publish.yml release gate for v0.7.0.
   { name: '@hover-dev/security', dir: join(ROOT, 'packages/security') },
+  // Private workspace package (never published). Ships as `main: dist/...`
+  // because (a) its source is multi-file and Node's strict ESM resolver
+  // can't follow `./types.js` imports back to on-disk `.ts` files when a
+  // consumer like vite-plugin-hover loads via Vite's user-config path,
+  // and (b) every integration shim's tsup build will inline this package
+  // into its own dist via `noExternal`, so dist artefacts must exist
+  // before those shims build.
+  { name: '@hover-dev/transform-source', dir: join(ROOT, 'packages/transform-source') },
 ];
 
 function newestMtime(dir) {
@@ -78,7 +86,7 @@ function isStale(pkgDir) {
 
 const stale = PACKAGES.filter(p => isStale(p.dir));
 if (stale.length === 0) {
-  console.log('[postinstall] core + widget-bootstrap dist is up-to-date, skipping build');
+  console.log('[postinstall] all dist-shape packages up-to-date, skipping build');
   process.exit(0);
 }
 

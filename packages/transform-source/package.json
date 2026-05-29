@@ -1,0 +1,52 @@
+{
+  "name": "@hover-dev/transform-source",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal: source-attribution transforms (JSX / Vue SFC / Svelte / Astro) consumed by Hover's bundler integrations. Stamps host elements with data-hover-source=\"file:line:col\" so the widget's Fix picker can point the agent at a precise file location. Not published to npm — each integration shim's tsup build inlines this package into its dist via noExternal.",
+  "license": "Apache-2.0",
+  "author": "Hyperyond",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./jsx": {
+      "types": "./dist/jsx.d.ts",
+      "import": "./dist/jsx.js"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "import": "./dist/svelte.js"
+    },
+    "./astro": {
+      "types": "./dist/astro.d.ts",
+      "import": "./dist/astro.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "pnpm run build && tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.29.3",
+    "@babel/traverse": "^7.29.0",
+    "@babel/types": "^7.29.0",
+    "@astrojs/compiler": "^2.10.0",
+    "@vue/compiler-sfc": "^3.5.0",
+    "magic-string": "^0.30.21",
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.28.0",
+    "vitest": "^3.2.4"
+  }
+}

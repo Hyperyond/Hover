@@ -29,24 +29,29 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "pnpm run clean && pnpm run build",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@astrojs/compiler": "^2.10.0",
     "@babel/parser": "^7.29.3",
     "@babel/traverse": "^7.29.0",
     "@babel/types": "^7.29.0",
     "@hover-dev/core": "workspace:*",
     "@hover-dev/widget-bootstrap": "workspace:*",
-    "magic-string": "^0.30.21"
+    "@vue/compiler-sfc": "^3.5.0",
+    "magic-string": "^0.30.21",
+    "svelte": "^5.0.0"
   },
   "peerDependencies": {
     "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
   "devDependencies": {
-    "@types/babel__traverse": "^7.28.0",
+    "@hover-dev/transform-source": "workspace:*",
+    "tsup": "^8.5.1",
     "vite": "^7.0.0",
     "vitest": "^3.2.4"
   },

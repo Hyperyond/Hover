@@ -38,7 +38,7 @@ import { defineConfig } from 'tsup';
  * the source of truth for their version.
  */
 export default defineConfig({
-  entry: ['src/index.ts', 'src/instrumentation.ts', 'src/register-node.ts'],
+  entry: ['src/index.ts', 'src/instrumentation.ts', 'src/register-node.ts', 'src/source-loader.ts'],
   // ESM + CJS. ESM is the long-term shape (Next 16+ Turbopack loads
   // `next.config.mjs` via native `import()`); CJS exists for Next 15's
   // `next.config.ts` loader, which transpiles the user's .ts config to
@@ -62,5 +62,37 @@ export default defineConfig({
   // dynamic `require('chromium-bidi/...')`), and (2) it acts as a
   // canary — if someone removes one of these from `dependencies` and
   // forgets to update this list, the bundle still works the same way.
-  external: ['react', 'react-dom', 'next', 'playwright-core', 'ws', 'cross-spawn'],
+  // Inline the private transform-source package; its npm dep chain
+  // (@babel/*, @vue/compiler-sfc, svelte, @astrojs/compiler, magic-string)
+  // stays external — listed below alongside the existing runtime deps.
+  // Per-format build options. For the CJS output we statically replace
+  // `import.meta.url` with `undefined` so esbuild stops emitting the
+  // "import.meta is not available with cjs" warning at build time.
+  // Runtime is unaffected: the call sites are already gated on falsy
+  // anchors and fall back to `__filename` (which only exists in CJS),
+  // so undefined-url + present-filename takes the CJS branch correctly.
+  esbuildOptions(opts, ctx) {
+    if (ctx.format === 'cjs') {
+      opts.supported ??= {};
+      opts.define ??= {};
+      opts.define['import.meta.url'] = 'undefined';
+    }
+  },
+  noExternal: ['@hover-dev/transform-source'],
+  external: [
+    'react',
+    'react-dom',
+    'next',
+    'playwright-core',
+    'ws',
+    'cross-spawn',
+    '@babel/parser',
+    '@babel/traverse',
+    '@babel/types',
+    '@vue/compiler-sfc',
+    '@astrojs/compiler',
+    'svelte',
+    'svelte/compiler',
+    'magic-string',
+  ],
 });

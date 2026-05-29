@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
@@ -103,6 +104,37 @@ export class HoverPlugin {
     const model = this.options.model ?? 'sonnet';
     const devRoot = this.options.devRoot ?? compiler.context;
 
+    // Register the source-attribution loader for React/Vue/Svelte/Astro
+    // source files. Resolve the loader path via require.resolve so we
+    // pass an absolute path — webpack's loader API runs loaders via
+    // Node's resolver and a bare specifier ('webpack-plugin-hover/loader')
+    // would resolve from the user's project, not from us.
+    const loaderReq = createRequire(import.meta.url);
+    let loaderPath: string | null;
+    try {
+      loaderPath = loaderReq.resolve('webpack-plugin-hover/loader');
+    } catch {
+      // Monorepo dev path: when consumed via `main: src/index.ts`, the
+      // package's own exports map points at .ts files which Node's CJS
+      // resolver rejects (no .ts extension). Fall back to a direct path
+      // off our own location.
+      try {
+        loaderPath = loaderReq.resolve('./loader.ts');
+      } catch {
+        loaderPath = null;
+      }
+    }
+    if (loaderPath) {
+      compiler.options.module ??= { rules: [] } as typeof compiler.options.module;
+      compiler.options.module.rules ??= [];
+      compiler.options.module.rules.unshift({
+        test: /\.(jsx|tsx|vue|svelte|astro)$/,
+        exclude: /node_modules/,
+        enforce: 'pre',
+        use: [{ loader: loaderPath }],
+      });
+    }
+
     // Boot the service lazily: only when we observe an actual watch-mode
     // run. `webpack --mode development` (one-shot) would otherwise spawn
     // a service nothing connects to. `webpack serve` taps the `watchRun`
@@ -165,7 +197,20 @@ export class HoverPlugin {
     // optional peer dep. Almost every webpack dev pipeline uses it
     // (vanilla wds, CRA, Vue CLI, Rspack, Rsbuild), but we ship a
     // processAssets fallback for the edge case where it's missing.
-    const req = createRequire(import.meta.url);
+    //
+    // Critical: resolve from the *user's* compiler.context, not from
+    // our own package location. Under pnpm the user's html-webpack-plugin
+    // and ours are two physically distinct installs (different peer-dep
+    // permutations -> different .pnpm/...@<hash>/ folders), and
+    // HtmlWebpackPlugin.getHooks() keys its hook table on a per-module
+    // WeakMap<Compilation, Hooks>. If we hand it a Compilation that was
+    // registered against the user's copy, our copy's WeakMap is empty
+    // and getHooks() returns undefined — silently falling through to
+    // the processAssets fallback, where the .html asset doesn't yet
+    // exist (HtmlWebpackPlugin emits it at a later stage). Net effect:
+    // the widget script never lands in the HTML and the user sees a
+    // dev server that boots cleanly but has no Hover UI.
+    const req = createRequire(join(compiler.context, '_'));
     let HtmlWebpackPlugin: { getHooks?: (c: Compilation) => HtmlPluginHooks | undefined } | undefined;
     try {
       HtmlWebpackPlugin = req('html-webpack-plugin');

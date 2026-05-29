@@ -1,7 +1,13 @@
-import { defineNuxtModule } from '@nuxt/kit';
+import { addVitePlugin, defineNuxtModule } from '@nuxt/kit';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
+import {
+  transformAstro,
+  transformJsx,
+  transformSvelte,
+  transformVue,
+} from '@hover-dev/transform-source';
 
 export interface HoverOptions {
   /** Port for the local Hover WebSocket service (default 51789). Auto-bumps
@@ -59,6 +65,13 @@ export default defineNuxtModule<HoverOptions>({
 
     const enabled = options.enabled ?? nuxt.options.dev;
     if (!enabled) return;
+
+    // Stamp `data-hover-source` on host elements across every framework
+    // shape Vite hosts under Nuxt (Vue SFCs, JSX islands, .svelte/.astro
+    // if the user wires those compilers in). `addVitePlugin` registers
+    // a sub-plugin into Nuxt's Vite chain — runs in dev only because
+    // we early-return above when `nuxt.options.dev` is false.
+    addVitePlugin(makeAttributionPlugin(nuxt.options.rootDir));
 
     let service: ServiceHandle;
     try {
@@ -131,3 +144,25 @@ export default defineNuxtModule<HoverOptions>({
       });
   },
 });
+
+/** Tiny Vite plugin: stamps `data-hover-source` on host elements in
+ *  every file shape Nuxt's Vite chain hands us. Mirrors the per-extension
+ *  dispatch in `vite-plugin-hover` — same logic, separately wired here
+ *  because Nuxt's Vite chain is independent of the Vite-plugin shim. */
+function makeAttributionPlugin(root: string) {
+  return {
+    name: 'hover:source-attribution',
+    enforce: 'pre' as const,
+    apply: 'serve' as const,
+    transform(code: string, id: string) {
+      const cleanId = id.split('?')[0];
+      if (cleanId.includes('/node_modules/')) return null;
+      const input = { code, filename: cleanId, root };
+      if (/\.(jsx|tsx)$/.test(cleanId)) return transformJsx(input);
+      if (cleanId.endsWith('.vue')) return transformVue(input);
+      if (cleanId.endsWith('.svelte')) return transformSvelte(input);
+      if (cleanId.endsWith('.astro')) return transformAstro(input);
+      return null;
+    },
+  };
+}

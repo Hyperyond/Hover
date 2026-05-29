@@ -1,20 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { transformSourceAttribution } from '../src/index.js';
+import { transformJsx } from '../src/jsx.js';
 
 const root = '/repo';
 const filename = '/repo/src/App.tsx';
 
 function run(code: string) {
-  return transformSourceAttribution({ code, filename, root });
+  return transformJsx({ code, filename, root });
 }
 
-describe('transformSourceAttribution', () => {
+describe('transformJsx', () => {
   it('stamps host elements with relative path + line + column', () => {
     const out = run(`export default function App() {
   return <button onClick={() => {}}>hi</button>;
 }`);
     expect(out).not.toBeNull();
-    expect(out!.code).toMatch(/<button data-hover-source="src\/App\.tsx:2:11" onClick/);
+    expect(out!.code).toMatch(/<button data-hover-source="src\/App\.tsx:2:10" onClick/);
   });
 
   it('does not stamp component elements (PascalCase)', () => {
@@ -66,7 +66,7 @@ describe('transformSourceAttribution', () => {
   });
 
   it('uses forward slashes in relative path on all platforms', () => {
-    const out = transformSourceAttribution({
+    const out = transformJsx({
       code: `function A() { return <div />; }`,
       filename: '/repo/src/components/Card.tsx',
       root: '/repo',

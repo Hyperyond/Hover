@@ -2,75 +2,8 @@ import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
 import { getWidgetScript } from '@hover-dev/widget-bootstrap';
+import { transformJsx, transformVue, transformSvelte, transformAstro } from '@hover-dev/transform-source';
 import type { Plugin } from 'vite';
-import { parse } from '@babel/parser';
-import _traverse from '@babel/traverse';
-import MagicString from 'magic-string';
-import path from 'node:path';
-
-// @babel/traverse ships as CJS with the function on .default under ESM import.
-// Falls back to the namespace itself for type-only consumers.
-const _traverseFn = (_traverse as unknown as { default?: typeof _traverse }).default ?? _traverse;
-
-// Source-attribution transform — stamps `data-hover-source="<file>:<line>:<col>"`
-// on host JSX elements (lowercase tag names) in user code, so the widget's
-// element picker can produce a precise file location. Inlined here (rather
-// than imported from a separate file) so that vite-plugin-hover loads
-// cleanly as a single ESM module under both monorepo dev (`main: src/...`)
-// and published npm install (`main: dist/...`). A separate file would
-// require a cross-file `.js` import which Node's strict ESM resolver can't
-// satisfy when the on-disk source is `.ts`.
-const SOURCE_ATTR = 'data-hover-source';
-interface AttributionInput { code: string; filename: string; root: string; }
-interface AttributionResult { code: string; map: ReturnType<MagicString['generateMap']>; }
-
-// Exported for unit tests. Not part of the public API; the runtime path
-// is the `transform` hook in the plugin returned by hover().
-export function transformSourceAttribution(input: AttributionInput): AttributionResult | null {
-  const { code, filename, root } = input;
-  if (!code.includes('<')) return null;
-  let ast;
-  try {
-    ast = parse(code, {
-      sourceType: 'module',
-      allowReturnOutsideFunction: true,
-      plugins: ['jsx', 'typescript'],
-    });
-  } catch {
-    return null;
-  }
-  const relPath = (() => {
-    const rel = path.relative(root, filename);
-    return rel.split(path.sep).join('/');
-  })();
-  const s = new MagicString(code);
-  let touched = false;
-  _traverseFn(ast, {
-    JSXOpeningElement(p) {
-      const node = p.node;
-      const name = node.name;
-      if (name.type !== 'JSXIdentifier') return;
-      const tag = name.name;
-      if (!/^[a-z]/.test(tag)) return;
-      const hasExisting = node.attributes.some(
-        (a) => a.type === 'JSXAttribute' && a.name.type === 'JSXIdentifier' && a.name.name === SOURCE_ATTR,
-      );
-      if (hasExisting) return;
-      const loc = node.name.loc;
-      if (!loc) return;
-      const insertAt = (node.name as { end?: number }).end;
-      if (insertAt == null) return;
-      const value = `${relPath}:${loc.start.line}:${loc.start.column + 1}`;
-      s.appendLeft(insertAt, ` ${SOURCE_ATTR}="${value}"`);
-      touched = true;
-    },
-  });
-  if (!touched) return null;
-  return {
-    code: s.toString(),
-    map: s.generateMap({ hires: true, source: filename }),
-  };
-}
 
 export interface HoverOptions {
   /** Port for the local Hover WebSocket service (default 51789). */
@@ -140,10 +73,18 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
     transform(code, id) {
       if (!enabled || !sourceAttribution) return null;
       // Strip Vite's `?query` / `#hash` suffixes before extension check.
+      // `.vue` ships through Vite as `App.vue?vue&type=template&...` for
+      // sub-blocks once @vitejs/plugin-vue rewrites them; we only want
+      // the top-level SFC pass, so the query-strip + extension check
+      // is enough to filter out the sub-block requests.
       const cleanId = id.split('?')[0];
-      if (!/\.(jsx|tsx)$/.test(cleanId)) return null;
       if (cleanId.includes('/node_modules/')) return null;
-      return transformSourceAttribution({ code, filename: cleanId, root: viteRoot });
+      const input = { code, filename: cleanId, root: viteRoot };
+      if (/\.(jsx|tsx)$/.test(cleanId)) return transformJsx(input);
+      if (cleanId.endsWith('.vue')) return transformVue(input);
+      if (cleanId.endsWith('.svelte')) return transformSvelte(input);
+      if (cleanId.endsWith('.astro')) return transformAstro(input);
+      return null;
     },
 
     async configureServer(server) {
