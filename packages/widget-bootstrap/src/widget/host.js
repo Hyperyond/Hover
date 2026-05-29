@@ -112,6 +112,18 @@ export function initHost(ctx) {
   };
 
   // ─── DOM mutation applier ───────────────────────────────────────────
+  //
+  // INTENDED USE: mutations the plugin makes to ITS OWN DOM contributions
+  // — e.g. toggling a `.collapsed` class on a plugin-owned panel based on
+  // user state. The default-mode widget core (Record, Fix, Send, footer,
+  // overlays, etc.) is NOT a target for this API — core owns its own
+  // visibility and listens for mode changes to hide/show its own widgets.
+  //
+  // Pointing `hide` or `addClass` at a core selector technically works
+  // (the host doesn't enforce ownership), but it creates two-sided
+  // coupling: the plugin has to track core's selector names + revert on
+  // deactivate, while core could refactor at any time. Avoid.
+  //
   // Records original state so deactivate() can revert. Each mutation is
   // (element, key, prev). hide → key='hidden', prev=original `hidden` attr.
   // addClass → key='class:<className>', prev=null|className depending on

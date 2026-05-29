@@ -1625,11 +1625,46 @@
     // Deliberately no tooltip — the bar's own text already says the
     // mode name + affordance, so a hover bubble repeating it adds noise.
     //
-    // Plugin-specific UI (network panel button, record-button hide,
-    // overlay rendering) is now contributed by the plugin's widget
-    // module via the host API. The host's applyMode() is invoked from
-    // the WS `modes` handler — that's where plugin contributions take
-    // effect, NOT here.
+    // Plugin-contributed UI (network panel button, plugin overlays, plugin
+    // CSS) is wired by the host's applyMode() — invoked from the WS `modes`
+    // handler, NOT here. This function only updates the mode bar pill.
+  };
+
+  // ───────────────────────── default-mode visibility ─────────────────────────
+  //
+  // The default mode "owns" its own UI elements (Record button, Fix button,
+  // textarea, Send, voice mic, …). When a plugin mode is active, default
+  // hides its own widgets so the plugin's UI is the only thing offering
+  // affordances. This is the inverse of the v0.9.0-original "plugin hides
+  // core elements" design — by having core hide its own widgets, plugins
+  // never need to know core's selectors (e.g. `.record-btn` / `.fix-btn`).
+  //
+  // Called from the WS `modes` handler whenever currentMode changes. Pulls
+  // the trigger on in-flight recording / fix-picking sessions too — they
+  // belong to default mode semantically, so they shouldn't survive a switch
+  // to a plugin mode.
+  const applyDefaultModeVisibility = (newMode) => {
+    const inDefault = newMode === null;
+    // Hide default-only footer affordances when a plugin mode is active.
+    // Both buttons have rules `.foo[hidden] { display: none !important }`
+    // via the catch-all in style.css, so `hidden = true` reliably collapses
+    // them despite the explicit `display: inline-flex` on .fix-btn.
+    if (recordBtn) recordBtn.hidden = !inDefault;
+    if (fixBtn) fixBtn.hidden = !inDefault;
+    // Tear down in-flight default-mode interactions that the new mode would
+    // visually break. Skipped on the way INTO default (nothing to tear down).
+    if (!inDefault) {
+      // setRecording / cancelFixMode are defined later in this IIFE; this
+      // closure resolves them at call time, which is always post-WS-open
+      // (the `modes` payload arrives after `hello`). Guard each with a
+      // typeof to keep the early-init case sane.
+      if (typeof recording !== 'undefined' && recording && typeof setRecording === 'function') {
+        setRecording(false);
+      }
+      if (typeof fixMode !== 'undefined' && fixMode && typeof cancelFixMode === 'function') {
+        cancelFixMode();
+      }
+    }
   };
 
   const renderModesOverlay = () => {
@@ -3114,9 +3149,13 @@
         state.availableModes = Array.isArray(p.available) ? p.available : [];
         renderModeButton();
         if (modesOverlay.classList.contains('open')) renderModesOverlay();
-        // Plugin host: synchronise plugin UI (CSS, DOM mutations, overlays,
-        // toolbar buttons) with the new active mode. Idempotent — same
-        // mode = no-op.
+        // Default mode owns its own widgets — hide them when a plugin
+        // mode takes over, show them again on return. Plugins don't need
+        // to know default's selectors; default listens for itself.
+        applyDefaultModeVisibility(state.currentMode);
+        // Plugin host: install / tear down plugin UI contributions (CSS,
+        // toolbar buttons, overlays, plugin-internal DOM mutations).
+        // Idempotent — same mode = no-op.
         hostCtl.applyMode(state.currentMode);
       } else {
         // Plugin-namespaced messages (any `<plugin>:<event>` shape) are

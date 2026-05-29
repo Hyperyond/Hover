@@ -119,15 +119,22 @@ test.describe('widget plugin host', () => {
       /.+/,
     );
 
-    // Record + Fix buttons — the legacy hardcoded `recordBtn.hidden =
-    // engaged` path is gone; security's plugin module declares both via
-    // spec.domMutations.hide on activate. In default mode (security
-    // inactive) both remain visible.
+    // Record + Fix buttons — owned by default mode. Default listens for
+    // mode changes and hides itself when a plugin mode takes over; it
+    // shows itself when current mode returns to null. Plugins never
+    // touch these selectors. In default mode both are visible.
     await expect(widget.locator('.record-btn')).toBeVisible();
     await expect(widget.locator('.fix-btn')).toBeVisible();
   });
 
   // TODO: positive test for actually activating a plugin mode.
+  // What we don't yet cover automatically:
+  //   • Default mode's own widgets (.record-btn, .fix-btn) HIDE when a
+  //     plugin mode takes over and SHOW again when it leaves.
+  //   • Plugin contributions (CSS, toolbar buttons, overlays, plugin
+  //     domMutations) install/uninstall through host.applyMode.
+  //   • In-flight recording / fix-picking sessions cancel cleanly when
+  //     mode leaves default.
   // The widget host's applyMode() isn't exposed on `window.__HOVER_WIDGET__`
   // (only the plugin-facing surface is). Faithful end-to-end activation
   // also boots mockttp on the server side — which needs a system-trusted

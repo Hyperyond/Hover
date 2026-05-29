@@ -121,18 +121,11 @@ if (host) {
       }
     `,
 
-    // Hide the default-mode Record + Fix buttons while engaged.
-    //   • Record — the Playwright-spec record semantics
-    //     ("click → save as page.click() step") don't match security
-    //     mode's HTTP replay workflow. v0.10 will reintroduce a
-    //     security-specific record button via toolbarButtons.
-    //   • Fix — points the agent at a JSX file:line:col to rewrite,
-    //     which is irrelevant when the user is testing third-party /
-    //     staging surfaces under security mode. Security testing
-    //     doesn't author code from the page.
-    domMutations: {
-      hide: ['.record-btn', '.fix-btn'],
-    },
+    // No domMutations targeting core widget elements. Default mode is
+    // responsible for hiding its own affordances when a plugin mode
+    // takes over (Record / Fix / Send / etc. are default-owned and
+    // disappear automatically). Plugins should only use domMutations
+    // for elements they themselves contributed.
 
     toolbarButtons: [{
       id: 'network',
