@@ -3,6 +3,7 @@ import { readWidget } from './reader.js';
 import { jsonStringify, stripModuleExports } from './transforms.js';
 import {
   WIDGET_CSS,
+  WIDGET_HOST,
   WIDGET_HTML,
   WIDGET_JS,
   WIDGET_REDUCER,
@@ -121,9 +122,14 @@ export function buildWidgetBundle(opts: WidgetScriptOptions): { preamble: string
 
   const reducerInlined = readWidget(WIDGET_REDUCER, stripModuleExports);
   const voiceInlined = readWidget(WIDGET_VOICE, stripModuleExports);
+  // Host must precede client.js — client's IIFE calls initHost(...) from
+  // its top-level setup. stripModuleExports turns host.js's `export
+  // function initHost` into a plain function declaration in the IIFE
+  // scope where client.js can call it.
+  const hostInlined = readWidget(WIDGET_HOST, stripModuleExports);
   const js = readWidget(WIDGET_JS);
 
-  const coreBody = `${reducerInlined}\n${voiceInlined}\n${js}`;
+  const coreBody = `${reducerInlined}\n${voiceInlined}\n${hostInlined}\n${js}`;
   const transformedCore = opts.transformBody ? opts.transformBody(coreBody) : coreBody;
 
   // Each plugin module is inlined inside an IIFE so its top-level
@@ -207,12 +213,20 @@ export function manifestsToPluginInputs(
  * If you concatenate it into an IIFE you must strip those yourself — or
  * call `buildWidgetBundle` / `getWidgetScript` which do this for you.
  */
-export function readWidgetAssets(): { html: string; css: string; js: string; reducer: string; voice: string } {
+export function readWidgetAssets(): {
+  html: string;
+  css: string;
+  js: string;
+  reducer: string;
+  voice: string;
+  host: string;
+} {
   return {
     html: readWidget(WIDGET_HTML),
     css: readWidget(WIDGET_CSS),
     js: readWidget(WIDGET_JS),
     reducer: readWidget(WIDGET_REDUCER),
     voice: readWidget(WIDGET_VOICE),
+    host: readWidget(WIDGET_HOST),
   };
 }

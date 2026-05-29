@@ -3102,6 +3102,23 @@
   let backoff = 500;
   let reconnectTimer = null;
 
+  // Plugin host — initialise once we know the panel + root + how to send.
+  // wsSend is a closure that captures the latest `ws`; plugins can call
+  // host.send(msg) at any time and it falls back to a no-op if the socket
+  // isn't open yet (server-side state may not have arrived; plugins should
+  // be resilient to that, e.g. retry on their own state).
+  const wsSend = (msg) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify(msg));
+    } catch (err) {
+      console.warn('[hover] plugin host wsSend failed:', err);
+    }
+  };
+  const hostCtl = (typeof initHost === 'function')
+    ? initHost({ root, panel, wsSend })
+    : { applyMode: () => {}, dispatchMessage: () => false };
+
   const sendLabel = $('.send .send-label');
   const setRunning = (r) => {
     const changed = running !== r;
@@ -3247,14 +3264,31 @@
         state.availableModes = Array.isArray(p.available) ? p.available : [];
         renderModeButton();
         if (modesOverlay.classList.contains('open')) renderModesOverlay();
+        // Plugin host: synchronise plugin UI (CSS, DOM mutations, overlays,
+        // toolbar buttons) with the new active mode. Idempotent — same
+        // mode = no-op.
+        hostCtl.applyMode(state.currentMode);
       } else if (msg.type === 'security:flow:added' || msg.type === 'security:flow:updated') {
         // Plugin-namespaced broadcast from @hover-dev/security. The payload
         // is a Flow object (see packages/security/src/mitm/flows.ts). We
         // upsert on flow.id so the same row gets refreshed in place when
         // the response arrives.
+        //
+        // TODO Stage 3: once @hover-dev/security ships its widget-side
+        // plugin module, this branch becomes a fallback — the host's
+        // dispatchMessage(msg) above will route to the plugin's
+        // onMessage handler first.
         if (msg.payload && typeof msg.payload === 'object') {
           upsertFlow(msg.payload);
         }
+      } else {
+        // Plugin-namespaced messages (any `<plugin>:<event>` shape).
+        // dispatchMessage returns true when one or more plugins handled
+        // it; logging only when nothing matched would help debug stray
+        // messages, but the WS protocol has too many one-off types
+        // (skill-saved, spec-exists, agents, …) that fall through here
+        // legitimately. Stay quiet.
+        hostCtl.dispatchMessage(msg);
       }
     };
   };
