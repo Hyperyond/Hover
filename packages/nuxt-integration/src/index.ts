@@ -1,7 +1,8 @@
 import { addVitePlugin, defineNuxtModule } from '@nuxt/kit';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
-import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
+import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
+import { buildWidgetBundle, manifestsToPluginInputs } from '@hover-dev/widget-bootstrap';
 import {
   transformAstro,
   transformJsx,
@@ -28,6 +29,10 @@ export interface HoverOptions {
   model?: string;
   /** Hard $ ceiling per command. No default. */
   maxBudgetUsd?: number;
+  /** Optional Hover plugins (e.g. `@hover-dev/security`). Nuxt's module
+   *  setup signature doesn't support varargs like vite-plugin-hover, so
+   *  plugins go in the options object. Default: no plugins. */
+  plugins?: HoverPluginManifest[];
 }
 
 /**
@@ -62,6 +67,7 @@ export default defineNuxtModule<HoverOptions>({
     const agentId = options.agentId ?? 'claude';
     const model = options.model ?? 'sonnet';
     const maxBudgetUsd = options.maxBudgetUsd;
+    const plugins = options.plugins ?? [];
 
     const enabled = options.enabled ?? nuxt.options.dev;
     if (!enabled) return;
@@ -84,6 +90,7 @@ export default defineNuxtModule<HoverOptions>({
         // Nuxt exposes the project root as a filesystem path on
         // `nuxt.options.rootDir` (vs Astro which uses a file:// URL).
         devRoot: nuxt.options.rootDir,
+        plugins,
       });
     } catch (err) {
       console.error(
@@ -93,8 +100,11 @@ export default defineNuxtModule<HoverOptions>({
     }
 
     const bumped = service.port !== requestedPort;
+    const pluginNote = plugins.length
+      ? ` · plugins=[${plugins.map((p) => p.name).join(', ')}]`
+      : '';
     console.info(
-      `[@hover-dev/nuxt] service ready · ws://127.0.0.1:${service.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}`,
+      `[@hover-dev/nuxt] service ready · ws://127.0.0.1:${service.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}${pluginNote}`,
     );
 
     // Push the widget as an inline script before </body>. We use
@@ -102,7 +112,10 @@ export default defineNuxtModule<HoverOptions>({
     // place. The bundle is the byte-equivalent of what vite-plugin-hover
     // and @hover-dev/astro produce — same @hover-dev/widget-bootstrap
     // middle-layer API.
-    const { preamble, body } = buildWidgetBundle({ port: service.port });
+    const { preamble, body } = buildWidgetBundle({
+      port: service.port,
+      plugins: manifestsToPluginInputs(plugins),
+    });
     nuxt.options.app.head = nuxt.options.app.head ?? {};
     nuxt.options.app.head.script = nuxt.options.app.head.script ?? [];
     nuxt.options.app.head.script.push({

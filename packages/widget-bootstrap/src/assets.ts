@@ -18,3 +18,9 @@ export const WIDGET_JS = resolve(WIDGET_DIR, 'client.js');
 // transforms.ts:stripModuleExports).
 export const WIDGET_REDUCER = resolve(WIDGET_DIR, 'reducer.js');
 export const WIDGET_VOICE = resolve(WIDGET_DIR, 'voice.js');
+// Plugin host API. Exposes `window.__HOVER_WIDGET__` so plugin widget
+// modules (loaded as later <script> blocks in the same bundle) can
+// register their contributions. Must be concatenated AFTER reducer/voice
+// (whose pure-function exports it doesn't depend on) but BEFORE client.js
+// (which calls initHost from inside its IIFE).
+export const WIDGET_HOST = resolve(WIDGET_DIR, 'host.js');

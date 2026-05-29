@@ -2,7 +2,8 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
-import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
+import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
+import { buildWidgetBundle, manifestsToPluginInputs } from '@hover-dev/widget-bootstrap';
 import webpack, { type Compiler, type Compilation, type sources as WebpackSources } from 'webpack';
 
 // webpack 5 is a CommonJS package; in ESM contexts (like our tsx/esm
@@ -67,11 +68,13 @@ const PLUGIN_NAME = 'HoverPlugin';
  */
 export class HoverPlugin {
   private readonly options: HoverOptions;
+  private readonly plugins: HoverPluginManifest[];
   private servicePromise: Promise<ServiceHandle | null> | null = null;
   private service: ServiceHandle | null = null;
 
-  constructor(options: HoverOptions = {}) {
+  constructor(options: HoverOptions = {}, ...plugins: HoverPluginManifest[]) {
     this.options = options;
+    this.plugins = plugins;
   }
 
   apply(compiler: Compiler): void {
@@ -151,12 +154,16 @@ export class HoverPlugin {
         maxBudgetUsd: this.options.maxBudgetUsd,
         cdpUrl: `http://localhost:${chromeDebugPort}`,
         devRoot,
+        plugins: this.plugins,
       })
         .then(svc => {
           this.service = svc;
           const bumped = svc.port !== requestedPort;
+          const pluginNote = this.plugins.length
+            ? ` · plugins=[${this.plugins.map((p) => p.name).join(', ')}]`
+            : '';
           console.info(
-            `[webpack-plugin-hover] service ready · ws://127.0.0.1:${svc.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}`,
+            `[webpack-plugin-hover] service ready · ws://127.0.0.1:${svc.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}${pluginNote}`,
           );
           return svc;
         })
@@ -290,7 +297,10 @@ export class HoverPlugin {
   private async buildScriptTag(): Promise<HtmlPluginAssetTag | null> {
     const svc = await this.servicePromise;
     if (!svc) return null;
-    const { preamble, body } = buildWidgetBundle({ port: svc.port });
+    const { preamble, body } = buildWidgetBundle({
+      port: svc.port,
+      plugins: manifestsToPluginInputs(this.plugins),
+    });
     return {
       tagName: 'script',
       voidTag: false,
@@ -306,8 +316,11 @@ export default HoverPlugin;
 // Factory alias for symmetry with the other Hover integrations
 // (`hover()` is the verb the other packages export). `new HoverPlugin()`
 // is still the canonical form for webpack users.
-export function hover(options: HoverOptions = {}): HoverPlugin {
-  return new HoverPlugin(options);
+export function hover(
+  options: HoverOptions = {},
+  ...plugins: HoverPluginManifest[]
+): HoverPlugin {
+  return new HoverPlugin(options, ...plugins);
 }
 
 // ─── Internal types ─────────────────────────────────────────────────────

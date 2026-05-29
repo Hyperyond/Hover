@@ -153,6 +153,17 @@ function resolveMcpScriptPath(): string {
   return resolve(here, 'mcp', 'server.js');
 }
 
+/** Resolve the absolute path to the widget contribution module. Same
+ *  relative-to-self trick as resolveMcpScriptPath. The Hover widget host
+ *  reads this file at bundle-assembly time and inlines it as a
+ *  `<script type="module">` after the widget core. The package's build
+ *  step copies `src/widget.js` to `dist/widget.js` (`widget.js` is
+ *  authored as plain JS — tsc doesn't compile it). */
+function resolveWidgetScriptPath(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  return resolve(here, 'widget.js');
+}
+
 export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
   const cdpPort = opts?.cdpPort ?? DEFAULT_CDP_PORT;
   const userDataDir = opts?.userDataDir ?? DEFAULT_USER_DATA_DIR;
@@ -198,6 +209,8 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
     ],
 
     widgetEventTypes: ['security:flow:added', 'security:flow:updated'],
+
+    widgetEntry: resolveWidgetScriptPath(),
 
     hooks: {
       async 'hover:mode:activate'(ctx) {

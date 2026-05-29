@@ -19,9 +19,6 @@
   const WS_URL = `ws://127.0.0.1:${PORT}`;
   const STORAGE_KEY = 'hover:state:v1';
   const MESSAGE_CAP = 200;
-  // Cap captured flows so a long browsing session can't blow localStorage.
-  // 500 matches the server-side FlowStore limit in @hover-dev/security.
-  const FLOWS_CAP = 500;
 
   const host = document.createElement('div');
   host.id = HOST_ID;
@@ -71,13 +68,6 @@
   const modesListEl = $('.modes-list-items');
   const modesCountEl = $('.modes-overlay .count');
   const modesCloseBtn = $('.modes-close');
-  const networkBtn = $('.networkbtn');
-  const networkBadgeEl = $('.network-badge');
-  const networkOverlay = $('.network-overlay');
-  const networkListEl = $('.network-list-items');
-  const networkCountEl = $('.network-overlay .count');
-  const networkClearBtn = $('.network-clear');
-  const networkCloseBtn = $('.network-close');
   const settingsBtn = $('.settingsbtn');
   const settingsOverlay = $('.settings-overlay');
   const settingsCloseBtn = $('.settings-close');
@@ -103,10 +93,6 @@
     // mode pill stays hidden.
     currentMode: null,
     availableModes: [],
-    // Captured HTTP flows broadcast by plugin modes (today: @hover-dev/security
-    // via `security:flow:added` / `:flow:updated`). Newest-first. Cleared
-    // when the user toggles modes or hits the clear button.
-    flows: [],
   };
 
   // Whether an agent is currently running. The renderer reads this to decide
@@ -1638,19 +1624,47 @@
     modeBtn.classList.toggle('engaged', engaged);
     // Deliberately no tooltip — the bar's own text already says the
     // mode name + affordance, so a hover bubble repeating it adds noise.
-    // Network glyph rides in the header — visible when the active mode
-    // publishes flow events. For this iteration any non-default mode is
-    // treated as flow-capable; future modes that don't publish flows
-    // can flip this off via a manifest hint.
-    networkBtn.hidden = !engaged;
-    updateNetworkBadge();
-    // Record button is for the Playwright-spec recording flow — its
-    // semantics ("record clicks/fills → save as spec") don't match the
-    // security-mode workflow (which captures HTTP flows instead and
-    // crystallizes via the security MCP). Hide it in any non-default
-    // mode for now; future iteration will redesign recording for
-    // security mode specifically.
-    if (recordBtn) recordBtn.hidden = engaged;
+    //
+    // Plugin-contributed UI (network panel button, plugin overlays, plugin
+    // CSS) is wired by the host's applyMode() — invoked from the WS `modes`
+    // handler, NOT here. This function only updates the mode bar pill.
+  };
+
+  // ───────────────────────── default-mode visibility ─────────────────────────
+  //
+  // The default mode "owns" its own UI elements (Record button, Fix button,
+  // textarea, Send, voice mic, …). When a plugin mode is active, default
+  // hides its own widgets so the plugin's UI is the only thing offering
+  // affordances. This is the inverse of the v0.9.0-original "plugin hides
+  // core elements" design — by having core hide its own widgets, plugins
+  // never need to know core's selectors (e.g. `.record-btn` / `.fix-btn`).
+  //
+  // Called from the WS `modes` handler whenever currentMode changes. Pulls
+  // the trigger on in-flight recording / fix-picking sessions too — they
+  // belong to default mode semantically, so they shouldn't survive a switch
+  // to a plugin mode.
+  const applyDefaultModeVisibility = (newMode) => {
+    const inDefault = newMode === null;
+    // Hide default-only footer affordances when a plugin mode is active.
+    // Both buttons have rules `.foo[hidden] { display: none !important }`
+    // via the catch-all in style.css, so `hidden = true` reliably collapses
+    // them despite the explicit `display: inline-flex` on .fix-btn.
+    if (recordBtn) recordBtn.hidden = !inDefault;
+    if (fixBtn) fixBtn.hidden = !inDefault;
+    // Tear down in-flight default-mode interactions that the new mode would
+    // visually break. Skipped on the way INTO default (nothing to tear down).
+    if (!inDefault) {
+      // setRecording / cancelFixMode are defined later in this IIFE; this
+      // closure resolves them at call time, which is always post-WS-open
+      // (the `modes` payload arrives after `hello`). Guard each with a
+      // typeof to keep the early-init case sane.
+      if (typeof recording !== 'undefined' && recording && typeof setRecording === 'function') {
+        setRecording(false);
+      }
+      if (typeof fixMode !== 'undefined' && fixMode && typeof cancelFixMode === 'function') {
+        cancelFixMode();
+      }
+    }
   };
 
   const renderModesOverlay = () => {
@@ -1720,12 +1734,9 @@
       return;
     }
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    // Flows captured under the previous mode no longer have a control
-    // plane behind them (the proxy got torn down). Drop them so the user
-    // doesn't see stale rows that are no longer replayable.
-    state.flows = [];
-    renderNetworkOverlay();
-    updateNetworkBadge();
+    // Plugin-owned state (e.g. captured flows under @hover-dev/security)
+    // is cleaned up by the host's deactivate path — no per-mode logic
+    // needed here.
     ws.send(JSON.stringify({ type: 'set-mode', payload: { modeId: id } }));
     closeModesOverlay();
   };
@@ -1748,141 +1759,6 @@
   modesCloseBtn.addEventListener('click', closeModesOverlay);
 
   renderModeButton();
-
-  // ───────────────────────── network overlay (captured flows) ─────────────────────────
-  //
-  // Populated by plugin-broadcast events (today: @hover-dev/security via
-  // `security:flow:added` / `security:flow:updated`). Each broadcast
-  // upserts on flow.id — first event creates the row, second event with
-  // the same id updates it (status/body length). The badge in the header
-  // glyph shows the unread count since the user last opened the panel.
-
-  let networkUnreadCount = 0;
-
-  const classifyStatus = (code) => {
-    if (code == null) return 'pending';
-    if (code >= 500) return 's5xx';
-    if (code >= 400) return 's4xx';
-    if (code >= 300) return 's3xx';
-    if (code >= 200) return 's2xx';
-    return 'pending';
-  };
-
-  const updateNetworkBadge = () => {
-    const show = networkUnreadCount > 0;
-    networkBadgeEl.hidden = !show;
-    networkBadgeEl.textContent = String(networkUnreadCount > 99 ? '99+' : networkUnreadCount);
-  };
-
-  const renderFlowRow = (flow) => {
-    const row = document.createElement('div');
-    row.className = 'flow-row';
-    if (flow.mutated) row.classList.add('mutated');
-    row.dataset.flowId = flow.id;
-
-    const status = document.createElement('span');
-    const cls = classifyStatus(flow.response?.statusCode);
-    status.className = `flow-status ${cls}`;
-    status.textContent = flow.response?.statusCode ?? '…';
-    row.appendChild(status);
-
-    const method = document.createElement('span');
-    method.className = 'flow-method';
-    method.textContent = flow.request.method;
-    row.appendChild(method);
-
-    const url = document.createElement('span');
-    url.className = 'flow-url';
-    // Drop scheme + host for compactness when present; keep them in the
-    // tooltip for full disambiguation.
-    let display = flow.request.url;
-    try {
-      const u = new URL(flow.request.url);
-      display = u.pathname + (u.search || '');
-      url.title = flow.request.url;
-    } catch {
-      // non-URL (relative or odd) — show raw
-    }
-    url.textContent = display;
-    row.appendChild(url);
-
-    const meta = document.createElement('span');
-    meta.className = 'flow-meta';
-    const respLen = flow.response?.bodyLen;
-    meta.textContent = respLen != null ? `${respLen}b` : '';
-    row.appendChild(meta);
-
-    return row;
-  };
-
-  const renderNetworkOverlay = () => {
-    networkCountEl.textContent = String(state.flows.length);
-    networkListEl.innerHTML = '';
-    if (state.flows.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'network-empty';
-      empty.textContent = 'No flows captured yet. Drive the page (login, click, submit) to populate the proxy.';
-      networkListEl.appendChild(empty);
-      return;
-    }
-    // Newest first.
-    for (let i = state.flows.length - 1; i >= 0; i--) {
-      networkListEl.appendChild(renderFlowRow(state.flows[i]));
-    }
-  };
-
-  const upsertFlow = (flow) => {
-    if (!flow || typeof flow.id !== 'string') return;
-    const idx = state.flows.findIndex((f) => f.id === flow.id);
-    if (idx >= 0) {
-      state.flows[idx] = flow;
-      // If the panel is open, only re-render the affected row to avoid
-      // wiping scroll position on every flow:updated burst.
-      if (networkOverlay.classList.contains('open')) {
-        const existing = networkListEl.querySelector(`[data-flow-id="${flow.id}"]`);
-        if (existing) existing.replaceWith(renderFlowRow(flow));
-      }
-    } else {
-      state.flows.push(flow);
-      if (state.flows.length > FLOWS_CAP) state.flows.shift();
-      if (networkOverlay.classList.contains('open')) {
-        if (state.flows.length === 1) {
-          // Replace the "empty" hint.
-          renderNetworkOverlay();
-        } else {
-          networkListEl.prepend(renderFlowRow(flow));
-        }
-      } else {
-        networkUnreadCount = Math.min(networkUnreadCount + 1, 9999);
-        updateNetworkBadge();
-      }
-    }
-  };
-
-  const openNetworkOverlay = () => {
-    networkUnreadCount = 0;
-    updateNetworkBadge();
-    networkOverlay.classList.add('open');
-    networkOverlay.setAttribute('aria-hidden', 'false');
-    networkBtn.classList.add('active');
-    renderNetworkOverlay();
-  };
-  const closeNetworkOverlay = () => {
-    networkOverlay.classList.remove('open');
-    networkOverlay.setAttribute('aria-hidden', 'true');
-    networkBtn.classList.remove('active');
-  };
-  networkBtn.addEventListener('click', () => {
-    if (networkOverlay.classList.contains('open')) closeNetworkOverlay();
-    else openNetworkOverlay();
-  });
-  networkCloseBtn.addEventListener('click', closeNetworkOverlay);
-  networkClearBtn.addEventListener('click', () => {
-    state.flows = [];
-    networkUnreadCount = 0;
-    updateNetworkBadge();
-    renderNetworkOverlay();
-  });
 
   // ───────────────────────── custom tooltip ─────────────────────────
   //
@@ -1984,6 +1860,15 @@
   };
 
   root.addEventListener('mouseover', (ev) => {
+    // Suppress tooltips while any full-panel overlay or popover is
+    // open — they cover the header buttons, but mouseover still fires
+    // on the elements underneath, and tooltips render on a higher
+    // z-index so they punch through visually. Query lazily here
+    // (fixPopover and plugin overlays are declared later in the IIFE
+    // / appended at runtime by the host).
+    const fixOpen = root.querySelector('.fix-popover.visible');
+    const pluginOverlayOpen = root.querySelector('.plugin-overlay.open');
+    if (fixOpen || pluginOverlayOpen) return;
     const target = findTipTarget(ev);
     if (!target || target === tipTarget) return;
     cancelHideTimer();
@@ -3102,6 +2987,23 @@
   let backoff = 500;
   let reconnectTimer = null;
 
+  // Plugin host — initialise once we know the panel + root + how to send.
+  // wsSend is a closure that captures the latest `ws`; plugins can call
+  // host.send(msg) at any time and it falls back to a no-op if the socket
+  // isn't open yet (server-side state may not have arrived; plugins should
+  // be resilient to that, e.g. retry on their own state).
+  const wsSend = (msg) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify(msg));
+    } catch (err) {
+      console.warn('[hover] plugin host wsSend failed:', err);
+    }
+  };
+  const hostCtl = (typeof initHost === 'function')
+    ? initHost({ root, panel, wsSend })
+    : { applyMode: () => {}, dispatchMessage: () => false };
+
   const sendLabel = $('.send .send-label');
   const setRunning = (r) => {
     const changed = running !== r;
@@ -3247,14 +3149,21 @@
         state.availableModes = Array.isArray(p.available) ? p.available : [];
         renderModeButton();
         if (modesOverlay.classList.contains('open')) renderModesOverlay();
-      } else if (msg.type === 'security:flow:added' || msg.type === 'security:flow:updated') {
-        // Plugin-namespaced broadcast from @hover-dev/security. The payload
-        // is a Flow object (see packages/security/src/mitm/flows.ts). We
-        // upsert on flow.id so the same row gets refreshed in place when
-        // the response arrives.
-        if (msg.payload && typeof msg.payload === 'object') {
-          upsertFlow(msg.payload);
-        }
+        // Default mode owns its own widgets — hide them when a plugin
+        // mode takes over, show them again on return. Plugins don't need
+        // to know default's selectors; default listens for itself.
+        applyDefaultModeVisibility(state.currentMode);
+        // Plugin host: install / tear down plugin UI contributions (CSS,
+        // toolbar buttons, overlays, plugin-internal DOM mutations).
+        // Idempotent — same mode = no-op.
+        hostCtl.applyMode(state.currentMode);
+      } else {
+        // Plugin-namespaced messages (any `<plugin>:<event>` shape) are
+        // routed to the plugin's registered onMessage handler. The WS
+        // protocol has too many one-off types (skill-saved, spec-exists,
+        // agents, …) that legitimately fall through here, so we don't
+        // log unmatched messages.
+        hostCtl.dispatchMessage(msg);
       }
     };
   };

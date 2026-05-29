@@ -32,7 +32,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').copyFileSync('src/widget.js','dist/widget.js')\"",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "pnpm run clean && pnpm run build",

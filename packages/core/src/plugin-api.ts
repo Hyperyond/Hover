@@ -161,6 +161,17 @@ export interface HoverPluginManifest {
    *  events that no loaded plugin will ever produce. */
   widgetEventTypes?: string[];
 
+  /** Absolute path to a JS module that runs inside the widget's Shadow
+   *  DOM. The host reads this file at bundle-assembly time, inlines it
+   *  as a `<script type="module">` after the widget core, and exposes
+   *  `window.__HOVER_WIDGET__` for the module to register itself.
+   *
+   *  Plugin authors typically resolve this via `import.meta` or
+   *  `fileURLToPath(new URL('./widget.js', import.meta.url))` from
+   *  inside their server-side entry. If absent, the plugin contributes
+   *  no widget code (server-side-only plugin). */
+  widgetEntry?: string;
+
   hooks?: HoverHooks;
 }
 

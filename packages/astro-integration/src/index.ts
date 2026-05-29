@@ -2,7 +2,8 @@ import { readFile as fsReadFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
-import { buildWidgetBundle } from '@hover-dev/widget-bootstrap';
+import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
+import { buildWidgetBundle, manifestsToPluginInputs } from '@hover-dev/widget-bootstrap';
 import {
   transformAstro,
   transformJsx,
@@ -45,7 +46,10 @@ export interface HoverOptions {
  *
  * No-op outside `astro dev` — `astro build` / `preview` / `sync` exit early.
  */
-export function hover(options: HoverOptions = {}): AstroIntegration {
+export function hover(
+  options: HoverOptions = {},
+  ...plugins: HoverPluginManifest[]
+): AstroIntegration {
   const requestedPort = options.port ?? 51789;
   const chromeDebugPort = options.chromeDebugPort ?? 9222;
   const autoLaunchChrome = options.autoLaunchChrome ?? false;
@@ -88,6 +92,7 @@ export function hover(options: HoverOptions = {}): AstroIntegration {
             // Project root for skill saves. Astro exposes this via
             // `config.root` which is a URL — convert to filesystem path.
             devRoot: fileURLToPath(config.root),
+            plugins,
           });
         } catch (err) {
           logger.error(
@@ -97,15 +102,21 @@ export function hover(options: HoverOptions = {}): AstroIntegration {
         }
 
         const bumped = service.port !== requestedPort;
+        const pluginNote = plugins.length
+          ? ` · plugins=[${plugins.map((p) => p.name).join(', ')}]`
+          : '';
         logger.info(
-          `service ready · ws://127.0.0.1:${service.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}`,
+          `service ready · ws://127.0.0.1:${service.port}${bumped ? ` (auto-bumped from ${requestedPort})` : ''} · agent=${agentId} model=${model}${pluginNote}`,
         );
 
         // Inject the widget bundle on every page. Unlike vite-plugin-hover's
         // transformIndexHtml path, this is a single resolved string — by
         // the time we call injectScript the service has bound and we know
         // the actual port. No thunk needed here.
-        const { preamble, body } = buildWidgetBundle({ port: service.port });
+        const { preamble, body } = buildWidgetBundle({
+          port: service.port,
+          plugins: manifestsToPluginInputs(plugins),
+        });
         injectScript('page', `${preamble}\n${body}`);
 
         if (!autoLaunchChrome) return;
