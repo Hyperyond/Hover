@@ -1,7 +1,7 @@
 import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
-import { getWidgetScript } from '@hover-dev/widget-bootstrap';
+import { getWidgetScript, manifestsToPluginInputs } from '@hover-dev/widget-bootstrap';
 import { transformJsx, transformVue, transformSvelte, transformAstro } from '@hover-dev/transform-source';
 import type { Plugin } from 'vite';
 
@@ -173,7 +173,10 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
         // byte-identical bundle from a different host. We pass `servicePort`
         // as a thunk because the actual bound port is only known after
         // `configureServer` ran (auto-bump from 51789 if busy).
-        return [getWidgetScript({ port: () => servicePort })];
+        return [getWidgetScript({
+          port: () => servicePort,
+          plugins: manifestsToPluginInputs(plugins),
+        })];
       },
     },
   };

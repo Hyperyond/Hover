@@ -54,6 +54,21 @@ export async function HoverScript(): Promise<ReactElement | null> {
   const requested = process.env[ENV_KEYS.PORT];
   const port = resolved ? Number(resolved) : requested ? Number(requested) : 51789;
 
+  // Plugin descriptors written by registerNode() after it resolved the
+  // plugin module specifiers. Carries only strings (name, modeId, widgetEntry
+  // absolute path) — safe to round-trip via env. Absent or empty → widget
+  // core only.
+  let pluginInputs: Array<{ name: string; modeId?: string; widgetEntry?: string }> = [];
+  const pluginsRaw = process.env[ENV_KEYS.RESOLVED_PLUGINS];
+  if (pluginsRaw) {
+    try {
+      const parsed = JSON.parse(pluginsRaw);
+      if (Array.isArray(parsed)) pluginInputs = parsed;
+    } catch {
+      // Malformed JSON — skip plugins, keep the widget core alive.
+    }
+  }
+
   // Dynamic import — keeps `@hover-dev/widget-bootstrap` out of the
   // top-level require() graph in our CJS bundle. Next 15 loads
   // `next.config.ts` through a CJS require step that pulls in
@@ -61,7 +76,7 @@ export async function HoverScript(): Promise<ReactElement | null> {
   // would throw ERR_PACKAGE_PATH_NOT_EXPORTED if reachable via require.
   // Async server components are first-class in App Router.
   const { buildWidgetBundle } = await import('@hover-dev/widget-bootstrap');
-  const { preamble, body } = buildWidgetBundle({ port });
+  const { preamble, body } = buildWidgetBundle({ port, plugins: pluginInputs });
   const inline = `${preamble}\n${body}`;
 
   return (

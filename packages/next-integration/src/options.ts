@@ -58,6 +58,13 @@ export const ENV_KEYS = {
    *  port up from the requested one — the wrapper can't predict it, so the
    *  service publishes its final port here on boot. */
   RESOLVED_PORT: '__HOVER_NEXT_RESOLVED_PORT',
+  /** JSON-serialised plugin descriptors `[{ name, modeId, widgetEntry }]`
+   *  written by `registerNode()` after it has resolved the plugin module
+   *  specifiers. `<HoverScript />` reads this at RSC render time to know
+   *  which plugin widget bundles to inline. Only carries strings — no
+   *  closures, no hooks — so it's safe across the env-var boundary.
+   *  Empty array (or unset) → widget core only, no plugin contributions. */
+  RESOLVED_PLUGINS: '__HOVER_NEXT_RESOLVED_PLUGINS',
 } as const;
 
 /** Read HoverOptions back out of `process.env`, as written by `withHover`.

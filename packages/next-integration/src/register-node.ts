@@ -255,6 +255,17 @@ export async function registerNode(
   // Publish the resolved port for HoverScript to read at RSC render time.
   process.env[ENV_KEYS.RESOLVED_PORT] = String(service.port);
 
+  // Publish the plugins' widget descriptors so HoverScript can inline each
+  // plugin's widget entry alongside the core bundle. Only string fields go
+  // across this boundary — no closures / hooks (those stay in-memory in
+  // the running service, used by the WS layer).
+  const pluginDescriptors = plugins.map((p) => ({
+    name: p.name,
+    modeId: p.mode?.id,
+    widgetEntry: p.widgetEntry,
+  }));
+  process.env[ENV_KEYS.RESOLVED_PLUGINS] = JSON.stringify(pluginDescriptors);
+
   const bumped = service.port !== requestedPort;
   const pluginNote = plugins.length
     ? ` · plugins=[${plugins.map((p) => p.name).join(', ')}]`
