@@ -6,6 +6,34 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-05-29
+
+The "widget plugin-UI protocol" release. Plugins can now contribute their own widget surface (CSS, toolbar buttons, overlays, WS message handlers, lifecycle callbacks) via a new `window.__HOVER_WIDGET__` host API — not just server-side mode / MCP / prompt contributions. `@hover-dev/security` migrates off the hardcoded `client.js` branches that v0.7 added; default mode and plugin modes now share a symmetric protocol where each side owns its own widgets. Bonus: `cursor-agent` joins the agent registry alongside `claude` + `codex`.
+
+### Added
+
+- **Widget plugin-UI contribution protocol.** New `widgetEntry?: string` field on `HoverPluginManifest` — plugins point at a JS module that the bundle assembler inlines after the widget core. New widget host module (`packages/widget-bootstrap/src/widget/host.js`, 449 lines) exposes `window.__HOVER_WIDGET__` with `registerPlugin / getState / setState / openOverlay / closeOverlay / send`. Six contribution surfaces — namespaced CSS (auto-prefixed with `[data-plugin-active="<name>"]`), declarative DOM mutations (`hide` / `addClass`, reverted on deactivate), toolbar buttons, overlays, WS message handlers, and `onActivate` / `onDeactivate` callbacks. Single-mode exclusivity invariant: at most one plugin's contributions are visible at any time; default mode equals "no plugin active." All callbacks wrapped in try/catch with `[hover/plugin "<name>"] <where> failed:` structured logging — a plugin crashing never blocks the WS pump or other plugins.
+- **Symmetric mode-ownership model.** Default mode owns its own widgets (`Record`, `Fix`, etc.) and listens for `modes` payload changes to hide/show them itself; plugin modes own their contributed widgets. Neither side reaches into the other's DOM. Plugins never need to know default-mode selectors — adding a new plugin no longer requires listing "what core buttons should I hide."
+- **`@hover-dev/security` widget plugin module** (`packages/security/src/widget.js`, 187 lines). Network panel, flow row rendering, orange theme, status code colour buckets, mutated highlight — all contributed via the new host API. Security plugin ships its widget surface alongside its server-side manifest; the npm tarball includes `dist/widget.js` (copied from `src/widget.js` at build time — `widget.js` is authored as plain JS, not TS).
+- **`cursor-agent` joins the agent registry** (`packages/core/src/agents/cursor.ts`, 351 lines). Soft sandbox (⚠ in the dropdown, same as codex). Stream-JSON / NDJSON parser handles Cursor's `system / user / assistant / tool_call / result` events with defensive walking of the `*ToolCall` wrapper variants. Known limits surfaced in the descriptor's docstring: no `--max-budget-usd`, no `--mcp-config` (users add the Playwright MCP to `~/.cursor/mcp.json` themselves), no token/cost data in the stream (widget renders `–` for cursor sessions). Install hint: `curl https://cursor.com/install -fsS | bash`. 18 new vitest cases.
+
+### Changed
+
+- **`@hover-dev/astro`, `@hover-dev/nuxt`, `webpack-plugin-hover` accept plugins.** Previously only `vite-plugin-hover` and `@hover-dev/next` did. `hover()` / `new HoverPlugin()` gain a `...plugins: HoverPluginManifest[]` varargs slot (Nuxt uses `plugins?: HoverPluginManifest[]` in its module options since `defineNuxtModule` setup can't take varargs). Older `hover({})` calls without plugins continue to work unchanged.
+- **Generic `.plugin-overlay` shell** in the widget CSS replaces the security-specific `.network-overlay` rules. Plugin overlays now share the same slide-over animation, header, and overlay-offset behaviour without each plugin having to bring its own positioning CSS.
+- **Catch-all `[hidden] { display: none !important }`** in the widget CSS. Several existing widget elements had to repeat `.foo[hidden] { display: none }` per selector to defeat author `display: flex` / `display: inline-flex` declarations — fragile, easy to forget. One generic rule now covers every widget element (including plugin-contributed DOM), so `el.hidden = true` reliably collapses anything.
+- **Fix popover gets the `.panel.has-modebar` 68px offset.** Pre-existing layout bug — the popover sat at `top: 48px` and overlapped the 28px mode bar when one was present. Fixed; tooltips from header buttons under the popover are also now suppressed (mouseover handler short-circuits when `.fix-popover.visible` or any `.plugin-overlay.open` element exists).
+
+### Removed
+
+- **`client.js` security-specific hardcoded branches.** `state.flows`, the 7 `networkXxx` DOM handles, `renderFlowRow`, `renderNetworkOverlay`, `upsertFlow`, the `security:flow:added` / `:updated` WS branch, the `networkBtn.hidden = !engaged` + `recordBtn.hidden = engaged` lines in `renderModeButton`, and the security-specific CSS (`.network-overlay`, `.flow-row`, `.flow-status-*`, etc.) — all moved into `@hover-dev/security`'s widget module or replaced by the generic plugin-overlay shell. `client.js` shrank from 3337 to ~3155 lines.
+
+### Internal
+
+- **5 commits squashed into 1 merge commit (PR #49).** Net diff +1,196 / −319.
+- Plugin-host Playwright spec (`examples/basic-app/__vibe_tests__/plugin-host.spec.ts`) — 3 deterministic checks: `__HOVER_PLUGINS__` preamble carries security's descriptor, `__HOVER_WIDGET__` host API exposed on window with `apiVersion: 1`, default mode renders zero plugin contributions when security is installed but inactive.
+- Agent worktree branch `worktree-agent-af9f4b3f0c47da73a` was a side-effect of the cursor-agent task isolation — has no unique commits; safe to ignore.
+
 ## [0.8.0] — 2026-05-29
 
 The "multi-framework source attribution" release. The v0.4.x JSX stamp generalises to four frameworks (JSX / Vue / Svelte / Astro) through a new private workspace package, plus `@hover-dev/next` gains first-class plugin support so `@hover-dev/security` and future third-party plugins wire into Next without dragging Node-only deps into the Edge bundle.
