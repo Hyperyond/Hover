@@ -42,6 +42,23 @@ Same shape as `vite-plugin-hover`'s `HoverOptions`:
 | `model` | `string` | `'sonnet'` | Default model |
 | `maxBudgetUsd` | `number` | none | Hard $ ceiling per command |
 
+## Plugins (e.g. `@hover-dev/security`)
+
+Since v0.9, `hover()` accepts Hover plugins as additional positional arguments — same shape as `vite-plugin-hover`:
+
+```js
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import { hover } from '@hover-dev/astro';
+import securityMode from '@hover-dev/security';
+
+export default defineConfig({
+  integrations: [hover({ autoLaunchChrome: true }, securityMode())],
+});
+```
+
+Older `hover({})` calls without plugins continue to work unchanged.
+
 ## How it composes
 
 ```

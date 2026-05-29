@@ -13,7 +13,7 @@ Hover ships separate packages per bundler because each one has its own HTML pipe
 | **Create React App (legacy)** | ✅ via [`craco`](https://craco.js.org) or `react-app-rewired` (CRA is in maintenance mode but still uses webpack 5 + HtmlWebpackPlugin) |
 | **Vue CLI (legacy)** | ✅ via `vue.config.js`'s `configureWebpack` (Vue CLI is in maintenance mode) |
 | **Next.js with `--webpack`** | ✅ but requires the `--webpack` flag (Next.js 16 ships Turbopack as the default; webpack plugins do not load under Turbopack) |
-| **Next.js default (Turbopack)** | ❌ not supported by webpack plugins. Turbopack-native integration is on the roadmap |
+| **Next.js default (Turbopack)** | ❌ not supported by webpack plugins. Use [`@hover-dev/next`](https://www.npmjs.com/package/@hover-dev/next) for the Turbopack-native path |
 
 For Vite-based projects use [`vite-plugin-hover`](https://www.npmjs.com/package/vite-plugin-hover); for Astro use [`@hover-dev/astro`](https://www.npmjs.com/package/@hover-dev/astro); for Nuxt use [`@hover-dev/nuxt`](https://www.npmjs.com/package/@hover-dev/nuxt).
 
@@ -78,7 +78,7 @@ module.exports = {
 };
 ```
 
-Pure Turbopack (the Next 16 default) does **not** load webpack plugins; a dedicated `@hover-dev/next` package is on the roadmap.
+Pure Turbopack (the Next 16 default) does **not** load webpack plugins; for that path use [`@hover-dev/next`](https://www.npmjs.com/package/@hover-dev/next) instead.
 
 ## Options
 
@@ -95,6 +95,25 @@ Same shape as the other Hover integrations:
 | `agentId` | `string` | `'claude'` | One of `@hover-dev/core`'s registered agents |
 | `model` | `string` | `'sonnet'` | Default model |
 | `maxBudgetUsd` | `number` | none | Hard $ ceiling per command |
+
+## Plugins (e.g. `@hover-dev/security`)
+
+Since v0.9, `new HoverPlugin(opts, ...plugins)` accepts Hover plugins as additional positional arguments — same shape as `vite-plugin-hover`:
+
+```js
+import { HoverPlugin } from 'webpack-plugin-hover';
+import securityMode from '@hover-dev/security';
+
+export default {
+  // ... your config ...
+  plugins: [
+    new HtmlWebpackPlugin({ template: './src/index.html' }),
+    new HoverPlugin({ autoLaunchChrome: true }, securityMode()),
+  ],
+};
+```
+
+Older `new HoverPlugin({})` calls without plugins continue to work unchanged.
 
 ## How it composes
 

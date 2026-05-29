@@ -1,6 +1,6 @@
 # Security testing
 
-> Status: **0.7 preview**. The plugin works end-to-end; UI polish + recording semantics for security sessions are tracked for the next iteration.
+> Status: **production**, shipped since v0.7, on the widget plugin-UI protocol since v0.9. As of v0.9 the orange mode bar, the network panel, the flow row rendering, and the `security:flow:*` WS handlers are all contributed by `packages/security/src/widget.js` via the new `window.__HOVER_WIDGET__` host API — `@hover-dev/core/client.js` no longer carries any security-specific branches. Recording semantics for security sessions are tracked for v0.11.x.
 
 `@hover-dev/security` is Hover's first optional plugin. Switch the widget into **Security testing** mode and Hover starts capturing every HTTPS call your dev page makes — then lets the AI agent re-issue any of those calls with mutations to probe for IDOR / authentication bypass / parameter tampering. Findings save as plain Playwright specs that run in CI without the proxy.
 

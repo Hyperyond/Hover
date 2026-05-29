@@ -5,8 +5,12 @@ Low-level helper that builds the inline-script bundle for [Hover](https://github
 **This package is for plugin authors.** End users should install one of the official bundler plugins instead:
 
 - [`vite-plugin-hover`](https://www.npmjs.com/package/vite-plugin-hover) — Vite
+- [`@hover-dev/astro`](https://www.npmjs.com/package/@hover-dev/astro) — Astro
+- [`@hover-dev/nuxt`](https://www.npmjs.com/package/@hover-dev/nuxt) — Nuxt
+- [`@hover-dev/next`](https://www.npmjs.com/package/@hover-dev/next) — Next.js 16+ (Turbopack-native)
+- [`webpack-plugin-hover`](https://www.npmjs.com/package/webpack-plugin-hover) — webpack 5 (wds / Rspack / Rsbuild / CRA-via-craco / Vue CLI / `next dev --webpack`)
 
-Future plugins (`webpack-plugin-hover`, `next-plugin-hover`, etc.) will consume this same package to produce a byte-identical widget bundle regardless of the host bundler.
+All five consume this package to produce a byte-identical widget bundle regardless of the host bundler.
 
 ## What this package owns
 
@@ -44,7 +48,7 @@ Pass either a `number` or a `() => number`. Vite's `transformIndexHtml` needs th
 
 ### `transformBody` hook
 
-`getWidgetScript` and `buildWidgetBundle` both accept an optional `transformBody: (body: string) => string` callback. This is the seam for the future v0.3.x "click element → fix prompt" feature: per-host source-attribution injection (React fiber `_debugSource`, Vue `data-v-inspector`, framework-agnostic `data-hover-source`) plugs in here. The bootstrap package itself stays unaware of any framework.
+`getWidgetScript` and `buildWidgetBundle` both accept an optional `transformBody: (body: string) => string` callback. This is the seam the "click element → fix prompt" feature (v0.4+) and the multi-framework source-attribution feature (v0.8+) use to inject the `data-hover-source` stamp on host elements before the widget script ships. The bootstrap package itself stays unaware of any framework.
 
 ## License
 

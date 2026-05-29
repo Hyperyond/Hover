@@ -52,6 +52,21 @@ hover({
 });
 ```
 
+## Plugins
+
+`hover()` accepts additional `HoverPluginManifest` objects as varargs after the options. Each contributes a mode the widget can switch into (`@hover-dev/security` adds an HTTPS-MITM security-testing mode, etc.):
+
+```ts
+import { hover } from 'vite-plugin-hover';
+import securityMode from '@hover-dev/security';
+
+export default defineConfig({
+  plugins: [hover({}, securityMode())],
+});
+```
+
+See [`@hover-dev/security`](https://www.npmjs.com/package/@hover-dev/security) for the canonical plugin example, and the [plugin API reference](https://hover-docs.vercel.app/reference/plugin-api) for the full manifest shape (including the v0.9 widget host API).
+
 ## What it does
 
 - `apply: 'serve'` — no-op in production builds.
