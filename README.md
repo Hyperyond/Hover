@@ -170,6 +170,7 @@ Everything checks into git. Nothing lives in a vendor's database. A spec written
   - **Save as Playwright spec** → `__vibe_tests__/<slug>.spec.ts`, uses `getByRole / getByLabel / getByTestId` semantic selectors. JSDoc header carries plain-English Steps + Expected blocks so non-coders can review.
   - **Save as Skill** → `.claude/skills/<slug>/SKILL.md`, replayable by saying *"execute login-as-claude"* in a future conversation.
   - **Save as Jira case** → `__vibe_tests__/<slug>.case.csv`, an Xray-compatible multi-row CSV that imports straight into Jira / Xray / Zephyr Scale as a Manual Test issue.
+- **⟳ Re-record specs (NEW in v0.11).** When the UI shifts enough that a saved spec breaks (button renamed, label split, role changed), use the agent to regenerate selectors instead of editing the `.spec.ts` by hand. Open the widget's **Saved sessions** overlay → **Specs** tab → click **⟳ Re-record** next to any spec. The agent replays the original prompt from the spec's JSDoc header against the current UI, and Hover overwrites the file with new selectors. Or run `pnpm hover re-record <spec>` from a terminal. CI itself stays pure Playwright — no AI in the test loop, just at the *authoring* step. See [FAQ: my UI changed, what happens?](#faq) below.
 - **Record mode with built-in checks** — Toggle Record in the footer, do the flow manually, get the same step sequence as if the agent had driven it. While recording, the sub-toolbar lets you switch what the next click captures:
   - **● Record** — record the click / fill / select as a Playwright step (default)
   - **✓ Exists** — check the element appears: `expect(SEL).toBeVisible()`
@@ -584,6 +585,47 @@ The plugin slot is what makes optional packages like [`@hover-dev/security`](./p
 
 Architecture details, package boundaries, and contribution workflow live on the [docs site](https://hover-docs.vercel.app/development/).
 
+## FAQ
+
+### My UI changed and my saved spec breaks. What now?
+
+This is the central question for any AI-authored e2e test. Hover's answer is three-layered:
+
+**1. Most UI churn doesn't break the spec.** Hover generates `getByRole / getByLabel / getByTestId` semantic selectors, not CSS classes or XPath. "Submit button" stays "Submit button" after a layout pass; the spec keeps running.
+
+**2. When the *semantics* shift (button renamed "Sign in", label changed, role changed), the spec turns red.** You have three options, listed from cheapest to most explicit:
+
+- **Re-record it.** Open the widget's **📜 Saved sessions** overlay → **Specs** tab → **⟳ Re-record**. Or from a terminal: `pnpm hover re-record <spec>`. The agent reads the spec's JSDoc `Original prompt:` header ("log in then add a todo") and replays it against the *current* UI, then overwrites the `.spec.ts` with new selectors. ~30s, ~$0.10 per spec. Review the `git diff` before committing.
+- **Edit by hand.** The spec is plain `@playwright/test` — `getByRole('button', { name: 'Submit' })` → `'Sign in'`. Faster if you know exactly what changed.
+- **Treat it as a regression.** If the test fails because the *flow* broke (not just the selector), that's the test catching a real bug — fix the app, not the spec.
+
+**3. Why we don't auto-heal at CI time** (the Stagehand / Midscene model): CI tokens add up — every test run pays an LLM call, every PR, every nightly. Hover keeps CI deterministic and free, and concentrates the LLM cost into deliberate, one-off re-records at the moments you actually need them.
+
+### What's the difference between a Skill and a Spec?
+
+Generated from the same Save card on the same Hover session. Used very differently:
+
+| | **Skill** (`.claude/skills/<slug>/SKILL.md`) | **Spec** (`__vibe_tests__/<slug>.spec.ts`) |
+|---|---|---|
+| **Read by** | Claude / agent | Playwright (CI) |
+| **When** | You say *"execute &lt;skill&gt;"* in a future Hover conversation | Every `pnpm test:e2e` / CI run |
+| **Failure mode** | Agent self-adapts to UI changes (no selectors written down) | Selector breaks if UI semantics shift → needs re-record or hand edit |
+| **Determinism** | Best-effort replay | Hard contract |
+
+Skills are for repeated *exploration*. Specs are for repeated *verification*. Many sessions deserve both.
+
+### Will Hover spawn another headless Chromium? My CI is already busy.
+
+No. `@hover-dev/core` launches one isolated debug Chrome under `<tmpdir>/hover-chrome` and connects via CDP. It never spawns a fresh Chromium per command. CI tests run with whatever browsers `@playwright/test` is configured with — entirely separate from Hover's debug Chrome.
+
+### Does Hover send my source code or DOM to a hosted service?
+
+No. Hover spawns the coding-agent CLI on your local `PATH` (`claude`, `codex`, `cursor-agent`, etc.) and that CLI talks to its own provider (Anthropic, OpenAI, Cursor). `@hover-dev/core` itself has no LLM SDK code, no telemetry, no upload path. The Node service binds to `127.0.0.1` only.
+
+### Why doesn't the widget show up in `astro build` / `next build` / `vite build` output?
+
+All bundler integrations are dev-only (`apply: 'serve'` for Vite, `command === 'dev'` for Astro, `nuxt.options.dev` for Nuxt, etc.). Production builds are no-ops. The Shadow-DOM widget is also marked `data-hover="true"` so any Playwright run against production HTML filters it out trivially.
+
 ## Built on the shoulders of
 
 - [**`nexu-io/open-design`**](https://github.com/nexu-io/open-design) — the **Local CLI Agent First** architecture. Hover doesn't bundle any AI runtime; it `PATH`-scans for whatever coding-agent CLI the developer already has installed (`claude`, today) and treats it as a sidecar. The "local daemon as the only privileged process, agent-as-teammate" worldview, the strict-sandbox-by-default posture, and the per-invocation USD budget cap are all direct inspirations. Open Design proved the loop end-to-end for a *design* surface; Hover applies it to a *testing* surface, with the deterministic Playwright spec as the artifact instead of an HTML/PDF.
@@ -604,15 +646,16 @@ If your favourite agent isn't on this list (currently: `claude`, `codex`, `curso
 - **v0.7.x** — **Security testing + plugin API.** ✓ `@hover-dev/security` ships as the first optional plugin: HTTPS MITM proxy (mockttp, no Python / system CA), captured-flow inspector in the widget, MCP server giving the agent `list_flows / get_flow / replay_flow / clear_flows`, system prompt scoped to authz / frontend / compliance vulnerability classes. The plugin API behind it — `defineHoverPlugin` + declarative manifest + namespaced hooks — lets third-party packages contribute modes, MCP servers, Chrome flags, and prompt fragments without touching `@hover-dev/core`.
 - **v0.8.x** — **Multi-framework source attribution + integration overhaul.** ✓ The v0.4.x JSX stamp generalises to four frameworks: `.jsx`/`.tsx` (Babel parser, covers React / Solid / Preact), `.vue` (`@vue/compiler-sfc`, host-element filter so PascalCase + kebab-case components are skipped), `.svelte` (`svelte/compiler` modern AST, gates on `RegularElement`), `.astro` (`@astrojs/compiler`, async WASM-backed). All four report the `<` character's 1-indexed line + column for cross-framework consistency. Distribution: a new private `@hover-dev/transform-source` package is inlined into each of the 5 integration shims (vite / astro / nuxt / next / webpack) via `tsup`'s `noExternal`, so consumers `pnpm add` only the shim they need and the transform lands inside the shim's own `dist/`. Plus `@hover-dev/next` gains plugin support via `register()`'s second argument (a `PluginSpec[]` — bare module specifier or `{ module, options }`) so `@hover-dev/security` and future third-party plugins wire into Next without dragging Node-only deps into the Edge bundle. Also includes Next 15 `register-node` resolution fix for `.next/server` layout and docs polish around `autoLaunchChrome` + site nav version.
 - **v0.9.x** — **Widget plugin-UI protocol + cursor-agent.** ✓ Plugins now contribute their own widget surface via a new `window.__HOVER_WIDGET__` host API — namespaced CSS, declarative DOM mutations, toolbar buttons, full-panel overlays, WS message handlers, and `onActivate` / `onDeactivate` callbacks. Single-mode exclusivity invariant: at most one plugin's contributions are visible at any moment, and default mode equals "no plugin active." `@hover-dev/security` migrates off the hardcoded `client.js` branches v0.7 introduced — it now owns its network panel, flow rendering, and orange theme as a real widget plugin. Default mode listens for `modes` changes and hides its own widgets (Record / Fix) when a plugin mode takes over; plugins never need to know default's selectors. Bonus: `cursor-agent` joins the agent registry as a third option alongside `claude` and `codex` (soft sandbox, ⚠ in the dropdown).
-- **v0.10.x** — **Multi-tab / cross-origin agent reliability + 3 more agents.** ✓ **(you are here)** System-prompt addendum teaches the agent how to handle popup-based payment flows (Stripe-style Checkout, "Pay with X"), OAuth redirect chains, and post-popup state on the original tab — explicit rules for `browser_tabs(list/select)`, post-`window.close` refocus, and the postMessage handoff. `examples/payment-provider` upgraded from a one-button approve/decline to a realistic two-step card + OTP flow with simulated 3DS latency. New `pnpm bench-multi-tab` benchmark scores agent success rate end-to-end across N runs so prompt changes can be A/B-tested. `aider`, `gemini-cli`, and `qwen-code` join the agent registry (soft sandbox, ⚠ in the dropdown) — `claude` + `codex` + `cursor-agent` + the new three = 6 supported agents.
-- **v0.11.x** — planned — **Recording semantics for security mode.** Re-purpose the Record button while a security mode (or future probing mode) is active so a session captures the agent's replay decisions + asserts the server response shape, crystallising into a security regression spec. Becomes a security-side change now that the widget plugin-UI protocol is in place — zero changes to core widget code.
-- **v0.12.x or sibling repo** — planned — **Chrome extension.** Drops the bundler-plugin dependency so Hover can drive *any* tab (staging URLs, third-party sites). Likely lives in a separate repo (`hover-extension`) rather than this monorepo because Web Store releases are manual and the extension's release cadence shouldn't gate on monorepo PRs. Loses source attribution (no transform ran) but gains universal page coverage.
+- **v0.10.x** — **Multi-tab / cross-origin agent reliability + 3 more agents.** ✓ System-prompt addendum teaches the agent how to handle popup-based payment flows (Stripe-style Checkout, "Pay with X"), OAuth redirect chains, and post-popup state on the original tab — explicit rules for `browser_tabs(list/select)`, post-`window.close` refocus, and the postMessage handoff. `examples/payment-provider` upgraded from a one-button approve/decline to a realistic two-step card + OTP flow with simulated 3DS latency. New `pnpm bench-multi-tab` benchmark scores agent success rate end-to-end across N runs so prompt changes can be A/B-tested. `aider`, `gemini-cli`, and `qwen-code` join the agent registry (soft sandbox, ⚠ in the dropdown) — `claude` + `codex` + `cursor-agent` + the new three = 6 supported agents.
+- **v0.11.x** — **Spec resilience: ⟳ Re-record + Saved-sessions overlay + FAQ.** ✓ **(you are here)** When the UI shifts enough that a saved spec turns red, instead of editing the `.spec.ts` by hand, hit ⟳ Re-record. The agent reads the JSDoc `Original prompt:` from the spec, replays it against the *current* UI, and Hover overwrites the file with new selectors. Two ways to trigger: the widget's new **📜 Saved sessions** overlay (Skills + Specs tabs), or `pnpm hover re-record <spec>` from a terminal. CI itself remains pure Playwright — AI only at the *authoring* step, never the *running* step. New top-level FAQ in the README + docs site walks through the trade-off vs. Stagehand/Midscene's self-heal-at-CI model.
+- **v0.12.x** — planned — **Recording semantics for security mode.** Re-purpose the Record button while a security mode (or future probing mode) is active so a session captures the agent's replay decisions + asserts the server response shape, crystallising into a security regression spec. Becomes a security-side change now that the widget plugin-UI protocol is in place — zero changes to core widget code.
+- **v0.13.x or sibling repo** — planned — **Chrome extension.** Drops the bundler-plugin dependency so Hover can drive *any* tab (staging URLs, third-party sites). Likely lives in a separate repo (`hover-extension`) rather than this monorepo because Web Store releases are manual and the extension's release cadence shouldn't gate on monorepo PRs. Loses source attribution (no transform ran) but gains universal page coverage.
 
-v0.10.x is what you can use today.
+v0.11.x is what you can use today.
 
 ## Project status
 
-🟢 **v0.10.0 shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. v0.10 hardens the multi-tab / cross-origin agent path (the Stripe / OAuth / popup-checkout scenario) with explicit system-prompt rules and a new `pnpm bench-multi-tab` benchmark, plus brings the agent registry to six options (`claude` / `codex` / `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`). Earlier arcs: v0.9 (widget plugin-UI contribution protocol + `@hover-dev/security` migration), v0.8 (multi-framework source attribution + Next plugin support), v0.7 (Security testing plugin API + `@hover-dev/security` MITM proxy / captured-flow inspector), v0.6 (Voice mode — push-to-talk STT + spoken step narration, browser-native Web Speech API), v0.5 (Record + Exists / Says / Equals sub-toolbar), v0.4 (Click → Fix prompt + Vite source-attribution transform), v0.3 (Next.js Turbopack-native integration).
+🟢 **v0.11.0 shipped.** Dogfood-ready across all six host bundlers: Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5, and React Native Web. v0.11's central feature is **spec resilience**: when your UI changes enough that a saved Playwright spec turns red, click **⟳ Re-record** in the widget (or `pnpm hover re-record <spec>` from a terminal) — the agent replays the spec's original natural-language intent against the current UI and overwrites the file with new selectors. CI itself stays pure Playwright, no AI in the test loop. The widget's old **Saved skills** overlay becomes **📜 Saved sessions** with two tabs (Skills + Specs). New top-level FAQ in the README + docs site explains the resilience model. Earlier arcs: v0.10 (multi-tab agent reliability + `aider` / `gemini-cli` / `qwen-code`), v0.9 (widget plugin-UI contribution protocol + `@hover-dev/security` migration), v0.8 (multi-framework source attribution + Next plugin support), v0.7 (Security testing plugin API + `@hover-dev/security` MITM proxy / captured-flow inspector), v0.6 (Voice mode — push-to-talk STT + spoken step narration, browser-native Web Speech API), v0.5 (Record + Exists / Says / Equals sub-toolbar), v0.4 (Click → Fix prompt + Vite source-attribution transform), v0.3 (Next.js Turbopack-native integration).
 
 Tracking issues at [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues). Security reports go to the [Security Policy](./SECURITY.md).
 

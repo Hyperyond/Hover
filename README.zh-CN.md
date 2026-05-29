@@ -169,6 +169,7 @@ Hover **要**做的事：**让落盘的产物就是纯 `@playwright/test` 代码
   - **Save as Playwright spec** → 落盘到 `__vibe_tests__/<slug>.spec.ts`，selector 用 `getByRole / getByLabel / getByTestId`。JSDoc 头部带人话 Steps + Expected 块，方便非程序员 review。
   - **Save as Skill** → 落盘到 `.claude/skills/<slug>/SKILL.md`，未来对话里说一句 *"execute login-as-claude"* 就能重放。
   - **Save as Jira case** → 落盘到 `__vibe_tests__/<slug>.case.csv`，Xray 兼容的多行 CSV，直接导入 Jira / Xray / Zephyr Scale 成为 Manual Test issue。
+- **⟳ 一键重录 spec（v0.11 新增）。** UI 变化大到 spec 跑红时（按钮改名、label 拆分、role 调整），不用手改 `.spec.ts` —— 让 agent 用同样的意图在当前 UI 上重跑一遍。打开 widget 的 **📜 Saved sessions** overlay → **Specs** tab → 点对应 spec 的 **⟳ Re-record**。或者从终端跑 `pnpm hover re-record <spec>`。Agent 读 spec JSDoc 里的 `Original prompt:` 重放，Hover 用新 selector 覆盖文件。CI 本身仍然是纯 Playwright，AI 只在*重新写测试*那一步介入。详见下文 [FAQ：UI 变了怎么办](#faq)。
 - **录制模式自带检查** —— footer 切到 Record，手动跑一遍流程，得到跟 AI 驱动同样形状的 step 序列。录制时 sub-toolbar 让你切换下一次 click 捕获什么：
   - **● Record** —— 把 click / fill / select 录成 Playwright step（默认）
   - **✓ Exists** —— 检查元素出现：`expect(SEL).toBeVisible()`
@@ -464,6 +465,47 @@ hover({
 
 架构和边界约束写在 [CLAUDE.md](./CLAUDE.md) 里。各 package 的内部实现在 [packages/core/README.md](./packages/core/README.md)。
 
+## FAQ
+
+### UI 变了，存下来的 spec 怎么办？
+
+这是任何"AI 写 e2e 测试"产品的核心问题。Hover 的回答分三层：
+
+**1. 多数 UI 变化不破坏 spec。** Hover 生成的是 `getByRole / getByLabel / getByTestId` 这类语义 selector，不是 CSS class、不是 XPath。"Submit 按钮"在排版调整后还是"Submit 按钮"，spec 继续跑。
+
+**2. 当*语义*真的变了（按钮改名 "Sign in"、label 拆分、role 调整），spec 跑红。** 三个选项，从最便宜到最显式：
+
+- **Re-record（重录）。** 打开 widget 的 **📜 Saved sessions** overlay → **Specs** tab → 点 **⟳ Re-record**。或者终端跑 `pnpm hover re-record <spec>`。Agent 读 spec JSDoc 里的 `Original prompt:`（"log in then add a todo"），在*当前* UI 上重放一遍，Hover 用新 selector 覆盖 `.spec.ts`。约 30 秒、$0.10 一次。先 `git diff` 看一眼再 commit。
+- **手改。** Spec 是纯 `@playwright/test` 代码 —— `getByRole('button', { name: 'Submit' })` 改成 `'Sign in'`。你知道具体改了什么时最快。
+- **当 regression 处理。** 如果测试红是因为*流程*变了（不只是 selector），那就是测试在发现真 bug —— 改 app，不改 spec。
+
+**3. 为什么不在 CI 阶段做 AI self-heal**（Stagehand / Midscene 那种模式）：CI 烧 token 会持续 —— 每次跑测试、每个 PR、每个 nightly 都要 LLM 调用。Hover 让 CI 保持确定 + 免费，把 LLM 成本集中到你真正需要的"主动重录"那个时刻。
+
+### Skill 和 Spec 区别？
+
+来源相同（同一次 Hover session、同一个 Save card 同时落地），用法完全不同：
+
+| | **Skill**（`.claude/skills/<slug>/SKILL.md`） | **Spec**（`__vibe_tests__/<slug>.spec.ts`） |
+|---|---|---|
+| **谁读** | Claude / agent | Playwright（CI） |
+| **何时** | 未来对话说 *"execute &lt;skill&gt;"* | 每次 `pnpm test:e2e` / CI 跑 |
+| **失效模式** | Agent 当场适配 UI 变化（不写死 selector） | Selector 写死 → UI 语义变 → 需要 re-record 或手改 |
+| **确定性** | 尽力重放 | 硬契约 |
+
+Skill 是用来反复*探索*的；Spec 是用来反复*验证*的。很多 session 两个都值得存。
+
+### Hover 会不会另外起一个 headless Chromium？我 CI 已经够忙了。
+
+不会。`@hover-dev/core` 在 `<tmpdir>/hover-chrome` 启一个隔离的 debug Chrome，通过 CDP 连。它**不**会每次命令都新起 Chromium。CI 测试用的是你 `@playwright/test` 自己配的浏览器，跟 Hover 的 debug Chrome 完全无关。
+
+### Hover 会把我的源码 / DOM 上传到某个 SaaS 吗？
+
+不会。Hover 启动你 `PATH` 上的 coding-agent CLI（`claude`、`codex`、`cursor-agent`、…），由那个 CLI 跟自己的厂商（Anthropic、OpenAI、Cursor）通信。`@hover-dev/core` 自己没有任何 LLM SDK 代码、没有遥测、没有上传路径。Node 服务只绑 `127.0.0.1`。
+
+### 为什么 `astro build` / `next build` / `vite build` 产物里没有 widget？
+
+所有 bundler 集成都是 dev-only（Vite `apply: 'serve'`、Astro `command === 'dev'`、Nuxt `nuxt.options.dev` 等）。生产构建是 no-op。Shadow DOM widget 还带 `data-hover="true"` 标记，任何对生产 HTML 跑的 Playwright 都能轻松过滤掉它。
+
 ## 站在巨人肩膀上
 
 - [**`nexu-io/open-design`**](https://github.com/nexu-io/open-design) —— **Local CLI Agent First** 架构的来源。Hover 不打包任何 AI 运行时；它扫描 `PATH`，把开发者已经装好的 agent CLI（当前是 `claude`）当作 sidecar 调用。"本地 daemon 是唯一特权进程、agent 是队友" 的世界观、默认严格沙箱的姿态、每次调用 USD 预算上限 —— 都是直接借鉴。Open Design 在**设计**这个 surface 上把这一套跑通了；Hover 把它搬到**测试** surface，产物从 HTML/PDF 变成确定性的 Playwright spec。
@@ -484,15 +526,16 @@ hover({
 - **v0.7.x** —— **Security testing + 插件 API** ✓。`@hover-dev/security` 作为第一个可选插件发布：HTTPS MITM 代理（mockttp，零外部依赖）、widget 抓包面板、给 agent 的 MCP server（`list_flows / get_flow / replay_flow / clear_flows`），系统提示词限定在 authz / 前端 / 合规三类漏洞。背后的插件 API（`defineHoverPlugin` + 声明式 manifest + namespaced hooks）让第三方包能贡献 mode / MCP / Chrome 启动参数 / 提示词片段，不动 `@hover-dev/core`。
 - **v0.8.x** —— **多框架源码归因 + 集成层大修** ✓。v0.4.x 的 JSX stamp 推广到四种文件形态：`.jsx`/`.tsx`（Babel parser，覆盖 React / Solid / Preact）、`.vue`（`@vue/compiler-sfc`，host-element 过滤，PascalCase + kebab-case 组件都跳过）、`.svelte`（`svelte/compiler` modern AST，gate 在 `RegularElement`）、`.astro`（`@astrojs/compiler`，async，底层是 WASM）。四者都报 `<` 字符的 1-indexed 行 + 列，跨框架一致。分发方式：新建私有包 `@hover-dev/transform-source`，通过 `tsup` 的 `noExternal` 内联进五个集成 shim（vite / astro / nuxt / next / webpack）的 `dist/`，用户 `pnpm add` 只装一个 shim。另外 `@hover-dev/next` 通过 `register()` 的第二个参数（`PluginSpec[]` —— 裸 module specifier 字符串或 `{ module, options }`）拿到插件支持，`@hover-dev/security` 和未来的第三方插件能接入 Next 而不把 Node-only 依赖拖进 Edge bundle。同时含 Next 15 `register-node` 在 `.next/server` 布局下的解析修复，以及 `autoLaunchChrome` + 站点 nav 版本号的文档润色。
 - **v0.9.x** —— **Widget 插件 UI 协议 + cursor-agent** ✓。插件现在可以通过新的 `window.__HOVER_WIDGET__` host API 自己贡献 widget 表面 —— 带命名空间的 CSS、声明式 DOM mutation、toolbar 按钮、整页 overlay、WS 消息 handler、`onActivate` / `onDeactivate` 生命周期回调。单模式互斥不变量：任意时刻最多一个插件的贡献处于可见状态，默认模式就等于"没有插件激活"。`@hover-dev/security` 从 v0.7 那批硬编码进 `client.js` 的分支迁了出来 —— 它的网络面板、flow 渲染、橙色主题现在以真正的 widget plugin 形式装载。默认模式监听 `modes` 变化，自己负责在插件模式接管时藏起自己的 widget（Record / Fix）；插件不需要知道默认模式的 selector。彩蛋：`cursor-agent` 作为第三个 agent 进入 registry（软沙箱，下拉里带 ⚠ 标），与 `claude` 和 `codex` 并列。
-- **v0.10.x** —— **多 tab / 跨 origin agent 健壮性 + 三个新 agent** ✓ **（你在这里）**。System prompt 增量教 agent 怎么应对 popup 形式的支付流程（Stripe 风格 Checkout、"Pay with X"）、OAuth 跳转链、popup 关闭后原 tab 的状态 —— 显式规则覆盖 `browser_tabs(list/select)`、`window.close` 后的回切、postMessage 交接。`examples/payment-provider` 从一键 approve/decline 升级到真实两步流程（卡号 + OTP，含模拟 3DS 延迟）。新增 `pnpm bench-multi-tab` benchmark，按 N 次跑统计 agent 完整跑通的成功率，为 prompt 调优提供 A/B 数据。`aider`、`gemini-cli`、`qwen-code` 进入 agent registry（都是软沙箱，⚠ 标）—— 加上原来的 `claude` + `codex` + `cursor-agent` 共 6 个可选。
-- **v0.11.x** —— 规划中 —— **Security 模式下的录制语义。** 在 security 或其它探测模式启用时，把 Record 按钮重新定义：捕获 agent 的 replay 操作 + 断言服务端响应 shape，落盘成 security regression spec。借助 v0.9 widget 插件 UI 协议，这是一次纯插件侧改动 —— 核心 widget 代码零变更。
+- **v0.10.x** —— **多 tab / 跨 origin agent 健壮性 + 三个新 agent** ✓。System prompt 增量教 agent 怎么应对 popup 形式的支付流程（Stripe 风格 Checkout、"Pay with X"）、OAuth 跳转链、popup 关闭后原 tab 的状态 —— 显式规则覆盖 `browser_tabs(list/select)`、`window.close` 后的回切、postMessage 交接。`examples/payment-provider` 从一键 approve/decline 升级到真实两步流程（卡号 + OTP，含模拟 3DS 延迟）。新增 `pnpm bench-multi-tab` benchmark，按 N 次跑统计 agent 完整跑通的成功率，为 prompt 调优提供 A/B 数据。`aider`、`gemini-cli`、`qwen-code` 进入 agent registry（都是软沙箱，⚠ 标）—— 加上原来的 `claude` + `codex` + `cursor-agent` 共 6 个可选。
+- **v0.11.x** —— **Spec 弹性：⟳ Re-record + Saved sessions overlay + FAQ** ✓ **（你在这里）**。UI 变化大到 saved spec 跑红时，不用手改 `.spec.ts` —— 点 ⟳ Re-record。Agent 读 spec JSDoc 里的 `Original prompt:`，在*当前* UI 上重放，Hover 用新 selector 覆盖文件。两种触发：widget 新的 **📜 Saved sessions** overlay（Skills + Specs 两个 tab），或者终端 `pnpm hover re-record <spec>`。CI 本身保持纯 Playwright —— AI 只在*写测试*那步介入，不在*跑测试*。README + 文档站新加顶级 FAQ 章节解释这套弹性模型 vs Stagehand/Midscene 的 CI 自愈方案。
+- **v0.12.x** —— 规划中 —— **Security 模式下的录制语义。** 在 security 或其它探测模式启用时，把 Record 按钮重新定义：捕获 agent 的 replay 操作 + 断言服务端响应 shape，落盘成 security regression spec。借助 v0.9 widget 插件 UI 协议，这是一次纯插件侧改动 —— 核心 widget 代码零变更。
 - **v0.12.x 或独立仓库** —— 规划中 —— **Chrome 扩展。** 脱离 bundler 插件依赖，让 Hover 能驱动**任意** tab（staging URL、第三方站点）。可能在独立仓库（`hover-extension`）里维护而不放进 monorepo —— Web Store 上传是手动流程，扩展的发版节奏不应该被 monorepo PR 锁着。代价是没有源码归因（没 transform 跑过），换取通用页面覆盖。
 
-v0.10.x 是你今天能用的。
+v0.11.x 是你今天能用的。
 
 ## 项目状态
 
-🟢 **v0.10.0 已发布。** 全部六个宿主 bundler 都 dogfood 可用：Vite、Astro、Nuxt、Next.js (Turbopack)、webpack 5 和 React Native Web。v0.10 通过 system prompt 显式规则 + `pnpm bench-multi-tab` benchmark 加固多 tab / 跨 origin agent 路径（Stripe / OAuth / popup checkout 场景），并把 agent registry 扩到 6 个（`claude` / `codex` / `cursor-agent` / `aider` / `gemini-cli` / `qwen-code`）。前面的 arc：v0.9（widget 插件 UI 贡献协议 + `@hover-dev/security` 迁移）、v0.8（多框架源码归因 + Next 插件支持）、v0.7（Security testing 插件 API + `@hover-dev/security` MITM 代理 / 抓包面板）、v0.6（Voice mode —— push-to-talk STT + 进度朗读，纯浏览器原生 Web Speech API）、v0.5（Record + Exists / Says / Equals sub-toolbar）、v0.4（点击 → Fix prompt + Vite 源码归因）、v0.3（Next.js Turbopack 原生集成）。
+🟢 **v0.11.0 已发布。** 全部六个宿主 bundler 都 dogfood 可用：Vite、Astro、Nuxt、Next.js (Turbopack)、webpack 5 和 React Native Web。v0.11 的核心是 **spec 弹性**：UI 变化大到 saved Playwright spec 跑红时，点 widget 里的 **⟳ Re-record**（或终端 `pnpm hover re-record <spec>`）—— agent 用 spec 里存的原始自然语言意图在当前 UI 上重放，Hover 用新 selector 覆盖文件。CI 本身保持纯 Playwright，测试 loop 里不进 AI。Widget 老的 **Saved skills** overlay 升级为 **📜 Saved sessions**，带 Skills + Specs 两个 tab。README + 文档站新加顶级 FAQ 章节讲清这套弹性模型。前面的 arc：v0.10（多 tab agent 健壮性 + `aider` / `gemini-cli` / `qwen-code`）、v0.9（widget 插件 UI 贡献协议 + `@hover-dev/security` 迁移）、v0.8（多框架源码归因 + Next 插件支持）、v0.7（Security testing 插件 API + `@hover-dev/security` MITM 代理 / 抓包面板）、v0.6（Voice mode —— push-to-talk STT + 进度朗读，纯浏览器原生 Web Speech API）、v0.5（Record + Exists / Says / Equals sub-toolbar）、v0.4（点击 → Fix prompt + Vite 源码归因）、v0.3（Next.js Turbopack 原生集成）。
 
 Issue 跟踪：[github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues)。安全问题报告走 [Security Policy](./SECURITY.md)。
 

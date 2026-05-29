@@ -13,6 +13,7 @@
  *     { type: 'skill-saved',     payload: { name, path } }
  *     { type: 'skill-exists',    payload: { slug, existingPath } }
  *     { type: 'skills-list',     payload: { skills: SkillSummary[] } }
+ *     { type: 'specs-list',      payload: { specs: SpecSummary[] } }
  *     { type: 'spec-saved',      payload: { name, path } }
  *     { type: 'spec-exists',     payload: { slug, existingPath } }
  *     { type: 'case-csv-saved',  payload: { name, path } }
@@ -20,7 +21,12 @@
  *     { type: 'error',           payload: { message } }
  *
  *   client → server
- *     { type: 'command',       payload: { text, sessionId? } }
+ *     { type: 'command',       payload: { text, sessionId?, reRecord?: { slug } } }
+ *                                                  // when reRecord.slug is set, the
+ *                                                  // service collects tool_use events
+ *                                                  // into a step list and on a clean
+ *                                                  // session_end overwrites
+ *                                                  // __vibe_tests__/<slug>.spec.ts
  *     { type: 'cancel' }
  *     { type: 'check-cdp',     payload: { pageUrl } }                 // "is this widget in the debug Chrome?"
  *     { type: 'launch-chrome', payload: { pageUrl } }                 // start debug Chrome, navigate to pageUrl
@@ -29,6 +35,7 @@
  *     { type: 'save-spec',     payload: { name, description, steps, assertions?, overwrite? } }
  *     { type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
  *     { type: 'list-skills' }
+ *     { type: 'list-specs' }                                            // ask for every spec under __vibe_tests__/, with parsed JSDoc headers
  *     { type: 'list-agents' }                                          // ask for the full agent registry + install status
  *     { type: 'switch-agent',  payload: { agentId } }                  // set the service's current agent; broadcasts to all connections
  *
@@ -52,7 +59,8 @@ import { getAgent } from './agents/registry.js';
 import type { InvokeEvent } from './agents/types.js';
 import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
 import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
-import { listSkills } from './skills/writeSkill.js';
+import { listSkills, type SkillStep } from './skills/writeSkill.js';
+import { listSpecs } from './specs/listSpecs.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
 import {
@@ -605,6 +613,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         send(ws, { type: 'skills-list', payload: { skills } });
         return;
       }
+      if (msg.type === 'list-specs') {
+        // Widget asks for every spec under <devRoot>/__vibe_tests__/ so it
+        // can render the Specs tab in the Saved-sessions overlay. Each
+        // summary carries `originalPrompt` (parsed from the JSDoc header)
+        // so the Re-record button can resubmit it as a normal command.
+        const specs = await listSpecs(devRoot);
+        send(ws, { type: 'specs-list', payload: { specs } });
+        return;
+      }
       if (msg.type === 'save-spec') {
         await handleSaveArtifact(ws, msg, devRoot, SPEC_CONFIG);
         return;
@@ -631,6 +648,16 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         typeof msg.payload?.sessionId === 'string' && msg.payload.sessionId.length > 0
           ? msg.payload.sessionId
           : undefined;
+      // Re-record mode: when the client (widget Specs tab or hover CLI)
+      // passes `reRecord: { slug }`, we collect tool_use events server-side
+      // into a SkillStep[] and, on session_end with no error, overwrite the
+      // existing __vibe_tests__/<slug>.spec.ts. This is the same flow the
+      // widget uses for "Save as Spec", but the spec already exists and is
+      // being regenerated for the current UI.
+      const reRecordSlug =
+        msg.payload && typeof msg.payload === 'object' && 'reRecord' in msg.payload
+          ? ((msg.payload as { reRecord?: { slug?: unknown } }).reRecord?.slug as string | undefined)
+          : undefined;
       if (typeof text !== 'string' || !text.trim()) return;
       if (busy) {
         send(ws, {
@@ -643,6 +670,16 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       busy = true;
       cancelled = false;
       inflight = new AbortController();
+      // Re-record step collector — populated as tool_use events stream by,
+      // consumed at session_end to overwrite the original spec. Empty unless
+      // reRecordSlug is set on this command. We seed with a synthetic
+      // `user` step so writeSpec's JSDoc Original-prompt: line carries the
+      // text the agent was actually given (which is the prompt we read out
+      // of the existing spec — the same one we're regenerating).
+      const reRecordSteps: SkillStep[] = [];
+      if (reRecordSlug) {
+        reRecordSteps.push({ kind: 'user', text });
+      }
       try {
         // Build the MCP config first — it's pure local file IO and lets
         // us assert plugin-contributed servers landed in the config even
@@ -767,6 +804,60 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         })) {
           if (cancelled || ws.readyState !== WebSocket.OPEN) return;
           send(ws, { type: 'event', payload: ev });
+          // Re-record collection. Mirror what widget client.js does on the
+          // way past tool_use events: accumulate into a SkillStep[] so we
+          // can write a fresh spec when the session ends. We do this only
+          // when this command was launched in re-record mode; ordinary
+          // commands don't need server-side step retention (widget owns
+          // that for normal saves).
+          if (reRecordSlug && ev.kind === 'tool_use') {
+            reRecordSteps.push({
+              kind: 'step',
+              tool: ev.tool,
+              input: ev.input,
+            });
+          }
+          if (reRecordSlug && ev.kind === 'session_end') {
+            // Cancelled or errored runs: don't overwrite — the existing
+            // spec is still valid. Tell the client what happened.
+            if (ev.isError) {
+              sendIfOpen(ws, {
+                type: 'error',
+                payload: {
+                  message:
+                    `Re-record failed: ${ev.summary ?? 'agent reported an error'}. ` +
+                    `Original spec left unchanged.`,
+                },
+              });
+            } else {
+              // Snapshot the agent's final summary into a synthetic `done`
+              // step so writeSpec's `Outcome:` header reflects the new run.
+              if (ev.summary) {
+                reRecordSteps.push({ kind: 'done', summary: ev.summary });
+              }
+              // Overwrite. writeSpec uses the slug to name the file; we
+              // pass the original slug verbatim so the path is stable.
+              try {
+                const { writeSpec } = await import('./specs/writeSpec.js');
+                const result = await writeSpec({
+                  devRoot,
+                  name: reRecordSlug,
+                  steps: reRecordSteps,
+                  overwrite: true,
+                });
+                sendIfOpen(ws, {
+                  type: 'spec-saved',
+                  payload: { name: reRecordSlug, path: result.path },
+                });
+              } catch (e) {
+                const m = e instanceof Error ? e.message : String(e);
+                sendIfOpen(ws, {
+                  type: 'error',
+                  payload: { message: `Re-record could not write spec: ${m}` },
+                });
+              }
+            }
+          }
         }
       } catch (err) {
         // A user-initiated cancel() already sent a synthetic session_end

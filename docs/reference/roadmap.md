@@ -14,19 +14,22 @@ What's shipped, what's in flight.
 | **v0.7.x** | **Security testing + plugin API** — `@hover-dev/security` (HTTPS MITM, captured-flow inspector, IDOR / authz probing MCP) + `defineHoverPlugin` manifest API behind it | ✅ Shipped |
 | **v0.8.x** | **Multi-framework source attribution + integration overhaul** — JSX / Vue / Svelte / Astro `data-hover-source` stamps via the private `@hover-dev/transform-source`; `@hover-dev/next` gains plugin support via `register()`'s second arg | ✅ Shipped |
 | **v0.9.x** | **Widget plugin-UI protocol + cursor-agent** — `window.__HOVER_WIDGET__` host API (namespaced CSS / DOM mutations / toolbar buttons / overlays / WS message handlers / lifecycle); `@hover-dev/security` migrates onto it; `cursor-agent` joins the registry | ✅ Shipped |
-| **v0.10.x** | **Multi-tab agent reliability + 3 more agents** — system-prompt addendum for popup checkouts / OAuth chains / post-popup state, `pnpm bench-multi-tab` for A/B'ing prompt changes, two-step card+OTP `examples/payment-provider`, `aider` + `gemini-cli` + `qwen-code` in the registry | ✅ Shipped (**you are here**) |
-| **v0.11.x** | Recording semantics for security mode — security regression specs from captured flows + agent replays | 🟡 Planned |
-| **v0.12.x or sibling repo** | Chrome extension — drops bundler-plugin dependency, drives any tab (staging, third-party). Likely a separate `hover-extension` repo (Web Store cadence shouldn't gate on monorepo PRs). Loses source attribution, gains universal coverage | 🟡 Planned |
+| **v0.10.x** | **Multi-tab agent reliability + 3 more agents** — system-prompt addendum for popup checkouts / OAuth chains / post-popup state, `pnpm bench-multi-tab` for A/B'ing prompt changes, two-step card+OTP `examples/payment-provider`, `aider` + `gemini-cli` + `qwen-code` in the registry | ✅ Shipped |
+| **v0.11.x** | **Spec resilience: ⟳ Re-record + Saved-sessions overlay + FAQ** — when a saved spec breaks (UI changed), Re-record button (widget) or `pnpm hover re-record <spec>` (CLI) replays the JSDoc `Original prompt:` against the current UI and overwrites the file. Widget gains the Skills+Specs tabbed overlay. README + docs site gain a top-level FAQ explaining why we don't self-heal at CI time | ✅ Shipped (**you are here**) |
+| **v0.12.x** | Recording semantics for security mode — security regression specs from captured flows + agent replays | 🟡 Planned |
+| **v0.13.x or sibling repo** | Chrome extension — drops bundler-plugin dependency, drives any tab (staging, third-party). Likely a separate `hover-extension` repo (Web Store cadence shouldn't gate on monorepo PRs). Loses source attribution, gains universal coverage | 🟡 Planned |
 
-## v0.11.x scope (planned)
+## v0.12.x scope (planned)
 
 - **Recording semantics for security mode.** Re-purpose the Record button while a security mode (or future probing mode) is active so a session captures the agent's replay decisions + asserts the server response shape, crystallising into a security regression spec. Now a security-side change thanks to the v0.9 widget plugin-UI protocol — zero changes to core widget code.
 
-## v0.12.x+ scope (planned)
+## v0.13.x+ scope (planned)
 
 - **Chrome extension** as a sibling product. Targets the "AI tests any live site" use case (staging URLs, third-party sites, multi-origin flows) — distinct from the Vite-plugin product line which targets "AI rewrites your dev-server's source." Likely a separate `hover-extension` repo because Chrome Web Store releases are manual and would mis-fit this monorepo's auto-publish workflow.
 
-## Beyond v0.11.x
+- **Re-record `--failed` / `--all`.** Batched spec resilience: feed Playwright's failure list into `hover re-record --failed` to re-record only the broken specs in one pass. v0.11 ships single-spec re-record on purpose ([rationale in FAQ](/faq#why-no-re-record-all-or-failed)) but the batched form is on the roadmap once we have real signal from how single-spec usage shakes out.
+
+## Beyond v0.12.x
 
 - **Voice mode Pro** (opt-in) — Deepgram Nova-3 streaming STT + ElevenLabs Flash / Cartesia Sonic TTS as an env-var-gated upgrade for users who want sub-100ms TTFA or higher-fidelity 中文 recognition. LLM stays on the user's local CLI agent — only the I/O adapters are cloud. Brings new privacy boundary (audio leaves the browser); will be opt-in, never default.
 - **AI-compiled spec output** — `writeSpec.ts` calls the local CLI agent to AI-compile `state.messages` + `state.assertions` into a polished `.spec.ts`, falling back to the existing deterministic codegen on failure. The AI is an authoring-time aid, not a CI dependency.
