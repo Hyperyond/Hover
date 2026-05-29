@@ -37,8 +37,12 @@
   const starBtn = $('.starbtn');
   const skillsOverlay = $('.skills-overlay');
   const skillsListEl = $('.skills-list-items');
-  const skillsCountEl = $('.skills-overlay .count');
+  const skillsCountEl = $('.skills-count');
   const skillsCloseBtn = $('.skills-close');
+  // Specs tab — v0.11 added. Same overlay as Skills (tabbed), so the
+  // close button is shared.
+  const specsListEl = $('.specs-list-items');
+  const specsCountEl = $('.specs-count');
   const assertBtn = $('.assertbtn');
   const assertCountEl = $('.assert-count');
   const recordBtn = $('.record-btn');
@@ -1345,11 +1349,26 @@
     pending.delete(kind);
   };
 
-  // ───────────────────────── skills overlay ─────────────────────────
+  // ───────────────────────── saved-sessions overlay ─────────────────────────
+  //
+  // The overlay carries two tabs:
+  //   • Skills — replayable agent instructions. Self-adapting (agent
+  //     re-resolves selectors each run), so they're "list, click to
+  //     replay, no maintenance" surface.
+  //   • Specs — Playwright tests under __vibe_tests__/. CI runs them
+  //     pure, no AI. v0.11 adds a [⟳ Re-record] action per spec — the
+  //     agent replays the original prompt on the current UI and
+  //     overwrites the file.
 
   const requestSkillsList = () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'list-skills' }));
+    }
+  };
+
+  const requestSpecsList = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'list-specs' }));
     }
   };
 
@@ -1401,11 +1420,105 @@
     }));
   };
 
+  const renderSpecs = (specs) => {
+    if (!specsListEl || !specsCountEl) return;
+    specsCountEl.textContent = String(specs.length);
+    specsListEl.innerHTML = '';
+    if (specs.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'skills-empty';
+      empty.textContent = 'No saved specs yet. Run a session, then click "Save as → Playwright spec" on the result card.';
+      specsListEl.appendChild(empty);
+      return;
+    }
+    const fmtRelative = (ms) => {
+      const diff = Date.now() - ms;
+      const min = Math.floor(diff / 60_000);
+      if (min < 1) return 'just now';
+      if (min < 60) return `${min}m ago`;
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return `${hr}h ago`;
+      const d = Math.floor(hr / 24);
+      return `${d}d ago`;
+    };
+    for (const s of specs) {
+      const row = document.createElement('div');
+      row.className = 'skill-row spec-row';
+      const n = document.createElement('div');
+      n.className = 'skill-name';
+      n.textContent = s.slug;
+      const d = document.createElement('div');
+      d.className = 'skill-desc';
+      d.textContent = s.originalPrompt
+        ? s.originalPrompt
+        : '(hand-authored — no Original prompt header; cannot re-record)';
+      const meta = document.createElement('div');
+      meta.className = 'skill-slug';
+      meta.textContent = fmtRelative(s.mtimeMs);
+      row.appendChild(n);
+      row.appendChild(d);
+      row.appendChild(meta);
+      // Re-record action — disabled when the spec has no `Original prompt`
+      // header (we have nothing to feed the agent).
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'spec-rerecord-btn';
+      action.textContent = '⟳ Re-record';
+      action.setAttribute('data-tooltip', 'Replay original prompt against current UI; overwrite this spec');
+      if (!s.originalPrompt) {
+        action.disabled = true;
+        action.setAttribute('data-tooltip', 'Spec has no Original prompt header — re-record needs the intent string');
+      } else {
+        action.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          reRecordSpec(s);
+        });
+      }
+      row.appendChild(action);
+      specsListEl.appendChild(row);
+    }
+  };
+
+  const reRecordSpec = (spec) => {
+    if (running || !ws || ws.readyState !== WebSocket.OPEN || !spec.originalPrompt) return;
+    closeSkillsOverlay();
+    addMessage({ kind: 'user', text: `re-record "${spec.slug}": ${spec.originalPrompt}` });
+    setRunning(true);
+    ws.send(JSON.stringify({
+      type: 'command',
+      payload: {
+        text: spec.originalPrompt,
+        // No sessionId — re-record is a fresh session, not a continuation.
+        // The reRecord field tells the service to overwrite the spec on
+        // a clean session_end.
+        reRecord: { slug: spec.slug },
+      },
+    }));
+  };
+
+  // ─── tab switching ─────────────────────────────────────────────────
+  const sessionsTabs = root.querySelectorAll('.sessions-tab');
+  const sessionsPanes = root.querySelectorAll('.sessions-pane');
+  const activateSessionsTab = (which) => {
+    sessionsTabs.forEach((t) => {
+      const on = t.dataset.tab === which;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    sessionsPanes.forEach((p) => {
+      p.hidden = p.dataset.tab !== which;
+    });
+  };
+  sessionsTabs.forEach((t) => {
+    t.addEventListener('click', () => activateSessionsTab(t.dataset.tab));
+  });
+
   const openSkillsOverlay = () => {
     skillsOverlay.classList.add('open');
     skillsOverlay.setAttribute('aria-hidden', 'false');
     skillsBtn.classList.add('active');
     requestSkillsList();
+    requestSpecsList();
   };
 
   const closeSkillsOverlay = () => {
@@ -3104,6 +3217,8 @@
         handleArtifactExists('case-csv', p.slug, p.existingPath);
       } else if (msg.type === 'skills-list') {
         renderSkills(msg.payload?.skills ?? []);
+      } else if (msg.type === 'specs-list') {
+        renderSpecs(msg.payload?.specs ?? []);
       } else if (msg.type === 'cdp-status') {
         const p = msg.payload ?? {};
         const launching = p.launching === true;

@@ -81,13 +81,47 @@
 
   <div class="body" aria-live="polite"></div>
 
-  <div class="skills-overlay" aria-hidden="true">
-    <div class="skills-header">
-      Saved skills · <span class="count">0</span>
+  <!--
+    Saved sessions overlay — Skills tab (replayable agent instructions)
+    and Specs tab (Playwright tests for CI). Same generation source (a
+    finished Hover session), but the consumers + failure semantics
+    differ — Skills run via agent so they self-adapt to UI changes,
+    Specs need re-recording when selectors break. See FAQ in the README
+    for the full distinction.
+  -->
+  <div class="skills-overlay sessions-overlay" aria-hidden="true">
+    <div class="sessions-header">
+      <span class="sessions-title">Saved sessions</span>
+      <div class="sessions-tabs" role="tablist">
+        <button class="sessions-tab active" type="button" role="tab" data-tab="skills" aria-selected="true">
+          Skills <span class="sessions-tab-count skills-count">0</span>
+        </button>
+        <button class="sessions-tab" type="button" role="tab" data-tab="specs" aria-selected="false">
+          Specs <span class="sessions-tab-count specs-count">0</span>
+        </button>
+      </div>
       <span style="flex:1"></span>
-      <button class="iconbtn skills-close" type="button" aria-label="Close skills" data-tooltip="Close">×</button>
+      <button class="iconbtn skills-close" type="button" aria-label="Close" data-tooltip="Close">×</button>
     </div>
-    <div class="skills-list-items"></div>
+
+    <div class="sessions-pane skills-pane" data-tab="skills">
+      <p class="sessions-pane-hint">
+        Replayable agent instructions — say <em>"execute &lt;skill&gt;"</em> in any
+        future conversation to run again. Self-adapt to UI changes because
+        the agent re-resolves selectors at runtime.
+      </p>
+      <div class="skills-list-items"></div>
+    </div>
+
+    <div class="sessions-pane specs-pane" data-tab="specs" hidden>
+      <p class="sessions-pane-hint">
+        Playwright tests under <code>__vibe_tests__/</code>. Run in CI with no
+        AI. When the UI changes enough that selectors break, hit
+        <strong>Re-record</strong> — the agent replays the original prompt
+        against the current UI and overwrites the spec.
+      </p>
+      <div class="specs-list-items"></div>
+    </div>
   </div>
 
   <div class="agents-overlay" aria-hidden="true">

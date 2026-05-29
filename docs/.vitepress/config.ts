@@ -100,6 +100,7 @@ export default defineConfig({
       { text: 'Get started', link: '/get-started/' },
       { text: 'Features', link: '/features/' },
       { text: 'Reference', link: '/reference/' },
+      { text: 'FAQ', link: '/faq' },
       { text: 'Development', link: '/development/' },
       {
         text: `v${HOVER_VERSION}`,
@@ -131,6 +132,7 @@ export default defineConfig({
             { text: 'Security testing', link: '/features/security' },
             { text: 'Voice mode', link: '/features/voice-mode' },
             { text: 'Save as Spec', link: '/features/save-as-spec' },
+            { text: 'Re-record a spec', link: '/features/re-record' },
             { text: 'Save as Skill', link: '/features/save-as-skill' },
             { text: 'Save as Jira case', link: '/features/save-as-jira-case' },
             { text: 'Record mode', link: '/features/record-mode' },

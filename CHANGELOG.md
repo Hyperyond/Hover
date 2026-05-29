@@ -6,6 +6,37 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-05-29
+
+The "spec resilience" release. Hover's central trade-off vs. Stagehand / Midscene has always been: we ship deterministic Playwright specs that run in CI without AI tokens, but those specs are brittle when the UI changes enough to break semantic selectors. v0.11 closes the loop with a **⟳ Re-record** workflow — read the spec's existing `Original prompt:` JSDoc header, replay it against the current UI, and overwrite the file with new selectors. Two entry points: the widget's new Saved-sessions overlay (Skills + Specs tabs), and a new `pnpm hover re-record <spec>` CLI subcommand. Plus a top-level FAQ in the README and docs site explaining the model.
+
+### Added
+
+- **⟳ Re-record from the widget.** New **📜 Saved sessions** overlay (replaces the old single-purpose Saved-skills overlay). Two tabs: **Skills** (existing list of `.claude/skills/<slug>/SKILL.md` entries) and **Specs** (new list of `__vibe_tests__/<slug>.spec.ts` files under `devRoot`). Each Spec row carries a **⟳ Re-record** button that fires the same WS `command` shape with a new `reRecord: { slug }` field — the service collects tool_use events, and on a clean `session_end` overwrites the spec via `writeSpec({ overwrite: true })`. Hand-authored specs (no `Original prompt:` header) list but show a disabled Re-record button with a tooltip explaining why.
+- **`pnpm hover re-record <spec>` CLI subcommand** (`packages/cli/src/re-record.ts`, ~250 lines). Boots a temporary `@hover-dev/core` service, parses the spec's JSDoc header locally for fail-fast UX, sends the prompt with `reRecord: { slug }`, prints the resulting `git diff`, and tells you the accept/reject commands. Flags: `--dry-run` (run the agent without overwriting), `--cwd` (target a monorepo workspace), `--port` (override service port; auto-bumps). Picks up `HOVER_AGENT` / `HOVER_MODEL` / `HOVER_CDP` env vars like `pnpm smoke`. Uses Node 22+'s `globalThis.WebSocket` so the CLI doesn't drag in `ws` as a dep.
+- **`listSpecs` + `parseSpecHeader` library** in `@hover-dev/core` (`packages/core/src/specs/listSpecs.ts`, 145 lines + 13 vitest cases). Lists every `*.spec.ts` under `__vibe_tests__/` newest-first by mtime, with the parsed JSDoc header (`Original prompt:`, `Outcome:`, `Steps:`, `Expected:`) attached. Tolerant of: missing JSDoc (hand-authored specs), reordered sections, long prompts that wrap, JSDoc comments that appear after the first `test(` (ignored).
+- **Service-side `reRecord` support** in the `command` handler. When `payload.reRecord.slug` is set, the service accumulates a `SkillStep[]` from streamed `tool_use` events (mirroring what the widget does), then on a clean `session_end` calls `writeSpec({ overwrite: true, name: slug, steps })`. The service publishes `spec-saved` to confirm; errors surface as `error` messages. Cancelled or errored runs do **not** overwrite the original spec.
+- **WS protocol additions** documented in `service.ts`:
+  - `client → server` `list-specs` — ask for the current spec list.
+  - `server → client` `specs-list { specs: SpecSummary[] }` — response.
+  - `client → server` `command { ..., reRecord?: { slug } }` — replay-and-overwrite intent.
+- **FAQ section in the README + docs site.** Top-level questions: "My UI changed and my saved spec breaks — what now?", "What's the difference between a Skill and a Spec?", "Will Hover spawn another headless Chromium?", "Does Hover send my source code to a hosted service?", "Why doesn't the widget show up in production builds?". The first question is the load-bearing one — it answers the most-asked X / GitHub comment about AI-authored e2e tests.
+- **`docs/features/re-record.md`** — full walkthrough of the feature (when to use, how it works, both entry points, flags, caveats).
+- **Updated `docs/features/save-as-spec.md`** — replaced the placeholder with the full spec-format reference, including the selector strategy and the link to Re-record for when selectors do break.
+
+### Changed
+
+- **Widget Skills overlay → Saved sessions overlay.** Same button in the header (📚 icon kept for visual continuity), same WS-driven loading, but now tabbed: Skills (default) and Specs. Per-tab hint paragraphs make the distinction explicit ("Skills self-adapt to UI changes; Specs need re-recording when selectors break"). Tab counts in the header chip update on every list refresh.
+- **Roadmap reshuffled.** v0.11 ✓ Spec resilience. v0.12 (was v0.11) → Security mode recording semantics. v0.13 (was v0.12) → Chrome extension. "Re-record `--failed` / `--all`" added as a Beyond entry.
+
+### Internal
+
+- The widget's `state.flows` plumbing from v0.9 stays untouched — Specs tab is its own state path.
+- The CLI re-record's local JSDoc parser is a deliberate duplicate of `parseSpecHeader` in `@hover-dev/core/specs/listSpecs.ts` (single regex match). Keeps the CLI's cold-start path light — no dynamic import of @hover-dev/core just to read 3 lines.
+- `pnpm typecheck` clean across all 10 publishable packages.
+- `pnpm --filter @hover-dev/core test`: 176 tests pass (163 prior + 13 new for `parseSpecHeader` / `listSpecs`).
+- `pnpm test:e2e`: 5 Playwright tests pass on `examples/basic-app` (no widget UI regressions from the overlay rewrite).
+
 ## [0.10.0] — 2026-05-29
 
 The "multi-tab agent reliability + more agents" release. Hardens the cross-origin / popup-checkout / OAuth-redirect path that v0.7-v0.9 left wobbly — the agent now has explicit system-prompt rules for `browser_tabs(list/select)`, post-`window.close` refocus, and the postMessage handoff back to the original tab. The `examples/payment-provider` sandbox upgrades from a one-button approve/decline to a realistic two-step card + OTP flow with simulated 3DS latency, and a new `pnpm bench-multi-tab` benchmark scores the full end-to-end run across N iterations. Plus `aider`, `gemini-cli`, and `qwen-code` join the agent registry — six supported agents now.
