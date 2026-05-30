@@ -6,8 +6,4 @@ The **Result card** holds the narrative summary (PASS / FAIL + steps the agent t
 
 Hover's system prompt teaches the agent to emit this structured block at the end of every run, so QA reading the saved spec can scan the bug list without scrolling through tool calls.
 
-::: info This page is a placeholder
-Full content coming soon, including the Findings markdown grammar Hover parses (`extractFindings` in `reducer.js`) and how each severity tier maps to a colour and an icon.
-:::
-
 ![Findings card](/07-findings-card.png)

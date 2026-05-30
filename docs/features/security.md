@@ -1,6 +1,6 @@
 # Security testing
 
-> Status: **production**, shipped since v0.7, on the widget plugin-UI protocol since v0.9. As of v0.9 the orange mode bar, the network panel, the flow row rendering, and the `security:flow:*` WS handlers are all contributed by `packages/security/src/widget.js` via the new `window.__HOVER_WIDGET__` host API — `@hover-dev/core/client.js` no longer carries any security-specific branches. Recording semantics for security sessions are tracked for v0.11.x.
+> Status: **production**, shipped since v0.7, on the widget plugin-UI protocol since v0.9. As of v0.9 the orange mode bar, the network panel, the flow row rendering, and the `security:flow:*` WS handlers are all contributed by `packages/security/src/widget.js` via the new `window.__HOVER_WIDGET__` host API — `@hover-dev/core/client.js` no longer carries any security-specific branches. Recording semantics for security sessions shipped in v0.12 — see [Save as Security spec](/features/security-spec).
 
 `@hover-dev/security` is Hover's first optional plugin. Switch the widget into **Security testing** mode and Hover starts capturing every HTTPS call your dev page makes — then lets the AI agent re-issue any of those calls with mutations to probe for IDOR / authentication bypass / parameter tampering. Findings save as plain Playwright specs that run in CI without the proxy.
 
@@ -45,7 +45,7 @@ The CA private key persists under `<your-project>/.hover/ca/ca.key`. The shipped
 
    The agent uses `mcp__hover_dev_security_flows__list_flows` to enumerate the API surface, `get_flow` to inspect specific requests, and `replay_flow` to test mutations.
 
-7. When findings show up in the Result + Findings cards, click **Save as Spec** to crystallize a Playwright regression test.
+7. When findings show up in the Result + Findings cards, click **Save as → Security spec** to crystallise the recorded `replay_flow` checks into a `__vibe_tests__/<slug>.security.spec.ts` regression test that runs in CI with vanilla `@playwright/test`. See [Save as Security spec](/features/security-spec).
 
 ## What the agent looks for
 
@@ -155,4 +155,4 @@ See [Reference → Plugin API](/reference/plugin-api) for the manifest shape `@h
 - **Service workers** — Playwright's `page.route()` historically can't see SW-mediated requests. The MITM proxy bypasses this (it's at the network layer, not the renderer layer), so capture works fine. But if your saved spec relies on observing a SW-routed request, you'll need to express it as `page.request.fetch()` (which goes around the SW) rather than `page.route()`.
 - **HTTP/3 / QUIC** — Chrome will quietly downgrade through the proxy. Not visible as h3 in the captured flow list.
 - **Cross-origin iframes** — captured, but the widget's panel currently flattens the flow list; correlating which iframe a flow came from is future work.
-- **Session recording for security sessions** — the **Record** button is hidden in security mode for now. Its current semantics (record clicks → spec) don't match security workflow. The right semantics ("record a security session = captured flows + agent replays → security regression spec") is a future iteration.
+- **Session recording for security sessions** — the classic **Record** button (record clicks → spec) is hidden when security mode is engaged, since click→spec semantics don't apply to a network-probing session. The security equivalent **is** supported in v0.12: the agent calls `replay_flow({ intent, expectStatus })` to record security checks, and **Save as → Security spec** crystallises them into a Playwright regression spec. See [Save as Security spec](/features/security-spec).

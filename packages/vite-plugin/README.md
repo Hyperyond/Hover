@@ -1,6 +1,6 @@
 # vite-plugin-hover
 
-Vite plugin that injects the Hover chat widget into your dev server. The developer types a natural-language instruction; an agent on the user's PATH (`claude`, today) drives a real (non-headless) debug Chrome that Hover launches under an isolated profile at `<tmpdir>/hover-chrome`, via CDP + Playwright MCP; verified sessions crystallize into `__vibe_tests__/<slug>.spec.ts` files for plain Playwright CI runs.
+Vite plugin that injects the Hover chat widget into your dev server. The developer types a natural-language instruction; an agent on the user's PATH (one of `claude`, `codex`, `cursor-agent`, `aider`, `gemini-cli`, `qwen-code`) drives a real (non-headless) debug Chrome that Hover launches under an isolated profile at `<tmpdir>/hover-chrome`, via CDP + Playwright MCP; verified sessions crystallize into `__vibe_tests__/<slug>.spec.ts` files for plain Playwright CI runs.
 
 Part of the [Hover](https://github.com/Hyperyond/Hover) monorepo. See the top-level README for the full pitch and architecture.
 
@@ -65,7 +65,7 @@ export default defineConfig({
 });
 ```
 
-See [`@hover-dev/security`](https://www.npmjs.com/package/@hover-dev/security) for the canonical plugin example, and the [plugin API reference](https://hover-docs.vercel.app/reference/plugin-api) for the full manifest shape (including the v0.9 widget host API).
+See [`@hover-dev/security`](https://www.npmjs.com/package/@hover-dev/security) for the canonical plugin example, and the [plugin API reference](https://hover-docs.vercel.app/reference/plugin-api) for the full manifest shape (including the v0.9 widget host API and the v0.12 `saveHandlers` / `saveEntries` API for contributing Save-dropdown entries).
 
 ## What it does
 

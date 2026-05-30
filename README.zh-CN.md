@@ -31,7 +31,7 @@
 
 在你的 dev 页面打开浮动聊天框，用中文（或者你喜欢的任何语言）描述要验证什么，看着 AI 真实地操作你的应用。一遍跑通后，点 **Save as spec** —— Hover 会写出一份标准的 `@playwright/test` 文件，CI 跑它的时候**完全不需要 AI 在场**。
 
-**v0.7 新功能：** 装上 `@hover-dev/security`，同一个 widget 多出一个 **Security testing 模式** —— agent 检查捕获到的 API 调用并做 mutation 重放，探测 IDOR、越权、参数篡改、PII 泄漏。发现的问题同样落盘成 Playwright 测试。详见下文 [Security testing](#security-testing)。
+装上 `@hover-dev/security`，同一个 widget 多出一个 **Security testing 模式** —— agent 检查捕获到的 API 调用并做 mutation 重放，探测 IDOR、越权、参数篡改、PII 泄漏。发现的问题同样落盘成 Playwright 测试。详见下文 [Security testing](#security-testing)。
 
 **无需 API key，不按 token 计费。** Hover 调用你 `PATH` 上已经装好的 coding-agent CLI（claude / codex），跑在你已经付费的订阅里。
 
@@ -89,7 +89,7 @@
 
 ### Bundler 覆盖
 
-下面六个目标的页面内容都一样（counter + todo 烟雾页），但底层 bundler / 框架不同 —— 每个 Hover 集成包都有自己专属的 dogfood 落点。
+下面前五个目标都是同样的 counter + todo 烟雾页，但底层 bundler / 框架不同 —— 每个 Hover 集成包都有自己专属的 dogfood 落点；第六个 `payment-provider` 是故意不装插件的第三方域，给 e-commerce 的跨标签页流程用。
 
 | 示例 | Bundler / 框架 | Hover 包 | 端口 |
 |---|---|---|---|
@@ -114,7 +114,7 @@ Hover 只服务"浏览器能跑起来"的前端。**React Native（iOS / Android
 |---|---|---|
 | **Playwright Codegen** | 录制你的点击 → `.spec.ts`。无 AI、无 auth | 不会思考——只能照搬你的点击 |
 | **Stagehand / Midscene** | AI 增强的测试；两家都做了缓存，稳态 CI 跑命中缓存就跳过 LLM。需要配 **OpenAI / Anthropic API key**——cache miss 时按 token 计费 | 跑测试仍然需要**它们的 SDK + 仓库里那份缓存文件**。不可移植到普通的 Playwright runner |
-| **Hover** | AI 只在**探索**时驱动浏览器一次；同时产出**确定性的 spec**、**可重放的 agent skill** 和**可直接导入 Jira 的测试用例**。**不需要 API key —— Hover 直接调用你 `PATH` 上已经装好的 coding-agent CLI**（claude / codex），跑在你已付费的 Claude Pro/Max 或 ChatGPT 订阅里 | 落盘的 spec 对 UI 改动是脆的——坏了就重跑 agent（CI 时不会自愈） |
+| **Hover** | AI 只在**探索**时驱动浏览器一次；同时产出**确定性的 spec**、**可重放的 agent skill** 和**可直接导入 Jira 的测试用例**。**不需要 API key —— Hover 直接调用你 `PATH` 上已经装好的 coding-agent CLI**（claude / codex / cursor-agent / aider / gemini-cli / qwen-code），跑在你已付费的 Claude Pro/Max 或 ChatGPT 订阅里 | 落盘的 spec 对 UI 改动是脆的——坏了就重跑 agent（CI 时不会自愈） |
 
 Hover **不打算**做的事：当一个更好的"测试时 AI 运行时"。Stagehand 的缓存 + 自愈机制比我们能造的成熟，Midscene 的视觉 fallback 能处理 canvas / iOS / Android 目标我们碰不到。
 
@@ -157,8 +157,8 @@ Hover **要**做的事：**让落盘的产物就是纯 `@playwright/test` 代码
 
 ## 你现在就能用的
 
-- **每个 bundler 各一份插件。** Vite、Astro、Nuxt、Next.js（Turbopack）、webpack 5、React Native Web 全覆盖。插件往 dev 页面注入一个 Shadow DOM widget，生产构建里完全 no-op，并打上 `data-hover="true"` 标记让你自己的 Playwright 跑测试时自动跳过它。
-- **🛡️ Security testing 模式（v0.7 新）。** 在原插件基础上装 `@hover-dev/security`，widget 会多出一个 Security 模式。debug Chrome 走本地 HTTPS MITM 代理；agent 能看到所有 API 调用、做 mutation 重放，探测 IDOR / 越权 / 参数篡改 / 缺失安全 header / PII 泄漏等问题。最终结晶为不依赖代理就能在 CI 跑的 Playwright 测试。详见下文 [Security testing](#security-testing-1)。
+- **五个 bundler 集成 + RN Web。** Vite、Astro、Nuxt、Next.js（Turbopack）、webpack 5 各一份原生插件；React Native Web 通过 vite-plugin-hover + `react-native` → `react-native-web` alias 覆盖。插件往 dev 页面注入一个 Shadow DOM widget，生产构建里完全 no-op，并打上 `data-hover="true"` 标记让你自己的 Playwright 跑测试时自动跳过它。
+- **🛡️ Security testing 模式。** 在原插件基础上装 `@hover-dev/security`，widget 会多出一个 Security 模式。debug Chrome 走本地 HTTPS MITM 代理；agent 能看到所有 API 调用、做 mutation 重放，探测 IDOR / 越权 / 参数篡改 / 缺失安全 header / PII 泄漏等问题。最终结晶为不依赖代理就能在 CI 跑的 Playwright 测试。详见下文 [Security testing](#security-testing-1)。
 - **无需 API key、无需 `.env`、不按 token 计费。** Hover 调用你 `PATH` 上已经装好的 coding-agent CLI，跑在你已经付费的订阅里（Claude Pro / Max、ChatGPT Pro）。`@hover-dev/core` 这个包里没有任何 LLM SDK 代码——没有需要 auth 的东西。把你已付费的 agent 额度榨干。
 - **多 agent —— 今天就支持六种。** `claude`（硬沙箱，推荐）、`codex`、`cursor-agent`、`aider`、`gemini-cli`、`qwen-code`（后五个都是软沙箱，下拉里带 ⚠ 标）。服务启动时自动检测你 PATH 上装的哪个；widget 头部显示当前 agent 为 pill (`claude ▾`)，下拉可即时切换。加新 agent 是单文件 registry 改动。
 - **按 agent 不同的沙箱策略。** 硬沙箱 agent（claude）显式 allow/deny，只剩 Playwright MCP 能被调用；`Bash` / `Edit` / `Write` / `Read` / `WebFetch` 等全部明确 deny；支持 `--max-budget-usd` 硬上限。软沙箱 agent（codex）CLI 没有内置工具 deny list，我们用 `--sandbox read-only` + 严格 `developer_instructions` 系统提示约束；widget 会给软沙箱 agent 加 ⚠ 标，让你知道工具面更宽。
@@ -310,7 +310,7 @@ Agent 通过 CDP 操作 debug Chrome，每一步都有叙述，结束时渲染 R
 npx @hover-dev/cli add
 ```
 
-这个 CLI 会自动识别你的 bundler（Vite / Astro / Nuxt / Webpack），读 lockfile 决定用 pnpm / yarn / bun / npm 装包，装上对应的 Hover 包并 AST 改你的 config 文件。幂等 —— 重跑安全。
+这个 CLI 会自动识别你的 bundler（Vite / Astro / Nuxt / Next.js / Webpack），读 lockfile 决定用 pnpm / yarn / bun / npm 装包，装上对应的 Hover 包并 AST 改你的 config 文件。幂等 —— 重跑安全。
 
 如果想强制走某个 bundler：
 
@@ -318,6 +318,7 @@ npx @hover-dev/cli add
 npx @hover-dev/cli add --vite      # vite-plugin-hover
 npx @hover-dev/cli add --astro     # @hover-dev/astro
 npx @hover-dev/cli add --nuxt      # @hover-dev/nuxt
+npx @hover-dev/cli add --next      # @hover-dev/next
 npx @hover-dev/cli add --webpack   # webpack-plugin-hover
 ```
 
@@ -399,7 +400,7 @@ export default defineConfig({
 >
 > **基于 Webpack 的项目**（vanilla `webpack-dev-server`、Rspack、Rsbuild、走 `craco` 的老 CRA、走 `configureWebpack` 的老 Vue CLI）—— 请用 [`webpack-plugin-hover`](./packages/webpack-plugin/)，它挂在 `HtmlWebpackPlugin` 的 `alterAssetTagGroups` 钩子上。
 >
-> **Next.js** 自 16 起默认使用 Turbopack，而 Turbopack 不加载 webpack 插件。`next dev --webpack` 模式的用户可以手动接 `webpack-plugin-hover`（详见包 README）。Turbopack 原生的 `@hover-dev/next` 已经在路线图上。
+> **Next.js** 自 16 起默认使用 Turbopack，而 Turbopack 不加载 webpack 插件 —— 请用 [`@hover-dev/next`](./packages/next-integration/) 集成（三件套：`next.config.{ts,mjs,js}` 用 `withHover()` 包一层、`instrumentation.ts` 调 `register()` 启动 service、`app/layout.tsx` 里嵌 `<HoverScript />`）。`next dev --webpack` 模式的用户也可以选 `webpack-plugin-hover`。
 
 ## 插件选项
 
@@ -439,7 +440,7 @@ hover({
 
 ```
 ┌────────────────┐   聊天 (WebSocket)   ┌──────────────────┐
-│  Widget        │ ───────────────────▶ │  @hover/core     │
+│  Widget        │ ───────────────────▶ │  @hover-dev/core │
 │  (Shadow DOM,  │ ◀─────────────────── │  Node 服务        │
 │   在 dev 页面里) │   step 事件          │  (127.0.0.1)     │
 └────────────────┘                      └────────┬─────────┘
@@ -536,7 +537,7 @@ v0.12.x 是你今天能用的。
 
 ## 项目状态
 
-🟢 **v0.12.0 已发布。** 全部六个宿主 bundler 都 dogfood 可用：Vite、Astro、Nuxt、Next.js (Turbopack)、webpack 5 和 React Native Web。v0.12 闭合 v0.7 打开的 security testing loop：`@hover-dev/security` 激活时，agent 的 `replay_flow` MCP 工具新增 `intent` + `expectStatus` 参数，把每次 replay **记成 security check**；widget 的 Save-as 菜单多出 **Security spec** 入口，把 check 列表落盘为 `__vibe_tests__/<slug>.security.spec.ts` —— 纯 `@playwright/test`，CI 跑它不需要 MITM 或 agent。前面的 arc：v0.11（Spec 弹性 —— ⟳ Re-record + Saved sessions overlay + FAQ）、v0.10（多 tab agent 健壮性 + `aider` / `gemini-cli` / `qwen-code`）、v0.9（widget 插件 UI 贡献协议 + `@hover-dev/security` 迁移）、v0.8（多框架源码归因 + Next 插件支持）、v0.7（Security testing 插件 API + `@hover-dev/security` MITM 代理 / 抓包面板）、v0.6（Voice mode —— push-to-talk STT + 进度朗读，纯浏览器原生 Web Speech API）、v0.5（Record + Exists / Says / Equals sub-toolbar）、v0.4（点击 → Fix prompt + Vite 源码归因）、v0.3（Next.js Turbopack 原生集成）。
+🟢 **v0.12.0 已发布。** 全部五个宿主 bundler 集成都 dogfood 可用：Vite、Astro、Nuxt、Next.js (Turbopack)、webpack 5 —— 外加 React Native Web（跑在 Vite 上的示例）。v0.12 闭合 v0.7 打开的 security testing loop：`@hover-dev/security` 激活时，agent 的 `replay_flow` MCP 工具新增 `intent` + `expectStatus` 参数，把每次 replay **记成 security check**；widget 的 Save-as 菜单多出 **Security spec** 入口，把 check 列表落盘为 `__vibe_tests__/<slug>.security.spec.ts` —— 纯 `@playwright/test`，CI 跑它不需要 MITM 或 agent。前面的 arc：v0.11（Spec 弹性 —— ⟳ Re-record + Saved sessions overlay + FAQ）、v0.10（多 tab agent 健壮性 + `aider` / `gemini-cli` / `qwen-code`）、v0.9（widget 插件 UI 贡献协议 + `@hover-dev/security` 迁移）、v0.8（多框架源码归因 + Next 插件支持）、v0.7（Security testing 插件 API + `@hover-dev/security` MITM 代理 / 抓包面板）、v0.6（Voice mode —— push-to-talk STT + 进度朗读，纯浏览器原生 Web Speech API）、v0.5（Record + Exists / Says / Equals sub-toolbar）、v0.4（点击 → Fix prompt + Vite 源码归因）、v0.3（Next.js Turbopack 原生集成）。
 
 Issue 跟踪：[github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues)。安全问题报告走 [Security Policy](./SECURITY.md)。
 

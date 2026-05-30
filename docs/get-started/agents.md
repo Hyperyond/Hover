@@ -1,6 +1,6 @@
 # Pick an agent
 
-Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for. Two agents are wired today: `claude` (recommended) and `codex`. More are one file in [the registry](/reference/agent-registry).
+Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for. Six agents are wired today: `claude` (hard sandbox, recommended) and `codex` / `cursor-agent` / `aider` / `gemini-cli` / `qwen-code` (soft sandbox). More are one file in [the registry](/reference/agent-registry).
 
 ## Supported today
 
@@ -8,6 +8,10 @@ Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on y
 |---|---|---|
 | **Claude Code** (`claude`) | Hard — explicit allow/deny list, MCP-only tool surface, `--max-budget-usd` ceiling | **Recommended default.** Tightest blast radius. |
 | **OpenAI Codex** (`codex`) | Soft — no built-in-tool deny list at CLI level; uses `--sandbox read-only` + strict `developer_instructions` | Marked with a ⚠ badge in the widget so you know the surface is broader. |
+| **Cursor Agent** (`cursor-agent`) | Soft | Added in v0.9; ⚠ badge in widget dropdown |
+| **Aider** (`aider`) | Soft | Added in v0.10; ⚠ badge |
+| **Gemini CLI** (`gemini-cli`) | Soft | Added in v0.10; ⚠ badge |
+| **Qwen Code** (`qwen-code`) | Soft | Added in v0.10; ⚠ badge |
 
 The widget shows the active agent as a pill (`claude ▾`) in the header. Click it for a dropdown of every agent in the registry — installed ones in white, missing ones grey with copy-pasteable install hints.
 
@@ -41,7 +45,7 @@ Click the agent pill. Pick the new one. No restart required — the next prompt 
 
 Write an `AgentDescriptor` and register it in [`packages/core/src/agents/registry.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/agents/registry.ts). See [Agent registry](/reference/agent-registry) for the full interface.
 
-Candidates already on the radar: `cursor-agent`, `aider`, `gemini-cli`, `qwen-code`.
+Candidates not yet wired: `cline`, `continue`, `kilo` (see the comment in `registry.ts`).
 
 ## Cost & budget
 

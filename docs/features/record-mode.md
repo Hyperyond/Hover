@@ -8,7 +8,3 @@ Toggle **● Record** in the footer, do the flow manually, get the same step seq
 - **= Equals** — check an input / select / checkbox's current value
 
 Check modes are one-shot — after the click commits the assertion, you snap back to Record. The same Save card downstream takes everything: actions and checks bake into the same `.spec.ts`. The downstream save path doesn't care whether the steps came from a human or from Claude.
-
-::: info This page is a placeholder
-Full content coming soon — including the Fix-mid-recording flow (Record pauses while the Fix popover is open and resumes when you close it).
-:::

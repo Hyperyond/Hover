@@ -53,11 +53,12 @@ The agent's verification report renders as a Result card at the end. If it found
 
 ## Step 4 — Save the verified session
 
-Click the dropdown on the Result card. Three formats:
+Click the dropdown on the Result card. Three formats by default (four if `@hover-dev/security` is loaded):
 
 - **Save as Spec** → `__vibe_tests__/<slug>.spec.ts` using `getByRole` / `getByLabel` / `getByTestId`
 - **Save as Skill** → `.claude/skills/<slug>/SKILL.md` (replayable by saying "execute &lt;slug&gt;")
 - **Save as Jira case** → `__vibe_tests__/<slug>.case.csv` (Xray-compatible)
+- **Save as Security spec** → `__vibe_tests__/<slug>.security.spec.ts` (uses Playwright's `request` fixture for header/status assertions; only present when `@hover-dev/security` is registered)
 
 ## Step 5 — Run the spec without Hover
 

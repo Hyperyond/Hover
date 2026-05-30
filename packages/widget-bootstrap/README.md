@@ -14,7 +14,7 @@ All five consume this package to produce a byte-identical widget bundle regardle
 
 ## What this package owns
 
-- The four widget source files (`template.html`, `style.css`, `client.js`, `reducer.js`) that make up the floating chat widget.
+- The six widget source files (`template.html`, `style.css`, `client.js`, `reducer.js`, `voice.js`, `host.js`) that make up the floating chat widget. The widget plugin host (`host.js`) exposes `window.__HOVER_WIDGET__` so plugin packages (`@hover-dev/security`, future third-party plugins) can register modes, save entries, and panels without patching core widget code (v0.9+).
 - An mtime-keyed cache that re-reads + re-transforms the files only when they change on disk (preserving the "edit a widget file → reload page → see change" dev loop without paying for the read on every page request).
 - The exact preamble (`window.__HOVER_PORT__`, `window.__HOVER_CSS__`, `window.__HOVER_HTML__`) the widget client expects on boot.
 - The two regex-replace passes that strip ESM `export` keywords from `reducer.js` so it can concatenate cleanly into the widget IIFE.
