@@ -2818,6 +2818,19 @@
       sendBtn.disabled = true;
       textarea.disabled = true;
       addMessage({ kind: 'user', text: '(recording manual interactions)' });
+      // Capture the starting URL as the first step so the saved spec opens
+      // the right page before replaying clicks. Without this, a fresh
+      // Playwright run starts on `about:blank`, `getByRole(...)` finds
+      // nothing, and the first interaction times out with
+      // "element(s) not found" — looks like a Hover bug but is really
+      // a missing `await page.goto(...)`. Agent-driven sessions don't
+      // hit this because the agent calls `browser_navigate` itself; only
+      // manual Record needs the synthetic step.
+      addMessage({
+        kind: 'step',
+        tool: 'browser_navigate',
+        input: { url: window.location.href },
+      });
       recordStartIdx = state.messages.length;
       recordStartAssertionsCount = state.assertions.length;
       // Show sub-toolbar; default to Record mode. First-use hint above
