@@ -24,9 +24,9 @@ Hover takes the opposite position: **AI is for authoring tests, not running them
 
 ## My button is still in the DOM but moved behind a kebab menu — does the spec catch that?
 
-Yes, since the visible-state prelude shipped. **`getByRole` alone wouldn't catch this** — Playwright's locators default to "visible OR attached", so a button that drifted into a closed `<details>` / kebab / drawer is still in the role tree and the locator stays green. The spec would either silently fire `.click()` on a hidden element or time out generically.
+Yes — and the *how* is more nuanced than "we added a check that wasn't there." Playwright's `.click()` / `.fill()` / `.hover()` / `.selectOption()` / `.dblclick()` all auto-wait on actionability, which includes visibility — so even the old emit (`await page.getByRole(...).click()`) wouldn't have silently fired on a hidden element. It would have timed out after 30 seconds with a generic actionability error that reads like a flake.
 
-To close that gap, Hover emits a visibility prelude before every interaction:
+The visibility prelude Hover now emits is a **fast, semantically-clearer failure** rather than net-new detection:
 
 ```ts
 // Hover emits this:
@@ -37,12 +37,23 @@ To close that gap, Hover emits a visibility prelude before every interaction:
 }
 ```
 
-The `await expect(el).toBeVisible()` line fails fast with `Locator expected to be visible` when the button is in the role tree but no longer reachable — surfacing the drift as a real CI failure instead of a flake. Applies to `click` / `dblclick` / `hover` / `fill` / `selectOption`. `page.goto` and `page.keyboard.press` are page-level (no element) and stay one-liners.
+When the button drifts into a closed `<details>` / kebab / drawer, the `toBeVisible()` line fails in ~5 s with `Locator expected to be visible` — a category triage engineers immediately recognise as a UI regression rather than dismiss as a network blip. The same drift on the old emit would have stalled for 30 s and produced a `Timeout 30000ms exceeded ... element is not visible` actionability error that's easy to mis-classify as flake.
 
-Credit: the gap was [pointed out on X](https://github.com/Hyperyond/Hover/issues) — `getByRole` catches CSS churn but misses "still a button, now hidden behind a kebab menu" drift. Layering a visible-state check on top of the role tree closes that gap. The prelude is on by default; spec authors don't have to remember to add it.
+Net change:
 
-What this still doesn't catch:
-- **`disabled` buttons** — Playwright auto-waits for actionability, so the click eventually fires or times out with a generic flake message rather than a clean "this control was disabled" assertion. (Tighten by hand with `await expect(el).toBeEnabled()` where it matters.)
+| | Before (just `.click()`) | After (prelude + `.click()`) |
+|---|---|---|
+| Detection | Caught (Playwright actionability) | Caught (toBeVisible) |
+| Time to fail | ~30 s | ~5 s |
+| Error category | "Timeout" — reads like flake | "Locator expected to be visible" — reads like UI regression |
+| Spec self-documents intent | Implicit in `.click()` | Explicit in code |
+
+The change applies to `click` / `dblclick` / `hover` / `fill` / `selectOption`. `page.goto` and `page.keyboard.press` are page-level (no element) and stay one-liners.
+
+Credit: the gap was pointed out on X (and the framing sharpened in follow-up) — role-based locators *catch* this case via auto-wait, but the failure shape is poor. The prelude is on by default; spec authors don't have to remember to add it.
+
+What this still doesn't fix:
+- **`disabled` buttons** — Playwright auto-waits for actionability there too, so `.click()` on a disabled control still times out at 30 s with a generic message. (Tighten by hand with `await expect(el).toBeEnabled()` where it matters.) Same shape of failure as before for this case.
 - **An intermediate step quietly disappearing from the flow** — each step still passes individually; only by reading the JSDoc `Steps:` block can you tell something changed. The Re-record path handles this case (agent regenerates the full sequence against current UI).
 
 ## Why no `re-record --all` or `--failed`?
