@@ -17,4 +17,5 @@ Everything Hover does today.
 - **[Save as Spec](./save-as-spec)** — `__vibe_tests__/<slug>.spec.ts` using `getByRole / getByLabel / getByTestId`. Runs in CI without Hover.
 - **[Save as Skill](./save-as-skill)** — `.claude/skills/<slug>/SKILL.md`. Replay by saying `execute <slug>`.
 - **[Save as Jira case](./save-as-jira-case)** — `.case.csv`, imports straight into Jira / Xray / Zephyr.
+- **[Save as Security spec](./security-spec)** ✨ NEW (v0.12) — `__vibe_tests__/<slug>.security.spec.ts` using Playwright's `request` fixture. Crystallises authz / IDOR / parameter-tampering probes into CI-runnable regression specs. Requires `@hover-dev/security`.
 - **[Findings cards](./findings-cards)** — bugs and observations the agent flagged, severity-coloured. First-class output, not buried in narration.

@@ -6,7 +6,7 @@ Add Hover to a project you already have running. One command, one config edit, t
 
 - A Vite / Astro / Nuxt / Next.js / Webpack project — any framework Hover supports.
 - Node 22+ on PATH.
-- Either `claude` (Claude Code) or `codex` (OpenAI Codex) on PATH — Hover spawns whichever coding-agent CLI you already have. No new API keys.
+- Any supported coding-agent CLI on PATH — `claude`, `codex`, `cursor-agent`, `aider`, `gemini-cli`, or `qwen-code`. Hover spawns whichever you already have. No new API keys.
 
 ::: tip Don't have an agent CLI yet?
 - **Claude Code** — `npm install -g @anthropic-ai/claude-code`, then `claude login`. Uses the Claude Pro / Max subscription you might already pay for.

@@ -24,7 +24,3 @@ Outer HTML:
 ```
 
 The prompt is **fact-only** — no leading instructions for the agent to echo back, no "please open the right file" boilerplate. Just your intent (as a markdown blockquote) followed by what Hover observed.
-
-::: info This page is a placeholder
-Full content coming soon — including details on the likely-target descent (click a `<div>` wrapping a button → prompt auto-points to the inner button) and the DOM ancestor chain that catches wrapper-rendered hosts like styled-components / Radix Slot.
-:::

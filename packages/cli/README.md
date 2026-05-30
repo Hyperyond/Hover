@@ -1,6 +1,6 @@
 # @hover-dev/cli
 
-One-command setup for [Hover](https://github.com/Hyperyond/Hover) — detects your bundler, installs the right integration package, and wires it into your config file.
+One-command setup for [Hover](https://github.com/Hyperyond/Hover) — detects your bundler, installs the right integration package, and wires it into your config file. Also ships a `re-record` subcommand for refreshing saved Playwright specs against a drifted UI.
 
 ## Usage
 
@@ -10,7 +10,7 @@ No installation required. `npx` runs the latest published version on demand:
 npx @hover-dev/cli add
 ```
 
-That's it. The CLI:
+That's it. The `add` subcommand:
 
 1. **Reads your `package.json`** to figure out your bundler (Vite, Astro, Nuxt, Next.js, or Webpack).
 2. **Reads your lockfile** to pick the right package manager (pnpm, yarn, bun, or npm).
@@ -70,6 +70,22 @@ This is also what happens if you have no config file at all — many projects re
 pnpm add -D @hover-dev/cli
 pnpm hover add
 ```
+
+## Re-record a spec
+
+```bash
+npx @hover-dev/cli re-record <spec>
+```
+
+Regenerate a Hover-saved Playwright spec against the current UI. The CLI reads the spec's JSDoc `Original prompt:` header, boots a one-shot `@hover-dev/core` service, replays the prompt against your current dev server, and overwrites the file with new selectors.
+
+Flags:
+
+- `--dry-run` — run the agent end-to-end but don't write the file (preview cost / behaviour).
+- `--cwd <path>` — target a workspace inside a monorepo.
+- `--port <n>` — service port (default 51789; auto-bumps if busy).
+
+See the [Re-record a spec](https://hover-docs.vercel.app/features/re-record) feature page for the full walkthrough.
 
 ## License
 

@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Hover
   text: AI that hovers over your dev workflow
-  tagline: Speak or type natural-language instructions. Watch the agent drive your dev browser. Crystallize the verified session into a Playwright spec, a Skill, or a Jira case.
+  tagline: Speak or type natural-language instructions. Watch the agent drive your dev browser. Crystallize the verified session into a Playwright spec, a Security spec, a Skill, or a Jira case.
   actions:
     - theme: brand
       text: Get started →
@@ -25,8 +25,8 @@ features:
     link: /features/voice-mode
     linkText: Try Voice mode
   - icon: 🤖
-    title: Multi-agent — claude, codex, more
-    details: Hover spawns whichever coding-agent CLI you have on PATH. Subscription you already pay for — no per-token billing. One-click switching from the widget header.
+    title: Multi-agent — 6 CLIs supported
+    details: claude, codex, cursor-agent, aider, gemini-cli, qwen-code. Hover spawns whichever coding-agent CLI you have on PATH. Subscription you already pay for — no per-token billing. One-click switching from the widget header.
     link: /get-started/agents
     linkText: Pick your agent
   - icon: 💾

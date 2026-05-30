@@ -68,6 +68,7 @@ interface HoverPluginManifest {
   systemPromptAdditions?: HoverPluginSystemPromptAddition[];
   widgetEventTypes?: string[];                    // namespaces of events you'll broadcast
   widgetEntry?: string;                           // absolute path to plugin widget JS module (v0.9+)
+  saveHandlers?: HoverPluginSaveHandler[];
   hooks?: HoverHooks;
 }
 ```
@@ -152,6 +153,20 @@ const widgetEntry = fileURLToPath(new URL('./widget.js', import.meta.url));
 
 If absent, the plugin contributes no widget code (server-side-only plugin).
 
+### saveHandlers (v0.12+)
+
+```ts
+saveHandlers?: HoverPluginSaveHandler[];
+```
+
+Registers plugin-owned Save-dropdown entries. The widget broadcasts a `type`-keyed WS message when the user picks an entry; the matching server-side handler writes a file under the user's project and returns its path. Each `HoverPluginSaveHandler` has:
+
+- `type: string` — WS message type the widget will send. Convention: `save:<plugin>:<kind>` (e.g. `save:security:spec`).
+- `label: string` — human-readable label shown in the UI (also used in confirmation toasts).
+- `description?: string` — optional longer description for the dropdown row.
+- `activeInModes?: string[]` — modes in which this entry is offered. Defaults to the plugin's own mode.
+- `handle({ devRoot, payload })` → `Promise<{ path, slug }>` — async writer. Receives the user's project root and the widget-supplied payload (form field values); resolves with the absolute `path` of the written file and the `slug` used to name it.
+
 ## Widget host API (v0.9+)
 
 Plugin widget modules see one global: `window.__HOVER_WIDGET__`. Its surface is:
@@ -205,11 +220,30 @@ interface WidgetPluginSpec {
     render?: (container: HTMLElement, state: Record<string, unknown>) => void;
   }>;
 
+  saveEntries?: SaveEntrySpec[];
+
   onMessage?: Record<string, (payload: unknown, api: WidgetHost) => void>;
   onActivate?: (api: WidgetHost) => void;
   onDeactivate?: (api: WidgetHost) => void;
 }
 ```
+
+### saveEntries (widget, v0.12+)
+
+```ts
+saveEntries?: SaveEntrySpec[];
+```
+
+Adds plugin-owned entries to the widget's Save dropdown. Each `SaveEntrySpec` (see `packages/widget-bootstrap/src/widget/host.js`):
+
+- `type: string` — must match a server-side `HoverPluginSaveHandler.type` (e.g. `save:security:spec`).
+- `label: string` — dropdown row label.
+- `sub?: string` — optional sub-label / hint shown beneath the label.
+- `icon?: string` — optional inline-SVG string or unicode glyph.
+- `title?: string` — heading shown in the save dialog. Defaults to `label`.
+- `fields?: FieldSpec[]` — input fields rendered in the dialog. Defaults to a single name field. Each field: `{ id, label, placeholder?, required? }`.
+- `confirmLabel?: string` — button label. Defaults to `"Save"`.
+- `successMsgTemplate?: string` — toast template. Defaults to `'✓ saved "{name}" → {path}'`; `{name}` and `{path}` are substituted from the field values and the server-side response.
 
 ### `domMutations` is for plugin-owned DOM
 
@@ -231,7 +265,7 @@ Every plugin-supplied callback runs inside a try/catch inside the host. A plugin
 
 ### Reference: `packages/security/src/widget.js`
 
-The 187-line `packages/security/src/widget.js` is the canonical example. It registers `@hover-dev/security` against `modeId: 'security'`, contributes ~120 lines of namespaced CSS (the orange theme, flow row grid, status code colours, plugin-toolbar-badge), one toolbar button (`network` — opens the captured-flows overlay, badge counts captured flows), one overlay (`@hover-dev/security:network` — renders one row per captured flow), and two WS message handlers (`security:flow:added` / `security:flow:updated`). `onDeactivate` drops the captured flow list so re-entering security mode starts with a clean slate.
+The 224-line `packages/security/src/widget.js` is the canonical example. It registers `@hover-dev/security` against `modeId: 'security'`, contributes ~120 lines of namespaced CSS, one toolbar button (`network`), one overlay (`@hover-dev/security:network`), one `saveEntries` entry (`Security spec` in the Save dropdown, triggers writing `__vibe_tests__/<slug>.security.spec.ts`), and two WS message handlers (`security:flow:added` / `security:flow:updated`). `onDeactivate` drops the captured flow list so re-entering security mode starts with a clean slate.
 
 ## Hooks
 
@@ -284,6 +318,6 @@ Mode `conflictsWith` is currently informational; runtime enforcement lands in a 
 
 ## Reference implementation
 
-Read `packages/security/src/index.ts` end-to-end (~270 lines) — it exercises the manifest, mode, MCP server, Chrome flags, system prompt additions, hooks, and `widgetEntry` resolution.
+Read `packages/security/src/index.ts` end-to-end (~335 lines) — it exercises the manifest, mode, MCP server, Chrome flags, system prompt additions, hooks, `widgetEntry` resolution, and `saveHandlers` (Security spec output via `writeSecuritySpec`).
 
-For the widget side of the same plugin, `packages/security/src/widget.js` (~190 lines) is the canonical example — see the [Widget host API](#widget-host-api-v0-9) section above.
+For the widget side of the same plugin, `packages/security/src/widget.js` (~225 lines) is the canonical example — see the [Widget host API](#widget-host-api-v0-9) section above.

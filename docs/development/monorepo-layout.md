@@ -32,6 +32,7 @@ Each example runs on its own port and uses one of the bundler shims, so they dou
 | `webpack-app` | 5180 | Vanilla webpack 5 + `webpack-dev-server` |
 | `rn-web-app` | 5181 | React Native Web — RN components rendering to DOM |
 | `next-app` | 5182 | Next 16 App Router (Turbopack default) |
+| `turbo-monorepo` | — | turbo + pnpm-workspace with two Next.js 15 apps (`apps/web`, `apps/game`); reproduces the shape real users have when running `npx @hover-dev/cli add` on a turbo project; not part of `pnpm dev:example:*` |
 
 Concurrent examples are supported. The Hover service auto-bumps from `127.0.0.1:51789` up through `:51798`; each widget reads `window.__HOVER_PORT__` and connects only to its own service.
 

@@ -32,7 +32,7 @@ HOVER_AGENT=codex pnpm smoke                                   # switch agent fo
 
 ## Plugin smokes
 
-Optional plugins have their own smokes. `@hover-dev/security` ships five:
+Optional plugins have their own smokes. `@hover-dev/security` ships six:
 
 ```bash
 pnpm --filter @hover-dev/security smoke           # mitm primitives (no Chrome)

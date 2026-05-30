@@ -24,13 +24,13 @@ Hover takes the opposite position: **AI is for authoring tests, not running them
 
 ## Why no `re-record --all` or `--failed`?
 
-Both rejected on purpose for v0.11.
+Both rejected on purpose.
 
 **`--all`** would re-record every spec under `__vibe_tests__/`. Sounds convenient — but it burns LLM tokens on specs that were perfectly fine. With 20 specs in the project and 3 actually broken, `--all` pays for 17 unnecessary agent runs. It also produces git-diff noise across the 17 that don't need changing: same intent, different agent-chosen selector style, still a diff you have to review.
 
-**`--failed`** is the right shape of the answer — only re-record specs that Playwright reports as failing — and is on the v0.12 roadmap. It needs a first-class run-Playwright-and-collect-failures step the CLI doesn't yet ship.
+**`--failed`** is the right shape of the answer — only re-record specs that Playwright reports as failing — and remains on the roadmap for a future release. It needs a first-class run-Playwright-and-collect-failures step the CLI doesn't yet ship.
 
-For v0.11, the pattern is: CI tells you which specs are red, you re-record them one at a time and review each diff. Slightly slower, much cleaner history.
+The pattern is: CI tells you which specs are red, you re-record them one at a time and review each diff. Slightly slower, much cleaner history.
 
 ## Security spec auth setup — how do I run a security spec in CI when the auth cookies live in my debug Chrome?
 
