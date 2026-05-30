@@ -8,3 +8,21 @@ Toggle **● Record** in the footer, do the flow manually, get the same step seq
 - **= Equals** — check an input / select / checkbox's current value
 
 Check modes are one-shot — after the click commits the assertion, you snap back to Record. The same Save card downstream takes everything: actions and checks bake into the same `.spec.ts`. The downstream save path doesn't care whether the steps came from a human or from Claude.
+
+## Starting URL is captured (v0.13)
+
+When you press Record, Hover captures `window.location.href` as a synthetic `browser_navigate` step. That becomes the first `await page.goto(...)` in the saved spec, so Playwright opens the right page before replaying clicks.
+
+Without this step, a fresh Playwright run started on `about:blank`, `getByRole(...)` resolved to nothing, and the first interaction timed out with `element(s) not found` — looked like a Hover bug, was really a missing initial `goto`. Agent-driven sessions never hit this because the agent calls `browser_navigate` itself; only manual Record needed the synthetic step.
+
+## Reload before recording (v0.13, opt-in)
+
+The replay always starts from a clean page load (because `page.goto` is the first step). But if you recorded from a page that already had accumulated state — logged-in, filled forms, todos already added — the replay can't reach that same starting state.
+
+Open **Settings → Reload before recording** to flip on strict record/replay parity. When enabled:
+
+1. Pressing **● Record** shows a `confirm()` dialog.
+2. Click **OK** → the page reloads, the widget auto-resumes into recording mode after the reload, and you start from a fresh state.
+3. Click **Cancel** → recording is aborted (you opted into the stricter mode; "no, don't reload" means "let me think," not "record anyway from dirty state").
+
+Default is **off** because the common "I logged in, now record the post-login flow" case shouldn't force you to log in again. Flip it on when you want what the spec replays to exactly match what you recorded.
