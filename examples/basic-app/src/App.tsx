@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { WrapperLab } from './wrapper-lab';
+import { VisibilityLab } from './visibility-lab';
 
 export default function App() {
   const [user, setUser] = useState<string | null>(null);
@@ -109,6 +110,8 @@ export default function App() {
           </form>
         </div>
       </section>
+
+      <VisibilityLab />
 
       <WrapperLab />
     </main>
