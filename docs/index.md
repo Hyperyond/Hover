@@ -25,8 +25,8 @@ features:
     link: /features/voice-mode
     linkText: Try Voice mode
   - icon: 🤖
-    title: Multi-agent — 6 CLIs supported: claude, codex, cursor-agent, aider, gemini-cli, qwen-code. Hover spawns whichever coding-agent CLI you have on PATH.
-    details: Hover spawns whichever coding-agent CLI you have on PATH. Subscription you already pay for — no per-token billing. One-click switching from the widget header.
+    title: Multi-agent — 6 CLIs supported
+    details: claude, codex, cursor-agent, aider, gemini-cli, qwen-code. Hover spawns whichever coding-agent CLI you have on PATH. Subscription you already pay for — no per-token billing. One-click switching from the widget header.
     link: /get-started/agents
     linkText: Pick your agent
   - icon: 💾
