@@ -22,6 +22,29 @@ The Stagehand / Midscene model: tests "self-heal" by calling an LLM mid-run, ret
 
 Hover takes the opposite position: **AI is for authoring tests, not running them.** The saved `.spec.ts` is plain Playwright — `pnpm test:e2e` is deterministic and free. When the UI changes enough that selectors break, you trigger Re-record once, deliberately, and the new spec is again deterministic and free. The token cost concentrates at the moment you actually need a model, not amortised across thousands of regression runs.
 
+## My button is still in the DOM but moved behind a kebab menu — does the spec catch that?
+
+Yes, since the visible-state prelude shipped. **`getByRole` alone wouldn't catch this** — Playwright's locators default to "visible OR attached", so a button that drifted into a closed `<details>` / kebab / drawer is still in the role tree and the locator stays green. The spec would either silently fire `.click()` on a hidden element or time out generically.
+
+To close that gap, Hover emits a visibility prelude before every interaction:
+
+```ts
+// Hover emits this:
+{
+  const el = page.getByRole('button', { name: 'Submit' });
+  await expect(el).toBeVisible();
+  await el.click();
+}
+```
+
+The `await expect(el).toBeVisible()` line fails fast with `Locator expected to be visible` when the button is in the role tree but no longer reachable — surfacing the drift as a real CI failure instead of a flake. Applies to `click` / `dblclick` / `hover` / `fill` / `selectOption`. `page.goto` and `page.keyboard.press` are page-level (no element) and stay one-liners.
+
+Credit: the gap was [pointed out on X](https://github.com/Hyperyond/Hover/issues) — `getByRole` catches CSS churn but misses "still a button, now hidden behind a kebab menu" drift. Layering a visible-state check on top of the role tree closes that gap. The prelude is on by default; spec authors don't have to remember to add it.
+
+What this still doesn't catch:
+- **`disabled` buttons** — Playwright auto-waits for actionability, so the click eventually fires or times out with a generic flake message rather than a clean "this control was disabled" assertion. (Tighten by hand with `await expect(el).toBeEnabled()` where it matters.)
+- **An intermediate step quietly disappearing from the flow** — each step still passes individually; only by reading the JSDoc `Steps:` block can you tell something changed. The Re-record path handles this case (agent regenerates the full sequence against current UI).
+
 ## Why no `re-record --all` or `--failed`?
 
 Both rejected on purpose.

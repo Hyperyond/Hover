@@ -6,6 +6,11 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+### Added
+
+- **Visibility prelude in `writeSpec` emit** — every interaction step (`click` / `dblclick` / `hover` / `fill` / `selectOption`) is now wrapped in a block-scoped `{ const el = …; await expect(el).toBeVisible(); await el.<action>; }`. Closes a known gap in role-based locators that an external contributor pointed out on X: `getByRole` defaults to "visible OR attached", so a button that drifted into a closed `<details>` / kebab menu / drawer is still in the role tree, and the locator stays green while the actual flow degraded. Asserting visibility before each interaction makes that drift fail loudly with `Locator expected to be visible` rather than silently firing on a hidden element. `page.goto` / `page.keyboard.press` are page-level and remain one-liners. New FAQ entry "My button is still in the DOM but moved behind a kebab menu — does the spec catch that?" explains the failure modes the prelude does and doesn't cover (still does NOT cover: silently `disabled` buttons, intermediate-step deletions from the flow).
+- **9 new vitest cases** in `packages/core/tests/specs/writeSpec.test.ts` covering the prelude — one per element-targeting tool (`browser_click`/`_double_click`/`_hover`/`_type`/`_select_option`), plus three negative cases (no prelude for `browser_navigate` or `browser_press_key`, multi-field forms emit one prelude per field, chained interactions don't collide on the `const el` declaration).
+
 ## [0.12.0] — 2026-05-29
 
 The "security spec recording" release. Closes the security-testing loop opened in v0.7: when `@hover-dev/security` is active, the agent's `replay_flow` MCP tool now records replays as security checks (when given `intent` + `expectStatus`), and the widget's Save-as menu gains a **Security spec** entry that crystallises those checks into `__vibe_tests__/<slug>.security.spec.ts`. CI runs the spec without MITM, without the agent. Also adds two plugin extension points (`saveHandlers` server-side + `saveEntries` widget-side) that any plugin can use to register a custom save flow.

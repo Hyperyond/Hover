@@ -104,3 +104,170 @@ describe('writeSpec — JSDoc header', () => {
     expect(closes.length).toBe(1);
   });
 });
+
+/**
+ * v0.13 visible-state prelude: every interaction (click / dblclick / hover /
+ * fill / selectOption) is wrapped in a block-scoped expect(...).toBeVisible()
+ * check before the action. Catches the "still in the role tree but moved
+ * behind a closed disclosure widget" failure mode that `getByRole` alone
+ * misses by default.
+ *
+ * `page.goto` and `page.keyboard.press` are NOT element-targeting and stay
+ * one-liners.
+ */
+describe('writeSpec — visible-state prelude (v0.13)', () => {
+  const interactionTools: Array<{
+    tool: string;
+    input: Record<string, unknown>;
+    expectedAction: string;
+    expectedSelector: string;
+  }> = [
+    {
+      tool: 'browser_click',
+      input: { element: 'Submit button' },
+      expectedAction: 'el.click()',
+      expectedSelector: "getByRole('button', { name: \"Submit\" })",
+    },
+    {
+      tool: 'browser_double_click',
+      input: { element: 'Card link' },
+      expectedAction: 'el.dblclick()',
+      expectedSelector: "getByRole('link', { name: \"Card\" })",
+    },
+    {
+      tool: 'browser_hover',
+      input: { element: 'Tooltip target button' },
+      expectedAction: 'el.hover()',
+      expectedSelector: "getByRole('button', { name: \"Tooltip target\" })",
+    },
+    {
+      tool: 'browser_type',
+      input: { element: 'Email textbox', text: 'a@b.co' },
+      expectedAction: 'el.fill("a@b.co")',
+      expectedSelector: "getByRole('textbox', { name: \"Email\" })",
+    },
+    {
+      tool: 'browser_select_option',
+      input: { element: 'Plan combobox', values: ['pro'] },
+      expectedAction: 'el.selectOption("pro")',
+      expectedSelector: "getByRole('combobox', { name: \"Plan\" })",
+    },
+  ];
+
+  it.each(interactionTools)(
+    '$tool emits a block-scoped visibility prelude before $expectedAction',
+    async ({ tool, input, expectedAction, expectedSelector }) => {
+      const r = await writeSpec({
+        devRoot,
+        name: 'visible-prelude-' + tool,
+        steps: [
+          { kind: 'user', text: 'demo' },
+          { kind: 'step', tool, input },
+          { kind: 'done', summary: 'OK.' },
+        ],
+      });
+      const src = readFileSync(r.path, 'utf-8');
+      // The prelude must wrap the interaction in `{ … }`, hoist the locator
+      // to a local `el`, assert visibility, then fire the action.
+      expect(src).toContain('  {');
+      expect(src).toContain(`    const el = page.${expectedSelector};`);
+      expect(src).toContain('    await expect(el).toBeVisible();');
+      expect(src).toContain(`    await ${expectedAction};`);
+      expect(src).toContain('  }');
+      // And the prelude must come BEFORE the action — i.e. expect(el).toBeVisible
+      // appears earlier in the file than `await el.<action>`.
+      const visibleIdx = src.indexOf('await expect(el).toBeVisible()');
+      const actionIdx = src.indexOf(`await ${expectedAction}`);
+      expect(visibleIdx).toBeGreaterThan(-1);
+      expect(actionIdx).toBeGreaterThan(visibleIdx);
+    },
+  );
+
+  it('does NOT wrap browser_navigate in a prelude (no element targeted)', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'nav-no-prelude',
+      steps: [
+        { kind: 'user', text: 'just navigate' },
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/' } },
+        { kind: 'done', summary: 'OK.' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('await page.goto("/");');
+    expect(src).not.toContain('toBeVisible');
+  });
+
+  it('does NOT wrap browser_press_key in a prelude (page-level keyboard event)', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'press-no-prelude',
+      steps: [
+        { kind: 'user', text: 'press a key' },
+        { kind: 'step', tool: 'browser_press_key', input: { key: 'Enter' } },
+        { kind: 'done', summary: 'OK.' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('await page.keyboard.press("Enter");');
+    expect(src).not.toContain('toBeVisible');
+  });
+
+  it('emits one prelude per field of a browser_fill_form step', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'multi-field-prelude',
+      steps: [
+        { kind: 'user', text: 'fill form' },
+        {
+          kind: 'step',
+          tool: 'browser_fill_form',
+          input: {
+            fields: [
+              { name: 'Email', type: 'email', value: 'a@b.co' },
+              { name: 'Password', type: 'password', value: 'secret' },
+            ],
+          },
+        },
+        { kind: 'done', summary: 'OK.' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    // Two preludes — one for each field.
+    const visibilityChecks = src.match(/await expect\(el\)\.toBeVisible\(\)/g) ?? [];
+    expect(visibilityChecks.length).toBe(2);
+    // Each field's fill should appear inside its own block.
+    expect(src).toContain('el.fill("a@b.co")');
+    expect(src).toContain('el.fill("secret")');
+  });
+
+  it('produces well-formed JS — multiple interactions chain without name collisions', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'chained-interactions',
+      steps: [
+        { kind: 'user', text: 'chain three' },
+        { kind: 'step', tool: 'browser_click', input: { element: 'Login button' } },
+        { kind: 'step', tool: 'browser_type', input: { element: 'Email textbox', text: 'a' } },
+        { kind: 'step', tool: 'browser_click', input: { element: 'Submit button' } },
+        { kind: 'done', summary: 'OK.' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    // Three preludes; the `const el = …` declarations are block-scoped so
+    // they don't shadow each other (no "Identifier 'el' has already been
+    // declared" syntax error). Verify by counting the standalone prelude
+    // braces inside the test body — the test's own `});` ends with `)`
+    // and is not matched by the standalone-`}` pattern.
+    const body = src.split('async ({ page }) => {')[1] ?? '';
+    const openBraces = body.match(/^\s*\{$/gm) ?? [];
+    const closeBraces = body.match(/^\s*\}$/gm) ?? [];
+    expect(openBraces.length).toBe(3);
+    expect(closeBraces.length).toBe(3);
+    // Also assert that each `const el = …` is unique within its block
+    // scope — there should be exactly 3 declarations across the body
+    // and they should not be reported as redeclarations.
+    const elDecls = body.match(/const el =/g) ?? [];
+    expect(elDecls.length).toBe(3);
+  });
+});
