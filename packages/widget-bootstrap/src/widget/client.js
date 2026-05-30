@@ -76,6 +76,7 @@
   const settingsOverlay = $('.settings-overlay');
   const settingsCloseBtn = $('.settings-close');
   const settingsTtsToggle = $('.settings-tts-toggle');
+  const settingsReloadToggle = $('.settings-reload-toggle');
 
   // ───────────────────────── persistent state ─────────────────────────
   // Survives panel close, page reload, and AI-driven navigations within
@@ -279,12 +280,13 @@
   // and wipe everyone's messages. `ttsEnabled` defaults to true to keep
   // first-time experience aligned with what was shipped today.
   const SETTINGS_KEY = 'hover:settings:v1';
-  const settings = { ttsEnabled: true };
+  const settings = { ttsEnabled: true, reloadBeforeRecording: false };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (typeof parsed.ttsEnabled === 'boolean') settings.ttsEnabled = parsed.ttsEnabled;
+      if (typeof parsed.reloadBeforeRecording === 'boolean') settings.reloadBeforeRecording = parsed.reloadBeforeRecording;
     }
   } catch { /* corrupt / privacy mode */ }
   const saveSettings = () => {
@@ -1775,6 +1777,7 @@
   // settings.* field and a saveSettings() call on change.
   const openSettingsOverlay = () => {
     if (settingsTtsToggle) settingsTtsToggle.checked = settings.ttsEnabled;
+    if (settingsReloadToggle) settingsReloadToggle.checked = settings.reloadBeforeRecording;
     settingsOverlay.classList.add('open');
     settingsOverlay.setAttribute('aria-hidden', 'false');
     settingsBtn.classList.add('active');
@@ -1795,6 +1798,10 @@
     // Flush any in-flight utterances when turning OFF so the user gets
     // immediate silence rather than the current sentence finishing.
     if (!settings.ttsEnabled) speaker?.cancel();
+  });
+  settingsReloadToggle?.addEventListener('change', () => {
+    settings.reloadBeforeRecording = !!settingsReloadToggle.checked;
+    saveSettings();
   });
 
   // ───────────────────────── modes overlay ─────────────────────────
@@ -2880,11 +2887,47 @@
     }
   };
 
+  // sessionStorage flag survives a reload but not a tab close — exactly the
+  // window we want for "user pressed Record, confirmed reload, page is
+  // refreshing, resume recording on the new load". We set it before
+  // location.reload() and consume it once the widget initialises.
+  const RESUME_KEY = 'hover:resume-recording';
+
   recordBtn.addEventListener('click', () => {
     if (running) return;
     if (fixMode) return; // mutex with Fix
-    setRecording(!recording);
+    // Stopping an in-progress recording is unconditional — no confirm, no
+    // reload — symmetric with how it works today.
+    if (recording) {
+      setRecording(false);
+      return;
+    }
+    if (settings.reloadBeforeRecording) {
+      const ok = window.confirm(
+        'Reload the page before recording?\n\n' +
+        'This gives the saved spec a clean starting state to replay from. ' +
+        'Any unsaved page state (forms, in-memory data) will be lost.'
+      );
+      if (!ok) return;
+      try { sessionStorage.setItem(RESUME_KEY, '1'); } catch {}
+      window.location.reload();
+      return;
+    }
+    setRecording(true);
   });
+
+  // Post-reload resume: if the previous page wrote the resume flag, kick
+  // recording on once the widget is wired up. Use a queueMicrotask so the
+  // surrounding init finishes first (state, listeners, WebSocket) before
+  // we start mutating recording state.
+  try {
+    if (sessionStorage.getItem(RESUME_KEY) === '1') {
+      sessionStorage.removeItem(RESUME_KEY);
+      queueMicrotask(() => {
+        if (!recording && !running && !fixMode) setRecording(true);
+      });
+    }
+  } catch {}
 
   function recordStep(tool, input) {
     addMessage({ kind: 'step', tool, input });
