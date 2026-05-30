@@ -155,10 +155,19 @@ function renderSpec(
     if (s.kind !== 'step' || !s.tool) continue;
     const calls = translateStep(s.tool, s.input);
     for (const c of calls) {
+      // Each emitted line gets the test-body indent (2 spaces). Lines
+      // inside an emitInteraction block carry an additional 2 spaces of
+      // relative indent embedded in the line itself, so this single
+      // 2-space prefix produces correct 4-space nesting inside `{ … }`.
       lines.push(`  ${c}`);
       hasAwait = true;
     }
   }
+  // `expect` is imported at the top of the generated file regardless of
+  // whether assertions are present — the visibility preludes emitted by
+  // translateStep depend on it for any element-targeting step. (Cheap:
+  // unused imports get tree-shaken out of any future test bundle, and
+  // Playwright's runner doesn't care.)
 
   if (assertions.length > 0) {
     if (hasAwait) lines.push('');
@@ -187,30 +196,39 @@ function translateStep(tool: string, rawInput: unknown): string[] {
       return [`await page.goto(${JSON.stringify(path)});`];
     }
     case 'browser_click':
-      return [`await ${selectorFromDescription(String(input.element ?? ''))}.click();`];
+      return emitInteraction(selectorFromDescription(String(input.element ?? '')), 'click()');
     case 'browser_double_click':
-      return [`await ${selectorFromDescription(String(input.element ?? ''))}.dblclick();`];
+      return emitInteraction(selectorFromDescription(String(input.element ?? '')), 'dblclick()');
     case 'browser_hover':
-      return [`await ${selectorFromDescription(String(input.element ?? ''))}.hover();`];
+      return emitInteraction(selectorFromDescription(String(input.element ?? '')), 'hover()');
     case 'browser_fill_form': {
       const fields = (input.fields as unknown[] | undefined) ?? [];
-      return fields.map(raw => {
+      return fields.flatMap(raw => {
         const f = raw as { name?: string; type?: string; value?: string; element?: string };
         const value = String(f.value ?? '');
         const target = f.name ?? f.element ?? '';
-        return `await ${selectorForFormField(target, f.type)}.fill(${JSON.stringify(value)});`;
+        return emitInteraction(
+          selectorForFormField(target, f.type),
+          `fill(${JSON.stringify(value)})`,
+        );
       });
     }
     case 'browser_type': {
       const text = String(input.text ?? '');
       const target = String(input.element ?? '');
-      return [`await ${selectorFromDescription(target)}.fill(${JSON.stringify(text)});`];
+      return emitInteraction(
+        selectorFromDescription(target),
+        `fill(${JSON.stringify(text)})`,
+      );
     }
     case 'browser_select_option': {
       const target = String(input.element ?? '');
       const values = input.values as unknown[] | undefined;
       const val = (values && values.length > 0 ? values[0] : input.value) ?? '';
-      return [`await ${selectorFromDescription(target)}.selectOption(${JSON.stringify(String(val))});`];
+      return emitInteraction(
+        selectorFromDescription(target),
+        `selectOption(${JSON.stringify(String(val))})`,
+      );
     }
     case 'browser_press_key': {
       const key = String(input.key ?? '');
@@ -231,6 +249,41 @@ function translateStep(tool: string, rawInput: unknown): string[] {
     default:
       return [`// TODO: translate ${tool} (skipped — unknown tool for spec emission)`];
   }
+}
+
+/**
+ * Wrap an interaction (click / dblclick / hover / fill / selectOption) in a
+ * block-scoped visibility prelude. Replaces the prior one-liner emit:
+ *
+ *    // before
+ *    await page.getByRole('button', { name: 'Submit' }).click();
+ *
+ *    // after
+ *    {
+ *      const el = page.getByRole('button', { name: 'Submit' });
+ *      await expect(el).toBeVisible();
+ *      await el.click();
+ *    }
+ *
+ * Why: `getByRole` is "visible OR attached" by default. A button that drifted
+ * behind a closed `<details>` / kebab menu / drawer is still in the role tree,
+ * so the locator stays green AND `.click()` may still fire — but the actual
+ * user flow has degraded. Asserting visibility before each interaction makes
+ * that drift fail loudly with "Locator expected to be visible" instead of
+ * silently passing or timing out generically. Issue raised externally;
+ * the fix is a 1-emit change here.
+ *
+ * Block-scoped (`{ … }`) so each step's local `el` doesn't shadow the next.
+ * The 4-line shape keeps the diff readable when re-record regenerates a spec.
+ */
+function emitInteraction(selectorExpr: string, action: string): string[] {
+  return [
+    `{`,
+    `  const el = ${selectorExpr};`,
+    `  await expect(el).toBeVisible();`,
+    `  await el.${action};`,
+    `}`,
+  ];
 }
 
 /**

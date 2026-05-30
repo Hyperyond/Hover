@@ -36,25 +36,41 @@ The generated file has two layers:
 
 The `Original prompt:` line is **load-bearing**: [Re-record](/features/re-record) reads it to regenerate the spec when the UI changes.
 
-**2. The test body** — one `await page.<action>` per captured tool call:
+**2. The test body** — each captured tool call becomes a block-scoped block with a visibility prelude before the interaction:
 
 ```ts
 test('login + counter', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Email').fill('claude@sparkplay.io');
-  await page.getByLabel('Password').fill('demo1234');
-  await page.getByRole('button', { name: 'Submit' }).click();
-
-  const plusOne = page.getByRole('button', { name: '+ 1' });
-  await plusOne.click();
-  await plusOne.click();
-  await plusOne.click();
+  {
+    const el = page.getByRole('textbox', { name: 'Email' });
+    await expect(el).toBeVisible();
+    await el.fill('claude@sparkplay.io');
+  }
+  {
+    const el = page.getByRole('textbox', { name: 'Password' });
+    await expect(el).toBeVisible();
+    await el.fill('demo1234');
+  }
+  {
+    const el = page.getByRole('button', { name: 'Submit' });
+    await expect(el).toBeVisible();
+    await el.click();
+  }
+  // … three more +1 clicks, each in its own block …
 
   await expect(page.getByTestId('count')).toHaveText('03');
 });
 ```
 
-Element descriptions coming back from Playwright MCP (`"Submit button"`, `"Email textbox"`) are deterministically translated to `getByRole(role, { name })` / `getByLabel(name)` calls — no LLM at code-emit time.
+Element descriptions coming back from Playwright MCP (`"Submit button"`, `"Email textbox"`) are deterministically translated to `getByRole(role, { name })` / `getByLabel(name)` calls — no LLM at code-emit time. `page.goto` and `page.keyboard.press` are page-level (no element) and stay one-liners.
+
+## Visibility prelude — catches "still a button, now hidden behind a kebab menu"
+
+Why the block-scoped `{ const el = …; await expect(el).toBeVisible(); await el.<action>; }` shape? **Playwright's locators default to "visible OR attached"**, so a button that drifted into a closed `<details>` / kebab menu / drawer is still in the role tree. Without the prelude, `getByRole('button', { name: 'Submit' }).click()` would silently fire on a hidden element — or time out with a generic "actionability" flake — even though the user flow has degraded.
+
+Asserting visibility before each interaction surfaces the drift as a clean `Locator expected to be visible` failure with the offending selector in the message. Applied uniformly to `click` / `dblclick` / `hover` / `fill` / `selectOption`.
+
+Originally pointed out as a gap in the role-only approach by an external contributor on X — fixed in the emit table at [`packages/core/src/specs/writeSpec.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/specs/writeSpec.ts). The [FAQ entry](/faq#my-button-is-still-in-the-dom-but-moved-behind-a-kebab-menu-does-the-spec-catch-that) goes deeper into the failure modes the prelude does and doesn't catch.
 
 ## Selector strategy
 
