@@ -17,6 +17,7 @@ const LINKS: { href: string; label: string }[] = [
   { href: '#comparison', label: 'Comparison' },
   { href: '#pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' },
+  { href: '/blog', label: 'Blog' },
   { href: DOCS, label: 'Docs' },
 ];
 

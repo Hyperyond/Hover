@@ -1,0 +1,67 @@
+---
+title: "How to keep AI-authored Playwright tests from breaking when your UI changes"
+description: "Selector rot is the central problem of end-to-end testing. Here's a practical, model-free strategy: semantic locators, deliberate re-recording, and treating real flow breaks as the bugs they are."
+date: 2026-05-08
+author: "Hover"
+tags: [playwright, maintenance, selectors]
+---
+
+# How to keep AI-authored Playwright tests from breaking when your UI changes
+
+Every end-to-end test suite eventually faces the same reckoning: the UI changes, and the tests go red. The question isn't whether it happens — it's what you do about it, and how much it costs you each time.
+
+There are two broad answers. One is to keep a model in the loop that re-resolves selectors at runtime. The other is the strategy below, which keeps your tests as plain, fast, free Playwright code. Here's how to make that work in practice.
+
+## 1. Use semantic locators, never CSS or XPath
+
+This is the single highest-leverage choice. A test written like this:
+
+```ts
+await page.locator('.btn-primary.css-1x9f2 > span').click();
+```
+
+breaks the moment a designer touches a class name. A test written like this:
+
+```ts
+await page.getByRole('button', { name: 'Sign in' }).click();
+```
+
+survives almost any restyle, because "the button labelled Sign in" is a stable contract between you and your users — not an implementation detail.
+
+Hover generates `getByRole`, `getByLabel`, `getByText`, and `getByTestId` selectors by default, and never CSS or XPath. If you write tests by hand, adopt the same rule. It's the difference between a suite that tolerates UI churn and one that fights it.
+
+## 2. Add a visibility prelude to catch "moved behind a menu"
+
+A button that's still in the DOM but now hidden behind a kebab menu is a classic silent failure. Playwright's `.click()` auto-waits for actionability, so it *would* eventually fail — but after a 30-second timeout with a generic message that reads like a flake.
+
+A small prelude turns that into a fast, legible failure:
+
+```ts
+const el = page.getByRole('button', { name: 'Submit' });
+await expect(el).toBeVisible();
+await el.click();
+```
+
+Now if the button drifts into a closed drawer, `toBeVisible()` fails in about five seconds with "Locator expected to be visible" — a category an engineer instantly recognises as a UI regression, not a network blip. Hover emits this prelude automatically for `click` / `dblclick` / `hover` / `fill` / `selectOption`.
+
+## 3. Re-record deliberately when semantics shift
+
+When a button is genuinely renamed — "Sign in" becomes "Log in" — the selector *should* break. That's correct behaviour; the test is asserting a contract that changed.
+
+The cheap fix is to re-author the test against the new UI. With Hover, that's one click of **⟳ Re-record**: the agent reads the test's original prompt, replays it against the current app, and rewrites the file. About 30 seconds, about ten cents, and you review the `git diff` before committing. By hand, it's a one-line edit — the file is plain Playwright.
+
+Crucially, this is a *deliberate* action you take when something actually changed — not an automatic model call on every run.
+
+## 4. Don't re-record everything — only what's red
+
+It's tempting to want a "re-record all" button. Resist it. Re-recording specs that were fine burns tokens for no reason and produces diff noise across files that didn't need changing. The right pattern: CI tells you which specs are red, and you re-record those, one at a time, reviewing each diff. Slightly slower, much cleaner history.
+
+## 5. Let real flow breaks fail
+
+The most important mindset shift: not every red test is a maintenance chore. If a test fails because the *flow* broke — a step that used to work now doesn't — that's the test catching a real regression. Fix the app, not the test. A suite that never catches real breaks isn't stable; it's useless.
+
+## The payoff
+
+Follow these and your suite stays plain Playwright: deterministic, fast, free to run, readable in a PR, and runnable on any machine with no AI present. You pay the cost of maintenance when something genuinely changed, deliberately and visibly — not as an invisible tax on every green build.
+
+[See Hover's re-record workflow →](/docs/features/re-record)

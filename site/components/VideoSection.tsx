@@ -1,26 +1,52 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 /* ── Hero video ─────────────────────────────────────────────────────────
- * A click-to-load YouTube facade: we render the thumbnail + a play button and
- * only inject the iframe on click, so the page stays fast and sets no YouTube
- * cookies until the visitor actually opts in to watch.
+ * Two playback modes, picked by which prop you pass from page.tsx:
  *
- * We use the standard youtube.com/embed host, not youtube-nocookie.com: the
- * privacy host combined with autoplay=1 trips YouTube's "sign in to confirm
- * you're not a bot" gate on some videos. Since the iframe only mounts after a
- * real click, autoplay here is a genuine user gesture and plays cleanly.
+ *   • src   — a self-hosted file under public/ (e.g. "/demo.mp4"). Rendered
+ *             with a native <video>. PREFERRED: no third party, no ad-block
+ *             friction, and immune to YouTube's "sign in to confirm you're
+ *             not a bot" wall, which YouTube can slap on a freshly-uploaded
+ *             or low-view video at the server level — unbeatable from the
+ *             client (verified: the watch page returns status:LOGIN_REQUIRED
+ *             for our clip while other public videos return OK from the same
+ *             origin, so it's a per-video YouTube flag, not our embed code).
+ *   • id    — an 11-char YouTube id. Fallback only. Click-to-load facade so
+ *             the page stays fast, but subject to the gate above.
+ *   • neither — a styled "coming soon" placeholder.
  *
- * Set the video by passing `id` (the 11-char YouTube id) from page.tsx. Until
- * a real walkthrough is recorded, leave `id` empty and a styled "coming"
- * placeholder shows instead of a broken embed. The README references
- * youtu.be/lQV5dmVWaIA — swap that id in once the final cut is up. */
+ * `src` wins if both are set. `poster` is the still shown before play; for the
+ * <video> path it defaults to the YouTube thumbnail when an id is also given,
+ * else pass a public/ image path. */
 
-export function VideoSection({ id = '', title = 'Watch Hover author a Playwright test in 90 seconds' }: { id?: string; title?: string }) {
+type Props = {
+  src?: string;
+  id?: string;
+  poster?: string;
+  title?: string;
+};
+
+export function VideoSection({
+  src = '',
+  id = '',
+  poster = '',
+  title = 'Watch Hover author a Playwright test in 90 seconds',
+}: Props) {
   const [playing, setPlaying] = useState(false);
-  const hasVideo = id.trim().length > 0;
-  const thumb = hasVideo ? `https://i.ytimg.com/vi/${id}/maxresdefault.jpg` : '';
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const hasFile = src.trim().length > 0;
+  const hasYouTube = id.trim().length > 0;
+  const ytThumb = hasYouTube ? `https://i.ytimg.com/vi/${id}/maxresdefault.jpg` : '';
+  const stillSrc = poster || ytThumb;
+
+  const startFile = () => {
+    setPlaying(true);
+    // Kick playback once the element mounts/controls show.
+    requestAnimationFrame(() => videoRef.current?.play().catch(() => {}));
+  };
 
   return (
     <section id="watch" className="relative z-10 mx-auto max-w-5xl px-6 pb-8 pt-4">
@@ -37,35 +63,45 @@ export function VideoSection({ id = '', title = 'Watch Hover author a Playwright
       <div className="relative overflow-hidden rounded-xl border border-line bg-bg-3 shadow-[0_18px_48px_rgba(0,0,0,0.55)]">
         {/* 16:9 frame */}
         <div className="relative aspect-video w-full">
-          {playing && hasVideo ? (
-            <iframe
-              className="absolute inset-0 h-full w-full"
-              src={`https://www.youtube.com/embed/${id}?autoplay=1&rel=0&playsinline=1`}
-              title={title}
-              allow="autoplay; accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-              allowFullScreen
-            />
-          ) : hasVideo ? (
-            <button
-              type="button"
-              onClick={() => setPlaying(true)}
-              aria-label={`Play video: ${title}`}
-              className="group absolute inset-0 h-full w-full"
-            >
-              {/* thumbnail */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={thumb}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
+          {/* ── Self-hosted file (preferred) ─────────────────────────── */}
+          {hasFile ? (
+            playing ? (
+              <video
+                ref={videoRef}
+                className="absolute inset-0 h-full w-full bg-black"
+                src={src}
+                poster={stillSrc || undefined}
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
               />
-              <span className="absolute inset-0 bg-black/30" />
-              <span className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(124,255,168,0.6)] bg-bg/80 text-mint backdrop-blur transition-transform group-hover:scale-110">
-                <PlayGlyph />
-              </span>
-            </button>
+            ) : (
+              <PlayFacade
+                title={title}
+                still={stillSrc}
+                onPlay={startFile}
+              />
+            )
+          ) : /* ── YouTube fallback ──────────────────────────────────── */
+          hasYouTube ? (
+            playing ? (
+              <iframe
+                className="absolute inset-0 h-full w-full"
+                src={`https://www.youtube.com/embed/${id}?autoplay=1&rel=0&playsinline=1`}
+                title={title}
+                allow="autoplay; accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                allowFullScreen
+              />
+            ) : (
+              <PlayFacade
+                title={title}
+                still={ytThumb}
+                onPlay={() => setPlaying(true)}
+              />
+            )
           ) : (
-            /* placeholder until the real video id is wired in */
+            /* ── Placeholder until a video is wired in ─────────────── */
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
               <div
                 aria-hidden
@@ -86,6 +122,49 @@ export function VideoSection({ id = '', title = 'Watch Hover author a Playwright
         </div>
       </div>
     </section>
+  );
+}
+
+/* Shared click-to-play poster: a still image (or solid backdrop) + a centered
+ * mint play button. Used by both the file and YouTube paths. */
+function PlayFacade({
+  title,
+  still,
+  onPlay,
+}: {
+  title: string;
+  still: string;
+  onPlay: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPlay}
+      aria-label={`Play video: ${title}`}
+      className="group absolute inset-0 h-full w-full bg-black"
+    >
+      {still ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={still}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(60% 70% at 50% 35%, rgba(124,255,168,0.1), transparent 70%)',
+          }}
+        />
+      )}
+      <span className="absolute inset-0 bg-black/30" />
+      <span className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[rgba(124,255,168,0.6)] bg-bg/80 text-mint backdrop-blur transition-transform group-hover:scale-110">
+        <PlayGlyph />
+      </span>
+    </button>
   );
 }
 

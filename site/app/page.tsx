@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { Sparkle } from '@/components/Sparkle';
 import { WidgetDemo } from '@/components/WidgetDemo';
 import { CopyCommand } from '@/components/CopyCommand';
@@ -8,6 +10,13 @@ import { Coverage } from '@/components/Coverage';
 import { Comparison } from '@/components/Comparison';
 import { Pricing } from '@/components/Pricing';
 import { Faq } from '@/components/Faq';
+
+/* Server-side file probe: only feed the <video> a src once the export actually
+ * exists under public/, so the page never offers a play button that 404s. Drop
+ * public/demo.mp4 (+ optional public/demo-poster.png) and it switches on. */
+const PUBLIC = join(process.cwd(), 'public');
+const DEMO_MP4 = existsSync(join(PUBLIC, 'demo.mp4')) ? '/demo.mp4' : '';
+const DEMO_POSTER = existsSync(join(PUBLIC, 'demo-poster.png')) ? '/demo-poster.png' : '';
 
 const GITHUB = 'https://github.com/Hyperyond/Hover';
 const DOCS = '/docs/';
@@ -41,8 +50,13 @@ export default function Home() {
       <Backdrop />
       <Nav />
       <Hero />
-      {/* Walkthrough video — youtube.com/watch?v=ASWFWUyMUlc */}
-      <VideoSection id="ASWFWUyMUlc" />
+      {/* Walkthrough video. Self-hosted MP4 is preferred — YouTube flagged the
+       * source clip (ASWFWUyMUlc) with a server-side "confirm you're not a bot"
+       * gate that no embed param can bypass. Drop the export at public/demo.mp4
+       * (and optionally a still at public/demo-poster.png) and it plays for
+       * everyone, ad-block and all. Until the file exists this shows a
+       * placeholder; the id is kept only as a documented fallback. */}
+      <VideoSection src={DEMO_MP4} poster={DEMO_POSTER} />
       <Coverage />
       <Pillars />
       <Outputs />

@@ -1,0 +1,43 @@
+---
+title: "Bring your own CLI: AI testing with no API key and no token resale"
+description: "Hover bundles no AI runtime. It spawns the coding-agent CLI already on your PATH — claude, codex, cursor-agent — so you reuse the subscription you already pay for. Here's why that architecture matters."
+date: 2026-05-15
+author: "Hover"
+tags: [architecture, byo-cli, pricing]
+---
+
+# Bring your own CLI: AI testing with no API key and no token resale
+
+Most AI dev tools ask for an API key. You paste it in, the tool calls the model on your behalf, and you're billed — sometimes by the model provider, sometimes by the tool with a margin on top. It's the default, and it has a cost structure you don't fully see.
+
+Hover does something different: it bundles **no AI runtime at all**. There's no API key field, because there's no model client inside Hover. Instead it spawns whatever coding-agent CLI is already installed on your machine.
+
+## How it works
+
+When you ask Hover to drive your browser, it shells out to a CLI on your `PATH`:
+
+- `claude` (Claude Code)
+- `codex` (OpenAI Codex CLI)
+- and others on the roadmap — `cursor-agent`, `aider`, `gemini-cli`
+
+That CLI talks to *its own* provider using *your* existing plan — the Claude Pro / Max or ChatGPT subscription you already pay for. Hover normalises whatever the CLI streams back into a single event stream and shows it in the widget. It never sees your API key, because it never makes the call.
+
+The service auto-detects which agents are installed and picks one. The widget shows the active agent as a pill and lets you switch from a dropdown — no environment-variable dance to change models.
+
+## Why this is the right architecture
+
+**No token resale.** You're not paying a tool a markup on inference. The model cost is whatever your existing subscription already covers. For many developers on a flat Pro/Max plan, browser-driving sessions are effectively free at the margin.
+
+**No key to leak.** Hover stores no credentials. There's no `.env` with a long-lived provider key sitting in your repo or your tool's config, waiting to be committed by accident.
+
+**No data path through a vendor.** Hover's local service has no LLM SDK and no telemetry. Your source and DOM go from the local CLI to that CLI's provider — the same path you already trust when you run `claude` in your terminal. The Hover service binds to `127.0.0.1` only and refuses outside connections.
+
+**You're not locked to one model.** Because the model is just a CLI on your PATH, switching providers is switching binaries. The day a model gets cheaper, faster, or better at browser tasks, you point Hover at it — no migration, no re-platforming.
+
+## The honest trade-off
+
+This design assumes you already have a coding-agent CLI installed and logged in. If you don't, you'll install one first — that's a real step a hosted tool skips. And different CLIs have different sandboxing strengths; Hover marks soft-sandbox agents with a badge so you know the tool surface is broader than the locked-down ones.
+
+But for the growing number of developers who already live in `claude` or `codex` all day, "reuse the thing you already pay for" beats "paste another API key and pay a margin." That's the bet Hover makes.
+
+[Read about the agent registry →](/docs/reference/agent-registry)
