@@ -6,7 +6,7 @@
 
 ## Why a separate mode
 
-Hover's default mode is for *building features*. Security testing is for *attacking what you just built* — the agent's prompt is different ("look for authz bypass", not "test the happy path"), the Chrome it drives runs in a separate profile, and the **mode bar tints orange** so you can never forget you're in altered state.
+Hover's default mode is for *building features*. Security testing is for *attacking what you just built* — the agent's prompt is different ("look for authz bypass", not "test the happy path"), its captured traffic is routed through a local MITM proxy, and the **mode bar tints orange** so you can never forget you're in altered state.
 
 ## Install
 
@@ -24,7 +24,9 @@ export default defineConfig({
 });
 ```
 
-Zero external dependencies — no `mitmproxy`, no Python, no system CA install. The plugin uses [mockttp](https://github.com/httptoolkit/mockttp) (the engine behind HTTP Toolkit) for HTTPS MITM, generates a one-off CA the first time it starts, and pins it to the secured Chrome via `--ignore-certificate-errors-spki-list` — your OS trust store stays untouched.
+Zero external dependencies — no `mitmproxy`, no Python, no system CA install. The plugin uses [mockttp](https://github.com/httptoolkit/mockttp) (the engine behind HTTP Toolkit) for HTTPS MITM, generates a one-off CA the first time it starts, and pins it to the debug Chrome via `--ignore-certificate-errors-spki-list` — your OS trust store stays untouched.
+
+The proxy is **resident**: when `@hover-dev/security` is installed it starts with the dev server (transparent passthrough by default) and the single debug Chrome is launched pointed through it. There is no second browser — entering Security mode just flips the proxy from passthrough to recording. The trade-off is that the one Chrome is always proxied (transparently) even in default mode; projects without the plugin are unaffected.
 
 <Callout type="warning" title="Don't commit the CA">
 
@@ -36,7 +38,7 @@ The CA private key persists under `<your-project>/.hover/ca/ca.key`. The shipped
 
 1. Click the ✨ launcher, then the **mode bar** above the panel header.
 2. Pick **Security testing**.
-3. The panel border + launcher ring turn orange to signal altered state. A separate debug Chrome opens on port 9333 (the default mode's Chrome on 9222 stays untouched).
+3. The panel border + launcher ring turn orange to signal altered state. No new browser opens — the same debug Chrome (already routed through the resident proxy) simply starts having its traffic recorded.
 4. Drive the page as a normal user would — log in, navigate, submit forms. Every HTTPS request is captured.
 5. Click the 🔁 **Network** icon next to the agent pill to see the captured flow list.
 6. In the chat textarea, ask the agent something like:
