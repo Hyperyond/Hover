@@ -1,5 +1,6 @@
 import { Sparkle } from '@/components/Sparkle';
 import { WidgetDemo } from '@/components/WidgetDemo';
+import { CopyCommand } from '@/components/CopyCommand';
 
 const GITHUB = 'https://github.com/Hyperyond/Hover';
 const DOCS = '/docs/';
@@ -135,15 +136,6 @@ function Hero() {
 
       <TerminalDemo />
     </section>
-  );
-}
-
-function CopyCommand() {
-  return (
-    <div className="group flex items-center gap-3 rounded-md border border-[rgba(124,255,168,0.5)] bg-bg px-5 py-3 font-mono text-[14px] text-mint shadow-[0_4px_16px_rgba(0,0,0,0.35)] transition-all hover:border-[rgba(124,255,168,0.9)] hover:shadow-[0_4px_18px_rgba(124,255,168,0.28),0_4px_16px_rgba(0,0,0,0.4)]">
-      <span className="select-none text-text-dim">$</span>
-      <span>npx @hover-dev/cli add</span>
-    </div>
   );
 }
 
