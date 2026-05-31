@@ -36,6 +36,12 @@ html {
   scroll-behavior: smooth;
 }
 
+/* The nav is sticky (~64px); offset anchor targets so a #jump doesn't tuck the
+ * section heading under the header. */
+:where(section[id], div[id='install']) {
+  scroll-margin-top: 84px;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-text);
@@ -46,6 +52,47 @@ body {
 ::selection {
   background: rgba(124, 255, 168, 0.22);
   color: #fff;
+}
+
+/* ── Coverage marquee ─────────────────────────────────────────────────
+ * Two identical tracks scroll left forever; pausing on hover lets a reader
+ * stop to read. Edges fade via a mask so pills enter/exit cleanly. On touch
+ * (no hover) the marquee still animates but the row is also swipeable. */
+.hover-marquee {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 6%,
+    #000 94%,
+    transparent
+  );
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.hover-marquee-track {
+  animation: hover-marquee 38s linear infinite;
+}
+.hover-marquee:hover .hover-marquee-track {
+  animation-play-state: paused;
+}
+@keyframes hover-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* Each track is half the doubled width; shift exactly one track left. */
+    transform: translateX(-50%);
+  }
+}
+
+/* Reduced-motion: stop the loop and let the row wrap + scroll manually. */
+@media (prefers-reduced-motion: reduce) {
+  .hover-marquee-track {
+    animation: none;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 0.75rem;
+    row-gap: 0.75rem;
+  }
 }
 
 /* Mint glow breathing — same feel as the widget launcher's pulse */

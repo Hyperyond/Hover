@@ -2,6 +2,12 @@ import { Sparkle } from '@/components/Sparkle';
 import { WidgetDemo } from '@/components/WidgetDemo';
 import { CopyCommand } from '@/components/CopyCommand';
 import { Waitlist } from '@/components/Waitlist';
+import { Nav } from '@/components/Nav';
+import { VideoSection } from '@/components/VideoSection';
+import { Coverage } from '@/components/Coverage';
+import { Comparison } from '@/components/Comparison';
+import { Pricing } from '@/components/Pricing';
+import { Faq } from '@/components/Faq';
 
 const GITHUB = 'https://github.com/Hyperyond/Hover';
 const DOCS = '/docs/';
@@ -35,11 +41,16 @@ export default function Home() {
       <Backdrop />
       <Nav />
       <Hero />
+      {/* Walkthrough video — pass the final YouTube id once recorded. */}
+      <VideoSection id="" />
+      <Coverage />
       <Pillars />
       <Outputs />
       <Security />
-      <Coverage />
+      <Comparison />
+      <Pricing />
       <Waitlist />
+      <Faq />
       <CTA />
       <Footer />
     </div>
@@ -75,42 +86,12 @@ function Backdrop() {
   );
 }
 
-function Nav() {
-  return (
-    <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-      <a href="/" className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(124,255,168,0.5)] bg-bg text-mint shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
-          <Sparkle size={18} />
-        </span>
-        <span className="text-[15px] font-semibold tracking-tight">Hover</span>
-      </a>
-      <nav className="flex items-center gap-1 text-[13px] text-text-mute">
-        <a href="#how" className="rounded-md px-3 py-2 transition-colors hover:text-text">
-          How it works
-        </a>
-        <a href="#outputs" className="rounded-md px-3 py-2 transition-colors hover:text-text">
-          Outputs
-        </a>
-        <a href={DOCS} className="rounded-md px-3 py-2 transition-colors hover:text-text">
-          Docs
-        </a>
-        <a
-          href={GITHUB}
-          className="ml-2 flex items-center gap-1.5 rounded-md border border-line px-3 py-2 transition-colors hover:border-line-2 hover:text-text"
-        >
-          <GitHubGlyph /> GitHub
-        </a>
-      </nav>
-    </header>
-  );
-}
-
 function Hero() {
   return (
     <section className="relative z-10 mx-auto max-w-6xl px-6 pb-20 pt-12 md:pt-16">
-      <div className="grid items-center gap-12 lg:grid-cols-[1fr_minmax(380px,420px)] lg:gap-10">
+      <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1fr_minmax(380px,420px)] lg:gap-10">
         {/* Left — copy */}
-        <div>
+        <div className="min-w-0">
           <a
             href={GITHUB}
             className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3.5 py-1.5 text-[12px] text-text-mute transition-colors hover:border-[rgba(124,255,168,0.4)] hover:text-text"
@@ -136,7 +117,7 @@ function Hero() {
             file that runs in CI with zero AI, forever.
           </p>
 
-          <div className="mt-9 flex flex-wrap items-center gap-3">
+          <div id="install" className="mt-9 flex flex-wrap items-center gap-3">
             <CopyCommand />
             <a
               href={DOCS}
@@ -155,7 +136,7 @@ function Hero() {
         </div>
 
         {/* Right — live widget replica */}
-        <div className="flex justify-center lg:justify-end">
+        <div className="flex min-w-0 justify-center lg:justify-end">
           <WidgetDemo />
         </div>
       </div>
@@ -179,7 +160,7 @@ function TerminalDemo() {
         </span>
       </div>
       <div className="grid gap-px bg-line md:grid-cols-2">
-        <div className="bg-bg-3 p-5">
+        <div className="min-w-0 bg-bg-3 p-5">
           <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-text-dim">
             You type
           </div>
@@ -195,8 +176,8 @@ function TerminalDemo() {
             <Step label="Done in 11 steps · $0.16" done />
           </div>
         </div>
-        <div className="bg-bg-3 p-5">
-          <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-text-dim">
+        <div className="min-w-0 bg-bg-3 p-5">
+          <div className="mb-3 break-all font-mono text-[11px] uppercase tracking-wider text-text-dim">
             Hover saves <span className="text-mint">__vibe_tests__/login-flow.spec.ts</span>
           </div>
           <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-text-mute">
@@ -435,35 +416,6 @@ function Security() {
                 </li>
               ))}
             </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ── Coverage strip ─────────────────────────────────────────────────── */
-const BUNDLERS = ['Vite', 'Astro', 'Nuxt', 'Next.js', 'webpack', 'RN Web'];
-
-function Coverage() {
-  return (
-    <section className="relative z-10 mx-auto max-w-6xl px-6 py-12">
-      <div className="rounded-lg border border-line bg-bg-3 px-8 py-7">
-        <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
-          <p className="text-[14px] text-text-mute">
-            <span className="text-text">Works where you already build.</span>{' '}
-            One <code className="font-mono text-mint">npx</code> command detects
-            your bundler and wires it up.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {BUNDLERS.map((b) => (
-              <span
-                key={b}
-                className="rounded-full border border-line bg-bg px-3.5 py-1.5 font-mono text-[12px] text-text-mute"
-              >
-                {b}
-              </span>
-            ))}
           </div>
         </div>
       </div>
