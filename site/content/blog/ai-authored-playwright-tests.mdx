@@ -1,6 +1,6 @@
 ---
 title: "AI-authored Playwright tests, without an AI in your CI"
-description: "Most AI testing tools keep a model in the loop at runtime, so every CI run pays for LLM calls. Here's the alternative: let AI author the test once, then ship plain Playwright that runs deterministically forever."
+description: "Most AI testing tools keep a model in the loop at runtime, so every CI run pays for LLM calls. The alternative: let AI author the test once, then ship plain Playwright that runs deterministically."
 date: 2026-05-28
 author: "Hover"
 tags: [playwright, ai-testing, ci]
@@ -8,27 +8,27 @@ tags: [playwright, ai-testing, ci]
 
 # AI-authored Playwright tests, without an AI in your CI
 
-There are two very different things a tool can mean when it says "AI testing."
+When a tool says "AI testing," ask one question: is the model running when the test runs?
 
-The first is **AI at runtime**: every time the test runs, a language model interprets the steps, looks at the page, decides what to click, and recovers when something moved. The test is, in effect, a prompt. It re-resolves itself on each run.
+Some tools answer yes. A language model reads the steps on every run, looks at the page, decides what to click, and recovers when something moved. The test is a prompt that re-resolves itself each time. Other tools, Hover among them, answer no. A model explores your app once, works out the flow, and writes ordinary test code. After that the model is gone, and a deterministic script runs the same way every time.
 
-The second is **AI at authoring time**: a model explores your app once, figures out the flow, and emits ordinary test code. From then on the model is gone. The artifact is a deterministic script that any CI runner executes the same way every time.
+That single yes-or-no decides what your test suite costs you for the rest of its life. Here is why.
 
-Hover is built entirely around the second model. This post explains why that distinction matters more than it first appears, and what it costs you to get it wrong.
+## Runtime AI is a bill that arrives forever
 
-## The runtime-AI tax is real and recurring
+Put a model on the path that runs when the test runs, and three things follow you around.
 
-If a model is in the loop when the test runs, then every run has a price and a dependency:
+You pay on every run. Each PR, each nightly, each merge-queue retry makes LLM calls. A suite that runs hundreds of times a day across dozens of branches multiplies that bill, and it grows with how much you test. You wanted more coverage to be cheap; this makes it expensive.
 
-- **Money.** Every PR, every nightly, every merge-queue retry makes LLM calls. A suite that runs hundreds of times a day across dozens of branches multiplies fast. The cost grows with how much you test — exactly the opposite of what you want.
-- **Latency.** A model deciding what to click is slower than a selector resolving against the DOM. Multimodal vision models are slower still.
-- **Fragility.** Your green build now depends on a hosted provider's uptime, rate limits, regional availability, and model-deprecation schedule. A model version sunset can turn a passing suite red without a single line of your code changing.
+Runs get slower. A model looking at a screenshot and deciding what to click takes longer than a selector resolving against the DOM. Vision models take longer still.
 
-None of this is hypothetical — it's the structural consequence of keeping inference on the hot path.
+Your green build now depends on someone else's uptime. A rate limit, a regional outage, or a model version your provider sunsets can turn a passing suite red without anyone touching your code.
+
+None of that is a worst case. It's what keeping inference on the hot path means.
 
 ## Authoring-time AI spends the model once
 
-Hover injects a chat widget into your dev server. You describe a flow in plain English — "log in, then add a todo named verify hover" — and the agent drives your *real* Chrome through it over CDP. You watch it happen. When the run is clean, you click **Save as spec**, and Hover writes a standard `@playwright/test` file:
+Hover puts a chat widget in your dev server. You type a flow in plain English, "log in, then add a todo named verify hover," and the agent drives your real Chrome through it over CDP while you watch. When the run looks right, you click **Save as spec**, and Hover writes a standard `@playwright/test` file:
 
 ```ts
 import { test, expect } from '@playwright/test';
@@ -42,22 +42,24 @@ test('login then add todo', async ({ page }) => {
 });
 ```
 
-That file has no agent in it. It runs with `npx playwright test`, in your CI, with zero tokens and zero network calls to any model provider. The cost of the model concentrated at the one moment you actually needed intelligence: figuring out the flow. After that, it's just Playwright.
+No agent lives in that file. It runs with `npx playwright test`, in your CI, with zero tokens and no call to any provider. The model did its work at the one moment intelligence helped: figuring out the flow. The artifact it left behind is ordinary Playwright.
 
 ## "But selectors break when the UI changes"
 
-True — and it's the right question to ask of any AI-authored test. Hover's answer has three layers, and none of them is "call a model on every run":
+Fair, and you should ask it of any AI-authored test. Hover answers in three ways, and none of them is "call a model on every run."
 
-1. **Most churn doesn't break the spec.** Hover generates semantic locators — `getByRole`, `getByLabel`, `getByText` — never CSS classes or XPath. A layout refactor leaves "the Sign in button" as "the Sign in button."
-2. **When semantics genuinely shift, you re-record deliberately.** One click of **⟳ Re-record** replays the original prompt against the current UI and rewrites the file. About 30 seconds, about ten cents, and you review the diff before committing.
-3. **A real flow break is a real bug.** If the test fails because the flow broke — not because a selector moved — that's the test doing its job.
+Most churn never reaches the spec. Hover writes semantic locators (`getByRole`, `getByLabel`, `getByText`), so a layout refactor leaves "the Sign in button" as "the Sign in button."
 
-The difference from runtime self-healing is *when* and *how often* you pay. You pay once, on purpose, when something actually changed — not silently, on every green run, forever.
+When a name changes, you re-record on purpose. One click replays the original prompt against the current UI and rewrites the file. Thirty seconds, ten cents, and you read the diff before committing.
 
-## When runtime AI is the right call
+When the flow itself broke, the red build is the point. That's a regression the test caught. Fix the app.
 
-To be fair: if your app's DOM is genuinely unstable, or you're testing something you don't control and can't re-record, a model-in-the-loop approach buys you resilience that a static script can't. That's a real trade-off, not a strawman.
+The difference from runtime self-healing is when you pay and how often. You pay once, on purpose, when something changed. You don't pay on every green run for the life of the suite.
 
-But for the common case — your own app, your own dev server, a flow you can re-record in seconds — paying for inference on every CI run is a tax with no upside. Author with AI. Run plain Playwright.
+## When you do want the model at runtime
+
+If your DOM is unstable, or you're testing something you don't control and can't re-record, a model in the loop buys resilience a static script can't. That's a real trade, worth making sometimes.
+
+For your own app, on your own dev server, with a flow you can re-record in seconds, paying for inference on every CI run buys you nothing. Author with AI. Run plain Playwright.
 
 [See how Hover crystallises a session into a spec →](/docs/features/save-as-spec)

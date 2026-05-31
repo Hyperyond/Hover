@@ -3,13 +3,23 @@
 import { useState } from 'react';
 
 /* ── Honest competitive comparison ──────────────────────────────────────
- * Every cell here is sourced from the vendor's own docs/site as of 2026.
- * Two deliberate accuracy rules (do NOT "round up" against competitors):
- *   - QA Wolf / Momentic publish no public pricing — we say "managed
- *     contract" / "sales-call", never a fabricated number.
- *   - Stagehand & Midscene keep AI wired into the run; their cached/replay
- *     paths hit Playwright-first, so the artifact row is "partial", phrased
- *     as "AI self-heal stays wired in" — NOT "needs AI every run".
+ * Every cell here was fact-checked against each vendor's OWN docs/site/repo in
+ * 2026 (sources linked per column under the table). Accuracy rules — do NOT
+ * "round up" against competitors:
+ *   - QA Wolf / Momentic publish NO public pricing. Describe the model
+ *     ("managed contract" / "quote-based"); never quote a number (the figures
+ *     online are third-party aggregator estimates).
+ *   - Momentic DOES save a portable artifact — YAML in your repo — but its AI
+ *     interprets those steps at runtime; it does not export Playwright. So the
+ *     "plain Playwright, no AI in CI" row is NO, but the note must say "YAML +
+ *     runtime AI", not "no code at all" (which was wrong).
+ *   - Stagehand v3 dropped its Playwright dependency; the artifact is a
+ *     Stagehand script. Cached actions replay WITHOUT an LLM, but the AI
+ *     fallback stays wired into the runtime. Phrase as "cached replay is
+ *     LLM-free, AI fallback stays in the loop" — NOT "needs AI every run".
+ *   - Midscene: same nuance — caching reduces, does not eliminate, runtime AI.
+ *   - QA Wolf is a managed service: their engineers + AI author the tests, so
+ *     "AI authors from intent" is PARTIAL, not a flat yes/no.
  * If you change a cell, re-verify against the source before shipping. */
 
 type Cell = { v: 'yes' | 'no' | 'partial' | 'na'; note: string };
@@ -22,6 +32,15 @@ type Row = {
 
 const COMPETITORS = ['Momentic', 'QA Wolf', 'Playwright codegen', 'Stagehand', 'Midscene'];
 
+/** Per-vendor source for the footnote — what each column was checked against. */
+const SOURCES: { name: string; href: string }[] = [
+  { name: 'Momentic', href: 'https://momentic.ai/docs' },
+  { name: 'QA Wolf', href: 'https://www.qawolf.com/' },
+  { name: 'Playwright codegen', href: 'https://playwright.dev/docs/codegen' },
+  { name: 'Stagehand', href: 'https://github.com/browserbase/stagehand' },
+  { name: 'Midscene', href: 'https://github.com/web-infra-dev/midscene' },
+];
+
 const yes = (note: string): Cell => ({ v: 'yes', note });
 const no = (note: string): Cell => ({ v: 'no', note });
 const partial = (note: string): Cell => ({ v: 'partial', note });
@@ -32,66 +51,66 @@ const ROWS: Row[] = [
     dim: 'AI authors the test from intent',
     hover: yes('Agent explores the flow from one English sentence'),
     cols: [
-      yes('AI-authored'),
-      partial('AI-assisted, humans finalise'),
-      no('Records literal clicks only — no exploration'),
-      yes('AI act / observe'),
-      yes('Vision-driven AI'),
+      yes('Natural-language prompts; AI turns them into steps'),
+      partial('Their QA engineers + AI author it for you'),
+      no('Deterministic recorder — transcribes clicks, cannot explore'),
+      yes('act / agent take intent; AI plans the steps'),
+      yes('Vision model plans and locates from screenshots'),
     ],
   },
   {
     dim: 'Output is plain Playwright that runs in CI with NO AI',
     hover: yes('Standard @playwright/test .spec.ts, agent-free forever'),
     cols: [
-      no('No code at all — AI interprets steps at runtime'),
-      yes('Real Playwright code (written by their team)'),
-      yes('.spec.ts, no AI by design'),
-      partial('Stagehand script; cached replay runs Playwright-first, but AI self-heal stays wired in'),
-      no('JS/YAML needs the Midscene + AI runtime (caching cuts calls, not the dependency)'),
+      no('YAML in your repo, but AI interprets it at runtime'),
+      yes('Real, exportable Playwright code — yours to keep'),
+      yes('Standard .spec.ts; no AI at author- or run-time'),
+      no('Stagehand script — cached replay is LLM-free, AI fallback stays in the loop'),
+      no('Own JS / YAML; needs Midscene runtime + AI (caching reduces, not eliminates)'),
     ],
   },
   {
     dim: 'Open source / self-hosted',
     hover: yes('Apache-2.0, runs entirely on your machine'),
     cols: [
-      no('Closed vendor platform'),
-      no('Managed service'),
+      no('Closed SaaS; local CLI still needs a Momentic account'),
+      no('Managed service; the platform is not self-hostable'),
       yes('Apache-2.0 (part of Playwright)'),
-      yes('MIT, runs local'),
-      yes('MIT, runs local'),
+      yes('MIT; runs fully local without Browserbase cloud'),
+      yes('MIT; runs locally, bring your own model endpoint'),
     ],
   },
   {
     dim: 'Bring-your-own AI (your CLI / model key)',
     hover: yes('Spawns the claude / codex CLI already on your PATH'),
     cols: [
-      no('Vendor-hosted AI, MOMENTIC_API_KEY'),
-      na('Vendor-run — you supply no model'),
-      na('No AI involved'),
-      yes('Your own LLM provider key'),
-      yes('Your own model / key'),
+      no('Vendor-hosted AI; you supply a Momentic API key'),
+      na('Managed — AI is internal to their team'),
+      na('No AI involved at all'),
+      yes('Any structured-output LLM — OpenAI / Anthropic / local'),
+      yes('Any OpenAI-compatible / VL endpoint you configure'),
     ],
   },
   {
     dim: 'Drives your real local dev server',
     hover: yes('Injects into your dev server, drives your debug Chrome over CDP'),
     cols: [
-      partial('CLI runs in your CI but is tied to the hosted account'),
-      partial('Their infra runs against your deployed env'),
-      yes('Fully local'),
-      yes('Local, or optional Browserbase cloud'),
-      yes('Local (Chrome extension / Bridge Mode)'),
+      partial('CLI runs locally / in CI, but tied to the hosted account'),
+      no('Runs the suite on QA Wolf’s own cloud infra'),
+      yes('Records against any local URL in a real browser'),
+      yes('Local Chrome by default; Browserbase cloud optional'),
+      yes('Local via Playwright / Puppeteer or Bridge Mode'),
     ],
   },
   {
     dim: 'Pricing',
     hover: yes('Free / OSS — you pay only the CLI plan you already have'),
     cols: [
-      no('Quote-based, sales-call'),
-      no('Managed contract (no public pricing)'),
+      no('Quote-based; no public pricing, free trial only'),
+      no('Managed contract; no public pricing on their site'),
       yes('Free / OSS'),
-      partial('OSS free; Browserbase cloud paid'),
-      yes('Free / OSS (pay your own model)'),
+      yes('SDK free (MIT); Browserbase cloud is a separate paid add-on'),
+      yes('Free / OSS — you pay only your own model usage'),
     ],
   },
 ];
@@ -132,8 +151,8 @@ export function Comparison() {
         <span className="text-mint">portable, agent-free artifact</span>.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Every cell below is taken from each vendor&rsquo;s own docs as of 2026.
-        Where a tool publishes no public pricing we say so rather than guess.
+        We checked every cell against each vendor&rsquo;s own docs. Where a tool
+        publishes no public pricing, we say so instead of guessing a number.
       </p>
 
       {/* ── Desktop matrix (md+) ─────────────────────────────────────── */}
@@ -253,6 +272,24 @@ export function Comparison() {
         <span className="font-mono text-text-dim">–</span> not applicable. QA Wolf and
         Momentic do not publish public pricing; figures elsewhere online come from
         third-party aggregators, so we describe their model rather than quote a number.
+      </p>
+
+      <p className="mt-3 max-w-3xl text-[12.5px] leading-relaxed text-text-dim">
+        Fact-checked against each vendor&rsquo;s own docs (2026):{' '}
+        {SOURCES.map((s, i) => (
+          <span key={s.name}>
+            <a
+              href={s.href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-text-mute underline-offset-2 hover:text-text hover:underline"
+            >
+              {s.name}
+            </a>
+            {i < SOURCES.length - 1 ? ' · ' : ''}
+          </span>
+        ))}
+        .
       </p>
     </section>
   );
