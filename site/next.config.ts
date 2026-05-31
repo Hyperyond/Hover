@@ -1,19 +1,15 @@
 import type { NextConfig } from 'next';
 
 /**
- * Static-export landing page for gethover.dev.
+ * gethover.dev — Next app deployed to Vercel (NOT static export).
  *
- * `output: 'export'` emits a fully static site under `out/` — no Node server
- * at runtime, deployable to any CDN (Vercel, Cloudflare Pages, GitHub Pages).
- * The marketing page has no server-side needs; everything is pre-rendered.
- *
- * `images.unoptimized` is required under static export (no Image Optimization
- * server is available). We use plain assets, so this is a no-op safety net.
+ * It was `output: 'export'` while the site was pure marketing, but the Cloud
+ * waitlist needs a server route (app/api/waitlist) to call Resend with a
+ * secret key that must never reach the client — so the site now deploys as a
+ * normal Next app on Vercel. The /docs pages are unaffected: they already use
+ * generateStaticParams, so Next still statically prerenders them.
  */
 const nextConfig: NextConfig = {
-  output: 'export',
-  images: { unoptimized: true },
-  // Trailing slashes keep static hosts happy when serving /foo as /foo/index.html.
   trailingSlash: true,
 };
 

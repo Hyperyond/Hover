@@ -1,0 +1,79 @@
+# Your first session
+
+A guided walkthrough of every widget control. Estimated time: 5 minutes.
+
+## Prerequisites
+
+- Followed [Quick start](/docs/get-started/quick-start) — Hover is installed in your project and `pnpm dev` (or your equivalent) is running.
+- The floating ✨ launcher is visible in the bottom-right of your dev page.
+- The debug Chrome is open on port 9222 (the widget walks you through launching it if not).
+
+## Step 1 — Open the widget
+
+Click the ✨ launcher. The panel slides up.
+
+You'll see:
+- A header pill `claude ▾` showing the active coding agent
+- A status indicator (`connected` when the WS bridge is up)
+- An empty conversation body
+- A footer with a textarea, **Record**, **⌖ Fix**, **Send**, and a round 🎙 mic button
+
+## Step 2 — Send your first prompt
+
+Type a natural-language instruction describing a flow you want to verify on your app. For example:
+
+```
+log in with the test account, navigate to the dashboard, and verify
+the user's name appears in the header
+```
+
+```
+add a product to cart, go to checkout, verify the total is correct
+```
+
+```
+submit the contact form with empty fields, verify each required-field
+error appears
+```
+
+Press `↵` or click **Send**. The button switches to **Stop** while the agent runs.
+
+
+
+Or hold the round 🎙 button to the right of Send and *speak* the same instruction. Hover transcribes it into the textarea and submits on release. Works in 中文 too — [learn more](/docs/features/voice-mode).
+
+
+
+## Step 3 — Watch the agent drive
+
+Events stream into the panel as the agent works:
+- `Opening page` / `Clicking …` / `Filling form` — tool calls, one row per natural-language intent
+- Mint-bar spinner on the currently-running step
+- Running cost ($) ticks in the header
+
+The agent's verification report renders as a Result card at the end. If it found bugs, a Findings card appears alongside, severity-coloured.
+
+## Step 4 — Save the verified session
+
+Click the dropdown on the Result card. Three formats by default (four if `@hover-dev/security` is loaded):
+
+- **Save as Spec** → `__vibe_tests__/<slug>.spec.ts` using `getByRole` / `getByLabel` / `getByTestId`
+- **Save as Skill** → `.claude/skills/<slug>/SKILL.md` (replayable by saying "execute &lt;slug&gt;")
+- **Save as Jira case** → `__vibe_tests__/<slug>.case.csv` (Xray-compatible)
+- **Save as Security spec** → `__vibe_tests__/<slug>.security.spec.ts` (uses Playwright's `request` fixture for header/status assertions; only present when `@hover-dev/security` is registered)
+
+## Step 5 — Run the spec without Hover
+
+The saved file is a plain `@playwright/test` spec. Run it like any other Playwright test in your project:
+
+```bash
+pnpm exec playwright test __vibe_tests__/<slug>.spec.ts
+```
+
+This is the point of crystallization: the AI authored the test once, but the saved spec runs forever in CI with zero agent involvement.
+
+## What's next
+
+- [Voice mode](/docs/features/voice-mode) — hands-free instruction and step narration
+- [Record mode](/docs/features/record-mode) — record your own clicks as Playwright steps
+- [Fix prompt](/docs/features/fix-prompt) — click an element, describe a change, get a precise prompt

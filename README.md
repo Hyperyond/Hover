@@ -18,7 +18,7 @@
 
 <!-- Project-meta badges: release / community / architecture -->
 <p>
-  <a href="https://hover-docs.vercel.app"><img alt="Documentation" src="https://img.shields.io/badge/docs-hover--docs.vercel.app-7CFFA8?style=flat-square&logo=readthedocs&logoColor=white" /></a>
+  <a href="https://gethover.dev/docs"><img alt="Documentation" src="https://img.shields.io/badge/docs-gethover.dev%2Fdocs-7CFFA8?style=flat-square&logo=readthedocs&logoColor=white" /></a>
   <a href="https://github.com/Hyperyond/Hover/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Hyperyond/Hover?style=flat-square&label=release&color=blueviolet" /></a>
   <a href="https://github.com/Hyperyond/Hover/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Hyperyond/Hover?style=flat-square&color=ffd700" /></a>
   <a href="https://github.com/Hyperyond/Hover/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Hyperyond/Hover?style=flat-square&color=2ecc71" /></a>
@@ -252,7 +252,7 @@ Zero external dependencies — no `mitmproxy`, no Python, no system CA install. 
 
 The agent gets four extra MCP tools while the mode is active: `list_flows` (enumerate captured API surface), `get_flow` (full headers + body), `replay_flow` (re-issue with optional method / url / headers / body mutations), and `clear_flows`. Findings save as plain Playwright specs that reproduce the probe via `page.request.fetch()` — your CI runs them with vanilla `@playwright/test`, no Hover, no mockttp.
 
-See [docs/features/security](https://hover-docs.vercel.app/features/security) for the full walkthrough + reporting markers + honest limitations.
+See [docs/features/security](https://gethover.dev/docs/features/security) for the full walkthrough + reporting markers + honest limitations.
 
 ### Voice mode
 
@@ -369,7 +369,7 @@ The spec is plain `@playwright/test` — no Hover runtime, no MITM proxy, no age
 
 ## Install
 
-Three steps, all copy-paste. Detailed walkthrough in the [install docs](https://hover-docs.vercel.app/get-started/install).
+Three steps, all copy-paste. Detailed walkthrough in the [install docs](https://gethover.dev/docs/get-started/install).
 
 ### 1 · Prerequisites
 
@@ -457,7 +457,7 @@ export default function RootLayout({ children }) {
 }
 ```
 
-Works on **Next 15 + 16**, with both Turbopack and webpack, and any of `next.config.{ts,mjs,js}`. See the [Next install guide](https://hover-docs.vercel.app/get-started/install#next-js-15-16) for the full breakdown.
+Works on **Next 15 + 16**, with both Turbopack and webpack, and any of `next.config.{ts,mjs,js}`. See the [Next install guide](https://gethover.dev/docs/get-started/install#next-js-15-16) for the full breakdown.
 
 </details>
 
@@ -496,7 +496,7 @@ log in, then add a todo named "verify hover"
 
 The agent drives the debug Chrome over CDP, narrates each step, and renders a Result + Findings card. Click **Save as Spec** and the verified flow becomes a `__vibe_tests__/<slug>.spec.ts` file that runs in CI like any other Playwright test — no Hover dependency, no agent in the loop, no API key.
 
-Working **on** Hover itself (not with it)? See [Development](https://hover-docs.vercel.app/development/) on the docs site for the monorepo workflow.
+Working **on** Hover itself (not with it)? See [Development](https://gethover.dev/docs/development/) on the docs site for the monorepo workflow.
 
 ## Use it in your project
 
@@ -639,9 +639,9 @@ hover({
                                   └────────────────────────────────────────┘
 ```
 
-The plugin slot is what makes optional packages like [`@hover-dev/security`](./packages/security/) extend the agent's tool surface without touching `@hover-dev/core`. See [Plugin API](https://hover-docs.vercel.app/reference/plugin-api) for the manifest shape.
+The plugin slot is what makes optional packages like [`@hover-dev/security`](./packages/security/) extend the agent's tool surface without touching `@hover-dev/core`. See [Plugin API](https://gethover.dev/docs/reference/plugin-api) for the manifest shape.
 
-Architecture details, package boundaries, and contribution workflow live on the [docs site](https://hover-docs.vercel.app/development/).
+Architecture details, package boundaries, and contribution workflow live on the [docs site](https://gethover.dev/docs/development/).
 
 ## FAQ
 
