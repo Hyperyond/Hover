@@ -1,0 +1,453 @@
+import { Sparkle } from '@/components/Sparkle';
+import { WidgetDemo } from '@/components/WidgetDemo';
+
+const GITHUB = 'https://github.com/Hyperyond/Hover';
+const DOCS = '/docs/';
+
+export default function Home() {
+  return (
+    <div className="relative overflow-x-hidden">
+      <Backdrop />
+      <Nav />
+      <Hero />
+      <Pillars />
+      <Outputs />
+      <Coverage />
+      <CTA />
+      <Footer />
+    </div>
+  );
+}
+
+/* ── Atmospheric backdrop ───────────────────────────────────────────────
+ * A faint mint radial bloom behind the hero + a hairline grid, so the page
+ * has depth instead of a flat near-black fill. Pointer-events none. */
+function Backdrop() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none fixed inset-0 z-0"
+      style={{
+        background:
+          'radial-gradient(60% 50% at 50% -10%, rgba(124,255,168,0.10), transparent 70%)',
+      }}
+    >
+      <div
+        className="absolute inset-0 opacity-[0.18]"
+        style={{
+          backgroundImage:
+            'linear-gradient(var(--color-line) 1px, transparent 1px), linear-gradient(90deg, var(--color-line) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+          maskImage:
+            'radial-gradient(80% 60% at 50% 0%, #000 30%, transparent 80%)',
+          WebkitMaskImage:
+            'radial-gradient(80% 60% at 50% 0%, #000 30%, transparent 80%)',
+        }}
+      />
+    </div>
+  );
+}
+
+function Nav() {
+  return (
+    <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+      <a href="/" className="flex items-center gap-2.5">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(124,255,168,0.5)] bg-bg text-mint shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
+          <Sparkle size={18} />
+        </span>
+        <span className="text-[15px] font-semibold tracking-tight">Hover</span>
+      </a>
+      <nav className="flex items-center gap-1 text-[13px] text-text-mute">
+        <a href="#how" className="rounded-md px-3 py-2 transition-colors hover:text-text">
+          How it works
+        </a>
+        <a href="#outputs" className="rounded-md px-3 py-2 transition-colors hover:text-text">
+          Outputs
+        </a>
+        <a href={DOCS} className="rounded-md px-3 py-2 transition-colors hover:text-text">
+          Docs
+        </a>
+        <a
+          href={GITHUB}
+          className="ml-2 flex items-center gap-1.5 rounded-md border border-line px-3 py-2 transition-colors hover:border-line-2 hover:text-text"
+        >
+          <GitHubGlyph /> GitHub
+        </a>
+      </nav>
+    </header>
+  );
+}
+
+function Hero() {
+  return (
+    <section className="relative z-10 mx-auto max-w-6xl px-6 pb-20 pt-12 md:pt-16">
+      <div className="grid items-center gap-12 lg:grid-cols-[1fr_minmax(380px,420px)] lg:gap-10">
+        {/* Left — copy */}
+        <div>
+          <a
+            href={GITHUB}
+            className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3.5 py-1.5 text-[12px] text-text-mute transition-colors hover:border-[rgba(124,255,168,0.4)] hover:text-text"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-mint" />
+            v0.13 — record/replay parity shipped
+          </a>
+
+          <h1 className="font-mono text-[38px] font-semibold leading-[1.08] tracking-tight md:text-[52px]">
+            AI authors the test.
+            <br />
+            <span className="text-mint">CI runs plain Playwright.</span>
+          </h1>
+
+          <p className="mt-7 max-w-xl text-[16px] leading-relaxed text-text-mute md:text-[18px]">
+            Describe a flow in plain English and watch AI drive your{' '}
+            <em className="not-italic text-text">real</em> Chrome. When the run
+            is clean, click <span className="text-text">Save as spec</span> —
+            Hover writes a standard{' '}
+            <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[14px] text-mint">
+              @playwright/test
+            </code>{' '}
+            file that runs in CI with zero AI, forever.
+          </p>
+
+          <div className="mt-9 flex flex-wrap items-center gap-3">
+            <CopyCommand />
+            <a
+              href={DOCS}
+              className="rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
+            >
+              Read the docs →
+            </a>
+          </div>
+
+          <p className="mt-5 text-[13px] text-text-dim">
+            No API key, no per-token billing — Hover spawns the{' '}
+            <span className="text-text-mute">claude</span> /{' '}
+            <span className="text-text-mute">codex</span> CLI already on your{' '}
+            <code className="font-mono text-text-mute">PATH</code>.
+          </p>
+        </div>
+
+        {/* Right — live widget replica */}
+        <div className="flex justify-center lg:justify-end">
+          <WidgetDemo />
+        </div>
+      </div>
+
+      <TerminalDemo />
+    </section>
+  );
+}
+
+function CopyCommand() {
+  return (
+    <div className="group flex items-center gap-3 rounded-md border border-[rgba(124,255,168,0.5)] bg-bg px-5 py-3 font-mono text-[14px] text-mint shadow-[0_4px_16px_rgba(0,0,0,0.35)] transition-all hover:border-[rgba(124,255,168,0.9)] hover:shadow-[0_4px_18px_rgba(124,255,168,0.28),0_4px_16px_rgba(0,0,0,0.4)]">
+      <span className="select-none text-text-dim">$</span>
+      <span>npx @hover-dev/cli add</span>
+    </div>
+  );
+}
+
+/* The explore → crystallise story told as a single annotated terminal panel —
+ * styled exactly like the widget's dark inset code blocks. */
+function TerminalDemo() {
+  return (
+    <div className="mt-16 overflow-hidden rounded-lg border border-line bg-bg-3 shadow-[0_18px_48px_rgba(0,0,0,0.55)]">
+      <div className="flex items-center gap-2 border-b border-line bg-bg-2 px-4 py-2.5">
+        <span className="h-3 w-3 rounded-full bg-line-2" />
+        <span className="h-3 w-3 rounded-full bg-line-2" />
+        <span className="h-3 w-3 rounded-full bg-line-2" />
+        <span className="ml-2 font-mono text-[12px] text-text-dim">
+          hover · basic-app
+        </span>
+      </div>
+      <div className="grid gap-px bg-line md:grid-cols-2">
+        <div className="bg-bg-3 p-5">
+          <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-text-dim">
+            You type
+          </div>
+          <p className="font-mono text-[14px] leading-relaxed text-text">
+            <span className="text-mint">›</span> log in, then add a todo named
+            &ldquo;verify hover&rdquo;
+          </p>
+          <div className="mt-5 space-y-2 font-mono text-[13px] text-text-mute">
+            <Step label="Opening page" />
+            <Step label="Filling login form" />
+            <Step label="Clicking Sign in" />
+            <Step label="Typing todo" />
+            <Step label="Done in 11 steps · $0.16" done />
+          </div>
+        </div>
+        <div className="bg-bg-3 p-5">
+          <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-text-dim">
+            Hover saves <span className="text-mint">__vibe_tests__/login-flow.spec.ts</span>
+          </div>
+          <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-text-mute">
+            <code>{`import { test, expect } from '@playwright/test';
+
+test('login then add todo', async ({ page }) => {
+  await page.goto('http://localhost:5173/');
+  await page.getByLabel('Email').fill('claude@…');
+  await page.getByRole('button',
+    { name: 'Sign in' }).click();
+  await page.getByPlaceholder('New todo')
+    .fill('verify hover');
+  await expect(page.getByText('verify hover'))
+    .toBeVisible();
+});`}</code>
+          </pre>
+          <div className="mt-3 font-mono text-[11px] text-text-dim">
+            runs with <span className="text-text-mute">npx playwright test</span> — no agent, no key
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Step({ label, done }: { label: string; done?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${done ? 'bg-mint' : 'bg-line-2'}`}
+      />
+      <span className={done ? 'text-mint' : undefined}>{label}</span>
+    </div>
+  );
+}
+
+/* ── Four core pillars ──────────────────────────────────────────────── */
+const PILLARS = [
+  {
+    k: 'explore',
+    title: 'Explore once → deterministic spec',
+    body: 'AI drives the browser to figure out the flow. What lands in your repo is plain @playwright/test code with semantic getByRole / getByLabel selectors — the agent\'s job ends at "save".',
+  },
+  {
+    k: 'runtime',
+    title: 'Zero AI at runtime, zero tokens in CI',
+    body: 'Other AI-testing tools keep a model in the loop when the test runs — every PR, every nightly pays for LLM calls. Hover spends the model once, at authoring time. Green builds never pay a recurring tax.',
+  },
+  {
+    k: 'byo',
+    title: 'BYO-CLI — reuse the subscription you have',
+    body: 'Hover bundles no AI runtime. It spawns whatever coding-agent CLI is on your PATH — claude, codex, cursor-agent, aider — riding on the Pro / Max / ChatGPT plan you already pay for. No .env, no API key.',
+  },
+  {
+    k: 'coverage',
+    title: 'Five bundlers, three artifacts',
+    body: 'Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5 — plus React Native Web. Every verified session crystallises three ways: a Playwright spec, a replayable Skill, and a Jira-importable test case.',
+  },
+];
+
+function Pillars() {
+  return (
+    <section id="how" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
+      <SectionLabel>Why Hover</SectionLabel>
+      <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
+        Optimised for one axis nobody else picks:{' '}
+        <span className="text-mint">artifact portability</span>.
+      </h2>
+      <div className="mt-12 grid gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-2">
+        {PILLARS.map((p, i) => (
+          <article
+            key={p.k}
+            className="group bg-bg p-8 transition-colors hover:bg-bg-2"
+          >
+            <div className="mb-5 flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md border border-line bg-bg-3 font-mono text-[12px] text-mint">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <span className="h-px flex-1 bg-line transition-colors group-hover:bg-[rgba(124,255,168,0.3)]" />
+            </div>
+            <h3 className="text-[18px] font-semibold tracking-tight text-text">
+              {p.title}
+            </h3>
+            <p className="mt-3 text-[14.5px] leading-relaxed text-text-mute">
+              {p.body}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ── Three outputs table ────────────────────────────────────────────── */
+const OUTPUTS = [
+  {
+    file: '.spec.ts',
+    name: 'Playwright spec',
+    reader: 'Node + Playwright (CI)',
+    audience: 'CI · devs writing code',
+    accent: 'text-mint',
+  },
+  {
+    file: 'SKILL.md',
+    name: 'Agent Skill',
+    reader: 'Claude Code / agent',
+    audience: 'Future you, exploring',
+    accent: 'text-link',
+  },
+  {
+    file: '.case.csv',
+    name: 'Jira test case',
+    reader: 'Xray · Zephyr · Jira',
+    audience: 'QA reviewing · PM tracking',
+    accent: 'text-warn',
+  },
+];
+
+function Outputs() {
+  return (
+    <section id="outputs" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
+      <SectionLabel>One exploration, three audiences</SectionLabel>
+      <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
+        A single <span className="text-mint">Save as ▾</span> menu, three files
+        that check into git.
+      </h2>
+      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
+        Nothing lives in a vendor database. A spec written on a laptop on Monday
+        is reviewed by QA on Tuesday and runs in CI from Wednesday — same file,
+        no export step.
+      </p>
+      <div className="mt-12 grid gap-5 md:grid-cols-3">
+        {OUTPUTS.map((o) => (
+          <article
+            key={o.file}
+            className="rounded-lg border border-line bg-bg-2 p-6 transition-colors hover:border-line-2"
+          >
+            <code
+              className={`font-mono text-[13px] ${o.accent}`}
+            >{`<slug>${o.file}`}</code>
+            <h3 className="mt-3 text-[17px] font-semibold tracking-tight">
+              {o.name}
+            </h3>
+            <dl className="mt-5 space-y-3 text-[13px]">
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-dim">Read by</dt>
+                <dd className="text-right text-text-mute">{o.reader}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-text-dim">Audience</dt>
+                <dd className="text-right text-text-mute">{o.audience}</dd>
+              </div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ── Coverage strip ─────────────────────────────────────────────────── */
+const BUNDLERS = ['Vite', 'Astro', 'Nuxt', 'Next.js', 'webpack', 'RN Web'];
+
+function Coverage() {
+  return (
+    <section className="relative z-10 mx-auto max-w-6xl px-6 py-12">
+      <div className="rounded-lg border border-line bg-bg-3 px-8 py-7">
+        <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+          <p className="text-[14px] text-text-mute">
+            <span className="text-text">Works where you already build.</span>{' '}
+            One <code className="font-mono text-mint">npx</code> command detects
+            your bundler and wires it up.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {BUNDLERS.map((b) => (
+              <span
+                key={b}
+                className="rounded-full border border-line bg-bg px-3.5 py-1.5 font-mono text-[12px] text-text-mute"
+              >
+                {b}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CTA() {
+  return (
+    <section className="relative z-10 mx-auto max-w-6xl px-6 py-28">
+      <div className="relative overflow-hidden rounded-xl border border-[rgba(124,255,168,0.3)] bg-bg-2 px-8 py-16 text-center md:px-16">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(50% 80% at 50% 0%, rgba(124,255,168,0.12), transparent 70%)',
+          }}
+        />
+        <div className="relative">
+          <span className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(124,255,168,0.5)] bg-bg text-mint">
+            <Sparkle size={22} />
+          </span>
+          <h2 className="mx-auto max-w-2xl font-mono text-[30px] font-semibold leading-tight tracking-tight md:text-[40px]">
+            Stop hand-writing the tests AI could explore for you.
+          </h2>
+          <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-text-mute">
+            Add Hover to your dev server in one command. Keep the deterministic
+            Playwright files forever.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <CopyCommand />
+            <a
+              href={GITHUB}
+              className="flex items-center gap-2 rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
+            >
+              <GitHubGlyph /> Star on GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="relative z-10 border-t border-line">
+      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 text-[13px] text-text-dim md:flex-row">
+        <div className="flex items-center gap-2.5">
+          <span className="text-mint">
+            <Sparkle size={16} />
+          </span>
+          <span>Hover — © Hyperyond · Apache-2.0</span>
+        </div>
+        <div className="flex items-center gap-5">
+          <a href={DOCS} className="transition-colors hover:text-text">
+            Docs
+          </a>
+          <a href={GITHUB} className="transition-colors hover:text-text">
+            GitHub
+          </a>
+          <a
+            href="https://www.npmjs.com/package/@hover-dev/cli"
+            className="transition-colors hover:text-text"
+          >
+            npm
+          </a>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 font-mono text-[12px] uppercase tracking-[0.2em] text-mint">
+      <span className="h-1.5 w-1.5 rounded-full bg-mint" />
+      {children}
+    </div>
+  );
+}
+
+function GitHubGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}

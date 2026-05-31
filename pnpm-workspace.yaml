@@ -5,3 +5,4 @@ packages:
   # links resolve into the local @hover-dev/* packages.
   - 'examples/turbo-monorepo/apps/*'
   - 'docs'
+  - 'site'

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="#7CFFA8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Same H + cursor mark used by the widget launcher (template.html). -->
+  <path d="M10 2v6M10 12v6M2 10h6M12 10h6"/>
+  <path d="M4.5 4.5l2 2M13.5 13.5l2 2M4.5 15.5l2-2M13.5 6.5l2-2" opacity="0.55"/>
+</svg>
