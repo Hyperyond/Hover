@@ -85,7 +85,7 @@ Flags:
 - `--cwd <path>` — target a workspace inside a monorepo.
 - `--port <n>` — service port (default 51789; auto-bumps if busy).
 
-See the [Re-record a spec](https://hover-docs.vercel.app/features/re-record) feature page for the full walkthrough.
+See the [Re-record a spec](https://gethover.dev/docs/features/re-record) feature page for the full walkthrough.
 
 ## License
 

@@ -214,7 +214,7 @@ export default defineConfig({
 
 模式启用期间 agent 会多拿到四个 MCP 工具：`list_flows`（枚举 API surface）、`get_flow`（完整 headers + body）、`replay_flow`（带 method / url / headers / body mutation 的重发）、`clear_flows`。发现的问题落盘成纯 Playwright spec，用 `page.request.fetch()` 复现 —— 你的 CI 用普通 `@playwright/test` 跑就行，不需要 Hover、不需要 mockttp。
 
-完整教程见 [docs/features/security](https://hover-docs.vercel.app/features/security)。
+完整教程见 [docs/features/security](https://gethover.dev/docs/features/security)。
 
 ### Bug 发现是一等输出
 
@@ -302,7 +302,7 @@ Agent 通过 CDP 操作 debug Chrome，每一步都有叙述，结束时渲染 R
 
 > 想让 Hover 在 `pnpm dev` 时就预先把 debug Chrome 启好？给插件传 `autoLaunchChrome: true`，详见 [插件选项](#插件选项)。**它启的是 `:9222` 上的隔离 debug Chrome，永远不会动你的日常浏览器**。也可以随时手动启动：`pnpm exec hover-chrome`（或 `npx hover-chrome`）。
 
-想给 Hover 自己开发（不是用它）？看 [Development](https://hover-docs.vercel.app/development/) 章节。
+想给 Hover 自己开发（不是用它）？看 [Development](https://gethover.dev/docs/development/) 章节。
 
 ## 安装
 

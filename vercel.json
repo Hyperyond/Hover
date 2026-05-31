@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @hover-dev/docs build",
+  "buildCommand": "pnpm --filter @hover-dev/site build",
   "installCommand": "pnpm install --frozen-lockfile",
-  "outputDirectory": "docs/.vitepress/dist",
-  "framework": null
+  "outputDirectory": "site/out",
+  "framework": "nextjs"
 }

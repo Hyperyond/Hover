@@ -1,0 +1,105 @@
+# Re-record a spec
+
+> Added in v0.11.
+
+When a saved Playwright spec breaks because the UI changed (button renamed, label split, role tweaked), you don't have to hand-edit the `.spec.ts`. Hover can regenerate it.
+
+## When to use it
+
+A re-record is the right move when:
+
+- A previously-green spec turns **red** on CI, and
+- The agent's **original intent** (e.g. "log in then add a todo") still makes sense — the user-facing flow hasn't changed, only the markup has.
+
+If the *flow* itself changed (login now requires SMS verification, or the cart step disappeared), don't re-record — that's a real regression. Open the spec, decide whether the new flow is intended, and either update the test by hand or delete it and start fresh.
+
+## How re-record works
+
+The spec's JSDoc header has always carried the **`Original prompt:`** line:
+
+```ts
+/**
+ * Original prompt: log in then click + 1 three times and verify the counter
+ * Outcome: Logged in, counter is 03.
+ * Steps:
+ *   1. Open /
+ *   2. Type "claude@sparkplay.io" into Email
+ *   3. Type "demo1234" into Password
+ *   4. Click Submit button
+ *   ...
+ */
+```
+
+Re-record uses that line. The agent receives the natural-language prompt verbatim, drives the **current** UI to satisfy the intent, and Hover overwrites the file with the new selectors that emerged. The JSDoc header is regenerated alongside.
+
+## Two ways to trigger
+
+### 1. From the widget
+
+1. Click the **📜 Saved sessions** button in the widget header.
+2. Switch to the **Specs** tab.
+3. Click **⟳ Re-record** next to the spec you want to refresh.
+
+The widget closes the overlay, the agent starts driving, and the result lands as a normal run. When the agent finishes successfully, the file is overwritten and the **Specs** list refreshes (open the overlay again to verify the new "saved … ago" timestamp).
+
+### 2. From the terminal
+
+```bash
+pnpm hover re-record <spec>
+```
+
+Either an absolute path, a path relative to `cwd`, or a bare slug all work:
+
+```bash
+pnpm hover re-record __vibe_tests__/login.spec.ts
+pnpm hover re-record login.spec.ts          # from inside __vibe_tests__/
+pnpm hover re-record login                   # bare slug — Hover finds it
+```
+
+The CLI boots a one-shot `@hover-dev/core` service in the background, replays the prompt, prints the resulting `git diff`, and tells you the accept / reject commands:
+
+```bash
+$ pnpm hover re-record login
+
+ℹ Spec: /…/__vibe_tests__/login.spec.ts
+ℹ Original prompt: log in then add a todo
+ℹ Booting a temporary Hover service on port 51789 (auto-bumps if busy)…
+ℹ Connected. Replaying prompt against the current UI…
+………………
+✓ Spec overwritten: /…/__vibe_tests__/login.spec.ts
+ℹ Review the change:
+
+diff --git a/__vibe_tests__/login.spec.ts b/__vibe_tests__/login.spec.ts
+- await page.getByRole('button', { name: 'Submit' }).click();
++ await page.getByRole('button', { name: 'Sign in' }).click();
+
+ℹ Accept: git add __vibe_tests__/login.spec.ts && git commit
+ℹ Reject: git checkout -- __vibe_tests__/login.spec.ts
+```
+
+### Flags
+
+- `--dry-run` — run the agent end-to-end, **do not write the file**. Use to preview cost / behaviour. The CLI prints the agent's summary and exits clean.
+- `--cwd <path>` — target a workspace inside a monorepo.
+- `--port <n>` — service port (default 51789; auto-bumps if busy).
+
+### Environment
+
+The CLI picks up the same env vars `pnpm smoke` honours:
+
+- `HOVER_AGENT` — `claude` (default), `codex`, `cursor-agent`, etc.
+- `HOVER_MODEL` — `sonnet` (default), `opus`.
+- `HOVER_CDP` — debug Chrome URL (default `http://localhost:9222`).
+
+## Caveats
+
+- **Re-record needs the `Original prompt:` header.** Hand-authored specs that never went through Hover's Save flow don't carry it; the widget shows an inert Re-record button with a tooltip explaining why. Add an `* Original prompt: …` line to the JSDoc and it will work.
+- **A debug Chrome is required.** Re-record drives a real browser — `pnpm smoke:chrome` if one isn't running.
+- **The agent is non-deterministic at the *step* level.** Even if the UI hasn't changed, the regenerated spec may use a slightly different sequence of tool calls. Diff before committing.
+- **One spec per command.** v0.11 doesn't ship `re-record --all` or `--failed` — both rejected on purpose ([see FAQ](/docs/faq#why-no-re-record-all-or-failed)). For now: re-record specs one at a time.
+
+## Why not auto-heal at CI time?
+
+That's the Stagehand / Midscene model — every test run pays for an LLM call. Hover's model is the inverse: pay once when the UI changes (you trigger Re-record), then CI runs the regenerated `.spec.ts` deterministically and for free, forever.
+
+See the [FAQ entry](/docs/faq#my-ui-changed-and-my-saved-spec-breaks-what-now) for the full reasoning.

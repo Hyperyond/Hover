@@ -65,7 +65,7 @@ export default defineConfig({
 });
 ```
 
-See [`@hover-dev/security`](https://www.npmjs.com/package/@hover-dev/security) for the canonical plugin example, and the [plugin API reference](https://hover-docs.vercel.app/reference/plugin-api) for the full manifest shape (including the v0.9 widget host API and the v0.12 `saveHandlers` / `saveEntries` API for contributing Save-dropdown entries).
+See [`@hover-dev/security`](https://www.npmjs.com/package/@hover-dev/security) for the canonical plugin example, and the [plugin API reference](https://gethover.dev/docs/reference/plugin-api) for the full manifest shape (including the v0.9 widget host API and the v0.12 `saveHandlers` / `saveEntries` API for contributing Save-dropdown entries).
 
 ## What it does
 
