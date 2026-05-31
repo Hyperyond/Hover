@@ -14,6 +14,7 @@ export default function Home() {
       <Hero />
       <Pillars />
       <Outputs />
+      <Security />
       <Coverage />
       <Waitlist />
       <CTA />
@@ -328,6 +329,91 @@ function Outputs() {
             </dl>
           </article>
         ))}
+      </div>
+    </section>
+  );
+}
+
+/* ── Security testing ───────────────────────────────────────────────────
+ * Orange-themed (matching the @hover-dev/security plugin) so it reads as a
+ * distinct mode, not part of the mint default flow. */
+const SECURITY_CHECKS = [
+  'IDOR — replay a captured URL with another user’s resource id',
+  'Auth bypass — drop or swap the auth header',
+  'Parameter tampering — mutate user_id / role / price / isAdmin',
+  'Missing headers — CSP / X-Frame-Options / HSTS / SameSite',
+  'PII leakage — user data in query strings or pre-consent requests',
+];
+
+function Security() {
+  const orange = '#fb923c';
+  return (
+    <section className="relative z-10 mx-auto max-w-6xl px-6 py-24">
+      <div
+        className="relative overflow-hidden rounded-xl border bg-bg-2 px-8 py-12 md:px-14"
+        style={{ borderColor: 'rgba(251,146,60,0.3)' }}
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(60% 80% at 80% 0%, rgba(251,146,60,0.10), transparent 70%)',
+          }}
+        />
+        <div className="relative grid gap-10 lg:grid-cols-2 lg:gap-14">
+          {/* Left — pitch */}
+          <div>
+            <div
+              className="mb-4 flex items-center gap-3 font-mono text-[12px] uppercase tracking-[0.2em]"
+              style={{ color: orange }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: orange }} />
+              Optional plugin · @hover-dev/security
+            </div>
+            <h2 className="font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
+              The same widget,{' '}
+              <span style={{ color: orange }}>a security mode</span>.
+            </h2>
+            <p className="mt-5 max-w-md text-[15px] leading-relaxed text-text-mute">
+              Add{' '}
+              <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px]" style={{ color: orange }}>
+                @hover-dev/security
+              </code>{' '}
+              and the panel grows a Security mode. Hover routes your debug
+              Chrome through a local HTTPS MITM, the agent inspects the captured
+              API calls and replays them with mutations, and confirmed findings
+              crystallise into{' '}
+              <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-text">
+                .security.spec.ts
+              </code>{' '}
+              regression tests that run in CI — no proxy, no agent. Today&rsquo;s
+              IDOR becomes a gate on every PR.
+            </p>
+            <p className="mt-4 text-[13px] text-text-dim">
+              Zero external deps — no mitmproxy, no Python, no system CA. Probes
+              run on your own dev server; authorised testing only.
+            </p>
+          </div>
+
+          {/* Right — what it probes */}
+          <div className="rounded-lg border border-line bg-bg-3 p-6">
+            <div className="mb-4 font-mono text-[11px] uppercase tracking-wider text-text-dim">
+              What the agent probes for
+            </div>
+            <ul className="space-y-3">
+              {SECURITY_CHECKS.map((c) => (
+                <li key={c} className="flex items-start gap-3 text-[13.5px] leading-snug text-text-mute">
+                  <span
+                    className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ background: orange }}
+                  />
+                  <span>{c}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
   );
