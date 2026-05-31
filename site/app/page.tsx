@@ -1,6 +1,7 @@
 import { Sparkle } from '@/components/Sparkle';
 import { WidgetDemo } from '@/components/WidgetDemo';
 import { CopyCommand } from '@/components/CopyCommand';
+import { Waitlist } from '@/components/Waitlist';
 
 const GITHUB = 'https://github.com/Hyperyond/Hover';
 const DOCS = '/docs/';
@@ -14,6 +15,7 @@ export default function Home() {
       <Pillars />
       <Outputs />
       <Coverage />
+      <Waitlist />
       <CTA />
       <Footer />
     </div>
