@@ -6,9 +6,32 @@ import { Waitlist } from '@/components/Waitlist';
 const GITHUB = 'https://github.com/Hyperyond/Hover';
 const DOCS = '/docs/';
 
+/** SoftwareApplication structured data — helps search + LLM engines describe
+ *  Hover accurately (open-source DeveloperApplication, free, Playwright-based). */
+const JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Hover',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Web (Chrome via CDP)',
+  description:
+    'Open-source tool that lets AI drive your real browser from a chat widget to author end-to-end tests, then crystallises the session into a plain @playwright/test spec that runs in CI with no AI and no API key.',
+  url: 'https://gethover.dev',
+  downloadUrl: 'https://www.npmjs.com/package/@hover-dev/cli',
+  license: 'https://github.com/Hyperyond/Hover/blob/main/LICENSE',
+  isAccessibleForFree: true,
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  author: { '@type': 'Organization', name: 'Hyperyond', url: 'https://github.com/Hyperyond' },
+  sameAs: ['https://github.com/Hyperyond/Hover', 'https://www.npmjs.com/package/@hover-dev/cli'],
+};
+
 export default function Home() {
   return (
     <div className="relative overflow-x-hidden">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
       <Backdrop />
       <Nav />
       <Hero />

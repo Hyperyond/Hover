@@ -1,0 +1,39 @@
+# Hover
+
+> Open-source tool where AI drives your real browser to author end-to-end tests, then crystallises the session into a plain @playwright/test spec that runs in CI with zero AI and zero API keys.
+
+Hover injects a floating chat widget into your dev server page. You describe a flow in plain English ("log in, then add a todo"); an AI agent drives your actual Chrome over the Chrome DevTools Protocol (CDP) via Playwright. When the run is verified, one click saves it as a standard `@playwright/test` spec under `__vibe_tests__/`. The saved spec runs in CI like any Playwright test — no agent, no model, no API key, no per-token billing.
+
+## What makes Hover different
+
+- **AI authors once, then steps out.** The agent explores and writes the test during authoring; the committed artifact is plain deterministic Playwright code. CI never calls a model. Tools like Stagehand and Midscene keep a model in the loop at run time (every CI run costs tokens); Hover spends the model only once, at authoring.
+- **BYO-CLI, no API key.** Hover bundles no AI runtime. It spawns whichever coding-agent CLI you already have on PATH — `claude` (Claude Code) or `codex` (OpenAI Codex) — riding the subscription you already pay for. There is no LLM SDK in Hover and nothing to authenticate.
+- **The artifact is portable.** Output is standard `@playwright/test` code in your git repo. No proprietary format, no SaaS lock-in, no vendor dashboard required to run it.
+
+## Install
+
+One command auto-detects your bundler and wires it up:
+
+    npx @hover-dev/cli add
+
+Supported bundlers: Vite, Astro, Nuxt, Next.js (Turbopack + webpack), webpack 5. React Native Web is supported via the Vite plugin. React Native native is NOT supported.
+
+## Key features
+
+- Save a verified session three ways: a Playwright spec (`.spec.ts`), a replayable agent Skill (`SKILL.md`), or a Jira/Xray-importable test case (`.case.csv`).
+- Record mode: do the flow manually and get the same Playwright steps.
+- Fix prompt: click any element, describe a change, get a precise source-attributed prompt for your coding agent.
+- Voice mode: speak instructions, hear spoken progress (browser-native Web Speech API, English + Chinese).
+- Re-record: when UI drift breaks a spec, the agent regenerates selectors from the original prompt.
+- Security testing (optional `@hover-dev/security` plugin): routes the debug Chrome through a local HTTPS MITM proxy; the agent inspects and replays captured API calls with mutations to probe for IDOR, authz bypass, parameter tampering, missing security headers, and PII leakage. Findings crystallise into Playwright regression specs.
+
+## Hover Cloud (planned, not yet available)
+
+A future hosted service for running the specs you author locally: parallel hosted runs, scheduled monitoring with alerts, a dashboard with flakiness detection, PR checks, plus AI that works on results that already ran — self-healing re-record (regenerate selectors and open a PR when a spec breaks) and failure diagnosis. CI still runs plain Playwright; the AI only acts on what already broke, never on a green build. Authoring stays local and free. No launch date yet.
+
+## Links
+
+- Website: https://gethover.dev
+- Documentation: https://gethover.dev/docs
+- Source (Apache-2.0): https://github.com/Hyperyond/Hover
+- npm CLI: https://www.npmjs.com/package/@hover-dev/cli

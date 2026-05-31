@@ -24,12 +24,18 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { slug } = await params;
   if (!slug || slug.length === 0) {
-    return { title: 'Hover docs', description: 'Everything you need to author end-to-end tests with Hover.' };
+    // `absolute` opts out of the root layout's "%s · Hover" template so the
+    // title isn't doubled (e.g. "… · Hover docs · Hover").
+    return {
+      title: { absolute: 'Hover docs' },
+      description: 'Everything you need to author end-to-end tests with Hover.',
+      alternates: { canonical: '/docs/' },
+    };
   }
   const source = readDoc(slug);
   const title = source ? docTitle(source) : 'Docs';
   return {
-    title: `${title} · Hover docs`,
+    title: { absolute: `${title} · Hover docs` },
     alternates: { canonical: hrefFor(slug) },
   };
 }
