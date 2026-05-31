@@ -122,6 +122,21 @@
   --link: #7dd3fc;
 }
 
+/* When a plugin mode is engaged, re-point --accent at the mode's colour
+ * (--mode-accent, set by the plugin; falls back to security orange) on the
+ * SHADOW HOST. Defining it here rather than on .panel means it cascades to
+ * every element in the shadow tree — including the floating tooltip and the
+ * launcher, which are siblings of .panel and wouldn't see a .panel-scoped
+ * override. Default mode (currentMode === null) never gets .mode-engaged, so
+ * it stays mint. */
+:host(.mode-engaged) {
+  --mode-accent: #fb923c;
+  --accent: var(--mode-accent);
+  --accent-dim: rgba(251, 146, 60, 0.16);
+  --accent-hover: #fdab5e;
+  --accent-ink: #2a1006;
+}
+
 /* ───────────────────────── launcher (unchanged colour) ───────────────────────── */
 
 /* Launcher: dark ball matching the panel theme. Same colour vocabulary as
@@ -218,22 +233,34 @@ header {
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent);
 }
 /* Status pill — same hook the JS toggles between connected / disconnected / running */
+/* Connection status — a single coloured dot + a short word, no pill/chip.
+ * Cleaner than the old background tag; the dot carries the colour signal so
+ * the text can stay a quiet secondary grey. The dot is a ::before so no extra
+ * DOM. Colour follows the state class. */
 .status {
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
   flex-shrink: 0;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   text-transform: lowercase;
-  background: var(--accent-dim);
-  color: var(--accent);
+  color: var(--text-mute);
   margin-left: auto;
 }
-.status.connected   { background: var(--accent-dim); color: var(--accent); }
-.status.disconnected{ background: var(--error-dim); color: var(--error); }
-.status.running     { background: var(--accent-dim); color: var(--accent); }
+.status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-dim);
+}
+.status.connected::before  { background: var(--accent); }
+.status.disconnected::before { background: var(--text-dim); }
+.status.running::before    { background: var(--accent); }
 
 /* Header live-cost chip. Starts opacity 0; the `.visible` class added by
  * JS triggers a fade-in. `[hidden]` still removes from layout when the
@@ -620,13 +647,15 @@ header {
  * + overflow rules let the hint truncate gracefully if it's long. */
 .modebar .modebar-hint {
   margin-left: auto;
-  color: var(--text-dim);
-  font-size: 10px;
+  color: var(--text-mute);
+  font-size: 11.5px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
+.modebar.engaged .modebar-hint { font-weight: 600; }
 
 /* Engaged state — non-default mode is active. Orange-red (warn-ish) so
  * it reads as "you're in altered state, be aware" without being
@@ -642,7 +671,7 @@ header {
   box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.18);
 }
 .modebar.engaged .modebar-label { color: #fed7aa; }
-.modebar.engaged .modebar-hint  { color: rgba(254, 215, 170, 0.6); }
+.modebar.engaged .modebar-hint  { color: rgba(254, 215, 170, 0.85); }
 .modebar.engaged .modebar-caret { color: rgba(254, 215, 170, 0.7); }
 .modebar.engaged:hover { background: linear-gradient(180deg, rgba(251, 146, 60, 0.26), rgba(251, 146, 60, 0.14)); }
 
@@ -650,9 +679,12 @@ header {
  * across the page. We hook the state via a class on .panel set by the
  * widget JS — that's the same element that holds the existing
  * .open class, so no extra layout. */
+/* Engaged panel chrome. The --accent retint that drives the tinting lives on
+ * :host(.mode-engaged) (top of file) so it reaches the tooltip + launcher
+ * too; here we only set the panel's own border/shadow. */
 .panel.mode-engaged {
-  border-color: rgba(251, 146, 60, 0.55);
-  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.25), 0 20px 60px rgba(0, 0, 0, 0.5);
+  border-color: rgba(251, 146, 60, 0.7);
+  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.35), 0 20px 60px rgba(0, 0, 0, 0.55);
 }
 
 /* When the modebar is present, every overlay that anchored its top at
@@ -1334,12 +1366,16 @@ textarea:disabled { background: var(--bg-2); color: var(--text-dim); cursor: not
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 10px 5px 12px;
   border-radius: 7px; border: 1px solid var(--accent);
-  background: var(--accent); color: #0a3a18;
+  /* --accent-ink is the readable foreground on the accent fill: a near-black
+   * tint of the accent hue. Default (mint) keeps the original deep green;
+   * .panel.mode-engaged overrides it so the Send glyph stays legible on the
+   * mode colour (e.g. dark-brown on orange). */
+  background: var(--accent); color: var(--accent-ink, #0a3a18);
   font-size: 12px; font-weight: 700;
   cursor: pointer; font-family: inherit;
   transition: background 0.12s, transform 0.06s, color 0.12s;
 }
-.send:hover:not(:disabled) { background: #5cf094; }
+.send:hover:not(:disabled) { background: var(--accent-hover, #5cf094); }
 .send:disabled { background: var(--bg-2); color: var(--text-dim); border-color: var(--line); cursor: not-allowed; }
 .send:active:not(:disabled) { transform: translateY(1px); }
 .send.stop { background: var(--error); color: #2a0606; border-color: var(--error); }
