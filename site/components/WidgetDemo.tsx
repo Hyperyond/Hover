@@ -197,7 +197,7 @@ export function WidgetDemo() {
           )}
 
           {showUser && (
-            <div className="mb-2 flex justify-end">
+            <div className="mb-2 flex shrink-0 justify-end">
               <div className="max-w-[86%] rounded-[14px_14px_4px_14px] border border-line bg-bg-2 px-3.5 py-2 text-[13px] leading-snug text-text">
                 {phase === 1 ? (
                   <>
@@ -317,7 +317,7 @@ function StepRow({
   const accent = engaged ? '#fb923c' : 'var(--color-mint)';
   return (
     <div
-      className={`relative flex items-center gap-2.5 overflow-hidden rounded-[10px] bg-bg-2 px-3 py-2 text-[12.5px] ${
+      className={`relative flex shrink-0 items-center gap-2.5 overflow-hidden rounded-[10px] bg-bg-2 px-3 py-2 text-[12.5px] ${
         running ? 'pl-3.5' : ''
       }`}
       style={{ animation: 'wd-row-in 0.25s ease both' }}
@@ -358,7 +358,7 @@ function ResultCard({ scene }: { scene: Scene }) {
   const badgeColor = result.pass ? 'var(--color-mint)' : '#fb923c';
   return (
     <div
-      className="mt-1 rounded-[10px] border bg-bg-2 p-3"
+      className="mt-1 shrink-0 rounded-[10px] border bg-bg-2 p-3"
       style={{
         borderColor: engaged ? 'rgba(251,146,60,0.35)' : 'var(--color-line)',
         animation: 'wd-row-in 0.3s ease both',
