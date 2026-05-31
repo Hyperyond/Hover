@@ -30,24 +30,22 @@ import {
   defineHoverPlugin,
   type HoverPluginManifest,
 } from '@hover-dev/core/plugin-api';
-import { tmpdir } from 'node:os';
-import { join, dirname, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startProxy, type ProxyHandle } from './mitm/index.js';
 import { startControlPlane, type ControlPlaneHandle } from './control-plane.js';
 
 export interface SecurityModeOptions {
-  /** CDP port for the secured Chrome. Defaults to 9333 (one above normal
-   *  Hover's 9222) so both modes can be addressed independently. */
+  /** @deprecated Single-Chrome model: security no longer launches a second
+   *  Chrome on a separate port. The one debug Chrome (normal CDP port) is born
+   *  pointed through the resident MITM proxy; entering Security mode flips the
+   *  proxy to intercept. This option is ignored and kept only so existing
+   *  configs don't error. */
   cdpPort?: number;
-  /** User-data-dir for the secured Chrome. Defaults to
-   *  `<tmpdir>/hover-chrome-security`. Kept separate from normal mode so
-   *  the proxy doesn't see normal-mode cookies. */
+  /** @deprecated See `cdpPort` — ignored in the single-Chrome model. */
   userDataDir?: string;
 }
 
-const DEFAULT_CDP_PORT = 9333;
-const DEFAULT_USER_DATA_DIR = join(tmpdir(), 'hover-chrome-security');
 const MCP_SERVER_ID = '@hover-dev/security:flows';
 
 /**
@@ -164,13 +162,10 @@ function resolveWidgetScriptPath(): string {
   return resolve(here, 'widget.js');
 }
 
-export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
-  const cdpPort = opts?.cdpPort ?? DEFAULT_CDP_PORT;
-  const userDataDir = opts?.userDataDir ?? DEFAULT_USER_DATA_DIR;
-
-  // Closed-over handles so the activate hook can boot the sidecars and
-  // the deactivate / shutdown hooks can stop them. One factory call ⇒
-  // one set of handles (Hover instantiates the manifest once per service).
+export default defineHoverPlugin<SecurityModeOptions | void>(() => {
+  // Closed-over handles so the service:start hook can boot the resident
+  // sidecars and the shutdown hook can stop them. One factory call ⇒ one set
+  // of handles (Hover instantiates the manifest once per service).
   let proxy: ProxyHandle | null = null;
   let control: ControlPlaneHandle | null = null;
 
@@ -183,13 +178,12 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
       label: 'Security testing',
       description:
         'Routes the debug Chrome through a local HTTPS MITM so the agent can inspect, replay, and mutate API calls.',
+      engagedHint: 'MITM proxy active',
     },
 
-    chromeFlags: {
-      cdpPort,
-      userDataDir,
-      // `proxy` is filled in at activate time via setChromeProxy(...).
-    },
+    // No chromeFlags: the single debug Chrome is launched by the core service
+    // (on the normal CDP port) with the resident proxy baked in via the
+    // service:start hook's setChromeProxy — no separate port / profile.
 
     mcpServers: [
       {
@@ -266,22 +260,30 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
     widgetEntry: resolveWidgetScriptPath(),
 
     hooks: {
-      async 'hover:mode:activate'(ctx) {
-        if (proxy && control) return; // idempotent re-activate
+      // Single-Chrome model: the MITM proxy is RESIDENT. It starts here, at
+      // service start, BEFORE the host launches the one debug Chrome — so
+      // Chrome is born pointed through it (transparent passthrough by
+      // default). Entering Security mode no longer launches a second Chrome;
+      // it just flips the proxy into intercept mode (see mode:activate).
+      async 'hover:service:start'(ctx) {
+        if (proxy && control) return; // idempotent
 
-        proxy = await startProxy(ctx.devRoot);
+        proxy = await startProxy(ctx.devRoot); // defaults to passthrough
+        // Tell the host to bake the proxy + CA pin into the single Chrome
+        // launch. Set once; lasts the whole session.
         ctx.setChromeProxy({ port: proxy.port, spki: proxy.ca.spki });
 
-        // Spin up the local HTTP control plane that the MCP server (a
-        // separate child process spawned by the agent) will talk to.
+        // Control plane (the local HTTP API the agent's MCP server talks to)
+        // is also resident — harmless when idle, and avoids a start/stop race
+        // on every mode toggle.
         control = await startControlPlane(proxy.store);
         ctx.setMcpServerEnv(MCP_SERVER_ID, {
           HOVER_SECURITY_API: `http://127.0.0.1:${control.port}`,
           HOVER_SECURITY_API_TOKEN: control.token,
         });
 
-        // Forward FlowStore events to the widget. Use namespaced event
-        // type so the widget side can route this to the right panel.
+        // Forward FlowStore events to the widget (only emitted while the
+        // proxy is in intercept mode, so this is quiet in passthrough).
         proxy.store.on('event', (e) => {
           ctx.broadcast({
             type: e.type === 'flow:added' ? 'security:flow:added' : 'security:flow:updated',
@@ -289,10 +291,8 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
           });
         });
 
-        // v0.12 — forward newly recorded security checks. The widget's
-        // Save-as-Security-spec entry uses this to maintain a running
-        // count + the check list itself (the canonical store is the
-        // control plane; widget keeps a mirror for rendering only).
+        // v0.12 — forward newly recorded security checks for the widget's
+        // Save-as-Security-spec running count.
         control.on('check', (check) => {
           ctx.broadcast({
             type: 'security:check:recorded',
@@ -301,11 +301,17 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
         });
       },
 
+      // Enter Security mode: flip the resident proxy to intercept. No Chrome
+      // relaunch, no second instance — the same already-proxied Chrome simply
+      // starts having its traffic recorded.
+      async 'hover:mode:activate'() {
+        proxy?.setMode('intercept');
+      },
+
+      // Leave Security mode: back to transparent passthrough. The proxy and
+      // control plane stay up (resident); we just stop recording.
       async 'hover:mode:deactivate'() {
-        await control?.stop();
-        control = null;
-        await proxy?.stop();
-        proxy = null;
+        proxy?.setMode('passthrough');
       },
 
       async 'hover:service:shutdown'() {

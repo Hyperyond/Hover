@@ -112,13 +112,15 @@ Hover 只服务"浏览器能跑起来"的前端。**React Native（iOS / Android
 
 | 工具 | 它做什么 | 取舍 |
 |---|---|---|
-| **Playwright Codegen** | 录制你的点击 → `.spec.ts`。无 AI、无 auth | 不会思考——只能照搬你的点击 |
+| **Playwright Codegen** | 录制你的点击 → `.spec.ts`。无 AI | 不会思考——只能照搬你的点击 |
 | **Stagehand / Midscene** | AI 增强的测试；两家都做了缓存，稳态 CI 跑命中缓存就跳过 LLM。需要配 **OpenAI / Anthropic API key**——cache miss 时按 token 计费 | 跑测试仍然需要**它们的 SDK + 仓库里那份缓存文件**。不可移植到普通的 Playwright runner |
 | **Hover** | AI 只在**探索**时驱动浏览器一次；同时产出**确定性的 spec**、**可重放的 agent skill** 和**可直接导入 Jira 的测试用例**。**不需要 API key —— Hover 直接调用你 `PATH` 上已经装好的 coding-agent CLI**（claude / codex / cursor-agent / aider / gemini-cli / qwen-code），跑在你已付费的 Claude Pro/Max 或 ChatGPT 订阅里 | 落盘的 spec 对 UI 改动是脆的——坏了就重跑 agent（CI 时不会自愈） |
 
 Hover **不打算**做的事：当一个更好的"测试时 AI 运行时"。Stagehand 的缓存 + 自愈机制比我们能造的成熟，Midscene 的视觉 fallback 能处理 canvas / iOS / Android 目标我们碰不到。
 
 Hover **要**做的事：**让落盘的产物就是纯 `@playwright/test` 代码，在干净机器上 `npx playwright test` 就能跑、零 AI 依赖**。AI 的工作到 "Save" 为止；CI 跑的就是纯 Playwright。这是交接点。
+
+**运行时零 AI，CI 里零 token。** 有些 AI 测试工具在测试*运行*时仍然把模型留在回路里——每次 CI、每个 PR、每次 nightly 都要付 LLM 调用的钱（还得把 API key 接进 CI）。Hover 只在**创作**那一刻花一次模型钱，跑在那个本来就为 `claude` / `codex` 订阅付费的开发者机器上。落盘的 `.spec.ts` 此后永远无模型、无 key、无按量计费地运行——就是一条你 CI 早就会跑的普通 Playwright 测试。LLM 成本是你主动选择的一次性支出（创作，或一次刻意的 ⟳ re-record），永远不是绿色构建上反复抽的税。
 
 ### 一次探索，三种受众
 

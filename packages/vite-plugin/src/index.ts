@@ -1,4 +1,3 @@
-import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
 import { getWidgetScript, manifestsToPluginInputs } from '@hover-dev/widget-bootstrap';
@@ -100,6 +99,13 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
           // `Save as Skill` writes `.claude/skills/<slug>/SKILL.md`.
           devRoot: server.config.root,
           plugins,
+          // Single-Chrome model: the service launches the debug Chrome itself
+          // (after firing plugin service:start hooks), so a resident proxy is
+          // baked into that one Chrome. The dev URL uses the configured port —
+          // known now, before httpServer 'listening' — which is fine since the
+          // launch is fire-and-forget and Chrome is ready by the time it loads.
+          autoLaunchChrome,
+          devUrl: `http://localhost:${server.config.server.port ?? 5173}/`,
         });
         servicePort = service.port;
         const bumped = servicePort !== port;
@@ -113,40 +119,8 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
         const msg = err instanceof Error ? err.message : String(err);
         server.config.logger.error(`[hover] failed to start service: ${msg}`);
       }
-
-      // Once Vite is listening, fire-and-forget a debug Chrome on
-      // chromeDebugPort, pointed at the dev URL. If a debug Chrome is already
-      // there (port 9222 alive) launchDebugChrome short-circuits — so this is
-      // idempotent across HMR restarts and across multiple concurrent example
-      // apps. The user gets a working browser without an extra command.
-      if (!autoLaunchChrome) return;
-      const launch = () => {
-        const url = server.resolvedUrls?.local[0] ?? `http://localhost:${server.config.server.port ?? 5173}/`;
-        launchDebugChrome({ url, port: chromeDebugPort })
-          .then(result => {
-            if (!result.ok) {
-              server.config.logger.warn(
-                `[hover] couldn't auto-launch Chrome: ${result.reason}. Open ${url} in a Chrome started with --remote-debugging-port=${chromeDebugPort}, or run \`pnpm exec hover-chrome\`.`,
-              );
-            } else if (result.alreadyRunning) {
-              server.config.logger.info(`[hover] reusing existing debug Chrome on :${result.port}`);
-            } else {
-              server.config.logger.info(
-                `[hover] debug Chrome launched on :${result.port} (data-dir=${result.userDataDir})`,
-              );
-            }
-          })
-          .catch(err => {
-            const msg = err instanceof Error ? err.message : String(err);
-            server.config.logger.warn(`[hover] Chrome auto-launch error: ${msg}`);
-          });
-      };
-      if (server.httpServer) {
-        server.httpServer.once('listening', launch);
-      } else {
-        // middleware mode — no httpServer; URL is best-effort
-        launch();
-      }
+      // Chrome auto-launch now happens inside startService (single-Chrome
+      // model) so the resident security proxy can be baked into it.
     },
 
     async closeBundle() {

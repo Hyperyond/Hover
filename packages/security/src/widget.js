@@ -53,8 +53,16 @@ if (host) {
     row.dataset.flowId = flow.id;
 
     const status = document.createElement('span');
-    status.className = `flow-status ${statusClass(flow.response?.statusCode)}`;
-    status.textContent = flow.response ? String(flow.response.statusCode) : '…';
+    if (flow.response) {
+      // Settled — bare status code, coloured by bucket (token-driven).
+      status.className = `flow-status ${statusClass(flow.response.statusCode)}`;
+      status.textContent = String(flow.response.statusCode);
+    } else {
+      // In flight — spinning ring instead of a static ellipsis, so it reads
+      // as "this request is still going" the same way a running step does.
+      status.className = 'flow-status flow-status-pending';
+      status.setAttribute('aria-label', 'pending');
+    }
     row.appendChild(status);
 
     const method = document.createElement('span');
@@ -83,19 +91,37 @@ if (host) {
     name: '@hover-dev/security',
     modeId: 'security',
 
-    // Orange theme — same hue values the legacy hardcoded CSS used.
+    // Orange theme. The mode bar uses the same translucent orange gradient
+    // as the core widget's `.modebar.engaged` (style.css) rather than a flat
+    // brown fill, so it reads with the same glassy depth as the rest of the
+    // panel. Everything that isn't orange-by-meaning inherits the core
+    // widget's design tokens (--text-mute / --text-dim / --accent / --link /
+    // --warn / --error) — they're defined on :host and this CSS is injected
+    // into the same shadow root, so the security panel shares one greyscale
+    // and one accent system with the main widget instead of a private slate
+    // palette. Orange status colours (#fb923c / #fed7aa) are kept verbatim.
     css: `
       .panel { border-color: #fb923c; box-shadow: 0 12px 32px rgba(251, 146, 60, 0.18); }
-      .launcher { border-color: #fb923c; box-shadow: 0 0 18px rgba(251, 146, 60, 0.6); color: #fb923c; }
-      .modebar.engaged { background: #2a1810; color: #fed7aa; }
-      .modebar.engaged .modebar-dot { background: #fb923c; }
+      .launcher {
+        border-color: #fb923c; color: #fb923c;
+        box-shadow: 0 4px 18px rgba(251, 146, 60, 0.28), 0 4px 16px rgba(0, 0, 0, 0.4);
+      }
+      .modebar.engaged {
+        background: linear-gradient(180deg, rgba(251, 146, 60, 0.18), rgba(251, 146, 60, 0.08));
+        border-bottom-color: rgba(251, 146, 60, 0.55);
+        color: #fed7aa;
+      }
+      .modebar.engaged .modebar-dot {
+        background: #fb923c;
+        box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.18);
+      }
 
       .plugin-toolbar-btn { position: relative; }
       .plugin-toolbar-badge {
         position: absolute; top: 2px; right: 2px;
         min-width: 14px; height: 14px; padding: 0 3px;
         font-size: 9px; line-height: 14px; text-align: center;
-        background: #fb923c; color: #1a0f06; border-radius: 7px;
+        background: #fb923c; color: var(--bg); border-radius: 7px;
         font-weight: 600;
       }
 
@@ -103,21 +129,32 @@ if (host) {
         display: grid;
         grid-template-columns: 36px 50px 1fr auto;
         gap: 8px; align-items: center;
-        padding: 4px 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
+        padding: 4px 10px; border-bottom: 1px solid var(--line);
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 11px; color: #cbd5e1;
+        font-size: 11px; color: var(--text-mute);
       }
-      .flow-row.mutated { background: rgba(251, 191, 36, 0.08); }
-      .flow-status { font-weight: 600; }
-      .flow-status-2xx { color: #34d399; }
-      .flow-status-3xx { color: #60a5fa; }
-      .flow-status-4xx { color: #fbbf24; }
-      .flow-status-5xx { color: #f87171; }
-      .flow-method { color: #94a3b8; font-weight: 500; }
+      .flow-row.mutated { background: rgba(251, 146, 60, 0.08); }
+      .flow-status { font-weight: 600; font-variant-numeric: tabular-nums; }
+      .flow-status-2xx { color: var(--accent); }
+      .flow-status-3xx { color: var(--link); }
+      .flow-status-4xx { color: var(--warn); }
+      .flow-status-5xx { color: var(--error); }
+      /* Pending request — the same open-top rotating ring the core widget
+         uses for a running step (style.css .gr-spinner), tinted orange to
+         match security mode. Replaces the old static "…". */
+      .flow-status-pending {
+        display: inline-block; width: 11px; height: 11px;
+        border: 1.5px solid #fb923c; border-top-color: transparent;
+        border-radius: 50%;
+        animation: security-flow-spin 0.9s linear infinite;
+        vertical-align: middle;
+      }
+      @keyframes security-flow-spin { to { transform: rotate(360deg); } }
+      .flow-method { color: var(--text-mute); font-weight: 500; }
       .flow-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .flow-meta { color: #64748b; }
+      .flow-meta { color: var(--text-dim); }
       .plugin-overlay-body.security-flows-empty {
-        padding: 20px; color: #64748b; font-size: 12px; text-align: center;
+        padding: 20px; color: var(--text-dim); font-size: 12px; text-align: center;
       }
     `,
 

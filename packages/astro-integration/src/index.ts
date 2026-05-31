@@ -1,6 +1,5 @@
 import { readFile as fsReadFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
 import { buildWidgetBundle, manifestsToPluginInputs } from '@hover-dev/widget-bootstrap';
@@ -93,6 +92,9 @@ export function hover(
             // `config.root` which is a URL — convert to filesystem path.
             devRoot: fileURLToPath(config.root),
             plugins,
+            // Single-Chrome model: service launches the debug Chrome itself.
+            autoLaunchChrome,
+            devUrl: `http://localhost:${guessAstroPort(config)}/`,
           });
         } catch (err) {
           logger.error(
@@ -118,24 +120,8 @@ export function hover(
           plugins: manifestsToPluginInputs(plugins),
         });
         injectScript('page', `${preamble}\n${body}`);
-
-        if (!autoLaunchChrome) return;
-        // Fire-and-forget Chrome launch. Idempotent: reuses an existing
-        // debug Chrome if one is already on `chromeDebugPort`.
-        const url = `http://localhost:${guessAstroPort(config)}/`;
-        launchDebugChrome({ url, port: chromeDebugPort })
-          .then(result => {
-            if (!result.ok) {
-              logger.warn(`couldn't auto-launch Chrome: ${result.reason}`);
-            } else if (result.alreadyRunning) {
-              logger.info(`reusing existing debug Chrome on :${result.port}`);
-            } else {
-              logger.info(`debug Chrome launched on :${result.port}`);
-            }
-          })
-          .catch(err => {
-            logger.warn(`Chrome auto-launch error: ${err instanceof Error ? err.message : String(err)}`);
-          });
+        // Chrome auto-launch now happens inside startService (single-Chrome
+        // model) so the resident security proxy can be baked into it.
       },
       'astro:server:setup': async ({ server, logger }) => {
         // Astro's own `astro:build` Vite plugin registers itself with

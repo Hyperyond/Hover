@@ -39,6 +39,10 @@ export interface HoverPluginMode {
   label: string;
   /** One-liner help text shown in the dropdown. */
   description?: string;
+  /** Short status shown in the mode bar's right-hand hint slot while this
+   *  mode is engaged. Defaults to "active" if omitted. Keep it terse — e.g.
+   *  "MITM proxy active". */
+  engagedHint?: string;
   /** Mode ids this mode cannot be active alongside. Two plugins both
    *  needing an exclusive proxy would set each other here. */
   conflictsWith?: string[];
@@ -122,11 +126,28 @@ export interface ModeDeactivateCtx extends HoverHookCtxBase {
   modeId: string;
 }
 
+/** Fired exactly once when the host service starts, BEFORE the debug Chrome
+ *  is (auto-)launched. A plugin that needs Chrome to be born with specific
+ *  flags — e.g. a resident MITM proxy that Chrome must point through from the
+ *  first navigation — boots that sidecar here and calls setChromeProxy so the
+ *  host bakes the flags into the single Chrome launch. This is what lets the
+ *  security plugin run one always-on (transparent-by-default) proxy instead
+ *  of launching a second Chrome on mode entry. */
+export interface ServiceStartCtx extends HoverHookCtxBase {
+  /** Tell the host "the debug Chrome should be launched with these proxy
+   *  settings". Set once here; persists for the whole session. */
+  setChromeProxy(proxy: { port: number; spki: string } | null): void;
+  /** Same as the activate-time variant — seed runtime env for a declared MCP
+   *  server before it's spawned. */
+  setMcpServerEnv(id: string, env: Record<string, string>): void;
+}
+
 /** Fired exactly once when the host service is shutting down for any
  *  reason. Hooks must release subprocesses and file handles. */
 export type ShutdownCtx = HoverHookCtxBase;
 
 export interface HoverHooks {
+  'hover:service:start'?: (ctx: ServiceStartCtx) => void | Promise<void>;
   'hover:mode:activate'?: (ctx: ModeActivateCtx) => void | Promise<void>;
   'hover:mode:deactivate'?: (ctx: ModeDeactivateCtx) => void | Promise<void>;
   'hover:service:shutdown'?: (ctx: ShutdownCtx) => void | Promise<void>;

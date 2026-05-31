@@ -59,6 +59,7 @@ import { getAgent } from './agents/registry.js';
 import type { InvokeEvent } from './agents/types.js';
 import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
 import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
+import { launchDebugChrome } from './playwright/launchChrome.js';
 import { listSkills, type SkillStep } from './skills/writeSkill.js';
 import { listSpecs } from './specs/listSpecs.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
@@ -100,6 +101,18 @@ export interface ServiceOptions {
    *  pre-plugin Hover" — important for the long tail of users who never
    *  install one. */
   plugins?: HoverPluginManifest[];
+  /** When true, the service launches the single debug Chrome itself at
+   *  startup — AFTER firing plugin `hover:service:start` hooks, so a plugin
+   *  that set a resident proxy (e.g. security's MITM) has its flags baked
+   *  into that one Chrome. Previously each bundler shim called
+   *  launchDebugChrome() directly, which bypassed the service and so couldn't
+   *  see the proxy; moving it here is what enables the single-Chrome model.
+   *  Default false (shims pass it through from their own option). */
+  autoLaunchChrome?: boolean;
+  /** The dev-server URL the auto-launched Chrome should open. Each shim knows
+   *  its own framework's dev URL and passes it here. Defaults to the cdp host
+   *  if unset, but shims should always provide it. */
+  devUrl?: string;
 }
 
 export interface ServiceHandle {
@@ -115,6 +128,22 @@ export interface ServiceHandle {
 
 const PROTOCOL_VERSION = 1;
 const PORT_RETRIES = 10;
+
+/** CJK-presence test — mirrors voice.js's detectLanguage. Any Han character
+ *  in the prompt flips the agent's prose output to Chinese. */
+const CJK_RE = /[一-鿿]/;
+
+/** Appended to the agent's system prompt when the user's prompt contains CJK,
+ *  so the human-facing prose (verification summary / ## Findings / step
+ *  narration) comes back in Chinese — matching how Voice mode picks a Chinese
+ *  TTS voice for the same prompt. Deliberately scoped to PROSE only: the agent
+ *  must still use the page's real (often English) accessible names, labels,
+ *  and selectors when driving the browser. */
+const ZH_OUTPUT_DIRECTIVE =
+  '用户使用中文下达指令。请用简体中文撰写所有面向用户的文字输出：验证结论摘要、' +
+  '`## Findings` 区块（bug / 问题 / 备注）、以及每一步的中文描述。' +
+  '注意：这只影响你写给用户看的文字。操作浏览器时仍要使用页面真实的（通常是英文的）' +
+  '角色名、标签、可访问名称和选择器——不要把它们翻译成中文。';
 
 /**
  * Try to bind a WebSocketServer to <host>:<port>. Resolves with the wss on
@@ -233,15 +262,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
       }
     }
-    // In an active mode, the Playwright MCP must point at THAT mode's
-    // Chrome (e.g. security mode's 9333), not the default 9222.
-    // effectiveLaunchExtras().cdpPort is the source of truth.
-    const extras = effectiveLaunchExtras();
-    const effectiveCdpUrl = extras?.cdpPort
-      ? `http://localhost:${extras.cdpPort}`
-      : cdpUrl;
+    // Single-Chrome model: the Playwright MCP always points at the one debug
+    // Chrome on the normal cdpUrl. (Pre-single-Chrome this branched to a
+    // mode-specific port like 9333; there's no second Chrome anymore.)
     return resolveMcpConfig({
-      cdpUrl: effectiveCdpUrl,
+      cdpUrl,
       port,
       extra,
       // Suffix the filename by the mode so different mode toggles within
@@ -290,43 +315,31 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
 
   /** id of the currently-active mode, or null for normal (unmoded) mode. */
   let currentModeId: string | null = null;
-  /** Chrome-proxy settings the active mode's activate hook set on us.
-   *  Read by `effectiveLaunchExtras()` and threaded into the cdp handlers
-   *  (check-cdp / launch-chrome / focus-debug) so the secured Chrome on
-   *  9333 actually gets `--proxy-server` + SPKI pin when the user clicks
-   *  Launch from the widget. */
-  let modeChromeProxy: { port: number; spki: string } | null = null;
+  /** Chrome-proxy settings a plugin's `hover:service:start` hook set on us
+   *  (security's resident MITM). RESIDENT for the whole session — set once
+   *  before Chrome launches, never cleared on mode change — so the single
+   *  debug Chrome is born with `--proxy-server` + the SPKI pin and entering
+   *  Security mode is just a runtime flip of the proxy, not a Chrome relaunch.
+   *  Read by `effectiveLaunchExtras()` and threaded into every cdp handler
+   *  (check-cdp / launch-chrome / focus-debug) plus the initial auto-launch. */
+  let residentChromeProxy: { port: number; spki: string } | null = null;
   /** Runtime env overrides keyed by mcpServer id, set by plugin
    *  activate hooks (via ctx.setMcpServerEnv). Cleared on mode change.
    *  Merged with the manifest-declared env when the agent's spawn-time
    *  MCP config is built. */
   const mcpEnvOverrides = new Map<string, Record<string, string>>();
 
-  /** The cdp-handler extras (port, userDataDir, proxy) for the active
-   *  mode's chromeFlags manifest field, or undefined when no mode is
-   *  active. The widget's launch-chrome / check-cdp / focus-debug paths
-   *  all consume these so a Chrome relaunch obeys the mode's needs. */
+  /** The cdp-handler extras (proxy) threaded into launch-chrome / check-cdp /
+   *  focus-debug and the initial auto-launch. In the single-Chrome model this
+   *  is driven purely by the RESIDENT proxy (set in `hover:service:start`),
+   *  NOT by the active mode — there is one Chrome on the normal CDP port that
+   *  is always proxied; entering Security mode flips the proxy's behaviour,
+   *  it does not relaunch Chrome on a different port. Returns undefined when
+   *  no plugin set a resident proxy (the common no-security case), so plain
+   *  Hover is byte-for-byte unchanged. */
   const effectiveLaunchExtras = (): LaunchExtras | undefined => {
-    if (!currentModeId) return undefined;
-    const plugin = pluginsByModeId.get(currentModeId);
-    const flags = plugin?.chromeFlags;
-    if (!flags && !modeChromeProxy) return undefined;
-    // Belt + suspenders — flags.activeInModes is honoured if set, but
-    // since chromeFlags lives on the plugin that contributed this mode,
-    // the default of "applies in own mode" matches what we want.
-    if (flags?.activeInModes && !flags.activeInModes.includes('*') && !flags.activeInModes.includes(currentModeId)) {
-      // Plugin explicitly restricted its chromeFlags to a different mode.
-      // Honour that and only carry modeChromeProxy (set by setChromeProxy).
-      return modeChromeProxy ? { proxy: modeChromeProxy } : undefined;
-    }
-    return {
-      cdpPort: flags?.cdpPort,
-      userDataDir: flags?.userDataDir,
-      // modeChromeProxy wins over flags.proxy because it's the runtime
-      // value the activate hook computed (after starting mockttp);
-      // flags.proxy is only ever set by tests stubbing the manifest.
-      proxy: modeChromeProxy ?? flags?.proxy,
-    };
+    if (!residentChromeProxy) return undefined;
+    return { proxy: residentChromeProxy };
   };
 
   /** Send the current mode catalogue to one ws (or all if undefined). */
@@ -383,8 +396,14 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
       }
     }
-    modeChromeProxy = null;
-    mcpEnvOverrides.clear();
+    // NOTE: neither residentChromeProxy NOR mcpEnvOverrides is cleared here.
+    // In the single-Chrome model both are RESIDENT — set once in
+    // service:start (e.g. security's HOVER_SECURITY_API base + token), they
+    // must survive every mode toggle so the agent's spawned MCP server can
+    // always reach the control plane. Clearing them on mode change was the
+    // pre-resident behaviour and would leave the security MCP server with no
+    // env → it exits with "failed". Mode changes now only flip plugin runtime
+    // state via the plugin's own activate/deactivate hooks.
     currentModeId = null;
 
     // Bring up new mode
@@ -400,7 +419,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           broadcast: broadcastPluginEvent,
           modeId: newModeId,
           setChromeProxy(proxy) {
-            modeChromeProxy = proxy;
+            // Retained for API compatibility. In the single-Chrome model the
+            // proxy is normally set once in service:start; if an activate hook
+            // still calls this, treat it as updating the resident proxy.
+            residentChromeProxy = proxy;
           },
           setMcpServerEnv(id, env) {
             mcpEnvOverrides.set(id, env);
@@ -413,9 +435,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           // pretend to be in `newModeId` with no sidecars running.
           // Widget still trusts the broadcast below to learn we're back
           // to default. The error is rethrown so the caller can surface
-          // it to the user.
-          modeChromeProxy = null;
-          mcpEnvOverrides.clear();
+          // it to the user. residentChromeProxy and mcpEnvOverrides are NOT
+          // touched — both are owned by service:start, independent of mode
+          // activation (clearing the env would break the resident security
+          // MCP server).
           currentModeId = null;
           broadcastModes();
           throw err;
@@ -777,6 +800,18 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           }
         }
 
+        // Mirror the prompt's language in the agent's *prose* output — the
+        // verification summary (Result card), the ## Findings block, and the
+        // step narration — the same way Voice mode mirrors it in TTS. A
+        // Chinese prompt should produce a Chinese report. This does NOT change
+        // how the agent operates the browser: selectors, role names, and the
+        // app's own (often English) UI text are unaffected — only the agent's
+        // human-facing writing follows the user. Detection mirrors voice.js's
+        // detectLanguage (CJK presence → zh).
+        if (CJK_RE.test(text)) {
+          appendSystemPrompt = `${appendSystemPrompt}\n\n${ZH_OUTPUT_DIRECTIVE}`;
+        }
+
         // Snapshot the agent id so a switch-agent message during the run
         // can't smear two agents across one invocation. (We also gate
         // switch-agent on `busy`, but defense in depth.)
@@ -923,6 +958,65 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       }
     });
   });
+
+  // ───────────────────────── service:start + single Chrome ─────────────────
+  // Fire plugin `hover:service:start` hooks BEFORE launching Chrome, so a
+  // plugin (security) can boot its resident proxy and call setChromeProxy.
+  // residentChromeProxy is then baked into the one auto-launched Chrome.
+  for (const p of plugins) {
+    const hook = p.hooks?.['hover:service:start'];
+    if (!hook) continue;
+    try {
+      await hook({
+        devRoot,
+        broadcast: broadcastPluginEvent,
+        setChromeProxy(proxy) {
+          residentChromeProxy = proxy;
+        },
+        setMcpServerEnv(id, env) {
+          mcpEnvOverrides.set(id, env);
+        },
+      });
+    } catch (err) {
+      process.stderr.write(
+        `[hover] plugin "${p.name}" service:start failed: ${
+          err instanceof Error ? err.message : String(err)
+        }\n`,
+      );
+    }
+  }
+
+  // Auto-launch the single debug Chrome here (moved out of the bundler shims
+  // so it happens AFTER service:start and can carry residentChromeProxy).
+  // Fire-and-forget — startup must not block on Chrome, and a launch failure
+  // is non-fatal (the widget's amber ✨ lets the user retry on demand).
+  if (opts.autoLaunchChrome) {
+    const launchPort = (() => {
+      try {
+        return Number(new URL(cdpUrl).port) || 9222;
+      } catch {
+        return 9222;
+      }
+    })();
+    const launchUrl = opts.devUrl ?? cdpUrl;
+    launchDebugChrome({
+      url: launchUrl,
+      port: launchPort,
+      proxy: residentChromeProxy ?? undefined,
+    })
+      .then((r) => {
+        if (!r.ok) {
+          process.stderr.write(`[hover] auto-launch Chrome failed: ${r.reason}\n`);
+        }
+      })
+      .catch((err) => {
+        process.stderr.write(
+          `[hover] auto-launch Chrome error: ${
+            err instanceof Error ? err.message : String(err)
+          }\n`,
+        );
+      });
+  }
 
   return {
     port,

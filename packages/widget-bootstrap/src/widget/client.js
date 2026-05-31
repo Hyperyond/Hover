@@ -1830,6 +1830,10 @@
     const engaged = state.currentMode !== null;
     panel.classList.toggle('mode-engaged', engaged);
     launcher.classList.toggle('mode-engaged', engaged);
+    // Also mark the shadow host so :host(.mode-engaged) can retint elements
+    // that live OUTSIDE .panel — notably the floating tooltip, which is a
+    // sibling of .panel and so wouldn't inherit .panel's --accent override.
+    host.classList.toggle('mode-engaged', engaged);
     if (!hasModes) return;
     const cur = state.availableModes.find((m) => m.id === state.currentMode);
     modeLabelEl.textContent = cur?.label || 'Default';
@@ -1838,7 +1842,11 @@
     // primary label out of view. Description still lands in the modes
     // overlay rows where there's room for it.
     if (modeHintEl) {
-      modeHintEl.textContent = engaged ? 'active' : 'click to switch';
+      // Engaged: the mode's own short status (e.g. "MITM proxy active"),
+      // falling back to "active". Not engaged: the switch affordance.
+      modeHintEl.textContent = engaged
+        ? cur?.engagedHint || 'active'
+        : 'click to switch';
     }
     modeBtn.classList.toggle('engaged', engaged);
     // Deliberately no tooltip — the bar's own text already says the
@@ -3293,7 +3301,7 @@
       newBtn.disabled = false;
       recordBtn.disabled = false;
       if (recording) setStatus('recording', 'running');
-      else if (wsReady) setStatus('connected', 'connected');
+      else if (wsReady) setStatus('ready', 'connected');
     }
     // Toggling running affects whether the trailing group is rendered as
     // live (spinner, auto-expand) or closed (chevron collapsed, Save-as
@@ -3325,7 +3333,7 @@
     sock.onopen = () => {
       if (sock !== ws) return;
       backoff = 500;
-      setStatus('connected', 'connected');
+      setStatus('ready', 'connected');
       sendBtn.disabled = running;
       textarea.disabled = running;
       // Ask the service whether we're in the debug Chrome. Until we hear

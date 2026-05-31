@@ -2,9 +2,17 @@
  * mockttp lifecycle wrapper for security-mode.
  *
  * Boots a forward HTTPS proxy on a free port in [DEFAULT_PORT, +PORT_RETRIES)
- * and pipes every observed request/response into a FlowStore. The proxy
- * stays passthrough by default — agent-driven mutation goes through a
- * separate replay/mutate path on the MCP side, not via this hot loop.
+ * and forwards every request untouched. The proxy is *resident*: it starts
+ * once when the security plugin loads and the single debug Chrome is launched
+ * pointed through it, so there is no second Chrome. It has two runtime modes,
+ * flipped by `setMode()` with no proxy/Chrome restart:
+ *
+ *   - 'passthrough' (default): the hot loop returns immediately without
+ *     reading bodies or recording — behaviourally transparent, so normal
+ *     dev/debugging through this Chrome is unaffected.
+ *   - 'intercept': request/response pairs (with bodies) are piped into the
+ *     FlowStore so the agent can inspect/replay them. Entered when the user
+ *     switches the widget into Security mode.
  *
  * Stop is idempotent so the service teardown can call it unconditionally.
  */
@@ -15,11 +23,17 @@ import { FlowStore, type FlowRequest, type FlowResponse } from './flows.js';
 const DEFAULT_PROXY_PORT = 8080;
 const PROXY_PORT_RETRIES = 10;
 
+export type ProxyMode = 'passthrough' | 'intercept';
+
 export interface ProxyHandle {
   /** The port the proxy actually bound to. */
   port: number;
   ca: CaMaterial;
   store: FlowStore;
+  /** Flip recording on/off at runtime. No proxy or Chrome restart. */
+  setMode(mode: ProxyMode): void;
+  /** Current mode — handy for tests / status. */
+  getMode(): ProxyMode;
   stop(): Promise<void>;
 }
 
@@ -61,8 +75,18 @@ export async function startProxy(devRoot: string): Promise<ProxyHandle> {
   // callbacks back to the right entry without scanning the store.
   const idMap = new Map<string, string>();
 
+  // Runtime mode. Default 'passthrough' so the resident proxy is transparent
+  // until the user enters Security mode (setMode('intercept')). Held in a
+  // closure variable the callbacks read on every request — flipping it needs
+  // no rule swap and no Chrome/proxy restart.
+  let mode: ProxyMode = 'passthrough';
+
   await server.forAnyRequest().thenPassThrough({
     beforeRequest: async (req) => {
+      // Transparent fast-path: in passthrough we forward untouched and, in
+      // particular, do NOT call getText() — body-buffering every request on a
+      // proxy that's always in the path would tax normal dev traffic.
+      if (mode === 'passthrough') return {};
       const { bodyText, bodyLen } = await readBody(req.body);
       const flowReq: FlowRequest = {
         method: req.method,
@@ -78,6 +102,9 @@ export async function startProxy(devRoot: string): Promise<ProxyHandle> {
       return {};
     },
     beforeResponse: async (res) => {
+      // Only correlate responses for requests we recorded (i.e. captured
+      // while in intercept mode). idMap is empty in passthrough, so this is
+      // a no-op there even if a request straddled a mode flip.
       const ourId = idMap.get(res.id);
       if (!ourId) return {};
       const { bodyText, bodyLen } = await readBody(res.body);
@@ -127,6 +154,12 @@ export async function startProxy(devRoot: string): Promise<ProxyHandle> {
     port: boundPort,
     ca,
     store,
+    setMode(next: ProxyMode) {
+      mode = next;
+    },
+    getMode() {
+      return mode;
+    },
     async stop() {
       if (stopped) return;
       stopped = true;

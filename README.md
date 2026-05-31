@@ -113,13 +113,15 @@ Several good tools already exist in this space; Hover is what falls out when you
 
 | Tool | What it does | The trade-off |
 |---|---|---|
-| **Playwright Codegen** | Records your clicks → `.spec.ts`. No AI, no auth | Can't think — just replays what you did literally |
+| **Playwright Codegen** | Records your clicks → `.spec.ts`. No AI | Can't think — just replays what you did literally |
 | **Stagehand / Midscene** | AI-augmented tests; both ship caches so steady-state CI runs skip the LLM on cache hits. Configure an **OpenAI / Anthropic API key** — per-token billing on cache misses | Tests still run **inside the vendor SDK** + a cache file in your repo. Not portable to a plain Playwright runner |
 | **Hover** | AI drives the browser **once** to explore; saves a deterministic spec, a replayable skill, *and* a Jira-importable case from the same click. **No API key — Hover spawns the coding-agent CLI already on your `PATH`** (claude / codex / cursor-agent / aider / gemini-cli / qwen-code), so your existing Claude Pro/Max or ChatGPT subscription covers it | Crystallised spec is brittle to UI changes — when it breaks, re-run the agent (it doesn't self-heal at CI time) |
 
 What Hover is **not** trying to do: be the better test-time AI runtime. Stagehand's caching + self-healing is more sophisticated than anything we'd build, and Midscene's vision fallback handles canvas / iOS / Android targets we can't touch.
 
 What Hover IS trying to do: **make the saved artifact be plain `@playwright/test` code that runs with `npx playwright test` on a fresh machine, zero AI deps**. The agent's job ends at "save"; CI is pure Playwright. That's the handoff.
+
+**Zero AI at runtime, zero tokens in CI.** Some AI-testing tools keep a model in the loop when the test *runs* — every CI run, every PR, every nightly pays for LLM calls (and needs an API key wired into CI). Hover spends the model **once**, at authoring time, on the machine of the developer who already pays for a `claude` / `codex` subscription. The saved `.spec.ts` then runs forever with no model, no key, no per-token bill — a normal Playwright test your CI already knows how to run. The LLM cost is a one-off you opt into (authoring, or a deliberate ⟳ re-record), never a recurring tax on green builds.
 
 ### One exploration, three audiences
 
@@ -236,7 +238,7 @@ export async function register() {
 ```
 
 Use the object form `{ module, options }` to pass options to a plugin
-factory: e.g. `{ module: '@hover-dev/security', options: { cdpPort: 9444 } }`.
+factory: e.g. `{ module: '@hover-dev/security', options: { cdpPort: 9333 } }`.
 
 Zero external dependencies — no `mitmproxy`, no Python, no system CA install. The plugin uses [mockttp](https://github.com/httptoolkit/mockttp) (the engine behind HTTP Toolkit) to MITM HTTPS, generates a one-off CA on first run, and pins it via Chrome's `--ignore-certificate-errors-spki-list` so your OS trust store stays untouched. The CA private key persists under `<project>/.hover/ca/` (the shipped `.gitignore` excludes it).
 
@@ -631,9 +633,9 @@ hover({
                                            │ CDP                 │ proxy
                                            ▼                     ▼
                                   ┌────────────────────────────────────────┐
-                                  │  Isolated debug Chrome (port 9222 or   │
-                                  │  9333 for security mode), via your    │
-                                  │  /tmp/hover-chrome profile dir         │
+                                  │  Isolated debug Chrome (port 9222, or  │
+                                  │  9333 for security mode), via your     │
+                                  │  <tmpdir>/hover-chrome profile dir     │
                                   └────────────────────────────────────────┘
 ```
 
