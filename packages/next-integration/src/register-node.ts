@@ -244,6 +244,9 @@ export async function registerNode(
       cdpUrl: `http://localhost:${chromeDebugPort}`,
       devRoot: process.cwd(),
       plugins,
+      // Single-Chrome model: service launches the debug Chrome itself.
+      autoLaunchChrome,
+      devUrl: opts.devUrl ?? 'http://localhost:3000/',
     });
   } catch (err) {
     console.error(
@@ -289,23 +292,6 @@ export async function registerNode(
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
   process.once('beforeExit', shutdown);
-
-  if (!autoLaunchChrome) return;
-  const url = opts.devUrl ?? 'http://localhost:3000/';
-  const { launchDebugChrome } = await import('@hover-dev/core/launch-chrome');
-  launchDebugChrome({ url, port: chromeDebugPort })
-    .then(result => {
-      if (!result.ok) {
-        console.warn(`[@hover-dev/next] couldn't auto-launch Chrome: ${result.reason}`);
-      } else if (result.alreadyRunning) {
-        console.info(`[@hover-dev/next] reusing existing debug Chrome on :${result.port}`);
-      } else {
-        console.info(`[@hover-dev/next] debug Chrome launched on :${result.port}`);
-      }
-    })
-    .catch(err => {
-      console.warn(
-        `[@hover-dev/next] Chrome auto-launch error: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
+  // Chrome auto-launch now happens inside startService (single-Chrome model)
+  // so the resident security proxy can be baked into it.
 }

@@ -47,7 +47,7 @@ export async function preflightCDP(
   } catch (err) {
     return {
       ok: false,
-      reason: `Chrome debug session not detected at ${cdpUrl}. Start it with: pnpm exec hover-chrome (or: npx hover-chrome)`,
+      reason: `Chrome debug session not detected at ${cdpUrl}. Click the ✨ launcher in the widget to start it, or run \`pnpm exec hover-chrome\` (npx hover-chrome).`,
     };
   }
   if (!versionRes.ok) {

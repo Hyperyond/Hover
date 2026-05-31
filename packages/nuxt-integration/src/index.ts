@@ -1,5 +1,4 @@
 import { addVitePlugin, defineNuxtModule } from '@nuxt/kit';
-import { launchDebugChrome } from '@hover-dev/core/launch-chrome';
 import { startService, type ServiceHandle } from '@hover-dev/core/service';
 import type { HoverPluginManifest } from '@hover-dev/core/plugin-api';
 import { buildWidgetBundle, manifestsToPluginInputs } from '@hover-dev/widget-bootstrap';
@@ -91,6 +90,9 @@ export default defineNuxtModule<HoverOptions>({
         // `nuxt.options.rootDir` (vs Astro which uses a file:// URL).
         devRoot: nuxt.options.rootDir,
         plugins,
+        // Single-Chrome model: service launches the debug Chrome itself.
+        autoLaunchChrome,
+        devUrl: `http://localhost:${nuxt.options.devServer?.port ?? 3000}/`,
       });
     } catch (err) {
       console.error(
@@ -135,26 +137,8 @@ export default defineNuxtModule<HoverOptions>({
       }
     });
 
-    if (!autoLaunchChrome) return;
-    // Fire-and-forget Chrome launch. Idempotent — reuses an existing
-    // debug Chrome on `chromeDebugPort` if one is alive.
-    const devPort = nuxt.options.devServer?.port ?? 3000;
-    const url = `http://localhost:${devPort}/`;
-    launchDebugChrome({ url, port: chromeDebugPort })
-      .then(result => {
-        if (!result.ok) {
-          console.warn(`[@hover-dev/nuxt] couldn't auto-launch Chrome: ${result.reason}`);
-        } else if (result.alreadyRunning) {
-          console.info(`[@hover-dev/nuxt] reusing existing debug Chrome on :${result.port}`);
-        } else {
-          console.info(`[@hover-dev/nuxt] debug Chrome launched on :${result.port}`);
-        }
-      })
-      .catch(err => {
-        console.warn(
-          `[@hover-dev/nuxt] Chrome auto-launch error: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
+    // Chrome auto-launch now happens inside startService (single-Chrome
+    // model) so the resident security proxy can be baked into it.
   },
 });
 
