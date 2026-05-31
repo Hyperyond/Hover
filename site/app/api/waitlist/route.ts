@@ -1,20 +1,23 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { SendMailClient } from 'zeptomail';
 
 /**
- * Hover Cloud waitlist intake. The client modal POSTs { email }; we email a
- * notification to the maintainer via Resend. The API key lives only here
- * (server-side) — never shipped to the client.
+ * Hover Cloud waitlist intake. The client modal POSTs { email }; we notify the
+ * maintainer via Zoho ZeptoMail's official SDK. The send token lives only here
+ * (server-side) — never shipped to the client, never hard-coded.
  *
  * Env (set in Vercel project settings):
- *   RESEND_API_KEY   — Resend API key
- *   WAITLIST_TO      — where to send signups (defaults to claude@sparkplay.io)
- *   WAITLIST_FROM    — verified Resend sender (defaults to a resend.dev sender)
+ *   ZEPTOMAIL_TOKEN — the full "Send Mail token" INCLUDING the "Zoho-enczapikey "
+ *                     prefix, exactly as shown in the ZeptoMail console.
+ *   WAITLIST_TO     — where signups go (defaults to oliver@hyperyond.com).
+ *   WAITLIST_FROM   — sender on the ZeptoMail-verified domain
+ *                     (defaults to noreply@gethover.dev).
  *
- * Needs the Node.js runtime (Resend SDK), not Edge.
+ * Needs the Node.js runtime (SDK + token must stay server-side).
  */
 export const runtime = 'nodejs';
 
+const ZEPTO_URL = 'https://api.zeptomail.com/';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {
@@ -30,31 +33,24 @@ export async function POST(req: Request) {
   }
   const clean = email.trim().toLowerCase();
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    // Misconfiguration — log server-side, return a generic error to the client.
-    console.error('[waitlist] RESEND_API_KEY is not set');
+  const token = process.env.ZEPTOMAIL_TOKEN;
+  if (!token) {
+    console.error('[waitlist] ZEPTOMAIL_TOKEN is not set');
     return NextResponse.json({ error: 'Waitlist is temporarily unavailable.' }, { status: 503 });
   }
-
-  const resend = new Resend(apiKey);
-  const to = process.env.WAITLIST_TO ?? 'claude@sparkplay.io';
-  const from = process.env.WAITLIST_FROM ?? 'Hover Waitlist <onboarding@resend.dev>';
+  const from = process.env.WAITLIST_FROM ?? 'noreply@gethover.dev';
+  const to = process.env.WAITLIST_TO ?? 'oliver@hyperyond.com';
 
   try {
-    const { error } = await resend.emails.send({
-      from,
-      to,
+    const client = new SendMailClient({ url: ZEPTO_URL, token });
+    await client.sendMail({
+      from: { address: from, name: 'Hover Waitlist' },
+      to: [{ email_address: { address: to, name: 'Hover' } }],
       subject: `Hover Cloud waitlist — ${clean}`,
-      text: `New Hover Cloud waitlist signup:\n\n${clean}\n`,
-      replyTo: clean,
+      htmlbody: `<div>New Hover Cloud waitlist signup:<br/><br/><b>${clean}</b></div>`,
     });
-    if (error) {
-      console.error('[waitlist] resend error', error);
-      return NextResponse.json({ error: 'Could not record your signup.' }, { status: 502 });
-    }
   } catch (err) {
-    console.error('[waitlist] send threw', err);
+    console.error('[waitlist] zeptomail send failed', err);
     return NextResponse.json({ error: 'Could not record your signup.' }, { status: 502 });
   }
 
