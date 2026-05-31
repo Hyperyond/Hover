@@ -217,7 +217,10 @@ export function initHost(ctx) {
     closeBtn.setAttribute('aria-label', 'Close');
     closeBtn.setAttribute('data-tooltip', 'Close');
     closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', () => closeOverlay(overlay.id));
+    // `closeOverlay` lives on the `api` object (defined below in this same
+    // closure), not as a free function — call it through `api` or the click
+    // throws ReferenceError and the overlay can never be dismissed.
+    closeBtn.addEventListener('click', () => api.closeOverlay(overlay.id));
     header.appendChild(closeBtn);
     el.appendChild(header);
     // Body — plugin's render fn populates this on open / state change.
