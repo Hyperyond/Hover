@@ -6,6 +6,30 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-05-31
+
+Theme: **single-Chrome security + a real landing site**. Security mode no longer needs a second browser, the marketing site lands, and the widget gains a plugin-mode theming system.
+
+### Added
+
+- **Landing site (`@hover-dev/site`)** — a static-export Next 16 + React 19 + Tailwind v4 marketing page for gethover.dev, kept separate from the VitePress `docs/`. Design tokens and the four-point ✨ mark are lifted from the widget so the page and the in-app product read as one. The hero embeds an auto-playing **dual-mode** WidgetDemo (Default mint → Security orange) and a click-to-copy install command.
+- **`hover:service:start` plugin hook** — fires once at service start, before the debug Chrome launches, so a plugin can boot a sidecar and set Chrome launch flags (e.g. a resident proxy) for the single Chrome.
+- **`--mode-accent` widget theming** — when a plugin mode is engaged, `:host(.mode-engaged)` re-points `--accent` (+ `-dim`/`-hover`/`-ink`) at the mode's colour, retinting the Send button, running-step spinner, status dot, and tooltip in one place. Security mode reads orange.
+- **Agent output language mirroring** — when the user's prompt contains CJK, the agent writes its prose (verification summary, `## Findings`, step narration) in Simplified Chinese, mirroring how Voice mode already picks a Chinese TTS voice. Prose only — selectors, role names, and the app's own UI text are untouched. English prompts are unaffected.
+
+### Changed
+
+- **Single-Chrome security model.** The MITM proxy is now **resident**: it starts at service start (transparent passthrough by default), and the one debug Chrome on the normal CDP port is born with `--proxy-server` + the SPKI pin. Entering Security mode flips the proxy to intercept — **no second Chrome on 9333, no relaunch**. Trade-off: with `@hover-dev/security` installed, that Chrome is always proxied (transparently) even in normal mode. Projects without the plugin are unaffected.
+- **Chrome auto-launch moved into the core service** (out of all five bundler shims) via new `startService` options `autoLaunchChrome` + `devUrl`, since only the service knows the resident proxy port. Also fixes auto-launch having bypassed the service entirely.
+- Connection status renders as a single coloured dot + word (`● ready`) instead of a background pill; the mode bar shows the active mode's `engagedHint` (e.g. "MITM proxy active").
+- Security plugin UI re-pointed at the core widget's design tokens instead of a private slate palette; pending flows show the rotating spinner.
+
+### Fixed
+
+- **Plugin overlay close button threw `ReferenceError`** — the `×` handler called a bare `closeOverlay`, which only exists as a method on the host `api` object, so the security Network panel could never be dismissed. Calls `api.closeOverlay` now.
+- **Security MCP server exited `failed`** — `mcpEnvOverrides` (carrying `HOVER_SECURITY_API`) was cleared on every mode change; it and the resident proxy are now session-resident, so the spawned MCP server always has its env.
+- Friendlier CDP-not-found hint (points at the widget ✨ launcher rather than a 9222-only command).
+
 ## [0.13.0] — 2026-05-30
 
 Theme: **record/replay parity**. Three closely-related improvements to how saved specs behave under realistic conditions — UI drift, missing initial navigation, and dirty page state at record time.
