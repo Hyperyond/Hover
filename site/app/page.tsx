@@ -41,8 +41,8 @@ export default function Home() {
       <Backdrop />
       <Nav />
       <Hero />
-      {/* Walkthrough video — pass the final YouTube id once recorded. */}
-      <VideoSection id="" />
+      {/* Walkthrough video — youtube.com/watch?v=ASWFWUyMUlc */}
+      <VideoSection id="ASWFWUyMUlc" />
       <Coverage />
       <Pillars />
       <Outputs />

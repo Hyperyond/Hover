@@ -4,8 +4,13 @@ import { useState } from 'react';
 
 /* ── Hero video ─────────────────────────────────────────────────────────
  * A click-to-load YouTube facade: we render the thumbnail + a play button and
- * only inject the privacy-mode (youtube-nocookie) iframe on click, so the page
- * stays fast and sets no Google cookies until the visitor opts in.
+ * only inject the iframe on click, so the page stays fast and sets no YouTube
+ * cookies until the visitor actually opts in to watch.
+ *
+ * We use the standard youtube.com/embed host, not youtube-nocookie.com: the
+ * privacy host combined with autoplay=1 trips YouTube's "sign in to confirm
+ * you're not a bot" gate on some videos. Since the iframe only mounts after a
+ * real click, autoplay here is a genuine user gesture and plays cleanly.
  *
  * Set the video by passing `id` (the 11-char YouTube id) from page.tsx. Until
  * a real walkthrough is recorded, leave `id` empty and a styled "coming"
@@ -35,9 +40,9 @@ export function VideoSection({ id = '', title = 'Watch Hover author a Playwright
           {playing && hasVideo ? (
             <iframe
               className="absolute inset-0 h-full w-full"
-              src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`}
+              src={`https://www.youtube.com/embed/${id}?autoplay=1&rel=0&playsinline=1`}
               title={title}
-              allow="accelerated-performance; autoplay; encrypted-media; picture-in-picture"
+              allow="autoplay; accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
             />
           ) : hasVideo ? (

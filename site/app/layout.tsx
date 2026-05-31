@@ -32,19 +32,31 @@ export const metadata: Metadata = {
   creator: 'Hyperyond',
   icons: { icon: '/favicon.svg' },
   alternates: { canonical: '/' },
-  // OG/Twitter images are supplied by app/opengraph-image.tsx (Next injects
-  // them automatically) — no manual `images` needed here.
+  // OG/Twitter share image is a real static PNG under public/og.png — NOT the
+  // dynamic /opengraph-image route. A static export (this site deploys to
+  // gethover.dev as static HTML) cannot serve a dynamic image endpoint, so
+  // social scrapers would 404 on it and show no preview. A plain file always
+  // resolves. 1734×907 (1.91:1, the OG/Twitter recommended ratio).
   openGraph: {
     title: TITLE,
     description: OG_DESCRIPTION,
     url: 'https://gethover.dev',
     siteName: 'Hover',
     type: 'website',
+    images: [
+      {
+        url: '/og.png',
+        width: 1734,
+        height: 907,
+        alt: 'Hover — AI authors your tests, CI runs plain Playwright',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: TITLE,
     description: OG_DESCRIPTION,
+    images: ['/og.png'],
   },
   robots: {
     index: true,
