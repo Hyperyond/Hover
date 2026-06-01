@@ -16,11 +16,10 @@ const OSS_INCLUDES = [
 ];
 
 const CLOUD_INCLUDES = [
-  'Self-healing re-record — PRs when specs drift',
+  'Self-healing re-record — a selector-only PR when a spec drifts',
+  'Test-rot detection — which specs no longer match your UI',
   'AI failure diagnosis on every red run',
-  'Parallel hosted runs across browsers',
-  'Scheduled monitoring + Slack / email alerts',
-  'Dashboard — pass-rate trends + flakiness flags',
+  'Runs, monitoring & dashboards — layered on later',
 ];
 
 export function Pricing() {
@@ -90,8 +89,9 @@ export function Pricing() {
             </span>
           </div>
           <p className="mt-3 text-[13px] leading-relaxed text-text-dim">
-            A hosted layer that runs and monitors the specs you author locally —
-            authoring stays free and local. CI still runs plain Playwright.
+            A hosted layer that keeps the specs you author locally alive —
+            re-recording the ones UI drift breaks, flagging the ones gone stale.
+            Authoring stays free and local; CI still runs plain Playwright.
           </p>
           <ul className="mt-6 space-y-3 text-[14px] leading-snug text-text-mute">
             {CLOUD_INCLUDES.map((f) => (

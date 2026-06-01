@@ -416,6 +416,7 @@ Planned:
 
 - **Structured spec output** — planned — the saved spec grows an architecture: page objects + fixtures lifted from flows repeated across specs, `test.step` Given/When/Then reports, `Promise.all` pairing for popup / new-tab flows, and a `.hover/conventions.md` that steers the agent toward project conventions. All still plain Playwright, no agent in CI. Design in [`Harness/structured-spec-output.md`](./Harness/structured-spec-output.md).
 - **Chrome extension** — planned — drops the bundler-plugin dependency so Hover can drive *any* tab (staging URLs, third-party sites). Likely a separate repo; loses source attribution, gains universal page coverage.
+- **Hover Cloud** — planned — a hosted layer over the specs you author locally: intent-driven **self-heal** (re-record a CI-red spec from its original intent, open a selector-only PR), **test-rot detection** (flag specs whose intent no longer matches the live UI), and AI failure diagnosis. Authoring stays local and free; CI still runs plain Playwright. [Join the waitlist](https://gethover.dev/#cloud).
 
 ## Project status
 

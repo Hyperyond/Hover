@@ -14,11 +14,10 @@ import { useEffect, useState } from 'react';
  */
 
 const CLOUD_FEATURES: [string, string, boolean][] = [
-  ['Self-healing re-record', 'when UI drift breaks a spec in CI, the agent regenerates the selectors and opens a PR for you to review', true],
+  ['Self-healing re-record', 'when UI drift reds a spec in CI, the agent re-records it from the spec\'s original intent and opens a selector-only PR for you to review', true],
+  ['Test-rot detection', 'flags specs whose intent no longer matches your live UI — coverage that exists on paper but verifies the wrong thing', true],
   ['Failure diagnosis', 'each red run gets an AI read of the trace — real bug, or just a moved selector?', true],
-  ['Parallel hosted runs', 'your suite across browsers, faster than local or self-hosted CI', false],
-  ['Scheduled monitoring', 'nightly runs of critical flows, with Slack / email alerts on break', false],
-  ['Dashboard + PR checks', 'pass-rate trends, flakiness flags, and relevant specs run on each PR', false],
+  ['Runs, monitoring & dashboards', 'parallel runs, scheduled checks, and trend / flakiness views — layered on later', false],
 ];
 
 export function Waitlist() {
@@ -52,8 +51,9 @@ export function Waitlist() {
               <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">
                 npx @hover-dev/cli add
               </code>
-              . Cloud runs the specs you author locally — and keeps them green
-              with AI:
+              . Cloud keeps the specs you author locally alive with AI — it
+              re-records the ones UI drift breaks and flags the ones that have
+              gone stale:
             </p>
             <ul className="mt-4 max-w-md space-y-2.5 text-[14px] leading-snug text-text-mute">
               {CLOUD_FEATURES.map(([label, sub, ai]) => (
