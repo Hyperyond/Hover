@@ -9,10 +9,12 @@
 // module-specifier strings. Top-level imports of plugin packages would
 // be statically traced into Next's Edge bundle and break the build;
 // register-node.ts resolves the specifier behind an opaque dynamic
-// import that the Edge tracer can't follow. In a turbo-monorepo this
-// resolver walks up from `process.cwd()` (which is `apps/web/` under
-// `pnpm dev`), so a workspace-installed plugin in `apps/web/
-// node_modules/@hover-dev/security` is found just like in a flat repo.
+// import that the Edge tracer can't follow. To find a workspace-installed
+// plugin (`apps/web/node_modules/@hover-dev/security`, not hoisted under
+// pnpm), the resolver tries `process.cwd()` AND the dirs in its own call
+// stack — so it works whether the dev server runs from `apps/web/` or from
+// the monorepo root (Next compiles this file into `apps/web/.next/server/`,
+// whose frame anchors the walk at the app dir either way).
 import { register as registerHover } from '@hover-dev/next/instrumentation';
 
 export async function register() {

@@ -53,24 +53,68 @@ const dynamicImport: (specifier: string) => Promise<unknown> =
 // startService before either sets RESOLVED_PORT).
 let didRegister = false;
 
+/** Thrown when a requested plugin specifier can't be located under any
+ *  candidate root. Carries the roots we tried so the diagnostic can list them. */
+class PluginNotFoundError extends Error {
+  constructor(
+    public readonly moduleId: string,
+    public readonly roots: string[],
+  ) {
+    super(`could not locate "${moduleId}" under any of: ${roots.join(', ')}`);
+    this.name = 'PluginNotFoundError';
+  }
+}
+
+/** Directories to anchor the node_modules walk on, most-useful first.
+ *  `process.cwd()` covers the common case where the dev server runs from the
+ *  Next app dir. But in a pnpm / turbo monorepo launched from the repo root,
+ *  the plugin (a devDependency of the app) lives only under
+ *  `<app>/node_modules` while cwd is the repo root — so an upward walk from cwd
+ *  never sees it. The call stack rescues that case: Next compiles the user's
+ *  `instrumentation.ts` into `<app>/.next/server/instrumentation.js`, whose
+ *  frame appears in the stack, and walking up from there reaches
+ *  `<app>/node_modules`. The stack also carries this file's own dir, covering
+ *  installs where the plugin is hoisted next to `@hover-dev/next`. */
+function pluginSearchRoots(stack: string | undefined): string[] {
+  return [...new Set([process.cwd(), ...stackFrameDirs(stack)])];
+}
+
+/** Pull the directory of every `…/file.{js,cjs,mjs}:line:col` frame out of a
+ *  V8 stack string. Tolerant of `at fn (/abs/x.js:1:2)`, bare
+ *  `at /abs/x.js:1:2`, and `file://` frames — and of paths that contain spaces
+ *  (e.g. "/Volumes/Portable HD/…"), which a `[^\s]` character class would
+ *  truncate. */
+function stackFrameDirs(stack: string | undefined): string[] {
+  if (!stack) return [];
+  const dirs: string[] = [];
+  for (const line of stack.split('\n')) {
+    // Anchor on the trailing :line:col (optionally closed by ')'), then take
+    // the path in front of it — char-wise, so spaces in the path survive.
+    const m = line.match(/(.+?):\d+:\d+\)?\s*$/);
+    if (!m) continue;
+    let p = m[1];
+    const paren = p.lastIndexOf('(');
+    if (paren !== -1) p = p.slice(paren + 1);
+    p = p.replace(/^\s*at\s+/, '').replace(/^file:\/\//, '').trim();
+    if (p.startsWith('/') && /\.[cm]?js$/.test(p)) dirs.push(dirname(p));
+  }
+  return dirs;
+}
+
 /** Walk up from `startDir` looking for `node_modules/<moduleId>/package.json`.
- *  This is what Node's resolver does internally — we duplicate it here
- *  because the package-subpath / exports-map dance of standard ESM
- *  resolution refuses to load packages from arbitrary roots, and we
- *  specifically need to root at the user's project (`process.cwd()`),
- *  not at this file's `node_modules/@hover-dev/next/dist/` location.
- *  Returns the absolute package.json path, or throws. */
-function findPackageJson(moduleId: string, startDir: string): string {
+ *  We duplicate Node's resolver here because the package-subpath / exports-map
+ *  dance of standard ESM resolution refuses to load packages from arbitrary
+ *  roots. Returns the absolute package.json path, or null if nothing matches
+ *  up to the filesystem root. */
+function findPackageJson(moduleId: string, startDir: string): string | null {
   let dir = startDir;
-  // Safety: bail at filesystem root.
   while (true) {
     const candidate = join(dir, 'node_modules', moduleId, 'package.json');
     if (existsSync(candidate)) return candidate;
     const parent = dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) return null;
     dir = parent;
   }
-  throw new Error(`could not locate "${moduleId}" in any node_modules above ${startDir}`);
 }
 
 /** Resolve a bare specifier (e.g. `@hover-dev/security`) to an absolute
@@ -89,7 +133,15 @@ function findPackageJson(moduleId: string, startDir: string): string {
  *  .import` / `main` field, the absolute entry path goes through a
  *  plain `file://` dynamic import that the loader accepts unconditionally. */
 function resolvePluginEntry(moduleId: string): string {
-  const pkgJsonPath = findPackageJson(moduleId, process.cwd());
+  // Try each candidate root (cwd, then caller-stack dirs) until one resolves —
+  // see pluginSearchRoots for why cwd alone breaks in a monorepo.
+  const roots = pluginSearchRoots(new Error().stack);
+  let pkgJsonPath: string | null = null;
+  for (const root of roots) {
+    pkgJsonPath = findPackageJson(moduleId, root);
+    if (pkgJsonPath) break;
+  }
+  if (!pkgJsonPath) throw new PluginNotFoundError(moduleId, roots);
   const pkgDir = dirname(pkgJsonPath);
   const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8')) as {
     main?: string;
@@ -203,6 +255,14 @@ function printPluginLoadError(moduleId: string, err: unknown): void {
     console.error(
       `  Hover will keep running without this plugin. Remove the entry from register() to silence this message.`,
     );
+    return;
+  }
+
+  if (err instanceof PluginNotFoundError) {
+    console.error(`[@hover-dev/next] plugin "${moduleId}" not found — it won't appear in the widget.`);
+    console.error(`  Requested in register() but not resolvable from: ${err.roots.join(', ')}`);
+    console.error(`  In a monorepo, install it as a devDependency of THIS app (\`pnpm add -D ${moduleId}\` in the app dir).`);
+    console.error(`  Hover continues without this plugin.`);
     return;
   }
 
