@@ -70,6 +70,17 @@ const ROWS: Row[] = [
     ],
   },
   {
+    dim: 'Generated spec guards every step',
+    hover: yes('Each interaction prefaced with an explicit expect(el).toBeVisible()'),
+    cols: [
+      na('No code artifact — YAML interpreted by AI at runtime'),
+      partial('Hand / AI-written Playwright; a per-step guard isn\'t guaranteed'),
+      no('Records raw actions; a visibility assert needs a manual toolbar click'),
+      no('Runtime SDK — leans on Playwright auto-wait, no guard in the saved code'),
+      no('Runtime vision agent; asserts only where you write aiAssert'),
+    ],
+  },
+  {
     dim: 'Open source / self-hosted',
     hover: yes('Apache-2.0, runs entirely on your machine'),
     cols: [
@@ -272,6 +283,14 @@ export function Comparison() {
         <span className="font-mono text-text-dim">–</span> not applicable. QA Wolf and
         Momentic do not publish public pricing; figures elsewhere online come from
         third-party aggregators, so we describe their model rather than quote a number.
+      </p>
+
+      <p className="mt-3 max-w-3xl text-[12.5px] leading-relaxed text-text-dim">
+        On <span className="text-text-mute">&ldquo;Generated spec guards every step&rdquo;</span>,{' '}
+        <span className="font-mono" style={{ color: 'var(--color-error)' }}>✕</span> means the tool
+        leans on Playwright&rsquo;s runtime auto-wait instead of writing an explicit per-step
+        visibility assertion into the saved code. It still waits at run time; the artifact just
+        carries no guard of its own.
       </p>
 
       <p className="mt-3 max-w-3xl text-[12.5px] leading-relaxed text-text-dim">

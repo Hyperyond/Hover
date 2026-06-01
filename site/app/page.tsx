@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Sparkle } from '@/components/Sparkle';
 import { WidgetDemo } from '@/components/WidgetDemo';
+import { TerminalDemo } from '@/components/TerminalDemo';
 import { CopyCommand } from '@/components/CopyCommand';
 import { Waitlist } from '@/components/Waitlist';
 import { Nav } from '@/components/Nav';
@@ -62,6 +63,7 @@ export default function Home() {
       <Outputs />
       <Security />
       <Comparison />
+      <Roadmap />
       <Pricing />
       <Waitlist />
       <Faq />
@@ -111,7 +113,7 @@ function Hero() {
             className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3.5 py-1.5 text-[12px] text-text-mute transition-colors hover:border-[rgba(124,255,168,0.4)] hover:text-text"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-mint" />
-            v0.13 — record/replay parity shipped
+            v0.14 · latest release
           </a>
 
           <h1 className="font-mono text-[38px] font-semibold leading-[1.08] tracking-tight md:text-[52px]">
@@ -160,73 +162,9 @@ function Hero() {
   );
 }
 
-/* The explore → crystallise story told as a single annotated terminal panel —
- * styled exactly like the widget's dark inset code blocks. */
-function TerminalDemo() {
-  return (
-    <div className="mt-16 overflow-hidden rounded-lg border border-line bg-bg-3 shadow-[0_18px_48px_rgba(0,0,0,0.55)]">
-      <div className="flex items-center gap-2 border-b border-line bg-bg-2 px-4 py-2.5">
-        <span className="h-3 w-3 rounded-full bg-line-2" />
-        <span className="h-3 w-3 rounded-full bg-line-2" />
-        <span className="h-3 w-3 rounded-full bg-line-2" />
-        <span className="ml-2 font-mono text-[12px] text-text-dim">
-          hover · basic-app
-        </span>
-      </div>
-      <div className="grid gap-px bg-line md:grid-cols-2">
-        <div className="min-w-0 bg-bg-3 p-5">
-          <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-text-dim">
-            You type
-          </div>
-          <p className="font-mono text-[14px] leading-relaxed text-text">
-            <span className="text-mint">›</span> log in, then add a todo named
-            &ldquo;verify hover&rdquo;
-          </p>
-          <div className="mt-5 space-y-2 font-mono text-[13px] text-text-mute">
-            <Step label="Opening page" />
-            <Step label="Filling login form" />
-            <Step label="Clicking Sign in" />
-            <Step label="Typing todo" />
-            <Step label="Done in 11 steps · $0.16" done />
-          </div>
-        </div>
-        <div className="min-w-0 bg-bg-3 p-5">
-          <div className="mb-3 break-all font-mono text-[11px] uppercase tracking-wider text-text-dim">
-            Hover saves <span className="text-mint">__vibe_tests__/login-flow.spec.ts</span>
-          </div>
-          <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-text-mute">
-            <code>{`import { test, expect } from '@playwright/test';
-
-test('login then add todo', async ({ page }) => {
-  await page.goto('http://localhost:5173/');
-  await page.getByLabel('Email').fill('claude@…');
-  await page.getByRole('button',
-    { name: 'Sign in' }).click();
-  await page.getByPlaceholder('New todo')
-    .fill('verify hover');
-  await expect(page.getByText('verify hover'))
-    .toBeVisible();
-});`}</code>
-          </pre>
-          <div className="mt-3 font-mono text-[11px] text-text-dim">
-            runs with <span className="text-text-mute">npx playwright test</span> — no agent, no key
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Step({ label, done }: { label: string; done?: boolean }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${done ? 'bg-mint' : 'bg-line-2'}`}
-      />
-      <span className={done ? 'text-mint' : undefined}>{label}</span>
-    </div>
-  );
-}
+/* TerminalDemo (the You-type / generated-spec panel) now lives in
+ * components/TerminalDemo.tsx — a client component that typewriter-reveals the
+ * real generated spec. */
 
 /* ── Four core pillars ──────────────────────────────────────────────── */
 const PILLARS = [
@@ -432,6 +370,66 @@ function Security() {
             </ul>
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── On the roadmap ─────────────────────────────────────────────────────
+ * Planned spec-output work (page objects, test.step, popup pairing, a
+ * conventions file). Dashed borders + a Planned tag keep it visually apart from
+ * shipped features, so nothing here reads as a current capability. Design lives
+ * in Harness/structured-spec-output.md. */
+const ROADMAP = [
+  {
+    title: 'Page objects from repeated flows',
+    body: 'When a login or setup flow recurs across saved specs, Hover lifts it into a shared Page Object plus a fixture, so the selectors live in one file instead of five.',
+  },
+  {
+    title: 'Structured test.step reports',
+    body: 'Saved flows wrap their actions in Given / When / Then test.step calls, so the Playwright HTML report reads as named stages instead of a flat action list.',
+  },
+  {
+    title: 'Multi-tab & popup flows',
+    body: 'A click that opens a payment popup or OAuth tab crystallises with the Promise.all listener pairing Playwright needs, so the saved spec drives the new tab without a race.',
+  },
+  {
+    title: 'Project conventions file',
+    body: 'A .hover/conventions.md in your repo (which flows matter, where login lives, your preferred selectors) feeds the agent at exploration time, so generated specs follow your house style.',
+  },
+];
+
+function Roadmap() {
+  return (
+    <section id="roadmap" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
+      <SectionLabel>On the roadmap</SectionLabel>
+      <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
+        Next, Hover shapes the output into a{' '}
+        <span className="text-mint">maintainable suite</span>.
+      </h2>
+      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
+        None of this ships today. It&rsquo;s the next stretch for the saved spec:
+        page objects, fixtures, and structured steps a team already maintains by
+        hand, all still plain Playwright with no agent in CI. Follow along on{' '}
+        <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
+          GitHub
+        </a>
+        .
+      </p>
+      <div className="mt-12 grid gap-5 md:grid-cols-2">
+        {ROADMAP.map((r) => (
+          <article
+            key={r.title}
+            className="rounded-lg border border-dashed border-line bg-bg-2 p-7"
+          >
+            <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider text-text-dim">
+              <span className="h-1.5 w-1.5 rounded-full bg-text-dim" />
+              Planned
+            </span>
+            <h3 className="text-[17px] font-semibold tracking-tight text-text">{r.title}</h3>
+            <p className="mt-3 text-[14px] leading-relaxed text-text-mute">{r.body}</p>
+          </article>
+        ))}
       </div>
     </section>
   );
