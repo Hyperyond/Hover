@@ -75,7 +75,8 @@ class PluginNotFoundError extends Error {
  *  frame appears in the stack, and walking up from there reaches
  *  `<app>/node_modules`. The stack also carries this file's own dir, covering
  *  installs where the plugin is hoisted next to `@hover-dev/next`. */
-function pluginSearchRoots(stack: string | undefined): string[] {
+/** @internal Exported for unit tests. */
+export function pluginSearchRoots(stack: string | undefined): string[] {
   return [...new Set([process.cwd(), ...stackFrameDirs(stack)])];
 }
 
@@ -84,7 +85,8 @@ function pluginSearchRoots(stack: string | undefined): string[] {
  *  `at /abs/x.js:1:2`, and `file://` frames — and of paths that contain spaces
  *  (e.g. "/Volumes/Portable HD/…"), which a `[^\s]` character class would
  *  truncate. */
-function stackFrameDirs(stack: string | undefined): string[] {
+/** @internal Exported for unit tests. */
+export function stackFrameDirs(stack: string | undefined): string[] {
   if (!stack) return [];
   const dirs: string[] = [];
   for (const line of stack.split('\n')) {
@@ -106,7 +108,8 @@ function stackFrameDirs(stack: string | undefined): string[] {
  *  dance of standard ESM resolution refuses to load packages from arbitrary
  *  roots. Returns the absolute package.json path, or null if nothing matches
  *  up to the filesystem root. */
-function findPackageJson(moduleId: string, startDir: string): string | null {
+/** @internal Exported for unit tests. */
+export function findPackageJson(moduleId: string, startDir: string): string | null {
   let dir = startDir;
   while (true) {
     const candidate = join(dir, 'node_modules', moduleId, 'package.json');

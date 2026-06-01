@@ -71,6 +71,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "test": "vitest run",
     "dev": "tsup --watch",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepack": "pnpm run clean && pnpm run build"
@@ -95,7 +96,8 @@
     "@types/react": "^19.0.0",
     "next": "^16.0.0",
     "react": "^19.0.0",
-    "tsup": "^8.5.1"
+    "tsup": "^8.5.1",
+    "vitest": "^3.0.0"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
