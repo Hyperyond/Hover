@@ -377,9 +377,9 @@ function Security() {
 
 /* ── On the roadmap ─────────────────────────────────────────────────────
  * Planned spec-output work (page objects, test.step, popup pairing, a
- * conventions file). Dashed borders + a Planned tag keep it visually apart from
- * shipped features, so nothing here reads as a current capability. Design lives
- * in Harness/structured-spec-output.md. */
+ * conventions file, a community seed library, an optional AI optimization pass).
+ * Dashed borders + a Planned tag keep it visually apart from shipped features,
+ * so nothing here reads as a current capability. */
 const ROADMAP = [
   {
     title: 'Page objects from repeated flows',
@@ -397,6 +397,14 @@ const ROADMAP = [
     title: 'Project conventions file',
     body: 'A .hover/conventions.md in your repo (which flows matter, where login lives, your preferred selectors) feeds the agent at exploration time, so generated specs follow your house style.',
   },
+  {
+    title: 'Community translation seeds',
+    body: 'Hover translates actions off a library of worked examples — built-in for common patterns like popups and downloads, and extensible: you or the community add a seed to teach it a new pattern, no fork, no plugin code.',
+  },
+  {
+    title: 'Optional AI optimization pass',
+    body: 'Let AI read a generated spec and propose a polished version you accept via a diff. The deterministic original is always kept and the pass is off by default — nothing is rewritten behind your back.',
+  },
 ];
 
 function Roadmap() {
@@ -410,7 +418,9 @@ function Roadmap() {
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
         None of this ships today. It&rsquo;s the next stretch for the saved spec:
         page objects, fixtures, and structured steps a team already maintains by
-        hand, all still plain Playwright with no agent in CI. Follow along on{' '}
+        hand &mdash; plus a community-extensible seed library and an optional AI
+        polish pass that always keeps the deterministic original. All still plain
+        Playwright with no agent in CI. Follow along on{' '}
         <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
           GitHub
         </a>
