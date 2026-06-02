@@ -20,7 +20,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SkillStep } from '../skills/writeSkill.js';
-import { humanSteps } from './humanSteps.js';
+import { humanSteps, humanStep } from './humanSteps.js';
 
 export type SpecStep = SkillStep;
 
@@ -150,31 +150,37 @@ function renderSpec(
   const safeTitle = displayName.replace(/'/g, "\\'");
   lines.push(`test('${safeTitle}', async ({ page }) => {`);
 
+  // Each captured step becomes one `test.step(...)` so Playwright's HTML
+  // report reads as named Given/When/Then stages instead of a flat body. The
+  // label reuses the same human-readable prose as the JSDoc Steps block
+  // (humanStep), prefixed by a phase inferred from position: navigation
+  // before the first real interaction = Given, interactions = When,
+  // assertions = Then. `expect` is imported unconditionally — the visibility
+  // preludes inside each step depend on it.
   let hasAwait = false;
+  let sawInteraction = false;
   for (const s of steps) {
     if (s.kind !== 'step' || !s.tool) continue;
-    const calls = translateStep(s.tool, s.input);
-    for (const c of calls) {
-      // Each emitted line gets the test-body indent (2 spaces). Lines
-      // inside an emitInteraction block carry an additional 2 spaces of
-      // relative indent embedded in the line itself, so this single
-      // 2-space prefix produces correct 4-space nesting inside `{ … }`.
-      lines.push(`  ${c}`);
-      hasAwait = true;
-    }
+    const body = translateStep(s.tool, s.input);
+    if (body.length === 0) continue; // diagnostic / non-replayable — skipped
+    const phase = !sawInteraction && s.tool === 'browser_navigate' ? 'Given' : 'When';
+    const label = `${phase} · ${humanStep(s.tool, s.input) ?? s.tool}`;
+    lines.push(`  await test.step(${JSON.stringify(label)}, async () => {`);
+    for (const c of body) lines.push(`    ${c}`);
+    lines.push(`  });`);
+    hasAwait = true;
+    if (s.tool !== 'browser_navigate') sawInteraction = true;
   }
-  // `expect` is imported at the top of the generated file regardless of
-  // whether assertions are present — the visibility preludes emitted by
-  // translateStep depend on it for any element-targeting step. (Cheap:
-  // unused imports get tree-shaken out of any future test bundle, and
-  // Playwright's runner doesn't care.)
 
   if (assertions.length > 0) {
     if (hasAwait) lines.push('');
-    lines.push('  // Assertions captured via Alt-click in the Hover widget.');
+    // Alt-click assertions become Then steps so they group under the report's
+    // final stage alongside the When interactions above.
     for (const a of assertions) {
-      if (a.hint) lines.push(`  // ${a.hint}`);
-      lines.push(`  await ${a.code};`);
+      const label = `Then · ${a.hint ?? 'assertion'}`;
+      lines.push(`  await test.step(${JSON.stringify(label)}, async () => {`);
+      lines.push(`    await ${a.code};`);
+      lines.push(`  });`);
     }
   }
 
@@ -207,10 +213,12 @@ function translateStep(tool: string, rawInput: unknown): string[] {
         const f = raw as { name?: string; type?: string; value?: string; element?: string };
         const value = String(f.value ?? '');
         const target = f.name ?? f.element ?? '';
-        return emitInteraction(
+        // Each field gets its own block scope so the per-field `const el`
+        // declarations don't collide inside the step's shared test.step closure.
+        return blockScope(emitInteraction(
           selectorForFormField(target, f.type),
           `fill(${JSON.stringify(value)})`,
-        );
+        ));
       });
     }
     case 'browser_type': {
@@ -252,38 +260,38 @@ function translateStep(tool: string, rawInput: unknown): string[] {
 }
 
 /**
- * Wrap an interaction (click / dblclick / hover / fill / selectOption) in a
- * block-scoped visibility prelude. Replaces the prior one-liner emit:
+ * Emit an interaction (click / dblclick / hover / fill / selectOption) as a
+ * visibility-guarded prelude: hoist the locator to `el`, assert it's visible,
+ * then act.
  *
- *    // before
- *    await page.getByRole('button', { name: 'Submit' }).click();
- *
- *    // after
- *    {
- *      const el = page.getByRole('button', { name: 'Submit' });
- *      await expect(el).toBeVisible();
- *      await el.click();
- *    }
+ *    const el = page.getByRole('button', { name: 'Submit' });
+ *    await expect(el).toBeVisible();
+ *    await el.click();
  *
  * Why: `getByRole` is "visible OR attached" by default. A button that drifted
  * behind a closed `<details>` / kebab menu / drawer is still in the role tree,
  * so the locator stays green AND `.click()` may still fire — but the actual
- * user flow has degraded. Asserting visibility before each interaction makes
- * that drift fail loudly with "Locator expected to be visible" instead of
- * silently passing or timing out generically. Issue raised externally;
- * the fix is a 1-emit change here.
+ * user flow has degraded. Asserting visibility first makes that drift fail
+ * loudly with "Locator expected to be visible" instead of silently passing.
  *
- * Block-scoped (`{ … }`) so each step's local `el` doesn't shadow the next.
- * The 4-line shape keeps the diff readable when re-record regenerates a spec.
+ * Scoping: renderSpec wraps each step in its own `test.step(… async () => {})`,
+ * whose closure already scopes `el`, so a single interaction needs no extra
+ * braces. browser_fill_form emits several fields into one step, so it wraps
+ * each field in `blockScope(...)` to keep the per-field `el` from colliding.
  */
 function emitInteraction(selectorExpr: string, action: string): string[] {
   return [
-    `{`,
-    `  const el = ${selectorExpr};`,
-    `  await expect(el).toBeVisible();`,
-    `  await el.${action};`,
-    `}`,
+    `const el = ${selectorExpr};`,
+    `await expect(el).toBeVisible();`,
+    `await el.${action};`,
   ];
+}
+
+/** Wrap lines in a `{ … }` block scope (2-space inner indent). Used by
+ *  browser_fill_form so each field's `const el` lives in its own scope inside
+ *  the shared test.step closure. */
+function blockScope(lines: string[]): string[] {
+  return ['{', ...lines.map(l => `  ${l}`), '}'];
 }
 
 /**

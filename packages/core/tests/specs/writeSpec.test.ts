@@ -167,13 +167,12 @@ describe('writeSpec — visible-state prelude (v0.13)', () => {
         ],
       });
       const src = readFileSync(r.path, 'utf-8');
-      // The prelude must wrap the interaction in `{ … }`, hoist the locator
-      // to a local `el`, assert visibility, then fire the action.
-      expect(src).toContain('  {');
+      // Each interaction is wrapped in its own test.step closure (which scopes
+      // `el`), then runs the visibility-guarded prelude inside it.
+      expect(src).toContain('await test.step(');
       expect(src).toContain(`    const el = page.${expectedSelector};`);
       expect(src).toContain('    await expect(el).toBeVisible();');
       expect(src).toContain(`    await ${expectedAction};`);
-      expect(src).toContain('  }');
       // And the prelude must come BEFORE the action — i.e. expect(el).toBeVisible
       // appears earlier in the file than `await el.<action>`.
       const visibleIdx = src.indexOf('await expect(el).toBeVisible()');
@@ -254,20 +253,52 @@ describe('writeSpec — visible-state prelude (v0.13)', () => {
       ],
     });
     const src = readFileSync(r.path, 'utf-8');
-    // Three preludes; the `const el = …` declarations are block-scoped so
-    // they don't shadow each other (no "Identifier 'el' has already been
-    // declared" syntax error). Verify by counting the standalone prelude
-    // braces inside the test body — the test's own `});` ends with `)`
-    // and is not matched by the standalone-`}` pattern.
+    // Three interactions → three test.step closures. Each closure scopes its
+    // own `el`, so the three `const el = …` declarations don't shadow each
+    // other (no "Identifier 'el' has already been declared" syntax error).
     const body = src.split('async ({ page }) => {')[1] ?? '';
-    const openBraces = body.match(/^\s*\{$/gm) ?? [];
-    const closeBraces = body.match(/^\s*\}$/gm) ?? [];
-    expect(openBraces.length).toBe(3);
-    expect(closeBraces.length).toBe(3);
-    // Also assert that each `const el = …` is unique within its block
-    // scope — there should be exactly 3 declarations across the body
-    // and they should not be reported as redeclarations.
+    const stepWrappers = body.match(/await test\.step\(/g) ?? [];
+    expect(stepWrappers.length).toBe(3);
     const elDecls = body.match(/const el =/g) ?? [];
     expect(elDecls.length).toBe(3);
+  });
+});
+
+describe('writeSpec — test.step Given/When/Then wrapping (F1)', () => {
+  it('wraps each captured step in a test.step labelled with the humanStep prose', async () => {
+    const r = await writeSpec({ devRoot, name: 'f1-wrap', steps: session });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('await test.step("Given · Open http://localhost:5173/", async () => {');
+    expect(src).toContain('await test.step("When · Click Submit button", async () => {');
+  });
+
+  it('labels leading navigation Given and the first interaction When', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'f1-phases',
+      steps: [
+        { kind: 'user', text: 'x' },
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/' } },
+        { kind: 'step', tool: 'browser_click', input: { element: 'Go button' } },
+        { kind: 'done', summary: 'ok' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('test.step("Given · Open');
+    expect(src).toContain('test.step("When · Click Go button"');
+  });
+
+  it('wraps Alt-click assertions as Then steps', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'f1-then',
+      steps: session,
+      assertions: [
+        { code: 'expect(page.getByText("3")).toBeVisible()', hint: 'counter reads 3' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('await test.step("Then · counter reads 3", async () => {');
+    expect(src).toContain('await expect(page.getByText("3")).toBeVisible();');
   });
 });
