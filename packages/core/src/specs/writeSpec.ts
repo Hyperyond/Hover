@@ -290,7 +290,7 @@ function translateStep(tool: string, rawInput: unknown): string[] {
  * braces. browser_fill_form emits several fields into one step, so it wraps
  * each field in `blockScope(...)` to keep the per-field `el` from colliding.
  */
-function emitInteraction(selectorExpr: string, action: string): string[] {
+export function emitInteraction(selectorExpr: string, action: string): string[] {
   return [
     `const el = ${selectorExpr};`,
     `await expect(el).toBeVisible();`,
@@ -301,7 +301,7 @@ function emitInteraction(selectorExpr: string, action: string): string[] {
 /** Wrap lines in a `{ … }` block scope (2-space inner indent). Used by
  *  browser_fill_form so each field's `const el` lives in its own scope inside
  *  the shared test.step closure. */
-function blockScope(lines: string[]): string[] {
+export function blockScope(lines: string[]): string[] {
   return ['{', ...lines.map(l => `  ${l}`), '}'];
 }
 
@@ -310,9 +310,9 @@ function blockScope(lines: string[]): string[] {
  * textbox" / "Plan radio" into `getByRole(role, { name })` selectors. The
  * trailing role keyword is the convention Playwright MCP uses.
  */
-function selectorFromDescription(desc: string): string {
+export function selectorFromDescription(desc: string, pageVar = 'page'): string {
   const trimmed = desc.trim();
-  if (!trimmed) return `page.locator('body')`;
+  if (!trimmed) return `${pageVar}.locator('body')`;
 
   // Strip a leading "Link" / "Button" article-style prefix sometimes added
   // by the MCP, e.g. "Link \"Learn more\"". We only handle the trailing form.
@@ -323,14 +323,14 @@ function selectorFromDescription(desc: string): string {
   if (roleMatch) {
     const name = roleMatch[1].replace(/^"|"$/g, '');
     const role = roleMatch[2].toLowerCase();
-    return `page.getByRole('${role}', { name: ${JSON.stringify(name)} })`;
+    return `${pageVar}.getByRole('${role}', { name: ${JSON.stringify(name)} })`;
   }
 
   // Quoted label, e.g. \"Submit\" — fall back to getByText.
   const quoted = trimmed.match(/^"(.+)"$/);
-  if (quoted) return `page.getByText(${JSON.stringify(quoted[1])})`;
+  if (quoted) return `${pageVar}.getByText(${JSON.stringify(quoted[1])})`;
 
-  return `page.getByText(${JSON.stringify(trimmed)})`;
+  return `${pageVar}.getByText(${JSON.stringify(trimmed)})`;
 }
 
 /**
@@ -338,14 +338,14 @@ function selectorFromDescription(desc: string): string {
  * accessible name / label / aria-label. getByLabel is the right primitive.
  * Fall back to getByRole('textbox') if we have a hint.
  */
-function selectorForFormField(name: string, type?: string): string {
+export function selectorForFormField(name: string, type?: string, pageVar = 'page'): string {
   const trimmed = name.trim();
-  if (!trimmed) return `page.locator('input')`;
+  if (!trimmed) return `${pageVar}.locator('input')`;
   if (type) {
     const role = mapInputType(type);
-    if (role) return `page.getByRole('${role}', { name: ${JSON.stringify(trimmed)} })`;
+    if (role) return `${pageVar}.getByRole('${role}', { name: ${JSON.stringify(trimmed)} })`;
   }
-  return `page.getByLabel(${JSON.stringify(trimmed)})`;
+  return `${pageVar}.getByLabel(${JSON.stringify(trimmed)})`;
 }
 
 function mapInputType(type: string): string | null {
