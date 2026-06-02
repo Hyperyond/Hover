@@ -302,3 +302,41 @@ describe('writeSpec — test.step Given/When/Then wrapping (F1)', () => {
     expect(src).toContain('await expect(page.getByText("3")).toBeVisible();');
   });
 });
+
+describe('writeSpec — structured sidecar (Stage 1)', () => {
+  it('writes a .hover/<slug>.json sidecar with the verbatim structured session', async () => {
+    const r = await writeSpec({ devRoot, name: 'login + counter', steps: session });
+    const sidecarPath = join(devRoot, '__vibe_tests__', '.hover', `${r.slug}.json`);
+    const sc = JSON.parse(readFileSync(sidecarPath, 'utf-8'));
+    expect(sc.version).toBe(1);
+    expect(sc.slug).toBe(r.slug);
+    expect(sc.name).toBe('login + counter');
+    expect(typeof sc.createdAt).toBe('string');
+    // The full structured steps are preserved verbatim, not re-parsed from
+    // the generated .spec.ts — this is the record F4 / F7 read.
+    expect(sc.steps).toEqual(session);
+    expect(sc.assertions).toEqual([]);
+  });
+
+  it('persists Alt-click assertions in the sidecar', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'with asserts',
+      steps: session,
+      assertions: [{ code: 'expect(x).toBeVisible()', hint: 'visible' }],
+    });
+    const sc = JSON.parse(
+      readFileSync(join(devRoot, '__vibe_tests__', '.hover', `${r.slug}.json`), 'utf-8'),
+    );
+    expect(sc.assertions).toEqual([{ code: 'expect(x).toBeVisible()', hint: 'visible' }]);
+  });
+
+  it('lands in a dot-prefixed .hover/ dir as .json, never a collectable *.spec.ts', async () => {
+    const r = await writeSpec({ devRoot, name: 'guard', steps: session });
+    const sidecarPath = join(devRoot, '__vibe_tests__', '.hover', `${r.slug}.json`);
+    // readFileSync throws if absent — proves it was written.
+    expect(readFileSync(sidecarPath, 'utf-8').length).toBeGreaterThan(0);
+    expect(sidecarPath.endsWith('.spec.ts')).toBe(false);
+    expect(sidecarPath).toContain(`${join('__vibe_tests__', '.hover')}`);
+  });
+});

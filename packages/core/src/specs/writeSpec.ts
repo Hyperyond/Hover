@@ -21,6 +21,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SkillStep } from '../skills/writeSkill.js';
 import { humanSteps, humanStep } from './humanSteps.js';
+import { writeSidecar } from './sidecar.js';
 
 export type SpecStep = SkillStep;
 
@@ -66,6 +67,16 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   await mkdir(dir, { recursive: true });
   const source = renderSpec(slug, opts.name, opts.description ?? '', opts.steps, opts.assertions ?? []);
   await writeFile(path, source, 'utf-8');
+  // Persist the structured session next to the spec so cross-session
+  // extraction (F4) and the optimization pass (F7) read real SpecStep[]
+  // instead of parsing the generated code. Lands in .hover/, which
+  // Playwright's *.spec.ts glob never collects.
+  await writeSidecar(opts.devRoot, {
+    slug,
+    name: opts.name,
+    steps: opts.steps,
+    assertions: opts.assertions ?? [],
+  });
   return { path, slug };
 }
 
