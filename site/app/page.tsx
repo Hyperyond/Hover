@@ -123,14 +123,14 @@ function Hero() {
           </h1>
 
           <p className="mt-7 max-w-xl text-[16px] leading-relaxed text-text-mute md:text-[18px]">
-            Describe a flow in plain English and watch AI drive your{' '}
-            <em className="not-italic text-text">real</em> Chrome. When the run
-            is clean, click <span className="text-text">Save as spec</span> —
-            Hover writes a standard{' '}
+            Describe a flow in plain English; AI drives your{' '}
+            <em className="not-italic text-text">real</em> Chrome once to
+            explore it. When the run&rsquo;s clean, Hover crystallises it into a
+            standard{' '}
             <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[14px] text-mint">
               @playwright/test
             </code>{' '}
-            file that runs in CI with zero AI, forever.
+            spec that runs in CI with zero AI, forever.
           </p>
 
           <div id="install" className="mt-9 flex flex-wrap items-center gap-3">
@@ -148,6 +148,20 @@ function Hero() {
             <span className="text-text-mute">claude</span> /{' '}
             <span className="text-text-mute">codex</span> CLI already on your{' '}
             <code className="font-mono text-text-mute">PATH</code>.
+          </p>
+
+          <p className="mt-3 text-[13px] text-text-dim">
+            Today, a clean portable spec.{' '}
+            <span className="text-text-mute">Next</span>: structured reports,
+            page objects, a community seed library, and an optional AI polish
+            pass —{' '}
+            <a
+              href="#roadmap"
+              className="text-text underline-offset-2 hover:underline"
+            >
+              see the roadmap
+            </a>
+            .
           </p>
         </div>
 
@@ -416,11 +430,13 @@ function Roadmap() {
         <span className="text-mint">maintainable suite</span>.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        None of this ships today. It&rsquo;s the next stretch for the saved spec:
-        page objects, fixtures, and structured steps a team already maintains by
-        hand &mdash; plus a community-extensible seed library and an optional AI
-        polish pass that always keeps the deterministic original. All still plain
-        Playwright with no agent in CI. Follow along on{' '}
+        Today Hover saves a clean, portable spec &mdash; flat but correct. Next
+        it grows an architecture: structured Given/When/Then reports, page
+        objects and fixtures lifted from flows repeated across specs, a
+        community-extensible seed library that teaches the translator new
+        patterns, and an optional AI pass that polishes a spec while always
+        keeping the deterministic original. Still plain Playwright, no agent in
+        CI. None of this ships today. Follow along on{' '}
         <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
           GitHub
         </a>
