@@ -21,6 +21,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sidecarDir, type SpecSidecar } from './sidecar.js';
 import { humanStep } from './humanSteps.js';
+import type { SkillStep } from '../skills/writeSkill.js';
 
 export interface SharedFlow {
   /** The shared signature prefix, one entry per step. */
@@ -30,6 +31,9 @@ export interface SharedFlow {
   prose: string[];
   /** Slugs of the specs that share this prefix, sorted. */
   specs: string[];
+  /** The representative spec's original steps for the shared prefix, fed to
+   *  generatePageObject during Stage 3 extraction. */
+  prefixSteps: SkillStep[];
 }
 
 export interface DetectOptions {
@@ -106,17 +110,21 @@ async function readSidecars(devRoot: string): Promise<SpecSidecar[]> {
 
 /** Project a sidecar's steps to (signature, prose) lists, dropping
  *  non-flow steps. */
-function signatureSeq(sc: SpecSidecar): { slug: string; sigs: string[]; prose: string[] } {
+function signatureSeq(
+  sc: SpecSidecar,
+): { slug: string; sigs: string[]; prose: string[]; steps: SkillStep[] } {
   const sigs: string[] = [];
   const prose: string[] = [];
+  const steps: SkillStep[] = [];
   for (const s of sc.steps) {
     if (s.kind !== 'step' || !s.tool) continue;
     const sig = stepSignature(s.tool, s.input);
     if (sig == null) continue;
     sigs.push(sig);
     prose.push(humanStep(s.tool, s.input) ?? s.tool);
+    steps.push(s);
   }
-  return { slug: sc.slug, sigs, prose };
+  return { slug: sc.slug, sigs, prose, steps };
 }
 
 function longestCommonPrefixLen(seqs: string[][]): number {
@@ -165,6 +173,7 @@ export async function detectSharedFlows(
       signatures: group[0].sigs.slice(0, lcp),
       prose: group[0].prose.slice(0, lcp),
       specs: group.map(g => g.slug).sort(),
+      prefixSteps: group[0].steps.slice(0, lcp),
     });
   }
   // Longest shared prefix first — the richest extraction candidate on top.
