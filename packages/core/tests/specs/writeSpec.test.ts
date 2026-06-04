@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeSpec } from '../../src/specs/writeSpec.js';
+import { writePageObjectManifest } from '../../src/specs/pageObjectManifest.js';
 import type { SkillStep } from '../../src/skills/writeSkill.js';
 
 let devRoot: string;
@@ -338,5 +339,65 @@ describe('writeSpec — structured sidecar (Stage 1)', () => {
     expect(readFileSync(sidecarPath, 'utf-8').length).toBeGreaterThan(0);
     expect(sidecarPath.endsWith('.spec.ts')).toBe(false);
     expect(sidecarPath).toContain(`${join('__vibe_tests__', '.hover')}`);
+  });
+});
+
+describe('writeSpec — Page Object consumption (Stage 3c)', () => {
+  const manifestEntry = {
+    className: 'LoginPage',
+    methodName: 'login',
+    fixtureName: 'loginPage',
+    fileName: 'LoginPage.ts',
+    signatures: ['navigate:/login', 'fill:Email,Password', 'click:Sign in button'],
+    specs: ['x', 'y', 'z'],
+  };
+  const consuming: SkillStep[] = [
+    { kind: 'user', text: 'log in then add a todo' },
+    { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/login' } },
+    {
+      kind: 'step',
+      tool: 'browser_fill_form',
+      input: {
+        fields: [
+          { name: 'Email', type: 'email', value: 'a@b.co' },
+          { name: 'Password', type: 'password', value: 'secret' },
+        ],
+      },
+    },
+    { kind: 'step', tool: 'browser_click', input: { element: 'Sign in button' } },
+    { kind: 'step', tool: 'browser_click', input: { element: 'Add todo button' } },
+    { kind: 'done', summary: 'ok' },
+  ];
+
+  it('folds a matching prefix into one Page Object call and imports fixtures', async () => {
+    await writePageObjectManifest(devRoot, [manifestEntry]);
+    const r = await writeSpec({ devRoot, name: 'login + add todo', steps: consuming });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain("import { test, expect } from './fixtures';");
+    expect(src).toContain("test('login + add todo', async ({ page, loginPage }) => {");
+    expect(src).toContain('await loginPage.login("a@b.co", "secret");');
+    // The consumed prefix is NOT re-emitted inline…
+    expect(src).not.toContain('getByRole(\'textbox\', { name: "Email" })');
+    // …but the tail step after the prefix still renders normally.
+    expect(src).toContain('When · Click Add todo button');
+    expect(src).toContain('await el.click();');
+  });
+
+  it('leaves the spec as plain @playwright/test when no Page Object matches', async () => {
+    await writePageObjectManifest(devRoot, [manifestEntry]);
+    const r = await writeSpec({
+      devRoot,
+      name: 'unrelated',
+      steps: [
+        { kind: 'user', text: 'x' },
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/dashboard' } },
+        { kind: 'step', tool: 'browser_click', input: { element: 'Export button' } },
+        { kind: 'done', summary: 'ok' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain("import { test, expect } from '@playwright/test';");
+    expect(src).toContain('async ({ page }) => {');
+    expect(src).not.toContain('loginPage');
   });
 });

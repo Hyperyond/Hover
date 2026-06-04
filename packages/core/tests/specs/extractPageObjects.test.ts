@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeSidecar } from '../../src/specs/sidecar.js';
 import { extractPageObjects } from '../../src/specs/extractPageObjects.js';
+import { writeSpec } from '../../src/specs/writeSpec.js';
 import type { SkillStep } from '../../src/skills/writeSkill.js';
 
 let devRoot: string;
@@ -65,5 +66,25 @@ describe('extractPageObjects', () => {
     expect(res.pages).toHaveLength(0);
     expect(res.fixturesPath).toBeNull();
     expect(existsSync(join(devRoot, '__vibe_tests__', 'pages'))).toBe(false);
+  });
+
+  it('end-to-end: a spec saved after extraction consumes the generated Page Object', async () => {
+    await sc('a', login({ kind: 'step', tool: 'browser_click', input: { element: 'A button' } }));
+    await sc('b', login({ kind: 'step', tool: 'browser_click', input: { element: 'B button' } }));
+    await sc('c', login({ kind: 'step', tool: 'browser_click', input: { element: 'C button' } }));
+    await extractPageObjects(devRoot); // writes pages/LoginPage.ts + fixtures.ts + manifest
+
+    // A NEW spec that starts with the same login flow consumes the Page Object —
+    // signatures are produced by real code on both sides, so nothing is hand-written.
+    const r = await writeSpec({
+      devRoot,
+      name: 'login then settings',
+      steps: login({ kind: 'step', tool: 'browser_click', input: { element: 'Settings link' } }),
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain("import { test, expect } from './fixtures';");
+    expect(src).toContain('async ({ page, loginPage }) => {');
+    expect(src).toContain('await loginPage.login("a@b.co", "x");');
+    expect(src).toContain('When · Click Settings link');
   });
 });

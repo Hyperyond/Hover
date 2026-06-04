@@ -16,6 +16,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { detectSharedFlows } from './detectSharedFlows.js';
 import { generatePageObject } from './generatePageObject.js';
+import { writePageObjectManifest, type PageObjectEntry } from './pageObjectManifest.js';
 
 export interface ExtractedPage {
   className: string;
@@ -46,6 +47,7 @@ export async function extractPageObjects(
   await mkdir(pagesDir, { recursive: true });
 
   const pages: ExtractedPage[] = [];
+  const entries: PageObjectEntry[] = [];
   const usedNames = new Set<string>();
   for (const flow of flows) {
     const probe = generatePageObject(flow.prefixSteps);
@@ -63,10 +65,21 @@ export async function extractPageObjects(
       path,
       specs: flow.specs,
     });
+    entries.push({
+      className: po.className,
+      methodName: po.methodName,
+      fixtureName: fixtureName(po.className),
+      fileName: po.fileName,
+      signatures: flow.signatures,
+      specs: flow.specs,
+    });
   }
 
   const fixturesPath = join(testsDir, 'fixtures.ts');
   await writeFile(fixturesPath, renderFixtures(pages), 'utf-8');
+  // Manifest lets writeSpec match a new spec's prefix to a Page Object and
+  // consume it (Stage 3c) without re-running detection.
+  await writePageObjectManifest(devRoot, entries);
   return { pages, fixturesPath };
 }
 
