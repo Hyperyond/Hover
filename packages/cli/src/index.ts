@@ -16,6 +16,7 @@ import { mutateConfig } from './mutate.js';
 import { isInteractive, pick } from './picker.js';
 import { bold, cyan, dim, err, info, ok, spark, warn } from './log.js';
 import { parseReRecordArgs, runReRecord } from './re-record.js';
+import { runExtract } from './extract.js';
 
 /**
  * @hover-dev/cli entrypoint.
@@ -101,6 +102,7 @@ Usage:
 
   npx @hover-dev/cli re-record <spec>   ${dim('# regenerate a Playwright spec against the current UI')}
   npx @hover-dev/cli re-record --dry-run <spec>
+  npx @hover-dev/cli extract            ${dim('# lift flows shared across specs into Page Objects + fixtures')}
   npx @hover-dev/cli --help
   npx @hover-dev/cli --version
 
@@ -322,6 +324,12 @@ async function main(): Promise<void> {
     const { args: subArgs, exitCode } = parseReRecordArgs(subArgv);
     if (!subArgs) process.exit(exitCode);
     const code = await runReRecord(subArgs);
+    process.exit(code);
+  }
+  if (args.command === 'extract') {
+    // extract only needs --cwd (which the main parser already understands);
+    // the 3-spec threshold is fixed for now, so no sub-parser is required.
+    const code = await runExtract({ cwd: args.cwd, minSpecs: 3 });
     process.exit(code);
   }
   if (!args.command) {
