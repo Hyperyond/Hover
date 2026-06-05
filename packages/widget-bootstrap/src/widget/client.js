@@ -1565,43 +1565,9 @@
       row.appendChild(n);
       row.appendChild(d);
       row.appendChild(meta);
-      // Re-record action — disabled when the spec has no `Original prompt`
-      // header (we have nothing to feed the agent).
-      const action = document.createElement('button');
-      action.type = 'button';
-      action.className = 'spec-rerecord-btn';
-      action.textContent = '⟳ Re-record';
-      action.setAttribute('data-tooltip', 'Replay original prompt against current UI; overwrite this spec');
-      if (!s.originalPrompt) {
-        action.disabled = true;
-        action.setAttribute('data-tooltip', 'Spec has no Original prompt header — re-record needs the intent string');
-      } else {
-        action.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          reRecordSpec(s);
-        });
-      }
-      row.appendChild(action);
-
-      // F7 — Optimize action: an LLM pass proposes an improved spec; the human
-      // reviews the diff inline and promotes or discards. The original spec is
-      // never touched until promote.
-      const optBtn = document.createElement('button');
-      optBtn.type = 'button';
-      optBtn.className = 'spec-rerecord-btn spec-optimize-btn';
-      const busy = optimizing && optimizing.slug === s.slug && optimizing.status === 'running';
-      if (busy) {
-        optBtn.textContent = '✨ Optimizing…';
-        optBtn.disabled = true;
-      } else {
-        optBtn.textContent = '✨ Optimize';
-        optBtn.setAttribute('data-tooltip', 'LLM pass: propose an improved spec (review the diff; original kept)');
-        optBtn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          optimizeSpecAction(s);
-        });
-      }
-      row.appendChild(optBtn);
+      // Re-record + Optimize live in one dropdown so they don't fight over the
+      // single grid cell (grid-column 2 / row 1-4).
+      row.appendChild(buildSpecActions(s));
       specsListEl.appendChild(row);
 
       // Inline candidate review when a result is ready for this spec.
@@ -1609,6 +1575,82 @@
         specsListEl.appendChild(buildOptimizeReview(s.slug));
       }
     }
+  };
+
+  // One dropdown per spec row: ⟳ Re-record + Optimize. Occupies the grid cell
+  // the lone re-record button used to (grid-column 2 / grid-row 1-4); the menu
+  // pops below the trigger. Toggle/close-on-outside mirror buildSaveDropdown.
+  const buildSpecActions = (s) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'grid-column:2;grid-row:1 / 4;align-self:center;position:relative;';
+    const busy = optimizing && optimizing.slug === s.slug && optimizing.status === 'running';
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'spec-rerecord-btn';
+    trigger.style.cssText = 'position:static;'; // grid props don't apply inside wrap
+    trigger.textContent = busy ? 'Optimizing…' : 'Actions ▾';
+    trigger.disabled = busy;
+
+    const menu = document.createElement('div');
+    menu.hidden = true;
+    menu.style.cssText =
+      'position:absolute;right:0;top:calc(100% + 4px);z-index:30;min-width:150px;' +
+      'background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:4px;' +
+      'display:flex;flex-direction:column;gap:2px;box-shadow:0 6px 20px rgba(0,0,0,0.45);';
+
+    const mkItem = (label, opts) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.style.cssText =
+        'text-align:left;padding:6px 9px;background:none;border:none;color:var(--text-mute);' +
+        'font:inherit;font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;';
+      if (opts.disabled) {
+        b.disabled = true;
+        b.style.opacity = '0.4';
+        b.style.cursor = 'not-allowed';
+        if (opts.tip) b.setAttribute('data-tooltip', opts.tip);
+      } else {
+        b.addEventListener('mouseenter', () => { b.style.background = 'var(--accent-dim)'; b.style.color = 'var(--accent)'; });
+        b.addEventListener('mouseleave', () => { b.style.background = 'none'; b.style.color = 'var(--text-mute)'; });
+        b.addEventListener('click', (e) => { e.stopPropagation(); closeMenu(); opts.run(); });
+      }
+      return b;
+    };
+
+    menu.appendChild(
+      s.originalPrompt
+        ? mkItem('⟳ Re-record', { run: () => reRecordSpec(s) })
+        : mkItem('⟳ Re-record', { disabled: true, tip: 'No Original prompt header — cannot re-record' }),
+    );
+    menu.appendChild(mkItem('Optimize', { run: () => optimizeSpecAction(s) }));
+
+    const closeOnOutside = (e) => { if (!e.composedPath().includes(wrap)) closeMenu(); };
+    let attachTimer = null;
+    function openMenu() {
+      menu.hidden = false;
+      attachTimer = setTimeout(() => {
+        attachTimer = null;
+        document.addEventListener('click', closeOnOutside, { capture: true });
+      }, 0);
+    }
+    function closeMenu() {
+      menu.hidden = true;
+      if (attachTimer != null) { clearTimeout(attachTimer); attachTimer = null; }
+      document.removeEventListener('click', closeOnOutside, { capture: true });
+    }
+    if (!busy) {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (menu.hidden) openMenu();
+        else closeMenu();
+      });
+    }
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+    return wrap;
   };
 
   const buildOptimizeReview = (slug) => {
