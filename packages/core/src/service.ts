@@ -50,6 +50,7 @@
  */
 import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
+import { readConventions } from './service/conventions.js';
 import {
   listAgentAvailability,
   pickPrimaryAgent,
@@ -779,6 +780,14 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         let appendSystemPrompt = resumeSessionId
           ? buildCdpHintResume(cdp.tabs)
           : buildCdpHint(cdp.tabs);
+        // Knowledge layer (F5): on the first turn, fold in the project's
+        // .hover/conventions.md (static, like cdpHint's rules — skipped on
+        // resume to keep the prompt cache intact). The service reads the file;
+        // the agent never gains filesystem access (D2).
+        if (!resumeSessionId) {
+          const conventions = await readConventions(devRoot);
+          if (conventions) appendSystemPrompt = `${appendSystemPrompt}\n\n${conventions}`;
+        }
         // Add plugin-contributed prompt additions whose scope includes the
         // current mode (or '*' for always-on). Walks ALL loaded plugins,
         // not just the active-mode plugin — a plugin that contributes
