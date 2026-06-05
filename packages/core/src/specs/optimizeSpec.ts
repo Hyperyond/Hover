@@ -1,0 +1,137 @@
+/**
+ * Stage 7 (F7): the optional LLM optimization pass.
+ *
+ * Reads a deterministic draft spec + its sidecar, asks an LLM (the codegen
+ * mode — no browser, no MCP) to improve it (chiefly: add assertions for the
+ * feedback the session observed), validates the result, and writes it as a
+ * CANDIDATE at `.hover/optimized/<slug>.spec.ts.draft` — never overwriting the
+ * original (D10). A human promotes or discards it via diff.
+ *
+ * The LLM call is injected (`runCodegen`) so callers wire their own agent and
+ * tests run deterministically without spawning anything.
+ */
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { sidecarDir, type SpecSidecar } from './sidecar.js';
+
+export class OptimizeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OptimizeError';
+  }
+}
+
+/** Runs the codegen LLM on a prompt and returns its raw text output. */
+export type RunCodegen = (prompt: string) => Promise<string>;
+
+export interface OptimizeResult {
+  /** Absolute path of the written candidate (never the original spec). */
+  candidatePath: string;
+  /** The validated candidate source. */
+  code: string;
+}
+
+export async function optimizeSpec(
+  devRoot: string,
+  slug: string,
+  runCodegen: RunCodegen,
+): Promise<OptimizeResult> {
+  const specPath = join(devRoot, '__vibe_tests__', `${slug}.spec.ts`);
+  let draft: string;
+  try {
+    draft = await readFile(specPath, 'utf-8');
+  } catch {
+    throw new OptimizeError(`spec not found: ${slug} (looked at ${specPath})`);
+  }
+
+  let sidecar: SpecSidecar | null = null;
+  try {
+    sidecar = JSON.parse(
+      await readFile(join(sidecarDir(devRoot), `${slug}.json`), 'utf-8'),
+    ) as SpecSidecar;
+  } catch {
+    /* no sidecar — optimize from the draft alone */
+  }
+
+  const raw = await runCodegen(buildOptimizePrompt(draft, sidecar));
+  const code = extractCode(raw);
+  const check = validateSpecCode(code);
+  if (!check.ok) {
+    throw new OptimizeError(`optimization rejected — ${check.errors.join('; ')}`);
+  }
+
+  const dir = join(devRoot, '__vibe_tests__', '.hover', 'optimized');
+  await mkdir(dir, { recursive: true });
+  // `.spec.ts.draft`, never `*.spec.ts` — Playwright's glob must not collect a
+  // candidate before a human reviews it.
+  const candidatePath = join(dir, `${slug}.spec.ts.draft`);
+  await writeFile(candidatePath, code.endsWith('\n') ? code : `${code}\n`, 'utf-8');
+  return { candidatePath, code };
+}
+
+/**
+ * Build the codegen prompt: the current spec + the observed session, plus the
+ * same rules the deterministic path enforces (semantic selectors, no XPath, no
+ * waitForTimeout, keep the test.step shape).
+ */
+export function buildOptimizePrompt(draft: string, sidecar: SpecSidecar | null): string {
+  const done = sidecar?.steps.find(s => s.kind === 'done');
+  const stepsJson = sidecar
+    ? JSON.stringify(sidecar.steps.filter(s => s.kind === 'step'), null, 2)
+    : '(no sidecar captured)';
+  return [
+    `You are improving an already-correct, generated Playwright spec. You are`,
+    `given the current deterministic spec and the structured browser session it`,
+    `was crystallized from.`,
+    ``,
+    `Improve it WITHOUT changing what it tests:`,
+    `  - Add assertions for the success/error feedback the session OBSERVED —`,
+    `    e.g. await expect(page.getByText('Invalid email')).toBeVisible(), a`,
+    `    success toast, a counter value. Use the captured steps + the outcome`,
+    `    summary below to know what to assert.`,
+    `  - Keep semantic selectors: getByRole / getByLabel / getByText. NEVER emit`,
+    `    XPath or CSS-id selectors. NEVER use waitForTimeout (Playwright`,
+    `    auto-waits).`,
+    `  - Keep the existing import line and the test.step(...) structure.`,
+    `  - Do not invent steps the session did not perform.`,
+    ``,
+    `Output ONLY the complete .ts file contents — no markdown fences, no prose,`,
+    `no explanation.`,
+    ``,
+    `=== CURRENT SPEC ===`,
+    draft,
+    ``,
+    `=== OBSERVED OUTCOME ===`,
+    done?.summary?.trim() || '(none)',
+    ``,
+    `=== CAPTURED STEPS ===`,
+    stepsJson,
+  ].join('\n');
+}
+
+/** Strip a ```ts fence if the model wrapped its output in one. */
+export function extractCode(raw: string): string {
+  const t = raw.trim();
+  const fence = t.match(/```(?:ts|typescript|tsx|javascript|js)?\s*\n([\s\S]*?)```/);
+  return (fence ? fence[1] : t).trim();
+}
+
+/**
+ * Code-level guardrails — the same constraints the deterministic path keeps,
+ * enforced on the LLM's output so an optimization can't drift off-policy. This
+ * is what lets us allow an LLM to author here without a markdown constitution.
+ */
+export function validateSpecCode(code: string): { ok: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (!code.trim()) errors.push('empty output');
+  if (/\bwaitForTimeout\b/.test(code)) errors.push('uses waitForTimeout');
+  if (/xpath\s*=|locator\(\s*['"`]\/\//i.test(code)) errors.push('uses an XPath selector');
+  if (!/\btest\s*\(/.test(code)) errors.push('no test() block');
+  if (!/from\s+['"](@playwright\/test|\.\/fixtures)['"]/.test(code)) {
+    errors.push('missing @playwright/test (or ./fixtures) import');
+  }
+  const open = (code.match(/\{/g) ?? []).length;
+  const close = (code.match(/\}/g) ?? []).length;
+  if (open !== close) errors.push('unbalanced braces');
+  return { ok: errors.length === 0, errors };
+}
