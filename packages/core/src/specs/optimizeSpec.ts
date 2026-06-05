@@ -10,7 +10,7 @@
  * The LLM call is injected (`runCodegen`) so callers wire their own agent and
  * tests run deterministically without spawning anything.
  */
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sidecarDir, type SpecSidecar } from './sidecar.js';
 
@@ -134,4 +134,31 @@ export function validateSpecCode(code: string): { ok: boolean; errors: string[] 
   const close = (code.match(/\}/g) ?? []).length;
   if (open !== close) errors.push('unbalanced braces');
   return { ok: errors.length === 0, errors };
+}
+
+function candidatePathFor(devRoot: string, slug: string): string {
+  return join(devRoot, '__vibe_tests__', '.hover', 'optimized', `${slug}.spec.ts.draft`);
+}
+
+/** Promote an optimization candidate to the real spec (overwriting it) and
+ *  remove the candidate. Returns the written spec path. The human's "Use
+ *  optimized" / `mv` action. */
+export async function promoteOptimized(devRoot: string, slug: string): Promise<string> {
+  const candidate = candidatePathFor(devRoot, slug);
+  const specPath = join(devRoot, '__vibe_tests__', `${slug}.spec.ts`);
+  let code: string;
+  try {
+    code = await readFile(candidate, 'utf-8');
+  } catch {
+    throw new OptimizeError(`no optimization candidate to promote for "${slug}"`);
+  }
+  await writeFile(specPath, code, 'utf-8');
+  await rm(candidate, { force: true });
+  return specPath;
+}
+
+/** Discard an optimization candidate (delete the .draft, leave the spec). The
+ *  human's "Keep original". */
+export async function discardOptimized(devRoot: string, slug: string): Promise<void> {
+  await rm(candidatePathFor(devRoot, slug), { force: true });
 }

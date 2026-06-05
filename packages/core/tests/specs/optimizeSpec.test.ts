@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   optimizeSpec, buildOptimizePrompt, extractCode, validateSpecCode, OptimizeError,
+  promoteOptimized, discardOptimized,
 } from '../../src/specs/optimizeSpec.js';
 import type { SpecSidecar } from '../../src/specs/sidecar.js';
 
@@ -112,5 +113,30 @@ test('login', async ({ page }) => {
 
   it('throws when the spec does not exist', async () => {
     await expect(optimizeSpec(devRoot, 'nope', async () => 'x')).rejects.toThrow(OptimizeError);
+  });
+
+  const goodCandidate = async () =>
+    `import { test, expect } from '@playwright/test';\ntest('login', async ({ page }) => { await expect(page.getByText('Y')).toBeVisible(); });`;
+
+  it('promoteOptimized overwrites the spec with the candidate and removes the draft', async () => {
+    seedSpec();
+    const res = await optimizeSpec(devRoot, 'login', goodCandidate);
+    const specPath = await promoteOptimized(devRoot, 'login');
+    expect(readFileSync(specPath, 'utf-8')).toContain("getByText('Y')");
+    expect(existsSync(res.candidatePath)).toBe(false); // draft consumed
+  });
+
+  it('discardOptimized deletes the draft and leaves the spec intact', async () => {
+    seedSpec();
+    const res = await optimizeSpec(devRoot, 'login', goodCandidate);
+    await discardOptimized(devRoot, 'login');
+    expect(existsSync(res.candidatePath)).toBe(false);
+    expect(readFileSync(join(devRoot, '__vibe_tests__', 'login.spec.ts'), 'utf-8'))
+      .toContain('async ({ page }) => {});'); // original untouched
+  });
+
+  it('promoteOptimized throws when there is no candidate', async () => {
+    seedSpec();
+    await expect(promoteOptimized(devRoot, 'login')).rejects.toThrow(OptimizeError);
   });
 });
