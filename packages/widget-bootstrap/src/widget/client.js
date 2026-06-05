@@ -1624,7 +1624,14 @@
         ? mkItem('⟳ Re-record', { run: () => reRecordSpec(s) })
         : mkItem('⟳ Re-record', { disabled: true, tip: 'No Original prompt header — cannot re-record' }),
     );
-    menu.appendChild(mkItem('Optimize', { run: () => optimizeSpecAction(s) }));
+    menu.appendChild(
+      s.hasSidecar
+        ? mkItem('Optimize', { run: () => optimizeSpecAction(s) })
+        : mkItem('Optimize', {
+            disabled: true,
+            tip: 'No captured session (sidecar) — re-record this with Hover to enable optimization',
+          }),
+    );
 
     const closeOnOutside = (e) => { if (!e.composedPath().includes(wrap)) closeMenu(); };
     let attachTimer = null;

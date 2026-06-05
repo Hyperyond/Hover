@@ -221,4 +221,16 @@ describe('listSpecs', () => {
     const specs = await listSpecs(tmp);
     expect(specs.map((s) => s.slug)).toEqual(['newer', 'older']);
   });
+
+  test('reports hasSidecar — true when .hover/<slug>.json exists, false otherwise', async () => {
+    mkdirSync(join(tmp, '__vibe_tests__', '.hover'), { recursive: true });
+    writeFileSync(join(tmp, '__vibe_tests__', 'with.spec.ts'), `test('a', async () => {});`);
+    writeFileSync(join(tmp, '__vibe_tests__', '.hover', 'with.json'), '{}');
+    writeFileSync(join(tmp, '__vibe_tests__', 'without.spec.ts'), `test('b', async () => {});`);
+
+    const specs = await listSpecs(tmp);
+    const sidecar = Object.fromEntries(specs.map((s) => [s.slug, s.hasSidecar]));
+    expect(sidecar['with']).toBe(true);
+    expect(sidecar['without']).toBe(false);
+  });
 });

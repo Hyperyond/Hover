@@ -14,6 +14,7 @@
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface SpecSummary {
@@ -31,6 +32,10 @@ export interface SpecSummary {
   stepCount: number;
   /** File mtime in ms — used to show "saved 2 hours ago" in the UI. */
   mtimeMs: number;
+  /** Whether a structured `.hover/<slug>.json` sidecar exists. The widget
+   *  gates the optimization pass on this — without a captured session there's
+   *  no observed feedback for the LLM to add assertions from. */
+  hasSidecar: boolean;
 }
 
 export interface SpecHeader {
@@ -128,13 +133,15 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
       continue;
     }
     const header = parseSpecHeader(content);
+    const slug = entry.replace(/\.spec\.ts$/, '');
     summaries.push({
-      slug: entry.replace(/\.spec\.ts$/, ''),
+      slug,
       path,
       originalPrompt: header.originalPrompt,
       outcome: header.outcome,
       stepCount: header.steps.length,
       mtimeMs,
+      hasSidecar: existsSync(join(root, '.hover', `${slug}.json`)),
     });
   }
   summaries.sort((a, b) => b.mtimeMs - a.mtimeMs);
