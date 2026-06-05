@@ -37,6 +37,8 @@ export interface ClientMessage {
     /** set-mode only — id of the plugin-contributed mode to activate,
      *  or null to return to normal (unmoded) operation. */
     modeId?: string | null;
+    /** optimize-spec / promote-optimized / discard-optimized — the spec slug. */
+    slug?: string;
   };
 }
 

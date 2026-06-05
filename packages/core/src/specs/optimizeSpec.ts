@@ -29,6 +29,9 @@ export interface OptimizeResult {
   candidatePath: string;
   /** The validated candidate source. */
   code: string;
+  /** The original (deterministic) spec the candidate was generated from —
+   *  returned so callers can show a diff without re-reading the file. */
+  original: string;
 }
 
 export async function optimizeSpec(
@@ -66,7 +69,7 @@ export async function optimizeSpec(
   // candidate before a human reviews it.
   const candidatePath = join(dir, `${slug}.spec.ts.draft`);
   await writeFile(candidatePath, code.endsWith('\n') ? code : `${code}\n`, 'utf-8');
-  return { candidatePath, code };
+  return { candidatePath, code, original: draft };
 }
 
 /**

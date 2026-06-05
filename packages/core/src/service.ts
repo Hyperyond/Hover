@@ -51,6 +51,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { invokeAgent } from './agents/invoke.js';
 import { readConventions } from './service/conventions.js';
+import { optimizeSpecWithAgent } from './specs/optimizeSpecWithAgent.js';
+import { promoteOptimized, discardOptimized } from './specs/optimizeSpec.js';
 import {
   listAgentAvailability,
   pickPrimaryAgent,
@@ -652,6 +654,53 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       }
       if (msg.type === 'save-case-csv') {
         await handleSaveArtifact(ws, msg, devRoot, CASE_CSV_CONFIG);
+        return;
+      }
+      // Stage 7 (F7) widget flow: optimize a saved spec, then promote/discard
+      // the candidate after the human reviews the diff. optimizeSpecWithAgent
+      // spawns the codegen LLM (no browser, no MCP); the original spec is never
+      // touched until an explicit promote.
+      if (msg.type === 'optimize-spec') {
+        const slug = msg.payload?.slug;
+        if (typeof slug !== 'string' || !slug) {
+          send(ws, { type: 'error', payload: { message: 'optimize-spec: slug is required' } });
+          return;
+        }
+        try {
+          const res = await optimizeSpecWithAgent(devRoot, slug, {
+            agentId: currentAgentId, model, maxBudgetUsd,
+          });
+          send(ws, { type: 'optimize-result', payload: { slug, original: res.original, candidate: res.code } });
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          send(ws, { type: 'optimize-failed', payload: { slug, reason } });
+        }
+        return;
+      }
+      if (msg.type === 'promote-optimized') {
+        const slug = msg.payload?.slug;
+        if (typeof slug !== 'string' || !slug) {
+          send(ws, { type: 'error', payload: { message: 'promote-optimized: slug is required' } });
+          return;
+        }
+        try {
+          const path = await promoteOptimized(devRoot, slug);
+          send(ws, { type: 'optimized-promoted', payload: { slug, path } });
+          send(ws, { type: 'specs-list', payload: { specs: await listSpecs(devRoot) } });
+        } catch (err) {
+          const m = err instanceof Error ? err.message : String(err);
+          send(ws, { type: 'error', payload: { message: `promote-optimized: ${m}` } });
+        }
+        return;
+      }
+      if (msg.type === 'discard-optimized') {
+        const slug = msg.payload?.slug;
+        if (typeof slug !== 'string' || !slug) {
+          send(ws, { type: 'error', payload: { message: 'discard-optimized: slug is required' } });
+          return;
+        }
+        await discardOptimized(devRoot, slug);
+        send(ws, { type: 'optimized-discarded', payload: { slug } });
         return;
       }
       // v0.12 — plugin-contributed save handlers. Lookup is O(plugins),
