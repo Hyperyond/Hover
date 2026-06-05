@@ -37,6 +37,13 @@ describe('claudeAgent.buildArgs', () => {
     expect(argv).toContain('Edit');
   });
 
+  it('disables the arbitrary-JS Playwright tools (run_code / evaluate) by default', () => {
+    expect(claudeAgent.defaultDisallowedTools).toContain('mcp__playwright__browser_run_code_unsafe');
+    expect(claudeAgent.defaultDisallowedTools).toContain('mcp__playwright__browser_evaluate');
+    // the existing built-in denials still hold
+    expect(claudeAgent.defaultDisallowedTools).toContain('Bash');
+  });
+
   it('passes through the budget ceiling', () => {
     const argv = claudeAgent.buildArgs({ agentId: 'claude', prompt: 'p', maxBudgetUsd: 0.5 });
     expect(argv).toContain('--max-budget-usd');

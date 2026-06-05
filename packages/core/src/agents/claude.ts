@@ -105,6 +105,14 @@ const CLAUDE_DEFAULT_DISALLOWED_TOOLS: readonly string[] = [
   'Monitor', 'TaskOutput', 'TaskStop',
   'AskUserQuestion',
   'ShareOnboardingGuide',
+  // Playwright MCP's arbitrary-JS tools. browser_run_code_unsafe /
+  // browser_evaluate run any JS in the page — a real prompt-injection exfil
+  // path (fetch a token out, read localStorage) that punches through the
+  // "Playwright MCP only" sandbox, and their output can't be translated into
+  // a deterministic Playwright spec anyway (it lands as a `// TODO`). Agents
+  // drive via click/fill/select and read state via snapshot instead.
+  'mcp__playwright__browser_run_code_unsafe',
+  'mcp__playwright__browser_evaluate',
 ];
 
 export const claudeAgent: AgentDescriptor = {
