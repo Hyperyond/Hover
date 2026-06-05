@@ -401,3 +401,48 @@ describe('writeSpec — Page Object consumption (Stage 3c)', () => {
     expect(src).not.toContain('loginPage');
   });
 });
+
+describe('writeSpec — popup / new-tab pairing (F6)', () => {
+  const payFlow: SkillStep[] = [
+    { kind: 'user', text: 'pay with payhover' },
+    { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/checkout' } },
+    { kind: 'step', tool: 'browser_click', input: { element: 'Pay with PayHover button' } },
+    { kind: 'step', tool: 'browser_tabs', input: { action: 'select', idx: 1 } },
+    { kind: 'step', tool: 'browser_click', input: { element: 'Confirm payment button' } },
+    { kind: 'step', tool: 'browser_tabs', input: { action: 'select', idx: 0 } },
+    { kind: 'step', tool: 'browser_click', input: { element: 'View receipt button' } },
+    { kind: 'done', summary: 'ok' },
+  ];
+
+  it('pairs click + tab-switch into Promise.all and re-targets the new tab', async () => {
+    const r = await writeSpec({ devRoot, name: 'pay with payhover', steps: payFlow });
+    const src = readFileSync(r.path, 'utf-8');
+    // signature widened to include the context fixture
+    expect(src).toContain('async ({ context, page }) => {');
+    // opener click is paired with waitForEvent — no visibility prelude on it
+    expect(src).toContain('const [newPage] = await Promise.all([');
+    expect(src).toContain("context.waitForEvent('page'),");
+    expect(src).toContain('page.getByRole(\'button\', { name: "Pay with PayHover" }).click(),');
+    // the step after the switch operates the NEW tab
+    expect(src).toContain('const el = newPage.getByRole(\'button\', { name: "Confirm payment" });');
+    // after switching back to idx 0, steps operate the ORIGINAL page again
+    expect(src).toContain('const el = page.getByRole(\'button\', { name: "View receipt" });');
+  });
+
+  it('leaves single-tab specs with a plain { page } signature (no context)', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'no popup',
+      steps: [
+        { kind: 'user', text: 'x' },
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/' } },
+        { kind: 'step', tool: 'browser_click', input: { element: 'Go button' } },
+        { kind: 'done', summary: 'ok' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('async ({ page }) => {');
+    expect(src).not.toContain('context');
+    expect(src).not.toContain('Promise.all');
+  });
+});

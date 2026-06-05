@@ -148,6 +148,78 @@ function renderSpec(
   const proseSteps = humanSteps(steps);
   const expectedLines = collectExpected(assertions, doneMsg?.summary);
 
+  // ── Walk the steps into the test body first, so we know whether any F6
+  //    popup pairing needs the `context` fixture before we write the
+  //    signature. Each step becomes one `test.step(...)` (Given/When/Then by
+  //    position) so Playwright's HTML report reads as named stages. ──
+  const body: string[] = [];
+  let sawInteraction = false;
+  let sigSeen = 0;
+  let emittedPageObject = false;
+  let pageVar = 'page';
+  let popupCount = 0;
+  let usesContext = false;
+
+  const actions = steps.filter(s => s.kind === 'step' && !!s.tool);
+  for (let i = 0; i < actions.length; i++) {
+    const s = actions[i];
+    const next = actions[i + 1];
+
+    // Stage 3c: fold the matched login/entry prefix into one Page Object call.
+    if (match && sigSeen < match.consumedSigs && stepSignature(s.tool!, s.input) != null) {
+      sigSeen++;
+      if (!emittedPageObject) {
+        pushTestStep(body, `Given · ${match.entry.methodName}`,
+          [`await ${match.entry.fixtureName}.${match.entry.methodName}(${match.args.join(', ')});`]);
+        emittedPageObject = true;
+        sawInteraction = true;
+      }
+      continue;
+    }
+
+    // F6: a click that opens a new tab, immediately followed by a tab switch →
+    // pair them into Promise.all([context.waitForEvent('page'), …click()]) and
+    // re-target subsequent steps onto the new page. No visibility prelude on
+    // the click — the open must race the waitForEvent, not await visibility.
+    if (isPopupClick(s) && next && isTabSelectNew(next)) {
+      usesContext = true;
+      popupCount += 1;
+      const newVar = popupCount === 1 ? 'newPage' : `newPage${popupCount}`;
+      const clickSel = selectorFromDescription(
+        String((s.input as Record<string, unknown>).element ?? ''), pageVar);
+      pushTestStep(body, `When · ${humanStep(s.tool!, s.input) ?? s.tool!}`, [
+        `const [${newVar}] = await Promise.all([`,
+        `  context.waitForEvent('page'),`,
+        `  ${clickSel}.click(),`,
+        `]);`,
+      ]);
+      pageVar = newVar;
+      sawInteraction = true;
+      i++; // also consume the paired tab-switch step
+      continue;
+    }
+
+    // A standalone tab switch back to the original tab → re-target to `page`.
+    if (s.tool === 'browser_tabs') {
+      if (isTabSelectOriginal(s)) pageVar = 'page';
+      continue; // tab switches don't emit a line of their own
+    }
+
+    const bodyLines = translateStep(s.tool!, s.input, pageVar);
+    if (bodyLines.length === 0) continue; // diagnostic / non-replayable
+    const phase = !sawInteraction && s.tool === 'browser_navigate' ? 'Given' : 'When';
+    pushTestStep(body, `${phase} · ${humanStep(s.tool!, s.input) ?? s.tool!}`, bodyLines);
+    if (s.tool !== 'browser_navigate') sawInteraction = true;
+  }
+
+  // Then: Alt-click assertions group under the report's final stage.
+  if (assertions.length > 0 && body.length > 0) body.push('');
+  for (const a of assertions) {
+    pushTestStep(body, `Then · ${a.hint ?? 'assertion'}`, [`await ${a.code};`]);
+  }
+
+  // ── Assemble: import + JSDoc header + signature (widened to { context } when
+  //    a popup pairing needs it, and the page-object fixture when matched). ──
   const lines: string[] = [];
   lines.push(
     match
@@ -175,66 +247,47 @@ function renderSpec(
   lines.push(' * so the spec survives markup changes that don\'t touch semantics.');
   lines.push(' */');
   const safeTitle = displayName.replace(/'/g, "\\'");
-  const fnParams = match ? `{ page, ${match.entry.fixtureName} }` : '{ page }';
-  lines.push(`test('${safeTitle}', async (${fnParams}) => {`);
-
-  // Each captured step becomes one `test.step(...)` so Playwright's HTML
-  // report reads as named Given/When/Then stages instead of a flat body. The
-  // label reuses the same human-readable prose as the JSDoc Steps block
-  // (humanStep), prefixed by a phase inferred from position: navigation
-  // before the first real interaction = Given, interactions = When,
-  // assertions = Then. `expect` is imported unconditionally — the visibility
-  // preludes inside each step depend on it.
-  let hasAwait = false;
-  let sawInteraction = false;
-  let sigSeen = 0;
-  let emittedPageObject = false;
-  for (const s of steps) {
-    if (s.kind !== 'step' || !s.tool) continue;
-    const body = translateStep(s.tool, s.input);
-    if (body.length === 0) continue; // diagnostic / non-replayable — skipped
-    // Fold the matched prefix into a single Page Object call (Stage 3c).
-    if (match && sigSeen < match.consumedSigs && stepSignature(s.tool, s.input) != null) {
-      sigSeen++;
-      if (!emittedPageObject) {
-        const label = `Given · ${match.entry.methodName}`;
-        lines.push(`  await test.step(${JSON.stringify(label)}, async () => {`);
-        lines.push(`    await ${match.entry.fixtureName}.${match.entry.methodName}(${match.args.join(', ')});`);
-        lines.push(`  });`);
-        emittedPageObject = true;
-        hasAwait = true;
-        sawInteraction = true;
-      }
-      continue; // this step is replayed by the Page Object call above
-    }
-    const phase = !sawInteraction && s.tool === 'browser_navigate' ? 'Given' : 'When';
-    const label = `${phase} · ${humanStep(s.tool, s.input) ?? s.tool}`;
-    lines.push(`  await test.step(${JSON.stringify(label)}, async () => {`);
-    for (const c of body) lines.push(`    ${c}`);
-    lines.push(`  });`);
-    hasAwait = true;
-    if (s.tool !== 'browser_navigate') sawInteraction = true;
-  }
-
-  if (assertions.length > 0) {
-    if (hasAwait) lines.push('');
-    // Alt-click assertions become Then steps so they group under the report's
-    // final stage alongside the When interactions above.
-    for (const a of assertions) {
-      const label = `Then · ${a.hint ?? 'assertion'}`;
-      lines.push(`  await test.step(${JSON.stringify(label)}, async () => {`);
-      lines.push(`    await ${a.code};`);
-      lines.push(`  });`);
-    }
-  }
-
-  if (!hasAwait && assertions.length === 0) {
+  const params = ['page'];
+  if (usesContext) params.unshift('context');
+  if (match) params.push(match.entry.fixtureName);
+  lines.push(`test('${safeTitle}', async ({ ${params.join(', ')} }) => {`);
+  if (body.length === 0) {
     lines.push('  // (no automatable steps were captured)');
+  } else {
+    for (const b of body) lines.push(b);
   }
-
   lines.push('});');
   lines.push('');
   return lines.join('\n');
+}
+
+/** Push one `await test.step('<label>', async () => { … })` block (4-space
+ *  body indent) onto the assembled spec lines. */
+function pushTestStep(out: string[], label: string, inner: string[]): void {
+  out.push(`  await test.step(${JSON.stringify(label)}, async () => {`);
+  for (const l of inner) out.push(`    ${l}`);
+  out.push(`  });`);
+}
+
+/** A click that may open a new tab — the opener half of an F6 popup pairing. */
+function isPopupClick(s: SpecStep): boolean {
+  return s.tool === 'browser_click' || s.tool === 'browser_double_click';
+}
+
+/** A browser_tabs step that selects a NEW tab (idx > 0) — the switch half of an
+ *  F6 popup pairing. A select back to idx 0 is a return, not a popup open. */
+function isTabSelectNew(s: SpecStep): boolean {
+  const i = (s.input ?? {}) as Record<string, unknown>;
+  return s.tool === 'browser_tabs'
+    && i.action === 'select'
+    && Number(i.idx ?? i.index ?? -1) > 0;
+}
+
+/** A tab switch back to the original tab (index/idx 0) → re-target to `page`. */
+function isTabSelectOriginal(s: SpecStep): boolean {
+  const i = (s.input ?? {}) as Record<string, unknown>;
+  if (i.action !== 'select') return false;
+  return Number(i.idx ?? i.index ?? -1) === 0;
 }
 
 /** A spec's leading steps matched against a known Page Object. */
@@ -303,20 +356,20 @@ function flowArgValues(steps: SpecStep[]): string[] {
   return out;
 }
 
-function translateStep(tool: string, rawInput: unknown): string[] {
+function translateStep(tool: string, rawInput: unknown, pageVar = 'page'): string[] {
   const input = (rawInput ?? {}) as Record<string, unknown>;
   switch (tool) {
     case 'browser_navigate': {
       const url = String(input.url ?? '');
       const path = stripBaseUrl(url);
-      return [`await page.goto(${JSON.stringify(path)});`];
+      return [`await ${pageVar}.goto(${JSON.stringify(path)});`];
     }
     case 'browser_click':
-      return emitInteraction(selectorFromDescription(String(input.element ?? '')), 'click()');
+      return emitInteraction(selectorFromDescription(String(input.element ?? ''), pageVar), 'click()');
     case 'browser_double_click':
-      return emitInteraction(selectorFromDescription(String(input.element ?? '')), 'dblclick()');
+      return emitInteraction(selectorFromDescription(String(input.element ?? ''), pageVar), 'dblclick()');
     case 'browser_hover':
-      return emitInteraction(selectorFromDescription(String(input.element ?? '')), 'hover()');
+      return emitInteraction(selectorFromDescription(String(input.element ?? ''), pageVar), 'hover()');
     case 'browser_fill_form': {
       const fields = (input.fields as unknown[] | undefined) ?? [];
       return fields.flatMap(raw => {
@@ -326,7 +379,7 @@ function translateStep(tool: string, rawInput: unknown): string[] {
         // Each field gets its own block scope so the per-field `const el`
         // declarations don't collide inside the step's shared test.step closure.
         return blockScope(emitInteraction(
-          selectorForFormField(target, f.type),
+          selectorForFormField(target, f.type, pageVar),
           `fill(${JSON.stringify(value)})`,
         ));
       });
@@ -335,7 +388,7 @@ function translateStep(tool: string, rawInput: unknown): string[] {
       const text = String(input.text ?? '');
       const target = String(input.element ?? '');
       return emitInteraction(
-        selectorFromDescription(target),
+        selectorFromDescription(target, pageVar),
         `fill(${JSON.stringify(text)})`,
       );
     }
@@ -344,13 +397,13 @@ function translateStep(tool: string, rawInput: unknown): string[] {
       const values = input.values as unknown[] | undefined;
       const val = (values && values.length > 0 ? values[0] : input.value) ?? '';
       return emitInteraction(
-        selectorFromDescription(target),
+        selectorFromDescription(target, pageVar),
         `selectOption(${JSON.stringify(String(val))})`,
       );
     }
     case 'browser_press_key': {
       const key = String(input.key ?? '');
-      return [`await page.keyboard.press(${JSON.stringify(key)});`];
+      return [`await ${pageVar}.keyboard.press(${JSON.stringify(key)});`];
     }
     case 'browser_wait_for':
       // Skip "wait for" hints — Playwright auto-waits.
