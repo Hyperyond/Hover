@@ -1521,7 +1521,13 @@
     }));
   };
 
+  // F7 optimization-pass UI state: the spec currently being optimized + the
+  // last specs list (so async optimize-result can re-render the overlay).
+  let optimizing = null;
+  let lastSpecs = [];
+
   const renderSpecs = (specs) => {
+    lastSpecs = specs;
     if (!specsListEl || !specsCountEl) return;
     specsCountEl.textContent = String(specs.length);
     specsListEl.innerHTML = '';
@@ -1576,8 +1582,92 @@
         });
       }
       row.appendChild(action);
+
+      // F7 — Optimize action: an LLM pass proposes an improved spec; the human
+      // reviews the diff inline and promotes or discards. The original spec is
+      // never touched until promote.
+      const optBtn = document.createElement('button');
+      optBtn.type = 'button';
+      optBtn.className = 'spec-rerecord-btn spec-optimize-btn';
+      const busy = optimizing && optimizing.slug === s.slug && optimizing.status === 'running';
+      if (busy) {
+        optBtn.textContent = '✨ Optimizing…';
+        optBtn.disabled = true;
+      } else {
+        optBtn.textContent = '✨ Optimize';
+        optBtn.setAttribute('data-tooltip', 'LLM pass: propose an improved spec (review the diff; original kept)');
+        optBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          optimizeSpecAction(s);
+        });
+      }
+      row.appendChild(optBtn);
       specsListEl.appendChild(row);
+
+      // Inline candidate review when a result is ready for this spec.
+      if (optimizing && optimizing.slug === s.slug && optimizing.status === 'ready') {
+        specsListEl.appendChild(buildOptimizeReview(s.slug));
+      }
     }
+  };
+
+  const buildOptimizeReview = (slug) => {
+    const panel = document.createElement('div');
+    panel.style.cssText =
+      'margin:4px 0 12px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:6px;background:rgba(255,255,255,0.03);';
+    const label = document.createElement('div');
+    label.style.cssText = 'font-size:11px;opacity:0.7;margin-bottom:6px;';
+    label.textContent = 'Optimized candidate — original kept until you accept:';
+    const pre = document.createElement('pre');
+    pre.style.cssText =
+      'max-height:200px;overflow:auto;font-size:11px;line-height:1.45;white-space:pre-wrap;margin:0 0 8px;';
+    pre.textContent = optimizing.candidate || '';
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;';
+    const use = document.createElement('button');
+    use.type = 'button';
+    use.className = 'spec-rerecord-btn';
+    use.style.cssText = 'flex:1;';
+    use.textContent = '✓ Use optimized';
+    use.addEventListener('click', () => promoteOptimizeAction(slug));
+    const keep = document.createElement('button');
+    keep.type = 'button';
+    keep.className = 'spec-rerecord-btn';
+    keep.style.cssText = 'flex:1;';
+    keep.textContent = '✗ Keep original';
+    keep.addEventListener('click', () => discardOptimizeAction(slug));
+    actions.appendChild(use);
+    actions.appendChild(keep);
+    panel.appendChild(label);
+    panel.appendChild(pre);
+    panel.appendChild(actions);
+    return panel;
+  };
+
+  const optimizeSpecAction = (spec) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      addMessage({ kind: 'system', text: 'Cannot optimize: service disconnected.' });
+      return;
+    }
+    optimizing = { slug: spec.slug, status: 'running' };
+    renderSpecs(lastSpecs);
+    ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug: spec.slug } }));
+  };
+
+  const promoteOptimizeAction = (slug) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'promote-optimized', payload: { slug } }));
+    }
+    optimizing = null;
+    renderSpecs(lastSpecs);
+  };
+
+  const discardOptimizeAction = (slug) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'discard-optimized', payload: { slug } }));
+    }
+    optimizing = null;
+    renderSpecs(lastSpecs);
   };
 
   const reRecordSpec = (spec) => {
@@ -3386,6 +3476,22 @@
         renderSkills(msg.payload?.skills ?? []);
       } else if (msg.type === 'specs-list') {
         renderSpecs(msg.payload?.specs ?? []);
+      } else if (msg.type === 'optimize-result') {
+        const p = msg.payload ?? {};
+        if (optimizing && optimizing.slug === p.slug) {
+          optimizing = { slug: p.slug, status: 'ready', candidate: p.candidate, original: p.original };
+          renderSpecs(lastSpecs);
+        }
+      } else if (msg.type === 'optimize-failed') {
+        const p = msg.payload ?? {};
+        optimizing = null;
+        addMessage({ kind: 'system', text: `✗ Optimize failed: ${p.reason ?? 'unknown'}` });
+        renderSpecs(lastSpecs);
+      } else if (msg.type === 'optimized-promoted') {
+        addMessage({ kind: 'system', text: `✓ Promoted optimized spec: ${msg.payload?.slug ?? ''}` });
+        requestSpecsList();
+      } else if (msg.type === 'optimized-discarded') {
+        addMessage({ kind: 'system', text: `Kept original spec: ${msg.payload?.slug ?? ''}` });
       } else if (msg.type === 'cdp-status') {
         const p = msg.payload ?? {};
         const launching = p.launching === true;
