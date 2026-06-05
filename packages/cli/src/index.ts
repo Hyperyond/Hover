@@ -17,6 +17,7 @@ import { isInteractive, pick } from './picker.js';
 import { bold, cyan, dim, err, info, ok, spark, warn } from './log.js';
 import { parseReRecordArgs, runReRecord } from './re-record.js';
 import { runExtract } from './extract.js';
+import { parseOptimizeArgs, runOptimize } from './optimize.js';
 
 /**
  * @hover-dev/cli entrypoint.
@@ -103,6 +104,7 @@ Usage:
   npx @hover-dev/cli re-record <spec>   ${dim('# regenerate a Playwright spec against the current UI')}
   npx @hover-dev/cli re-record --dry-run <spec>
   npx @hover-dev/cli extract            ${dim('# lift flows shared across specs into Page Objects + fixtures')}
+  npx @hover-dev/cli optimize <spec>    ${dim('# LLM pass: propose an improved spec (candidate + diff, original kept)')}
   npx @hover-dev/cli --help
   npx @hover-dev/cli --version
 
@@ -330,6 +332,14 @@ async function main(): Promise<void> {
     // extract only needs --cwd (which the main parser already understands);
     // the 3-spec threshold is fixed for now, so no sub-parser is required.
     const code = await runExtract({ cwd: args.cwd, minSpecs: 3 });
+    process.exit(code);
+  }
+  if (args.command === 'optimize') {
+    // optimize takes a positional <spec> — its own argv shape, like re-record.
+    const subArgv = process.argv.slice(3);
+    const { args: subArgs, exitCode } = parseOptimizeArgs(subArgv);
+    if (!subArgs) process.exit(exitCode);
+    const code = await runOptimize(subArgs);
     process.exit(code);
   }
   if (!args.command) {
