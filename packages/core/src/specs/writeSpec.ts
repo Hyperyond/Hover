@@ -31,6 +31,23 @@ import { stepSignature } from './detectSharedFlows.js';
 
 export type SpecStep = SkillStep;
 
+/**
+ * Marker the deterministic translator leaves where a captured action is a real
+ * interaction but has no single-step Playwright translation (e.g. file upload,
+ * drag, a dialog handler) — a shape that needs a multi-step pattern. It is a
+ * structured signal, not a `// TODO`: the optimization pass (F7) and the
+ * "seeds could complete this — review?" suggestion grep for it, and
+ * `countOptimizableMarkers` reads it back off a saved spec.
+ */
+export const OPTIMIZABLE_MARKER = '// hover:optimizable';
+
+/** How many `// hover:optimizable` markers a generated spec carries. Used to
+ *  surface "this spec has an interaction the deterministic pass couldn't fully
+ *  translate — the optimization pass can complete it". */
+export function countOptimizableMarkers(source: string): number {
+  return source.split('\n').filter(l => l.trimStart().startsWith(OPTIMIZABLE_MARKER)).length;
+}
+
 export interface SpecAssertion {
   /** Generated Playwright code (single line, no leading "await "). */
   code: string;
@@ -418,7 +435,10 @@ function translateStep(tool: string, rawInput: unknown, pageVar = 'page'): strin
       // Diagnostic / read-only / non-replayable on a fresh playwright run.
       return [];
     default:
-      return [`// TODO: translate ${tool} (skipped — unknown tool for spec emission)`];
+      // A real action with no single-step translation. Leave a structured
+      // marker (not a TODO) so the optimization pass / seed library can
+      // complete it; the deterministic draft stays runnable around it.
+      return [`${OPTIMIZABLE_MARKER}: ${tool} — no single-step translation; the optimization pass or a .hover/rules/ seed can complete this`];
   }
 }
 

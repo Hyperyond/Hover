@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeSpec } from '../../src/specs/writeSpec.js';
+import { writeSpec, countOptimizableMarkers, OPTIMIZABLE_MARKER } from '../../src/specs/writeSpec.js';
 import { writePageObjectManifest } from '../../src/specs/pageObjectManifest.js';
 import type { SkillStep } from '../../src/skills/writeSkill.js';
 
@@ -103,6 +103,47 @@ describe('writeSpec — JSDoc header', () => {
     const jsdocBlock = src.split("test('")[0];
     const closes = jsdocBlock.match(/\*\//g) ?? [];
     expect(closes.length).toBe(1);
+  });
+});
+
+describe('writeSpec — optimizable markers', () => {
+  it('leaves a hover:optimizable marker (not a TODO) for an action with no single-step translation', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'upload flow',
+      steps: [
+        { kind: 'user', text: 'upload a file' },
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/' } },
+        { kind: 'step', tool: 'browser_file_upload', input: { paths: ['/tmp/a.pdf'] } },
+        { kind: 'done', summary: 'Uploaded.' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(OPTIMIZABLE_MARKER);
+    expect(src).toContain('browser_file_upload');
+    expect(src).not.toContain('// TODO');
+    expect(countOptimizableMarkers(src)).toBe(1);
+  });
+
+  it('emits no marker for a fully-translatable session', async () => {
+    const r = await writeSpec({ devRoot, name: 'clean', steps: session });
+    expect(countOptimizableMarkers(readFileSync(r.path, 'utf-8'))).toBe(0);
+  });
+});
+
+describe('countOptimizableMarkers', () => {
+  it('counts marker lines, ignoring the same text inside a string literal', () => {
+    const src = [
+      `${OPTIMIZABLE_MARKER}: browser_drag — ...`,
+      `  ${OPTIMIZABLE_MARKER}: browser_handle_dialog — ...`,
+      `await page.fill('${OPTIMIZABLE_MARKER}');`, // not at line start → not a marker
+    ].join('\n');
+    expect(countOptimizableMarkers(src)).toBe(2);
+  });
+
+  it('returns 0 for an empty or marker-free spec', () => {
+    expect(countOptimizableMarkers('')).toBe(0);
+    expect(countOptimizableMarkers('await page.goto("/");')).toBe(0);
   });
 });
 

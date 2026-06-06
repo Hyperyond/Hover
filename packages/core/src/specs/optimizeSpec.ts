@@ -13,6 +13,7 @@
 import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sidecarDir, type SpecSidecar } from './sidecar.js';
+import { readSeeds, relevantSeeds, type SeedRule } from './seeds.js';
 
 export class OptimizeError extends Error {
   constructor(message: string) {
@@ -56,7 +57,13 @@ export async function optimizeSpec(
     /* no sidecar — optimize from the draft alone */
   }
 
-  const raw = await runCodegen(buildOptimizePrompt(draft, sidecar));
+  const specTools = new Set(
+    (sidecar?.steps ?? [])
+      .filter(s => s.kind === 'step' && s.tool)
+      .map(s => s.tool as string),
+  );
+  const seeds = relevantSeeds(await readSeeds(devRoot), specTools);
+  const raw = await runCodegen(buildOptimizePrompt(draft, sidecar, seeds));
   const code = extractCode(raw);
   const check = validateSpecCode(code);
   if (!check.ok) {
@@ -77,7 +84,11 @@ export async function optimizeSpec(
  * same rules the deterministic path enforces (semantic selectors, no XPath, no
  * waitForTimeout, keep the test.step shape).
  */
-export function buildOptimizePrompt(draft: string, sidecar: SpecSidecar | null): string {
+export function buildOptimizePrompt(
+  draft: string,
+  sidecar: SpecSidecar | null,
+  seeds: SeedRule[] = [],
+): string {
   const done = sidecar?.steps.find(s => s.kind === 'done');
   const stepsJson = sidecar
     ? JSON.stringify(sidecar.steps.filter(s => s.kind === 'step'), null, 2)
@@ -109,6 +120,17 @@ export function buildOptimizePrompt(draft: string, sidecar: SpecSidecar | null):
     ``,
     `=== CAPTURED STEPS ===`,
     stepsJson,
+    ...(seeds.length > 0
+      ? [
+          ``,
+          `=== WORKED EXAMPLES (apply a pattern ONLY if the steps genuinely match it) ===`,
+          ...seeds.map(s =>
+            `# ${s.name}${s.note ? ` — ${s.note}` : ''}\n` +
+            `WHEN steps look like: ${JSON.stringify(s.example.steps)}\n` +
+            `EMIT something like:\n${s.example.code}`,
+          ),
+        ]
+      : []),
   ].join('\n');
 }
 
