@@ -88,6 +88,20 @@ log in, then add a todo named "verify hover"
 
 The verified flow becomes `__vibe_tests__/<slug>.spec.ts` — plain Playwright, no Hover runtime dependency. Manual wiring, monorepos, the Next.js step, and security mode: see the [install docs](https://gethover.dev/docs/get-started/install).
 
+## CLI
+
+Everything runs through the `hover` CLI (`npx @hover-dev/cli <command>`):
+
+| Command | What it does |
+|---|---|
+| `setup` | Detect your bundler + package manager, install the integration, wire the config |
+| `run "<prompt>"` | Drive the debug Chrome from the terminal — no widget; `--save <slug>` crystallizes a spec |
+| `optimize <spec>` | Optional AI pass → an improved spec candidate (diff, original kept) |
+| `extract` | Lift flows repeated across specs into shared Page Objects + fixtures |
+| `re-record <spec>` | Regenerate a spec against the current UI |
+
+`run` is CLI-only authoring (needs just `@hover-dev/core`, no widget); the rest post-process saved specs. Full reference: [docs](https://gethover.dev/docs/reference/cli).
+
 ## Examples
 
 Ten runnable apps under [`examples/`](./examples/). Four stress **testing surfaces** ([`basic-app`](./examples/basic-app), [`stock-registration`](./examples/stock-registration) ~50-field form, [`e-commerce`](./examples/e-commerce) cart/checkout, [`canvas-paint`](./examples/canvas-paint) DOM-amid-canvas); the rest are dedicated **bundler dogfood grounds**:

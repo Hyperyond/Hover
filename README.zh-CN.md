@@ -88,6 +88,20 @@ log in, then add a todo named "verify hover"
 
 验证过的流程就变成 `__vibe_tests__/<slug>.spec.ts` —— 纯 Playwright，不依赖 Hover 运行时。手动接线、monorepo、Next.js 那一步、安全模式：见[安装文档](https://gethover.dev/docs/get-started/install)。
 
+## 命令
+
+都走 `hover` CLI（`npx @hover-dev/cli <命令>`）：
+
+| 命令 | 作用 |
+|---|---|
+| `setup` | 探测打包器 + 包管理器，装集成、改配置 |
+| `run "<prompt>"` | 终端里驱动 debug Chrome —— 无 widget；`--save <slug>` 固化成 spec |
+| `optimize <spec>` | 可选 AI 优化 pass → 改进版候选（diff，原件保留） |
+| `extract` | 把跨 spec 重复的 flow 抽成共享 Page Object + fixture |
+| `re-record <spec>` | 对当前 UI 重新生成 spec |
+
+`run` 是 CLI-only authoring（只需 `@hover-dev/core`、无 widget）；其余是对已存 spec 的后处理。完整参考：[文档](https://gethover.dev/docs/reference/cli)。
+
 ## 示例
 
 [`examples/`](./examples/) 下有十个可跑的应用。四个压测**测试面**（[`basic-app`](./examples/basic-app)、[`stock-registration`](./examples/stock-registration) ~50 字段表单、[`e-commerce`](./examples/e-commerce) 购物车/结账、[`canvas-paint`](./examples/canvas-paint) canvas 里找 DOM），其余是各**打包器的专属 dogfood 场**：

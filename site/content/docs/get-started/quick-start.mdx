@@ -80,6 +80,20 @@ Click **Save as Spec** on the Result card. The verified flow becomes a `__vibe_t
 
 That's the loop: speak / type → agent verifies → crystallize once → CI replays forever.
 
+## The `hover` CLI
+
+Beyond `setup`, everything runs through the `hover` bin (`npx @hover-dev/cli <command>`):
+
+| Command | What it does |
+|---|---|
+| `setup` | Detect your bundler + package manager, install the integration, wire the config |
+| `run "<prompt>"` | Drive the debug Chrome from the terminal — no widget; `--save <slug>` crystallizes a spec |
+| `optimize <spec>` | Optional AI pass → an improved spec candidate (diff, original kept) |
+| `extract` | Lift flows repeated across specs into shared Page Objects + fixtures |
+| `re-record <spec>` | Regenerate a spec against the current UI |
+
+`run` is CLI-only authoring (no widget — needs just `@hover-dev/core`); the rest post-process saved specs. Full reference: [CLI](/docs/reference/cli).
+
 ## What's next
 
 - [Your first session](/docs/get-started/first-session) — A guided walkthrough of every widget control on a real flow.
