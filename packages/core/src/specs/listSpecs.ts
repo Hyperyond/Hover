@@ -16,6 +16,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { countOptimizableMarkers } from './writeSpec.js';
 
 export interface SpecSummary {
   /** Path-relative slug, e.g. `login-and-counter`. Identifies the spec. */
@@ -36,6 +37,10 @@ export interface SpecSummary {
    *  gates the optimization pass on this — without a captured session there's
    *  no observed feedback for the LLM to add assertions from. */
   hasSidecar: boolean;
+  /** Count of `// hover:optimizable` markers the deterministic translator left
+   *  — interactions it couldn't fully translate single-step. >0 is a strong
+   *  signal to run the optimization pass (or add a seed). */
+  optimizableCount: number;
 }
 
 export interface SpecHeader {
@@ -142,6 +147,7 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
       stepCount: header.steps.length,
       mtimeMs,
       hasSidecar: existsSync(join(root, '.hover', `${slug}.json`)),
+      optimizableCount: countOptimizableMarkers(content),
     });
   }
   summaries.sort((a, b) => b.mtimeMs - a.mtimeMs);

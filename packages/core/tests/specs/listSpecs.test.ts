@@ -222,6 +222,25 @@ describe('listSpecs', () => {
     expect(specs.map((s) => s.slug)).toEqual(['newer', 'older']);
   });
 
+  test('reports optimizableCount parsed from the spec body', async () => {
+    mkdirSync(join(tmp, '__vibe_tests__'));
+    writeFileSync(
+      join(tmp, '__vibe_tests__', 'marked.spec.ts'),
+      [
+        `test('a', async () => {`,
+        `  // hover:optimizable: browser_file_upload — ...`,
+        `  await page.goto('/');`,
+        `});`,
+      ].join('\n'),
+    );
+    writeFileSync(join(tmp, '__vibe_tests__', 'clean.spec.ts'), `test('b', async () => {});`);
+
+    const specs = await listSpecs(tmp);
+    const counts = Object.fromEntries(specs.map((s) => [s.slug, s.optimizableCount]));
+    expect(counts['marked']).toBe(1);
+    expect(counts['clean']).toBe(0);
+  });
+
   test('reports hasSidecar — true when .hover/<slug>.json exists, false otherwise', async () => {
     mkdirSync(join(tmp, '__vibe_tests__', '.hover'), { recursive: true });
     writeFileSync(join(tmp, '__vibe_tests__', 'with.spec.ts'), `test('a', async () => {});`);
