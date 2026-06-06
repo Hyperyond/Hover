@@ -199,8 +199,8 @@ const PILLARS = [
   },
   {
     k: 'coverage',
-    title: 'Five bundlers, three artifacts',
-    body: 'Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5 — plus React Native Web. Every verified session crystallises three ways: a Playwright spec, a replayable Skill, and a Jira-importable test case.',
+    title: 'Five bundlers, two artifacts',
+    body: 'Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5 — plus React Native Web. Every verified session crystallises two ways: a Playwright spec for CI and a Jira-importable test case.',
   },
 ];
 
@@ -247,13 +247,6 @@ const OUTPUTS = [
     accent: 'text-mint',
   },
   {
-    file: 'SKILL.md',
-    name: 'Agent Skill',
-    reader: 'Claude Code / agent',
-    audience: 'Future you, exploring',
-    accent: 'text-link',
-  },
-  {
     file: '.case.csv',
     name: 'Jira test case',
     reader: 'Xray · Zephyr · Jira',
@@ -265,9 +258,9 @@ const OUTPUTS = [
 function Outputs() {
   return (
     <section id="outputs" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>One exploration, three audiences</SectionLabel>
+      <SectionLabel>One exploration, two audiences</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        A single <span className="text-mint">Save as ▾</span> menu, three files
+        A single <span className="text-mint">Save as ▾</span> menu, two files
         that check into git.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
@@ -275,7 +268,7 @@ function Outputs() {
         is reviewed by QA on Tuesday and runs in CI from Wednesday — same file,
         no export step.
       </p>
-      <div className="mt-12 grid gap-5 md:grid-cols-3">
+      <div className="mt-12 grid gap-5 md:grid-cols-2">
         {OUTPUTS.map((o) => (
           <article
             key={o.file}

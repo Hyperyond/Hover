@@ -29,7 +29,6 @@ export const DOCS_NAV: DocSection[] = [
       { text: 'Optimize a spec', href: '/docs/features/optimization-pass' },
       { text: 'Seed library', href: '/docs/features/seed-library' },
       { text: 'Re-record a spec', href: '/docs/features/re-record' },
-      { text: 'Save as Skill', href: '/docs/features/save-as-skill' },
       { text: 'Save as Security spec', href: '/docs/features/security-spec' },
       { text: 'Save as Jira case', href: '/docs/features/save-as-jira-case' },
       { text: 'Record mode', href: '/docs/features/record-mode' },

@@ -90,19 +90,6 @@ The agent recorded the IDOR / authz probes with the cookies from your logged-in 
 
 Same pattern Playwright uses for UI-level e2e auth — see the [official docs](https://playwright.dev/docs/auth) for the full reference. The Hover spec works as long as the `request` fixture has the storageState; the generated spec doesn't try to authenticate on its own.
 
-## What's the difference between a Skill and a Spec?
-
-Generated from the same Save card on the same Hover session. Used very differently:
-
-| | **Skill** (`.claude/skills/<slug>/SKILL.md`) | **Spec** (`__vibe_tests__/<slug>.spec.ts`) |
-|---|---|---|
-| **Read by** | Claude / agent | Playwright (CI) |
-| **When** | You say *"execute &lt;skill&gt;"* in a future Hover conversation | Every `pnpm test:e2e` / CI run |
-| **Failure mode** | Agent self-adapts to UI changes (no selectors written down) | Selector breaks if UI semantics shift → needs re-record or hand edit |
-| **Determinism** | Best-effort replay | Hard contract |
-
-**Skills are for repeated *exploration*. Specs are for repeated *verification*.** Many sessions deserve both.
-
 ## Will Hover spawn another headless Chromium? My CI is already busy.
 
 No. `@hover-dev/core` launches one isolated debug Chrome under `<tmpdir>/hover-chrome` and connects via CDP. It never spawns a fresh Chromium per command, and it doesn't touch your CI's Playwright browsers — those are configured entirely in `playwright.config.ts` and unrelated to Hover's debug Chrome.

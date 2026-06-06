@@ -40,23 +40,23 @@ Several good tools exist here; Hover is what falls out when you optimise for **a
 |---|---|---|
 | **Playwright Codegen** | Records your clicks → `.spec.ts`. No AI | Can't think — replays literally |
 | **Stagehand / Midscene** | AI-augmented tests; caches skip the LLM on steady-state runs. Needs an OpenAI / Anthropic key | Tests run **inside the vendor SDK** + cache file — not portable to a plain Playwright runner |
-| **Hover** | AI drives the browser **once** to explore, saves a deterministic spec — with an optional AI pass that polishes it into a diff-reviewed candidate — plus a replayable skill *and* a Jira-importable case. **Spawns the CLI on your `PATH`** — subscription or your own API key | Crystallised spec is brittle to UI change — when it breaks, re-run the agent (no self-heal at CI time) |
+| **Hover** | AI drives the browser **once** to explore, saves a deterministic spec — with an optional AI pass that polishes it into a diff-reviewed candidate — *and* a Jira-importable case. **Spawns the CLI on your `PATH`** — subscription or your own API key | Crystallised spec is brittle to UI change — when it breaks, re-run the agent (no self-heal at CI time) |
 
 Hover isn't trying to be the better *test-time* AI runtime. It makes the saved artifact plain `@playwright/test` code that runs with zero AI deps: the agent's job ends at "save", and CI is pure Playwright — **zero tokens, no key wired into CI**.
 
-### Crystallise three ways
+### Crystallise two ways
 
-A single **💾 Save as ▾** on the done card crystallises one verified session three ways — every file checks into git, readable by teammates who never install Hover.
+A single **💾 Save as ▾** on the done card crystallises one verified session two ways — every file checks into git, readable by teammates who never install Hover.
 
-| | `📜 .spec.ts` | `💾 SKILL.md` | `📋 .case.csv` |
-|---|---|---|---|
-| **Lands in** | `__vibe_tests__/` | `.claude/skills/` | `__vibe_tests__/` |
-| **Read by** | Node + Playwright (CI) | Claude Code / agent | Xray · Zephyr · Jira |
-| **Audience** | CI, devs | Future you, exploring | QA · PM |
-| **Determinism** | Hard contract | Best-effort replay | Manual review |
+| | `📜 .spec.ts` | `📋 .case.csv` |
+|---|---|---|
+| **Lands in** | `__vibe_tests__/` | `__vibe_tests__/` |
+| **Read by** | Node + Playwright (CI) | Xray · Zephyr · Jira |
+| **Audience** | CI, devs | QA · PM |
+| **Determinism** | Hard contract | Manual review |
 
 <p align="center">
-  <img src="docs/screenshots/05-save-dropdown.png" alt="Save dropdown — Playwright spec, Claude Code Skill, Jira test case (CSV)" width="48%" />
+  <img src="docs/screenshots/05-save-dropdown.png" alt="Save dropdown — Playwright spec, Jira test case (CSV)" width="48%" />
   <img src="docs/screenshots/06-jira-case-modal.png" alt="Save as Jira case modal" width="48%" />
 </p>
 

@@ -163,7 +163,7 @@ export function WidgetDemo() {
           <span className="flex items-center gap-1.5 rounded-md border border-line bg-bg-3 px-2.5 py-1.5 font-mono text-[12px] text-text">
             claude <span className="text-text-dim">▾</span>
           </span>
-          <HeaderIcon label="Saved skills">
+          <HeaderIcon label="Saved sessions">
             <path d="M2 4h6a1 1 0 0 1 1 1v7H3a1 1 0 0 1-1-1V4Z" />
             <path d="M9 5a1 1 0 0 1 1-1h4v8H10a1 1 0 0 0-1 1V5Z" />
           </HeaderIcon>

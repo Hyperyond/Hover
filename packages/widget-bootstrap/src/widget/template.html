@@ -48,7 +48,7 @@
       <span class="agent-warn" hidden aria-label="Soft sandbox">⚠</span>
       <span class="agent-caret" aria-hidden="true">▾</span>
     </button>
-    <button class="iconbtn skillsbtn" type="button" aria-label="Skills" data-tooltip="Saved skills">
+    <button class="iconbtn skillsbtn" type="button" aria-label="Saved sessions" data-tooltip="Saved sessions (specs + seeds)">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <!-- stack of two books, viewed edge-on -->
         <path d="M2 4h6a1 1 0 0 1 1 1v7H3a1 1 0 0 1-1-1V4Z"/>
@@ -82,21 +82,16 @@
   <div class="body" aria-live="polite"></div>
 
   <!--
-    Saved sessions overlay — Skills tab (replayable agent instructions)
-    and Specs tab (Playwright tests for CI). Same generation source (a
-    finished Hover session), but the consumers + failure semantics
-    differ — Skills run via agent so they self-adapt to UI changes,
-    Specs need re-recording when selectors break. See FAQ in the README
-    for the full distinction.
+    Saved sessions overlay — Specs tab (Playwright tests for CI) and Seeds
+    tab (read-only view of the translation seeds Hover sees). Specs need
+    re-recording when selectors break; seeds are added by hand in
+    .hover/rules/. (Save-as-Skill was retired — spec + Re-record covers replay.)
   -->
   <div class="skills-overlay sessions-overlay" aria-hidden="true">
     <div class="sessions-header">
       <span class="sessions-title">Saved sessions</span>
       <div class="sessions-tabs" role="tablist">
-        <button class="sessions-tab active" type="button" role="tab" data-tab="skills" aria-selected="true">
-          Skills <span class="sessions-tab-count skills-count">0</span>
-        </button>
-        <button class="sessions-tab" type="button" role="tab" data-tab="specs" aria-selected="false">
+        <button class="sessions-tab active" type="button" role="tab" data-tab="specs" aria-selected="true">
           Specs <span class="sessions-tab-count specs-count">0</span>
         </button>
         <button class="sessions-tab" type="button" role="tab" data-tab="seeds" aria-selected="false">
@@ -107,16 +102,7 @@
       <button class="iconbtn skills-close" type="button" aria-label="Close" data-tooltip="Close">×</button>
     </div>
 
-    <div class="sessions-pane skills-pane" data-tab="skills">
-      <p class="sessions-pane-hint">
-        Replayable agent instructions — say <em>"execute &lt;skill&gt;"</em> in any
-        future conversation to run again. Self-adapt to UI changes because
-        the agent re-resolves selectors at runtime.
-      </p>
-      <div class="skills-list-items"></div>
-    </div>
-
-    <div class="sessions-pane specs-pane" data-tab="specs" hidden>
+    <div class="sessions-pane specs-pane" data-tab="specs">
       <p class="sessions-pane-hint">
         Playwright tests under <code>__vibe_tests__/</code>. Run in CI with no
         AI. When the UI changes enough that selectors break, hit

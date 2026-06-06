@@ -15,7 +15,6 @@ Everything Hover does today.
 ## Output
 
 - **[Save as Spec](/docs/features/save-as-spec)** ✨ UPDATED (v0.13) — `__vibe_tests__/<slug>.spec.ts` using `getByRole / getByLabel / getByTestId`. Runs in CI without Hover. v0.13 wraps every interaction in a visibility prelude (`{ const el = …; await expect(el).toBeVisible(); await el.<action>; }`) so UI drift fails in ~3 s with `Locator expected to be visible` instead of a 30 s actionability timeout.
-- **[Save as Skill](/docs/features/save-as-skill)** — `.claude/skills/<slug>/SKILL.md`. Replay by saying `execute <slug>`.
 - **[Save as Jira case](/docs/features/save-as-jira-case)** — `.case.csv`, imports straight into Jira / Xray / Zephyr.
 - **[Save as Security spec](/docs/features/security-spec)** — `__vibe_tests__/<slug>.security.spec.ts` using Playwright's `request` fixture. Crystallises authz / IDOR / parameter-tampering probes into CI-runnable regression specs. Requires `@hover-dev/security`.
 - **[Findings cards](/docs/features/findings-cards)** — bugs and observations the agent flagged, severity-coloured. First-class output, not buried in narration.

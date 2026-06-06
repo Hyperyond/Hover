@@ -10,9 +10,6 @@
  *     { type: 'hello',           payload: { agentId, model, version } }
  *     { type: 'event',           payload: InvokeEvent }              // see agents/types.ts
  *     { type: 'cdp-status',      payload: { state, reason?, matchingTabUrl?, browser?, launching? } }
- *     { type: 'skill-saved',     payload: { name, path } }
- *     { type: 'skill-exists',    payload: { slug, existingPath } }
- *     { type: 'skills-list',     payload: { skills: SkillSummary[] } }
  *     { type: 'specs-list',      payload: { specs: SpecSummary[] } }
  *     { type: 'seeds-list',      payload: { seeds: { name, note, signature, code, source }[] } }
  *     { type: 'spec-saved',      payload: { name, path } }
@@ -32,10 +29,8 @@
  *     { type: 'check-cdp',     payload: { pageUrl } }                 // "is this widget in the debug Chrome?"
  *     { type: 'launch-chrome', payload: { pageUrl } }                 // start debug Chrome, navigate to pageUrl
  *     { type: 'focus-debug',   payload: { pageUrl } }                 // bringToFront the matching tab in debug Chrome
- *     { type: 'save-skill',    payload: { name, description, steps, overwrite? } }
  *     { type: 'save-spec',     payload: { name, description, steps, assertions?, overwrite? } }
  *     { type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
- *     { type: 'list-skills' }
  *     { type: 'list-specs' }                                            // ask for every spec under __vibe_tests__/, with parsed JSDoc headers
  *     { type: 'list-seeds' }                                            // ask for built-in + .hover/rules/ translation seeds (read-only)
  *     { type: 'list-agents' }                                          // ask for the full agent registry + install status
@@ -65,7 +60,7 @@ import type { InvokeEvent } from './agents/types.js';
 import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
 import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
 import { launchDebugChrome } from './playwright/launchChrome.js';
-import { listSkills, type SkillStep } from './skills/writeSkill.js';
+import { type SkillStep } from './skills/writeSkill.js';
 import { listSpecs } from './specs/listSpecs.js';
 import { readSeeds, BUILTIN_SEEDS } from './specs/seeds.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
@@ -78,7 +73,6 @@ import {
 } from './service/cdpHandlers.js';
 import {
   handleSaveArtifact,
-  SKILL_CONFIG,
   SPEC_CONFIG,
   CASE_CSV_CONFIG,
 } from './service/saveHandlers.js';
@@ -653,15 +647,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         send(ws, { type: 'api-key-status', payload: { hasKey: !!currentApiKey, envVar } });
         return;
       }
-      if (msg.type === 'save-skill') {
-        await handleSaveArtifact(ws, msg, devRoot, SKILL_CONFIG);
-        return;
-      }
-      if (msg.type === 'list-skills') {
-        const skills = await listSkills(devRoot);
-        send(ws, { type: 'skills-list', payload: { skills } });
-        return;
-      }
       if (msg.type === 'list-specs') {
         // Widget asks for every spec under <devRoot>/__vibe_tests__/ so it
         // can render the Specs tab in the Saved-sessions overlay. Each
@@ -948,12 +933,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           // saved from this project (and CLAUDE.md, if any).
           cwd: devRoot,
           appendSystemPrompt,
-          // Skill stays in the allow list so saved skills under
-          // <devRoot>/.claude/skills/ can be invoked. mcp__playwright covers
-          // every browser tool. Plugin-contributed MCPs are appended when
-          // the corresponding mode is active.
+          // mcp__playwright covers every browser tool. Plugin-contributed MCPs
+          // are appended when the corresponding mode is active. (Save-as-Skill
+          // was retired, so the agent's built-in Skill tool is no longer
+          // allowed — nothing writes or invokes Claude Code skills now.)
           allowedTools: isHardSandbox
-            ? ['mcp__playwright', 'Skill', ...activePluginMcpIds]
+            ? ['mcp__playwright', ...activePluginMcpIds]
             : undefined,
           disallowedTools: isHardSandbox
             ? (invokedDescriptor?.defaultDisallowedTools

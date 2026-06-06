@@ -57,7 +57,6 @@
     "smoke:chrome": "tsx src/scripts/start-chrome.ts",
     "detect": "tsx src/scripts/detect-cli.ts",
     "verify-widget": "tsx src/scripts/verify-widget.ts",
-    "verify-skill": "tsx src/scripts/verify-skill.ts",
     "verify-spec": "tsx src/scripts/verify-spec.ts",
     "ws-smoke": "tsx src/scripts/ws-smoke.ts",
     "bench-ttfb": "tsx src/scripts/bench-ttfb.ts",

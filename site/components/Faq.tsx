@@ -55,23 +55,6 @@ const ITEMS: Item[] = [
     ),
   },
   {
-    q: 'What’s the difference between a Skill and a Spec?',
-    a: 'Both come from the same Save card. A Spec (__vibe_tests__/<slug>.spec.ts) is read by Playwright in CI — a hard contract that breaks if selectors shift. A Skill (.claude/skills/<slug>/SKILL.md) is read by the agent when you say "execute <skill>" — best-effort replay that self-adapts to UI changes. Skills are for repeated exploration; Specs are for repeated verification.',
-    answer: (
-      <>
-        Both come from the same Save card. A <span className="text-text">Spec</span>{' '}
-        (<Code>__vibe_tests__/&lt;slug&gt;.spec.ts</Code>) is read by Playwright in
-        CI — a hard contract that breaks if selectors shift. A{' '}
-        <span className="text-text">Skill</span> (
-        <Code>.claude/skills/&lt;slug&gt;/SKILL.md</Code>) is read by the agent
-        when you say <em className="not-italic text-text">&ldquo;execute
-        &lt;skill&gt;&rdquo;</em> — best-effort replay that self-adapts to UI
-        changes. Skills are for repeated <em className="not-italic">exploration</em>;
-        Specs are for repeated <em className="not-italic">verification</em>.
-      </>
-    ),
-  },
-  {
     q: 'Does the widget show up in production builds?',
     a: 'No. Every bundler integration is dev-only — apply: "serve" for Vite, command === "dev" for Astro, nuxt.options.dev for Nuxt, and so on. Production builds are no-ops by design, and the Shadow-DOM widget is marked data-hover="true" so any Playwright run against production HTML can filter it out with one selector.',
     answer: (

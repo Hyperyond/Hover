@@ -8,7 +8,7 @@
 
 const OSS_INCLUDES = [
   'The full widget — explore any flow in plain English',
-  'Save as Playwright spec, Skill, or Jira case',
+  'Save as Playwright spec or Jira case',
   'Five bundlers + React Native Web',
   'Optional @hover-dev/security mode',
   'BYO local CLI — claude / codex / cursor-agent / aider',

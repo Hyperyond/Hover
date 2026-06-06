@@ -36,8 +36,6 @@
   const skillsBtn = $('.skillsbtn');
   const starBtn = $('.starbtn');
   const skillsOverlay = $('.skills-overlay');
-  const skillsListEl = $('.skills-list-items');
-  const skillsCountEl = $('.skills-count');
   const skillsCloseBtn = $('.skills-close');
   // Specs tab — v0.11 added. Same overlay as Skills (tabbed), so the
   // close button is shared.
@@ -218,7 +216,7 @@
             turns: captured,
             costUsd: 0,
             source: 'recording',
-            summary: `Recorded ${captured} action${captured === 1 ? '' : 's'} before reload. Click Save as Skill / Spec on this card to keep it.`,
+            summary: `Recorded ${captured} action${captured === 1 ? '' : 's'} before reload. Click Save as spec on this card to keep it.`,
           });
         }
       }
@@ -1097,12 +1095,6 @@
         run: () => saveAsArtifact('spec', trigger),
       },
       {
-        icon: SAVE_ICON_SVG, label: 'Claude Code Skill',
-        sub: '.claude/skills/<slug>/SKILL.md · for future agent replay',
-        cls: 'item-skill',
-        run: () => saveAsArtifact('skill', trigger),
-      },
-      {
         icon: CSV_ICON_SVG, label: 'Jira test case (CSV)',
         sub: '__vibe_tests__/<slug>.case.csv · for Xray / Zephyr / Jira',
         cls: 'item-case',
@@ -1221,30 +1213,6 @@
   const pending = new Map();   // kind -> { name, description, steps, assertions, button, extras }
 
   const ARTIFACTS = {
-    skill: {
-      saveType: 'save-skill',
-      existsType: 'skill-exists',
-      savedType: 'skill-saved',
-      promptOpts: () => ({
-        title: 'Save as Skill',
-        fields: [
-          { id: 'name', label: 'Skill name', placeholder: 'login-as-claude', required: true },
-          { id: 'description', label: 'Description', placeholder: 'optional · one line' },
-        ],
-        confirmLabel: 'Save skill',
-      }),
-      buildPayload: (form, ctx) => ({
-        name: form.name,
-        description: form.description,
-        steps: ctx.steps,
-      }),
-      successMsg: (p) =>
-        `✓ saved skill "${p.name}" → ${p.path}\n  try: "execute ${p.name}" in a new conversation`,
-      overwriteOpts: (slug) => ({
-        title: 'Overwrite existing skill?',
-        body: `A skill named "${slug}" already exists.`,
-      }),
-    },
     spec: {
       saveType: 'save-spec',
       existsType: 'spec-exists',
@@ -1485,12 +1453,6 @@
   //     agent replays the original prompt on the current UI and
   //     overwrites the file.
 
-  const requestSkillsList = () => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'list-skills' }));
-    }
-  };
-
   const requestSpecsList = () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'list-specs' }));
@@ -1501,54 +1463,6 @@
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'list-seeds' }));
     }
-  };
-
-  const renderSkills = (skills) => {
-    skillsCountEl.textContent = String(skills.length);
-    skillsListEl.innerHTML = '';
-    if (skills.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'skills-empty';
-      empty.textContent = 'No saved skills yet. Run a session, then click "Save as → Claude Code Skill" on the result card.';
-      skillsListEl.appendChild(empty);
-      return;
-    }
-    for (const s of skills) {
-      const row = document.createElement('div');
-      row.className = 'skill-row';
-      const n = document.createElement('div');
-      n.className = 'skill-name';
-      n.textContent = s.name || s.slug;
-      const d = document.createElement('div');
-      d.className = 'skill-desc';
-      d.textContent = s.description || '(no description)';
-      const slug = document.createElement('div');
-      slug.className = 'skill-slug';
-      slug.textContent = s.slug;
-      row.appendChild(n);
-      row.appendChild(d);
-      row.appendChild(slug);
-      row.addEventListener('click', () => executeSkill(s));
-      skillsListEl.appendChild(row);
-    }
-  };
-
-  const executeSkill = (skill) => {
-    if (running || !ws || ws.readyState !== WebSocket.OPEN) return;
-    closeSkillsOverlay();
-    // Phrased to nudge the agent toward the Skill tool with the exact slug,
-    // not toward parsing the verb "execute" as a skill name (which we
-    // observed in 2.1.145).
-    const prompt =
-      `Use the Skill tool to invoke the skill named "${skill.slug}". ` +
-      `It is in ${skill.path}. Read its replay steps and run them with ` +
-      `mcp__playwright tools. Do not search for the file yourself.`;
-    addMessage({ kind: 'user', text: `execute "${skill.slug}"` });
-    setRunning(true);
-    ws.send(JSON.stringify({
-      type: 'command',
-      payload: { text: prompt, sessionId: state.sessionId ?? undefined },
-    }));
   };
 
   // F7 optimization-pass UI state: the spec currently being optimized + the
@@ -1869,7 +1783,6 @@
     skillsOverlay.classList.add('open');
     skillsOverlay.setAttribute('aria-hidden', 'false');
     skillsBtn.classList.add('active');
-    requestSkillsList();
     requestSpecsList();
     requestSeedsList();
   };
@@ -3158,7 +3071,7 @@
         turns: captured,
         costUsd: 0,
         source: 'recording',
-        summary: `${lead}. Click Save as Skill / Spec on this card to keep it.`,
+        summary: `${lead}. Click Save as spec on this card to keep it.`,
       });
       updateMutexUi();
     }
@@ -3639,11 +3552,6 @@
       } else if (msg.type === 'error') {
         addMessage({ kind: 'system', text: `error: ${msg.payload?.message ?? 'unknown'}` });
         setRunning(false);
-      } else if (msg.type === 'skill-saved') {
-        handleArtifactSaved('skill', msg.payload ?? {});
-      } else if (msg.type === 'skill-exists') {
-        const p = msg.payload ?? {};
-        handleArtifactExists('skill', p.slug, p.existingPath);
       } else if (msg.type === 'spec-saved') {
         handleArtifactSaved('spec', msg.payload ?? {});
       } else if (msg.type === 'spec-exists') {
@@ -3654,8 +3562,6 @@
       } else if (msg.type === 'case-csv-exists') {
         const p = msg.payload ?? {};
         handleArtifactExists('case-csv', p.slug, p.existingPath);
-      } else if (msg.type === 'skills-list') {
-        renderSkills(msg.payload?.skills ?? []);
       } else if (msg.type === 'specs-list') {
         renderSpecs(msg.payload?.specs ?? []);
       } else if (msg.type === 'seeds-list') {

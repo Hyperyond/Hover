@@ -1,18 +1,16 @@
 /**
- * Save-artifact WebSocket handlers (skill / spec / Jira CSV).
+ * Save-artifact WebSocket handlers (spec / Jira CSV).
  *
- * All three save-* messages share the same shape: validate `name + steps`,
- * call a per-kind writer, fork on Exists-error vs. success. The differences
- * (which writer, which message names, which fields to pluck, skill's
- * "push a fresh skills-list afterwards" tail) are captured in the
- * `SaveArtifactConfig` descriptor table below.
- *
- * Replaces three near-identical handlers that drifted apart over time —
- * see the v0.2.x refactor pass for the full rationale.
+ * Both save-* messages share the same shape: validate `name + steps`, call a
+ * per-kind writer, fork on Exists-error vs. success. The differences (which
+ * writer, which message names, which fields to pluck) are captured in the
+ * `SaveArtifactConfig` descriptor table below. (Save-as-Skill was retired; the
+ * generic `onSaved` hook it used is kept for any future artifact that needs a
+ * post-write tail.)
  */
 
 import type { WebSocket } from 'ws';
-import { writeSkill, listSkills, SkillExistsError, type SkillStep } from '../skills/writeSkill.js';
+import { type SkillStep } from '../skills/writeSkill.js';
 import { writeSpec, SpecExistsError, type SpecAssertion } from '../specs/writeSpec.js';
 import { writeCaseCsv, CaseCsvExistsError } from '../specs/writeCaseCsv.js';
 import { send, type ClientMessage } from './types.js';
@@ -89,21 +87,6 @@ export async function handleSaveArtifact<TWriteResult extends { slug: string; pa
     }
   }
 }
-
-export const SKILL_CONFIG: SaveArtifactConfig<Awaited<ReturnType<typeof writeSkill>>> = {
-  requestName: 'save-skill',
-  savedType: 'skill-saved',
-  existsType: 'skill-exists',
-  ExistsError: SkillExistsError,
-  write: ({ devRoot, name, description, steps, overwrite }) =>
-    writeSkill({ devRoot, name, description, steps, overwrite }),
-  onSaved: async (ws, devRoot) => {
-    // Push a fresh list so the widget's skills overlay updates without a
-    // round-trip — most relevant right after the save.
-    const skills = await listSkills(devRoot);
-    send(ws, { type: 'skills-list', payload: { skills } });
-  },
-};
 
 export const SPEC_CONFIG: SaveArtifactConfig<Awaited<ReturnType<typeof writeSpec>>> = {
   requestName: 'save-spec',
