@@ -1554,6 +1554,19 @@
       const n = document.createElement('div');
       n.className = 'skill-name';
       n.textContent = s.slug;
+      // Default-off optimization nudge (F7): a subtle ✦ when the server flags
+      // this spec as improvable; hovering shows why (reasons from the sidecar
+      // markers + relevant seeds).
+      if (s.optimization && s.optimization.suggested) {
+        const chip = document.createElement('span');
+        chip.textContent = ' ✦';
+        chip.style.cssText = 'color:var(--accent);font-size:11px;cursor:help;';
+        chip.setAttribute(
+          'data-tooltip',
+          'Optimization suggested — ' + (s.optimization.reasons || []).join('; '),
+        );
+        n.appendChild(chip);
+      }
       const d = document.createElement('div');
       d.className = 'skill-desc';
       d.textContent = s.originalPrompt
@@ -1606,11 +1619,11 @@
       b.style.cssText =
         'text-align:left;padding:6px 9px;background:none;border:none;color:var(--text-mute);' +
         'font:inherit;font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;';
+      if (opts.tip) b.setAttribute('data-tooltip', opts.tip);
       if (opts.disabled) {
         b.disabled = true;
         b.style.opacity = '0.4';
         b.style.cursor = 'not-allowed';
-        if (opts.tip) b.setAttribute('data-tooltip', opts.tip);
       } else {
         b.addEventListener('mouseenter', () => { b.style.background = 'var(--accent-dim)'; b.style.color = 'var(--accent)'; });
         b.addEventListener('mouseleave', () => { b.style.background = 'none'; b.style.color = 'var(--text-mute)'; });
@@ -1624,9 +1637,13 @@
         ? mkItem('⟳ Re-record', { run: () => reRecordSpec(s) })
         : mkItem('⟳ Re-record', { disabled: true, tip: 'No Original prompt header — cannot re-record' }),
     );
+    const suggested = s.optimization && s.optimization.suggested;
     menu.appendChild(
       s.hasSidecar
-        ? mkItem('Optimize', { run: () => optimizeSpecAction(s) })
+        ? mkItem(suggested ? '✦ Optimize' : 'Optimize', {
+            run: () => optimizeSpecAction(s),
+            tip: suggested ? (s.optimization.reasons || []).join('; ') : undefined,
+          })
         : mkItem('Optimize', {
             disabled: true,
             tip: 'No captured session (sidecar) — re-record this with Hover to enable optimization',
