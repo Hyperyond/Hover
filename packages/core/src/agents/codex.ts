@@ -167,6 +167,7 @@ export const codexAgent: AgentDescriptor = {
   protocol: 'argv',
   streamFormat: 'json-lines',
   sandboxStrength: 'soft',
+  apiKeyEnv: 'OPENAI_API_KEY',
   display: {
     label: 'OpenAI Codex',
     tagline: 'OpenAI — soft sandbox (no built-in tool deny-list)',

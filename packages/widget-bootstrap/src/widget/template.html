@@ -172,6 +172,15 @@
         </span>
         <input type="checkbox" class="settings-reload-toggle" />
       </label>
+      <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+        <span class="settings-row-label">
+          <span class="settings-row-title">Model API key (optional)</span>
+          <span class="settings-row-hint">Drive Hover on your own Anthropic / OpenAI key instead of a logged-in CLI subscription. Stored only in this browser and injected into the spawned CLI's environment — never uploaded, never written into a spec. Leave blank to use the subscription you logged in with.</span>
+        </span>
+        <input type="password" class="settings-apikey-input" placeholder="sk-… (blank = use CLI subscription)" autocomplete="off" autocapitalize="off" spellcheck="false"
+          style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg-2);color:var(--text);font:inherit;font-size:12px;" />
+        <span class="settings-apikey-status settings-row-hint"></span>
+      </div>
     </div>
   </div>
 

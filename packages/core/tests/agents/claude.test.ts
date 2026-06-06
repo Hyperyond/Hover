@@ -44,6 +44,10 @@ describe('claudeAgent.buildArgs', () => {
     expect(claudeAgent.defaultDisallowedTools).toContain('Bash');
   });
 
+  it('reads its API key from ANTHROPIC_API_KEY', () => {
+    expect(claudeAgent.apiKeyEnv).toBe('ANTHROPIC_API_KEY');
+  });
+
   it('passes through the budget ceiling', () => {
     const argv = claudeAgent.buildArgs({ agentId: 'claude', prompt: 'p', maxBudgetUsd: 0.5 });
     expect(argv).toContain('--max-budget-usd');

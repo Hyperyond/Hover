@@ -49,6 +49,11 @@ export interface InvokeOptions {
    *  "the user's current Chrome tab is already on http://localhost:5173/,
    *  don't browser_navigate there". */
   appendSystemPrompt?: string;
+  /** Optional model API key. Injected into the spawned CLI's environment under
+   *  the descriptor's `apiKeyEnv` var (e.g. ANTHROPIC_API_KEY) so a user without
+   *  a logged-in subscription can drive Hover with their own key. Never logged,
+   *  never persisted server-side — held only for the lifetime of the spawn. */
+  apiKey?: string;
   /** Aborts the spawned child if signaled. Used to stop an orphan run when
    *  the WebSocket caller disconnects (e.g. user reloads the dev page). */
   signal?: AbortSignal;
@@ -146,6 +151,12 @@ export interface AgentDescriptor {
    *  per-CLI deny list live alongside its descriptor instead of as a magic
    *  array in the service. Soft-sandbox agents leave this undefined. */
   defaultDisallowedTools?: readonly string[];
+  /** Environment variable this CLI reads its model API key from
+   *  (claude: ANTHROPIC_API_KEY, codex: OPENAI_API_KEY). When set and the
+   *  caller supplies `InvokeOptions.apiKey`, the key is injected into the spawn
+   *  env so the user can run on a raw key instead of a logged-in subscription.
+   *  Undefined for agents that have no API-key env path. */
+  apiKeyEnv?: string;
   buildArgs(opts: InvokeOptions): string[];
   /**
    * Parse a single line of agent stdout into normalised InvokeEvents.

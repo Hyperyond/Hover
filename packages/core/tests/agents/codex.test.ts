@@ -9,6 +9,7 @@ describe('codexAgent metadata', () => {
     expect(codexAgent.protocol).toBe('argv');
     expect(codexAgent.streamFormat).toBe('json-lines');
     expect(codexAgent.sandboxStrength).toBe('soft');
+    expect(codexAgent.apiKeyEnv).toBe('OPENAI_API_KEY');
     expect(codexAgent.display.label).toBe('OpenAI Codex');
     expect(codexAgent.display.installHint).toContain('@openai/codex');
   });

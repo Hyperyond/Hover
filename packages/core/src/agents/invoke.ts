@@ -38,7 +38,16 @@ export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEve
     cwd: opts.cwd,
     // Clear CLAUDECODE so spawning `claude` from inside a Claude Code session
     // doesn't trip the nested-session guard. Harmless for other agents.
-    env: { ...process.env, CLAUDECODE: '' },
+    // If the caller supplied an API key and the descriptor names a key env var,
+    // inject it so the CLI runs on the key instead of a logged-in subscription.
+    // The key lives only in this child's env — never logged, never persisted.
+    env: {
+      ...process.env,
+      CLAUDECODE: '',
+      ...(opts.apiKey && descriptor.apiKeyEnv
+        ? { [descriptor.apiKeyEnv]: opts.apiKey }
+        : {}),
+    },
   });
 
   const onAbort = () => {

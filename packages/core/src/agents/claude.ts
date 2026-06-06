@@ -122,6 +122,7 @@ export const claudeAgent: AgentDescriptor = {
   streamFormat: 'stream-json',
   sandboxStrength: 'hard',
   defaultDisallowedTools: CLAUDE_DEFAULT_DISALLOWED_TOOLS,
+  apiKeyEnv: 'ANTHROPIC_API_KEY',
   display: {
     label: 'Claude Code',
     tagline: 'Anthropic — best-in-class browser driving, hard tool sandbox',

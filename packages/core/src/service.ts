@@ -199,6 +199,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   const primary = await pickPrimaryAgent(preferred);
   let currentAgentId: string =
     primary?.descriptor.id ?? preferred ?? 'claude';
+  // Optional model API key the widget supplied (set-api-key). Held in memory
+  // for this service's lifetime only — never written to disk, never logged.
+  // Injected into the spawned CLI's env so a user without a logged-in
+  // subscription can drive Hover on their own key.
+  let currentApiKey: string | undefined =
+    process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY ?? undefined;
   if (!primary) {
     // Nothing installed — still bind so the widget can show a helpful
     // "install one of these" dialog. Commands will fail with
@@ -630,6 +636,16 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         await broadcastAgents();
         return;
       }
+      if (msg.type === 'set-api-key') {
+        // The widget supplies (or clears) a model API key. Stored in memory
+        // only and injected into the spawned CLI's env at invoke time — never
+        // persisted, never logged, never echoed back. Empty/missing clears it.
+        const key = msg.payload?.key;
+        currentApiKey = typeof key === 'string' && key.trim() ? key.trim() : undefined;
+        const envVar = getAgent(currentAgentId)?.apiKeyEnv;
+        send(ws, { type: 'api-key-status', payload: { hasKey: !!currentApiKey, envVar } });
+        return;
+      }
       if (msg.type === 'save-skill') {
         await handleSaveArtifact(ws, msg, devRoot, SKILL_CONFIG);
         return;
@@ -668,7 +684,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         try {
           const res = await optimizeSpecWithAgent(devRoot, slug, {
-            agentId: currentAgentId, model, maxBudgetUsd,
+            agentId: currentAgentId, model, maxBudgetUsd, apiKey: currentApiKey,
           });
           send(ws, { type: 'optimize-result', payload: { slug, original: res.original, candidate: res.code } });
         } catch (err) {
@@ -924,6 +940,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             : undefined,
           maxBudgetUsd,
           model,
+          apiKey: currentApiKey,
           signal: inflight.signal,
         })) {
           if (cancelled || ws.readyState !== WebSocket.OPEN) return;

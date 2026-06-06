@@ -39,6 +39,9 @@ export interface ClientMessage {
     modeId?: string | null;
     /** optimize-spec / promote-optimized / discard-optimized — the spec slug. */
     slug?: string;
+    /** set-api-key only — the model API key to inject into the spawned CLI's
+     *  env (or empty/missing to clear it). Held in memory only, never logged. */
+    key?: string;
   };
 }
 

@@ -77,6 +77,8 @@
   const settingsCloseBtn = $('.settings-close');
   const settingsTtsToggle = $('.settings-tts-toggle');
   const settingsReloadToggle = $('.settings-reload-toggle');
+  const settingsApiKeyInput = $('.settings-apikey-input');
+  const settingsApiKeyStatus = $('.settings-apikey-status');
 
   // ───────────────────────── persistent state ─────────────────────────
   // Survives panel close, page reload, and AI-driven navigations within
@@ -280,13 +282,17 @@
   // and wipe everyone's messages. `ttsEnabled` defaults to true to keep
   // first-time experience aligned with what was shipped today.
   const SETTINGS_KEY = 'hover:settings:v1';
-  const settings = { ttsEnabled: true, reloadBeforeRecording: false };
+  // apiKey lives in this browser's localStorage only — it's sent to the local
+  // 127.0.0.1 service (set-api-key) which injects it into the spawned CLI's
+  // env. Never uploaded anywhere else, never written into a saved spec.
+  const settings = { ttsEnabled: true, reloadBeforeRecording: false, apiKey: '' };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (typeof parsed.ttsEnabled === 'boolean') settings.ttsEnabled = parsed.ttsEnabled;
       if (typeof parsed.reloadBeforeRecording === 'boolean') settings.reloadBeforeRecording = parsed.reloadBeforeRecording;
+      if (typeof parsed.apiKey === 'string') settings.apiKey = parsed.apiKey;
     }
   } catch { /* corrupt / privacy mode */ }
   const saveSettings = () => {
@@ -424,6 +430,14 @@
   const sendCheckCdp = () => {
     if (!wsOpen()) return;
     ws.send(JSON.stringify({ type: 'check-cdp', payload: { pageUrl: location.href } }));
+  };
+
+  // Push the locally-stored model API key to the service (or clear it). Sent on
+  // every WS open and whenever the user edits the field. The key never leaves
+  // this browser except over the 127.0.0.1 socket to the local service.
+  const sendApiKey = () => {
+    if (!wsOpen()) return;
+    ws.send(JSON.stringify({ type: 'set-api-key', payload: { key: settings.apiKey || '' } }));
   };
 
   const renderCdpOverlay = () => {
@@ -1931,9 +1945,18 @@
   // from the SETTINGS_KEY localStorage record (independent of the chat
   // state schema). Each toggle wires directly to the corresponding
   // settings.* field and a saveSettings() call on change.
+  // Reflect whether a key is set without ever rendering the key itself.
+  const renderApiKeyStatus = () => {
+    if (!settingsApiKeyStatus) return;
+    settingsApiKeyStatus.textContent = settings.apiKey
+      ? 'Using your API key for this agent (stored in this browser only).'
+      : 'Using your logged-in CLI subscription.';
+  };
   const openSettingsOverlay = () => {
     if (settingsTtsToggle) settingsTtsToggle.checked = settings.ttsEnabled;
     if (settingsReloadToggle) settingsReloadToggle.checked = settings.reloadBeforeRecording;
+    if (settingsApiKeyInput) settingsApiKeyInput.value = settings.apiKey || '';
+    renderApiKeyStatus();
     settingsOverlay.classList.add('open');
     settingsOverlay.setAttribute('aria-hidden', 'false');
     settingsBtn.classList.add('active');
@@ -1958,6 +1981,14 @@
   settingsReloadToggle?.addEventListener('change', () => {
     settings.reloadBeforeRecording = !!settingsReloadToggle.checked;
     saveSettings();
+  });
+  // Persist + push the API key on edit. 'change' (fires on blur / Enter) keeps
+  // us from sending a set-api-key on every keystroke.
+  settingsApiKeyInput?.addEventListener('change', () => {
+    settings.apiKey = (settingsApiKeyInput.value || '').trim();
+    saveSettings();
+    sendApiKey();
+    renderApiKeyStatus();
   });
 
   // ───────────────────────── modes overlay ─────────────────────────
@@ -3495,6 +3526,9 @@
       // Ask the service whether we're in the debug Chrome. Until we hear
       // back, cdpState stays 'unknown' (overlay hidden, launcher normal).
       sendCheckCdp();
+      // Re-assert any locally-stored API key on (re)connect — the service
+      // holds it in memory only, so it's lost across service restarts / HMR.
+      if (settings.apiKey) sendApiKey();
       // Now that the page is alive and we know we'll likely be using the
       // widget, kick off the voiceschanged race so the first utterance
       // doesn't trip into a wrong-language voice.
@@ -3594,6 +3628,15 @@
         renderAgentButton();
         if (agentsOverlay.classList.contains('open')) renderAgentsOverlay();
         saveState();
+      } else if (msg.type === 'api-key-status') {
+        // Service confirms it stored (or cleared) the key. Refine the status
+        // line with the env var the active agent reads, without echoing the key.
+        if (settingsApiKeyStatus) {
+          const p = msg.payload ?? {};
+          settingsApiKeyStatus.textContent = p.hasKey
+            ? `Using your API key${p.envVar ? ` (${p.envVar})` : ''} — stored in this browser only.`
+            : 'Using your logged-in CLI subscription.';
+        }
       } else if (msg.type === 'modes') {
         // Plugin-contributed mode catalogue. `current` may be null
         // (default/unmoded). `available` is the list of plugin-contributed
