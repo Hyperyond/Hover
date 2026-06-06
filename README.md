@@ -28,6 +28,8 @@
   <sub><b><a href="https://www.youtube.com/watch?v=lQV5dmVWaIA">▶ Watch the 2-minute demo</a></b></sub>
 </p>
 
+Hover drives your app once to explore, then crystallises the verified run into a deterministic spec. From there an optional **AI optimisation pass** polishes it — adding the success/error assertions the run actually observed, completing popup / download flows, flagging buggy behaviour with `// KNOWN BUG` — into a candidate you review by diff, with the deterministic original always kept.
+
 **Bring your own CLI — subscription *or* API key.** Hover spawns the coding-agent CLI already on your `PATH` (`claude` / `codex` / …). Ride the subscription you already pay for, or drop your own model API key into the widget (it's passed to the CLI's environment, stored only in your browser, never uploaded). Either way the LLM cost is a one-off at authoring time — never a recurring tax on green builds, since the saved `.spec.ts` runs forever with `npx playwright test`, no agent in the loop.
 
 ## Why Hover
@@ -38,7 +40,7 @@ Several good tools exist here; Hover is what falls out when you optimise for **a
 |---|---|---|
 | **Playwright Codegen** | Records your clicks → `.spec.ts`. No AI | Can't think — replays literally |
 | **Stagehand / Midscene** | AI-augmented tests; caches skip the LLM on steady-state runs. Needs an OpenAI / Anthropic key | Tests run **inside the vendor SDK** + cache file — not portable to a plain Playwright runner |
-| **Hover** | AI drives the browser **once** to explore, then saves a deterministic spec, a replayable skill, *and* a Jira-importable case. **Spawns the CLI on your `PATH`** — your subscription or your own API key | Crystallised spec is brittle to UI change — when it breaks, re-run the agent (no self-heal at CI time) |
+| **Hover** | AI drives the browser **once** to explore, saves a deterministic spec — with an optional AI pass that polishes it into a diff-reviewed candidate — plus a replayable skill *and* a Jira-importable case. **Spawns the CLI on your `PATH`** — subscription or your own API key | Crystallised spec is brittle to UI change — when it breaks, re-run the agent (no self-heal at CI time) |
 
 Hover isn't trying to be the better *test-time* AI runtime. It makes the saved artifact plain `@playwright/test` code that runs with zero AI deps: the agent's job ends at "save", and CI is pure Playwright — **zero tokens, no key wired into CI**.
 

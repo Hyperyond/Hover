@@ -28,19 +28,21 @@
   <sub><b><a href="https://www.youtube.com/watch?v=lQV5dmVWaIA">▶ 看 2 分钟演示</a></b></sub>
 </p>
 
+
+Hover 先驱动你的应用探索一遍，把验证过的会话固化成一份确定性 spec。之后还有一个可选的 **AI 优化环节**：它把这份 spec 打磨得更好 —— 补上这次运行真正观察到的成功/错误断言、补全 popup / 下载等多步流程、给疑似 bug 的行为标上 `// KNOWN BUG` —— 生成一个候选版本，你通过 diff 审核决定是否采用，确定性的原始版本永远保留。
+
 **自带 CLI —— 订阅 *或* API key 都行。** Hover 直接 spawn 你 `PATH` 上已有的 coding-agent CLI（`claude` / `codex` / …）。可以复用你已经在付费的订阅，也可以把自己的模型 API key 填进 widget（它被透传到 CLI 的环境变量，只存在你的浏览器里，绝不上传）。无论哪种，LLM 成本都只是 authoring 时的一次性开销 —— 不会变成每次构建通过都要反复支付的成本，因为存下来的 `.spec.ts` 用 `npx playwright test` 永远跑得起来，回路里没有 agent。
 
 ## 为什么是 Hover
-
-这个领域已有不少好工具；而当你换一个维度去优化 —— **产物可移植性** —— 自然就会做成 Hover 这样。
+这个领域已经有不少好工具。Hover 的不同在于：它优化的是另一个维度 —— **产物的可移植性**。
 
 | 工具 | 它做什么 | 代价 |
 |---|---|---|
-| **Playwright Codegen** | 录你的点击 → `.spec.ts`，无 AI | 不会思考 —— 只是字面回放你做过的 |
+| **Playwright Codegen** | 录你的点击 → `.spec.ts`，无 AI | 不会思考 —— 只能照你做过的原样回放 |
 | **Stagehand / Midscene** | AI 增强的测试；稳态运行靠缓存跳过 LLM。需要 OpenAI / Anthropic key | 测试跑在**厂商 SDK + 缓存文件**里 —— 无法迁到一个纯 Playwright runner |
-| **Hover** | AI 驱动浏览器**探索一遍**，然后存出一份确定性 spec、一个可回放的 skill、外加一份可导入 Jira 的 case。**spawn 你 `PATH` 上的 CLI** —— 用订阅或你自己的 API key | 固化的 spec 对 UI 变化脆弱 —— 坏了就重跑 agent（CI 时不自愈） |
+| **Hover** | AI 驱动浏览器**探索一遍**，存出一份确定性 spec —— 还能可选地让 AI 把它优化成一个 diff 审核的候选 —— 外加一个可回放的 skill 和一份可导入 Jira 的 case。**spawn 你 `PATH` 上的 CLI** —— 用订阅或你自己的 API key | 固化的 spec 对 UI 变化脆弱 —— 坏了就重跑 agent（CI 时不自愈） |
 
-Hover 并不想做更好的*运行时* AI runtime。它让存下来的产物就是纯 `@playwright/test` 代码、零 AI 依赖：agent 的工作到 "save" 就结束了，CI 是纯 Playwright —— **零 token、CI 里不接任何 key**。
+Hover 并不想在*运行时*把 AI 做得更强。它的选择是让最终存下来的产物就是纯 `@playwright/test` 代码、零 AI 依赖 —— agent 的活到 "save" 为止，CI 是纯 Playwright，**零 token、CI 里不接任何 key**。
 
 ### 三种固化方式
 
