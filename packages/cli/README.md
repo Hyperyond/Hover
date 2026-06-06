@@ -71,6 +71,22 @@ pnpm add -D @hover-dev/cli
 pnpm hover setup
 ```
 
+## Run from the terminal (`hover run`)
+
+```bash
+hover run "test the login flow" --url http://localhost:5173 --save login
+```
+
+Drive Hover from the terminal — no widget, no DOM injection. `hover run` auto-launches the isolated debug Chrome if one isn't up, drives it over CDP via `@hover-dev/core`'s session engine, streams the run, and (with `--save <slug>`) crystallizes it to `__vibe_tests__/<slug>.spec.ts`. Then polish with `hover optimize <slug>`.
+
+CLI mode needs only the engine — no `setup`, no bundler config (that's for injecting the widget):
+
+```bash
+npm i -D @hover-dev/core @hover-dev/cli
+```
+
+Flags: `--url <devUrl>`, `--save <slug>`, `--agent <id>`, `--model <m>`, `--cwd <path>`. It's **not headless** — a real, visible Chrome you log into once. Record mode / Fix prompt / voice stay widget-only. Full reference: [CLI docs](https://gethover.dev/docs/reference/cli#hover-run-cli-mode).
+
 ## Re-record a spec
 
 ```bash

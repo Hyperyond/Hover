@@ -1,14 +1,48 @@
 # CLI
 
-`@hover-dev/cli` is the zero-install setup CLI. Exposed as the `hover` bin once installed.
+`@hover-dev/cli` is the zero-install Hover CLI. Exposed as the `hover` bin once installed.
 
 ```bash
 npx @hover-dev/cli setup
 ```
 
-Reads your `package.json` to pick the right Hover integration (Vite / Astro / Nuxt / Next / Webpack), sniffs your lockfile to pick the package manager (pnpm / yarn / bun / npm), spawns the install command, then uses [magicast](https://github.com/unjs/magicast) to AST-mutate your bundler config.
+`setup` reads your `package.json` to pick the right Hover integration (Vite / Astro / Nuxt / Next / Webpack), sniffs your lockfile to pick the package manager (pnpm / yarn / bun / npm), spawns the install command, then uses [magicast](https://github.com/unjs/magicast) to AST-mutate your bundler config.
 
-## Flags
+## Commands
+
+| Command | What it does |
+|---|---|
+| `setup` | Install + wire the integration into your bundler (detailed below). |
+| `run "<prompt>"` | **Drive the debug Chrome from the terminal — no widget.** `--save <slug>` crystallizes a spec. See [CLI mode](#hover-run-cli-mode). |
+| `optimize <spec>` | The optional [AI optimization pass](/docs/features/optimization-pass) — propose an improved spec (candidate + diff, original kept). |
+| `extract` | Lift flows repeated across specs into shared Page Objects + fixtures. |
+| `re-record <spec>` | Regenerate a spec against the current UI (replays its `Original prompt:`). |
+
+`run` is the CLI-only authoring path; the others post-process specs you've already saved — the same operations the widget's Save / Optimize / Re-record do.
+
+## `hover run` (CLI mode)
+
+Drive Hover entirely from the terminal — no widget, no DOM injection. Useful when you'd rather not (or can't) inject the widget into a page: scripting, non-bundler projects, or terminal preference.
+
+```bash
+hover run "test the login flow" --url http://localhost:5173 --save login
+```
+
+- **`--url <devUrl>`** — the page to open / drive (picks the matching tab).
+- **`--save <slug>`** — crystallize the verified run into `__vibe_tests__/<slug>.spec.ts`. Omit it to just watch the run.
+- **`--agent <id>` / `--model <m>`** — override the agent (default `claude`) / model (default `sonnet`); `HOVER_AGENT` / `HOVER_MODEL` env vars work too.
+
+It needs only `@hover-dev/core` — **no `setup`, no bundler config** (`setup` exists to inject the *widget*; CLI mode doesn't use it):
+
+```bash
+npm i -D @hover-dev/core @hover-dev/cli
+```
+
+`hover run` auto-launches the isolated debug Chrome if one isn't already up (the same persistent profile the widget uses), then drives it over CDP. **It is not headless** — it's a real, visible Chrome you log into once; the first run on a flow that needs auth asks you to log in and re-run, later runs reuse the session. After `--save`, polish it with `hover optimize <slug>`; the spec runs in CI with no agent.
+
+What CLI mode does **not** cover (these need the in-page widget): Record mode, the Fix prompt, and voice.
+
+## `setup` flags
 
 ```
 --vite              Force the Vite integration (vite-plugin-hover)
