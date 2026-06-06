@@ -99,6 +99,9 @@
         <button class="sessions-tab" type="button" role="tab" data-tab="specs" aria-selected="false">
           Specs <span class="sessions-tab-count specs-count">0</span>
         </button>
+        <button class="sessions-tab" type="button" role="tab" data-tab="seeds" aria-selected="false">
+          Seeds <span class="sessions-tab-count seeds-count">0</span>
+        </button>
       </div>
       <span style="flex:1"></span>
       <button class="iconbtn skills-close" type="button" aria-label="Close" data-tooltip="Close">×</button>
@@ -121,6 +124,17 @@
         against the current UI and overwrites the spec.
       </p>
       <div class="specs-list-items"></div>
+    </div>
+
+    <div class="sessions-pane seeds-pane" data-tab="seeds" hidden>
+      <p class="sessions-pane-hint">
+        Worked examples that teach the optional AI optimization pass new
+        patterns. Add one by dropping a JSON file in <code>.hover/rules/</code>
+        — browse community seeds at
+        <a href="https://github.com/Hyperyond/hover-seeds" target="_blank" rel="noreferrer">hover-seeds</a>.
+        This list shows what Hover currently sees.
+      </p>
+      <div class="seeds-list-items"></div>
     </div>
   </div>
 

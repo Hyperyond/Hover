@@ -43,6 +43,10 @@
   // close button is shared.
   const specsListEl = $('.specs-list-items');
   const specsCountEl = $('.specs-count');
+  // Seeds tab — read-only list of translation seeds Hover sees (built-in +
+  // <devRoot>/.hover/rules/). Users add seeds by hand; no download path.
+  const seedsListEl = $('.seeds-list-items');
+  const seedsCountEl = $('.seeds-count');
   const assertBtn = $('.assertbtn');
   const assertCountEl = $('.assert-count');
   const recordBtn = $('.record-btn');
@@ -1493,6 +1497,12 @@
     }
   };
 
+  const requestSeedsList = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'list-seeds' }));
+    }
+  };
+
   const renderSkills = (skills) => {
     skillsCountEl.textContent = String(skills.length);
     skillsListEl.innerHTML = '';
@@ -1777,6 +1787,68 @@
   };
 
   // ─── tab switching ─────────────────────────────────────────────────
+  // Seeds tab — read-only. Shows the translation seeds Hover sees (built-in +
+  // <devRoot>/.hover/rules/). No add/remove: users edit .hover/rules/ by hand.
+  const renderSeeds = (seeds) => {
+    if (!seedsListEl || !seedsCountEl) return;
+    seedsCountEl.textContent = String(seeds.length);
+    seedsListEl.innerHTML = '';
+    if (seeds.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'skills-empty';
+      empty.textContent =
+        'No seeds yet. Drop a JSON file in .hover/rules/ to teach the optimization pass a new pattern.';
+      seedsListEl.appendChild(empty);
+      return;
+    }
+    for (const s of seeds) {
+      const row = document.createElement('div');
+      row.className = 'skill-row spec-row';
+      const n = document.createElement('div');
+      n.className = 'skill-name';
+      n.textContent = s.name;
+      const badge = document.createElement('span');
+      badge.textContent = s.source === 'builtin' ? ' built-in' : ' project';
+      badge.style.cssText =
+        'margin-left:6px;font-size:10px;color:' +
+        (s.source === 'builtin' ? 'var(--text-dim)' : 'var(--accent)') + ';';
+      n.appendChild(badge);
+      const d = document.createElement('div');
+      d.className = 'skill-desc';
+      d.textContent = s.note || '';
+      const meta = document.createElement('div');
+      meta.className = 'skill-slug';
+      meta.textContent = Array.isArray(s.signature) ? s.signature.join(' · ') : '';
+      row.appendChild(n);
+      row.appendChild(d);
+      row.appendChild(meta);
+
+      if (s.code) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'spec-rerecord-btn';
+        toggle.style.cssText = 'grid-column:2;grid-row:1 / 4;align-self:center;position:static;';
+        toggle.textContent = 'Code ▾';
+        const pre = document.createElement('pre');
+        pre.hidden = true;
+        pre.style.cssText =
+          'margin:4px 0 12px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);' +
+          'border-radius:6px;background:rgba(255,255,255,0.03);max-height:180px;overflow:auto;' +
+          'font-size:11px;line-height:1.45;white-space:pre-wrap;';
+        pre.textContent = s.code;
+        toggle.addEventListener('click', () => {
+          pre.hidden = !pre.hidden;
+          toggle.textContent = pre.hidden ? 'Code ▾' : 'Code ▴';
+        });
+        row.appendChild(toggle);
+        seedsListEl.appendChild(row);
+        seedsListEl.appendChild(pre);
+      } else {
+        seedsListEl.appendChild(row);
+      }
+    }
+  };
+
   const sessionsTabs = root.querySelectorAll('.sessions-tab');
   const sessionsPanes = root.querySelectorAll('.sessions-pane');
   const activateSessionsTab = (which) => {
@@ -1799,6 +1871,7 @@
     skillsBtn.classList.add('active');
     requestSkillsList();
     requestSpecsList();
+    requestSeedsList();
   };
 
   const closeSkillsOverlay = () => {
@@ -3585,6 +3658,8 @@
         renderSkills(msg.payload?.skills ?? []);
       } else if (msg.type === 'specs-list') {
         renderSpecs(msg.payload?.specs ?? []);
+      } else if (msg.type === 'seeds-list') {
+        renderSeeds(msg.payload?.seeds ?? []);
       } else if (msg.type === 'optimize-result') {
         const p = msg.payload ?? {};
         if (optimizing && optimizing.slug === p.slug) {

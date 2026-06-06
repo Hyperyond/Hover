@@ -14,6 +14,7 @@
  *     { type: 'skill-exists',    payload: { slug, existingPath } }
  *     { type: 'skills-list',     payload: { skills: SkillSummary[] } }
  *     { type: 'specs-list',      payload: { specs: SpecSummary[] } }
+ *     { type: 'seeds-list',      payload: { seeds: { name, note, signature, code, source }[] } }
  *     { type: 'spec-saved',      payload: { name, path } }
  *     { type: 'spec-exists',     payload: { slug, existingPath } }
  *     { type: 'case-csv-saved',  payload: { name, path } }
@@ -36,6 +37,7 @@
  *     { type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
  *     { type: 'list-skills' }
  *     { type: 'list-specs' }                                            // ask for every spec under __vibe_tests__/, with parsed JSDoc headers
+ *     { type: 'list-seeds' }                                            // ask for built-in + .hover/rules/ translation seeds (read-only)
  *     { type: 'list-agents' }                                          // ask for the full agent registry + install status
  *     { type: 'switch-agent',  payload: { agentId } }                  // set the service's current agent; broadcasts to all connections
  *
@@ -65,6 +67,7 @@ import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
 import { launchDebugChrome } from './playwright/launchChrome.js';
 import { listSkills, type SkillStep } from './skills/writeSkill.js';
 import { listSpecs } from './specs/listSpecs.js';
+import { readSeeds, BUILTIN_SEEDS } from './specs/seeds.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
 import {
@@ -666,6 +669,21 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // so the Re-record button can resubmit it as a normal command.
         const specs = await listSpecs(devRoot);
         send(ws, { type: 'specs-list', payload: { specs } });
+        return;
+      }
+      if (msg.type === 'list-seeds') {
+        // Widget's Seeds tab: show which translation seeds Hover sees — the
+        // built-in set + whatever the user dropped in <devRoot>/.hover/rules/.
+        // Read-only; users add seeds by hand (no download path).
+        const builtinNames = new Set(BUILTIN_SEEDS.map(s => s.name));
+        const seeds = (await readSeeds(devRoot)).map(s => ({
+          name: s.name,
+          note: s.note ?? '',
+          signature: s.signature,
+          code: s.example?.code ?? '',
+          source: builtinNames.has(s.name) ? 'builtin' : 'project',
+        }));
+        send(ws, { type: 'seeds-list', payload: { seeds } });
         return;
       }
       if (msg.type === 'save-spec') {
