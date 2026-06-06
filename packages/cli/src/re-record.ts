@@ -24,7 +24,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { bold, cyan, dim, err, info, ok, spark, warn } from './log.js';
+import { bold, cyan, dim, err, ok, warn, head, line, gap, done, tail } from './log.js';
 
 interface RecordArgs {
   spec: string;
@@ -48,7 +48,10 @@ export async function runReRecord(args: RecordArgs): Promise<number> {
     err(`Tried as a path and as a slug under ${cyan(join(cwd, '__vibe_tests__'))}.`);
     return 1;
   }
-  info(`Spec: ${cyan(specPath)}`);
+  const slug = basename(specPath).replace(/\.spec\.ts$/, '');
+  head(`${bold('hover re-record')} ${dim('·')} ${cyan(slug)}`);
+  gap();
+  line(`spec ${dim('→')} ${cyan(specPath)}`);
 
   // ─── parse the JSDoc header locally (fail fast before booting anything) ──
   const source = readFileSync(specPath, 'utf-8');
@@ -60,9 +63,7 @@ export async function runReRecord(args: RecordArgs): Promise<number> {
     err(`  2. Delete the spec and re-record from scratch in the widget.`);
     return 1;
   }
-  info(`Original prompt: ${dim(header.originalPrompt)}`);
-
-  const slug = basename(specPath).replace(/\.spec\.ts$/, '');
+  line(`original prompt ${dim('·')} ${dim(header.originalPrompt)}`);
 
   // ─── resolve @hover-dev/core dynamically from cwd ──────────────────
   let coreEntry: string;
@@ -89,7 +90,7 @@ export async function runReRecord(args: RecordArgs): Promise<number> {
     }>;
   };
 
-  info(`Booting a temporary Hover service on port ${args.port} (auto-bumps if busy)…`);
+  line(`booting a temporary service on :${args.port} ${dim('(auto-bumps if busy)')}…`);
   let service: Awaited<ReturnType<typeof startService>>;
   try {
     service = await startService({
@@ -119,12 +120,13 @@ export async function runReRecord(args: RecordArgs): Promise<number> {
   }
 
   if (args.dryRun) {
-    spark(`Dry-run complete — agent finished, no files written.`);
+    gap();
+    done('Dry-run complete — agent finished, no files written');
     if (result.summary) {
-      info(`Agent's summary:`);
+      line(dim('agent summary:'));
       console.log('  ' + result.summary.split('\n').join('\n  '));
     }
-    info(`Run again without ${cyan('--dry-run')} to overwrite the spec.`);
+    tail(`run again without ${cyan('--dry-run')} to overwrite the spec`);
     return 0;
   }
 
@@ -134,20 +136,23 @@ export async function runReRecord(args: RecordArgs): Promise<number> {
     return 1;
   }
 
-  ok(`Spec overwritten: ${cyan(specPath)}`);
-  info(`Review the change:`);
-  console.log('');
+  ok(`spec overwritten ${dim('→')} ${cyan(specPath)}`);
+  gap();
+  line(dim('review the change:'));
+  gap();
   const diff = spawnSync('git', ['diff', '--', specPath], { cwd, encoding: 'utf-8' });
   if (diff.status === 0 && diff.stdout) {
     console.log(diff.stdout);
   } else if (diff.status === 0) {
-    info(`(${dim('git diff is empty — agent produced byte-identical spec')})`);
+    line(dim('(git diff is empty — agent produced a byte-identical spec)'));
   } else {
     warn(`git diff exited with ${diff.status}. Run ${cyan(`git diff -- ${specPath}`)} manually.`);
   }
-  console.log('');
-  info(`Accept: ${cyan('git add ' + specPath + ' && git commit')}`);
-  info(`Reject: ${cyan('git checkout -- ' + specPath)}`);
+  gap();
+  done('Re-recorded against the current UI');
+  line(`${bold('accept')}  ${cyan('git add ' + specPath + ' && git commit')}`);
+  line(`${bold('reject')}  ${cyan('git checkout -- ' + specPath)}`);
+  tail(dim('the spec runs in CI with no agent'));
   return 0;
 }
 
@@ -236,6 +241,7 @@ async function runOneCommand(opts: {
     let summary = '';
     let sessionError = false;
     let specWritten = false;
+    let dotsStarted = false;
     let postSessionTimer: NodeJS.Timeout | null = null;
     const TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -250,7 +256,7 @@ async function runOneCommand(opts: {
     }, TIMEOUT_MS);
 
     ws.addEventListener('open', () => {
-      info(`Connected. Replaying prompt against the current UI…`);
+      line(`connected — replaying the prompt against the current UI…`);
       ws.send(JSON.stringify({
         type: 'command',
         payload: opts.slug
@@ -266,7 +272,10 @@ async function runOneCommand(opts: {
 
       if (msg.type === 'event' && msg.payload) {
         const ev = msg.payload;
-        if (ev.kind === 'tool_use') process.stderr.write('.');
+        if (ev.kind === 'tool_use') {
+          if (!dotsStarted) { process.stderr.write(`${dim('│')}  `); dotsStarted = true; }
+          process.stderr.write('.');
+        }
         if (ev.kind === 'session_end' && !sessionEnded) {
           sessionEnded = true;
           process.stderr.write('\n');

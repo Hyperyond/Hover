@@ -14,7 +14,7 @@ import { findFrameworkById, FRAMEWORKS, type Framework, type FrameworkId } from 
 import { installPackage } from './install.js';
 import { mutateConfig } from './mutate.js';
 import { isInteractive, pick } from './picker.js';
-import { bold, cyan, dim, err, info, ok, spark, warn } from './log.js';
+import { bold, cyan, dim, err, info, ok, warn, head, gap, done, tail } from './log.js';
 import { parseReRecordArgs, runReRecord } from './re-record.js';
 import { runExtract } from './extract.js';
 import { parseOptimizeArgs, runOptimize } from './optimize.js';
@@ -135,6 +135,8 @@ For more: https://github.com/Hyperyond/Hover
 }
 
 async function runSetup(args: ParsedArgs): Promise<number> {
+  head(`${bold('hover setup')}`);
+  gap();
   // --cwd lets the user point us at an app inside a monorepo without changing
   // shell directories. Resolve it before walking up so we land in the right
   // package, not the parent monorepo root.
@@ -244,9 +246,11 @@ async function runSetup(args: ParsedArgs): Promise<number> {
   info(`Using package manager: ${bold(pm)} ${dim(`(${reason})`)}.`);
 
   if (args.dryRun) {
-    warn(`Dry-run — not installing or modifying files.`);
-    info(`Would install: ${cyan(framework.hoverPackage)} (dev dependency, via ${pm}).`);
-    info(`Would mutate: ${cyan(framework.configCandidates[0])} (or whichever candidate exists).`);
+    info(`would install ${cyan(framework.hoverPackage)} ${dim(`(dev dependency, via ${pm})`)}`);
+    info(`would mutate ${cyan(framework.configCandidates[0])} ${dim('(or whichever candidate exists)')}`);
+    gap();
+    done('Dry-run — nothing installed or modified');
+    tail(`drop ${cyan('--dry-run')} to apply`);
     return 0;
   }
 
@@ -303,7 +307,9 @@ async function runSetup(args: ParsedArgs): Promise<number> {
 `);
   }
 
-  spark(`Done. Run your dev server and click the floating ✨.`);
+  gap();
+  done('Hover wired in');
+  tail(`run your dev server and click the floating ${cyan('✨')}`);
   return 0;
 }
 
@@ -328,7 +334,8 @@ async function main(): Promise<void> {
     // `add` is the deprecated former name — still works, will be removed in a
     // future release. Nudge users to `setup` without breaking their scripts.
     if (args.command === 'add') {
-      info(`${dim('`add` is deprecated and will be removed — use `setup`:')} npx @hover-dev/cli setup`);
+      // Standalone note (no bar) — this fires before runSetup opens its head().
+      console.log(dim('`add` is deprecated and will be removed — use `setup`: npx @hover-dev/cli setup'));
     }
     const code = await runSetup(args);
     process.exit(code);

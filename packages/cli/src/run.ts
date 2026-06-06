@@ -14,7 +14,7 @@
  */
 import { existsSync } from 'node:fs';
 import { isAbsolute, join, resolve, relative } from 'node:path';
-import { bold, cyan, dim, err, ok } from './log.js';
+import { bold, cyan, dim, err, ok, head, line, sub, gap, done, tail } from './log.js';
 
 export interface RunArgs {
   prompt: string;
@@ -24,15 +24,6 @@ export interface RunArgs {
   model: string | null;
   cwd: string | null;
 }
-
-// ── Clack/Claude-style vertical-connector output ─────────────────────────
-const BAR = dim('│');
-const head = (label: string): void => console.log(`${cyan('◇')} ${label}`);
-const line = (text: string): void => console.log(`${BAR}  ${text}`);
-const sub = (text: string): void => console.log(`${BAR}    ${dim(text)}`);
-const gap = (): void => console.log(BAR);
-const done = (label: string): void => console.log(`${cyan('◆')} ${label}`);
-const tail = (text: string): void => console.log(`${dim('╰─')} ${text}`);
 
 /** Walk up from `cwd` to the project's installed `@hover-dev/core/dist`. */
 function resolveCoreDist(cwd: string): string | null {

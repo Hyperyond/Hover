@@ -12,7 +12,7 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute, join, resolve, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { bold, cyan, dim, err, info, ok, spark } from './log.js';
+import { bold, cyan, dim, err, ok, head, line, gap, done, tail } from './log.js';
 
 interface OptimizeArgs {
   spec: string;
@@ -29,6 +29,8 @@ export async function runOptimize(args: OptimizeArgs): Promise<number> {
   }
 
   const slug = args.spec.replace(/\.spec\.ts$/, '');
+  head(`${bold('hover optimize')} ${dim('·')} ${cyan(slug)}`);
+  gap();
   const origPath = join(cwd, '__vibe_tests__', `${slug}.spec.ts`);
   if (!existsSync(origPath)) {
     err(`No spec found at ${cyan(relative(cwd, origPath))}.`);
@@ -53,7 +55,7 @@ export async function runOptimize(args: OptimizeArgs): Promise<number> {
     ) => Promise<{ candidatePath: string; code: string }>;
   };
 
-  info(`Optimizing ${cyan(slug)} — the agent reads the spec + session and proposes improvements…`);
+  line('reading the spec + captured session, proposing improvements…');
   let res: { candidatePath: string; code: string };
   try {
     res = await optimizeSpecWithAgent(cwd, slug, {
@@ -66,18 +68,21 @@ export async function runOptimize(args: OptimizeArgs): Promise<number> {
     return 1;
   }
 
-  ok(`Candidate written: ${cyan(relative(cwd, res.candidatePath))} ${dim('(original untouched)')}`);
-  info(`Diff (original → optimized):`);
-  console.log('');
+  ok(`candidate written ${dim('→')} ${cyan(relative(cwd, res.candidatePath))}`);
+  gap();
+  line(dim('diff (original → optimized):'));
+  gap();
   const diff = spawnSync(
     'git',
     ['diff', '--no-index', '--', origPath, res.candidatePath],
     { cwd, encoding: 'utf-8' },
   );
   console.log(diff.stdout || dim('(git diff unavailable — open the candidate to compare)'));
-  console.log('');
-  spark(`Review it. ${bold('Promote')}: ${cyan(`mv "${relative(cwd, res.candidatePath)}" "${relative(cwd, origPath)}"`)}`);
-  info(`${bold('Discard')}: ${cyan(`rm "${relative(cwd, res.candidatePath)}"`)}`);
+  gap();
+  done('Candidate ready for review');
+  line(`${bold('promote')}  ${cyan(`mv "${relative(cwd, res.candidatePath)}" "${relative(cwd, origPath)}"`)}`);
+  line(`${bold('discard')}  ${cyan(`rm "${relative(cwd, res.candidatePath)}"`)}`);
+  tail(dim('the original spec is untouched — it still runs in CI'));
   return 0;
 }
 

@@ -13,7 +13,7 @@
  */
 import { existsSync } from 'node:fs';
 import { isAbsolute, join, resolve, relative } from 'node:path';
-import { bold, cyan, dim, err, info, ok, spark, warn } from './log.js';
+import { bold, cyan, dim, err, ok, head, line, sub, gap, done, tail } from './log.js';
 
 export async function runExtract(args: { cwd: string | null; minSpecs: number }): Promise<number> {
   const cwd = args.cwd
@@ -23,6 +23,8 @@ export async function runExtract(args: { cwd: string | null; minSpecs: number })
     err(`--cwd path does not exist: ${cwd}`);
     return 1;
   }
+  head(`${bold('hover extract')}`);
+  gap();
 
   let entry: string;
   try {
@@ -44,25 +46,26 @@ export async function runExtract(args: { cwd: string | null; minSpecs: number })
     }>;
   };
 
-  info(`Scanning saved specs for flows shared by ${bold(String(args.minSpecs))}+ specs…`);
+  line(`scanning saved specs for flows shared by ${bold(`${args.minSpecs}+`)} specs…`);
   const res = await extractPageObjects(cwd, { minSpecs: args.minSpecs });
 
   if (res.pages.length === 0) {
-    warn(`No flow is shared by ${args.minSpecs}+ specs yet — nothing to extract.`);
-    info(`Save a few specs that start the same way (e.g. log in), then re-run.`);
+    gap();
+    done(`Nothing to extract yet ${dim(`— no flow shared by ${args.minSpecs}+ specs`)}`);
+    tail('save a few specs that start the same way (e.g. log in), then re-run');
     return 0;
   }
 
   for (const p of res.pages) {
     ok(`${bold(p.className)} ${dim('←')} ${p.specs.join(', ')}`);
-    info(`  ${cyan(relative(cwd, p.path))}`);
+    sub(relative(cwd, p.path));
   }
   if (res.fixturesPath) {
-    info(`Fixtures: ${cyan(relative(cwd, res.fixturesPath))}`);
+    line(`fixtures ${dim('→')} ${cyan(relative(cwd, res.fixturesPath))}`);
   }
-  spark(
-    `Done. New specs can ${bold("import { test, expect } from './fixtures'")} and use the page objects.`,
-  );
+  gap();
+  done('Extracted shared Page Objects + fixtures');
+  tail(`new specs can ${bold("import { test, expect } from './fixtures'")} and use the page objects`);
   return 0;
 }
 
