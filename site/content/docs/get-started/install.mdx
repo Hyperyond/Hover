@@ -26,7 +26,7 @@ No `.env` file, no `.npmrc` for npm auth — every Hover package is public on np
 Run inside your project root:
 
 ```bash
-npx @hover-dev/cli add
+npx @hover-dev/cli setup
 ```
 
 That single command:
@@ -40,7 +40,7 @@ That single command:
 ### Preview without changing anything
 
 ```bash
-npx @hover-dev/cli add --dry-run
+npx @hover-dev/cli setup --dry-run
 ```
 
 Prints what would be installed + which file would be edited, then exits clean. Useful when you're not sure what the CLI will pick.
@@ -50,11 +50,11 @@ Prints what would be installed + which file would be edited, then exits clean. U
 If auto-detect picks the wrong one (rare, but happens in projects with multiple bundlers in `devDependencies`):
 
 ```bash
-npx @hover-dev/cli add --vite
-npx @hover-dev/cli add --astro
-npx @hover-dev/cli add --nuxt
-npx @hover-dev/cli add --next
-npx @hover-dev/cli add --webpack
+npx @hover-dev/cli setup --vite
+npx @hover-dev/cli setup --astro
+npx @hover-dev/cli setup --nuxt
+npx @hover-dev/cli setup --next
+npx @hover-dev/cli setup --webpack
 ```
 
 ## Option B — manual install
@@ -209,7 +209,7 @@ If you're on Next and want the webpack code path (`next dev --webpack`), still u
 Hover's CLI knows about workspace monorepos. **Run from the repo root**, not from inside `apps/*`:
 
 ```bash
-npx @hover-dev/cli add
+npx @hover-dev/cli setup
 ```
 
 The CLI:
@@ -230,7 +230,7 @@ What happens next depends on how many apps matched:
 Skip auto-detect entirely and target a specific workspace:
 
 ```bash
-npx @hover-dev/cli add --cwd apps/web
+npx @hover-dev/cli setup --cwd apps/web
 ```
 
 Path is absolute or relative to where you ran the command.
@@ -308,7 +308,7 @@ If `lsof` shows a stale Hover service on 51789–51798 too, kill those: `lsof -i
 
 Open browser devtools → Console. If you see a WebSocket connection error to `ws://127.0.0.1:51789`, the Hover service didn't boot. Common causes:
 
-- The bundler integration wasn't registered. Re-run `npx @hover-dev/cli add --dry-run` to confirm the config has the plugin / integration.
+- The bundler integration wasn't registered. Re-run `npx @hover-dev/cli setup --dry-run` to confirm the config has the plugin / integration.
 - You ran `pnpm build` instead of `pnpm dev` — Hover is **deliberately a no-op in production builds**.
 - For Next.js: forgot to add `<HoverScript />` to `app/layout.tsx`. The CLI prints this snippet at the end of `add`; if you missed it, see [Option B → Next.js](#next-js-15-16).
 
@@ -333,6 +333,6 @@ Whichever bundler shim you pick pulls these as transitive deps:
 Optional extras:
 
 - `@hover-dev/security` — adds [Security testing mode](/docs/features/security) (MITM proxy + replay) to the same widget.
-- `@hover-dev/cli` — what `npx @hover-dev/cli add` runs. You don't need to install it explicitly; `npx` runs the latest published version on demand.
+- `@hover-dev/cli` — what `npx @hover-dev/cli setup` runs. You don't need to install it explicitly; `npx` runs the latest published version on demand.
 
 See [Plugin options](/docs/reference/plugin-options) for the full configuration surface (port, agent, model, budget, source-attribution, …).

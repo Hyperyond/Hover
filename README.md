@@ -10,7 +10,7 @@
 
 <p>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square" /></a>
-  <a href="https://www.npmjs.com/package/@hover-dev/cli"><img alt="@hover-dev/cli on npm" src="https://img.shields.io/npm/v/@hover-dev/cli?style=flat-square&label=npx%20%40hover-dev%2Fcli%20add&color=cb3837&logo=npm&logoColor=white" /></a>
+  <a href="https://www.npmjs.com/package/@hover-dev/cli"><img alt="@hover-dev/cli on npm" src="https://img.shields.io/npm/v/@hover-dev/cli?style=flat-square&label=npx%20%40hover-dev%2Fcli%20setup&color=cb3837&logo=npm&logoColor=white" /></a>
   <a href="https://www.npmjs.com/package/@hover-dev/core"><img alt="@hover-dev/core on npm" src="https://img.shields.io/npm/v/@hover-dev/core?style=flat-square&label=%40hover-dev%2Fcore&color=cb3837&logo=npm&logoColor=white" /></a>
   <a href="https://github.com/Hyperyond/Hover/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Hyperyond/Hover?style=flat-square&color=ffd700" /></a>
   <a href="https://gethover.dev/docs"><img alt="Documentation" src="https://img.shields.io/badge/docs-gethover.dev-7CFFA8?style=flat-square&logo=readthedocs&logoColor=white" /></a>
@@ -77,7 +77,7 @@ A single **💾 Save as ▾** on the done card crystallises one verified session
 ## Quickstart
 
 ```bash
-npx @hover-dev/cli add        # detects bundler + package manager, wires config (idempotent; --dry-run to preview)
+npx @hover-dev/cli setup        # detects bundler + package manager, wires config (idempotent; --dry-run to preview)
 ```
 
 You also need **Node 22+** and one coding-agent CLI — Claude Code (`npm i -g @anthropic-ai/claude-code`) or OpenAI Codex (`npm i -g @openai/codex`). Authenticate either with the subscription you already pay for (`claude login` on Pro/Max, `codex login` on your ChatGPT plan) **or** paste a model API key into the widget's ⚙ settings (it's injected into the CLI's environment, kept in your browser only). Then start your dev server as usual and open the dev URL in Chrome — a floating ✨ launcher appears bottom-right; click it (it spawns an isolated debug Chrome on demand), type a prompt, and **Save as spec**:

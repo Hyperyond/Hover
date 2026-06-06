@@ -7,7 +7,7 @@ One-command setup for [Hover](https://github.com/Hyperyond/Hover) — detects yo
 No installation required. `npx` runs the latest published version on demand:
 
 ```bash
-npx @hover-dev/cli add
+npx @hover-dev/cli setup
 ```
 
 That's it. The `add` subcommand:
@@ -28,7 +28,7 @@ Run from the repo root. The CLI enumerates the workspaces declared in `pnpm-work
 - **Multiple matches in CI / piped invocation** — lists candidates and asks for `--cwd apps/web`.
 
 ```bash
-npx @hover-dev/cli add --cwd apps/web   # target a specific workspace
+npx @hover-dev/cli setup --cwd apps/web   # target a specific workspace
 ```
 
 Sub-workspaces don't need their own lockfile — the CLI walks up to find one, so a pnpm-managed monorepo with a single root `pnpm-lock.yaml` works without surprise.
@@ -38,17 +38,17 @@ Sub-workspaces don't need their own lockfile — the CLI walks up to find one, s
 If detection picks the wrong one (e.g. your project has multiple bundlers, or you're starting from a fresh repo), use a flag:
 
 ```bash
-npx @hover-dev/cli add --vite        # vite-plugin-hover
-npx @hover-dev/cli add --astro       # @hover-dev/astro
-npx @hover-dev/cli add --nuxt        # @hover-dev/nuxt
-npx @hover-dev/cli add --next        # @hover-dev/next
-npx @hover-dev/cli add --webpack     # webpack-plugin-hover
+npx @hover-dev/cli setup --vite        # vite-plugin-hover
+npx @hover-dev/cli setup --astro       # @hover-dev/astro
+npx @hover-dev/cli setup --nuxt        # @hover-dev/nuxt
+npx @hover-dev/cli setup --next        # @hover-dev/next
+npx @hover-dev/cli setup --webpack     # webpack-plugin-hover
 ```
 
 ## Preview without modifying anything
 
 ```bash
-npx @hover-dev/cli add --dry-run
+npx @hover-dev/cli setup --dry-run
 ```
 
 Prints what would be installed + which config file would be modified, then exits without changing anything.
@@ -68,7 +68,7 @@ This is also what happens if you have no config file at all — many projects re
 
 ```bash
 pnpm add -D @hover-dev/cli
-pnpm hover add
+pnpm hover setup
 ```
 
 ## Re-record a spec

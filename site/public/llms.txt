@@ -14,7 +14,7 @@ Hover injects a floating chat widget into your dev server page. You describe a f
 
 One command auto-detects your bundler and wires it up:
 
-    npx @hover-dev/cli add
+    npx @hover-dev/cli setup
 
 Supported bundlers: Vite, Astro, Nuxt, Next.js (Turbopack + webpack), webpack 5. React Native Web is supported via the Vite plugin. React Native native is NOT supported.
 

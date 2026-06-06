@@ -29,7 +29,7 @@ export async function runExtract(args: { cwd: string | null; minSpecs: number })
     entry = resolveExtractEntry(cwd);
   } catch (e) {
     err(`Couldn't find ${cyan('@hover-dev/core')} in ${cyan(cwd)}.`);
-    err(`Install Hover for this project first: ${cyan('npx @hover-dev/cli add')}.`);
+    err(`Install Hover for this project first: ${cyan('npx @hover-dev/cli setup')}.`);
     err(`Original error: ${e instanceof Error ? e.message : String(e)}`);
     return 1;
   }

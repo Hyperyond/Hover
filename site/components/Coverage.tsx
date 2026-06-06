@@ -45,7 +45,7 @@ export function Coverage() {
         <div className="px-8">
           <p className="text-[14px] text-text-mute">
             <span className="text-text">Works where you already build.</span>{' '}
-            One <code className="font-mono text-mint">npx @hover-dev/cli add</code>{' '}
+            One <code className="font-mono text-mint">npx @hover-dev/cli setup</code>{' '}
             detects your bundler and wires it up — no config.
           </p>
           <div className="mt-1.5 flex items-center gap-4 font-mono text-[11px] text-text-dim">

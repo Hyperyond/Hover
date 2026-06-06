@@ -4,7 +4,7 @@ A minimal **turbo + pnpm-workspace** monorepo with two Next.js 15 apps. Exists t
 
 - Root `package.json` only declares turbo + workspaces — no bundler.
 - `apps/web` — Next.js 15 + `next.config.ts`. The combination that surfaced `ERR_PACKAGE_PATH_NOT_EXPORTED` (Next 15 loads `.ts` configs through CJS `require()`).
-- `apps/game` — second Next workspace, intentionally NOT wired to Hover. Exists so running `npx @hover-dev/cli add` at the repo root triggers the interactive multi-workspace picker.
+- `apps/game` — second Next workspace, intentionally NOT wired to Hover. Exists so running `npx @hover-dev/cli setup` at the repo root triggers the interactive multi-workspace picker.
 
 This example is dogfood for the CLI. It is not configured to "just run" out-of-the-box because Hover dispatches into a *user's choice* of workspace — the wiring lives in `apps/web/` and `apps/game/` stays bare.
 

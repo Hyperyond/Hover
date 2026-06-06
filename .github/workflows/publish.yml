@@ -18,7 +18,7 @@ name: Publish
 #     - @hover-dev/astro             — Astro integration
 #     - @hover-dev/nuxt              — Nuxt module
 #     - @hover-dev/next              — Next.js (App Router, Turbopack) integration
-#     - @hover-dev/cli               — `npx @hover-dev/cli add` setup CLI
+#     - @hover-dev/cli               — `npx @hover-dev/cli setup` setup CLI
 #     - @hover-dev/security          — security-testing plugin (MITM proxy + MCP)
 #   Unscoped (follows the community vite-plugin-* / webpack-*-plugin convention)
 #     - vite-plugin-hover            — Vite plugin
@@ -43,7 +43,7 @@ name: Publish
 #
 # Consumers can then install with no .npmrc and no auth — same shape as
 # any other public npm package:
-#   npx @hover-dev/cli add               # one command, picks the right shim
+#   npx @hover-dev/cli setup               # one command, picks the right shim
 # or manually:
 #   pnpm add -D vite-plugin-hover        # ...or @hover-dev/astro / @hover-dev/nuxt
 #                                          / webpack-plugin-hover

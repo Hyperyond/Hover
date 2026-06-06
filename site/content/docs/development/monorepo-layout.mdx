@@ -13,7 +13,7 @@ Hover is a single pnpm workspace. `packages/*` ship to npm; `examples/*` are smo
 | `@hover-dev/nuxt` | Nuxt module. Nuxt renders HTML through Nitro, not Vite, so we push the widget into `nuxt.options.app.head.script`. |
 | `@hover-dev/next` | Next.js (App Router, Turbopack) integration. Three pieces: `withHover` config wrapper, `register()` from `@hover-dev/next/instrumentation`, and the `<HoverScript />` Server Component. |
 | `webpack-plugin-hover` | Webpack 5 plugin — vanilla `webpack-dev-server`, Rspack / Rsbuild, legacy CRA / Vue CLI. Hooks `HtmlWebpackPlugin.alterAssetTagGroups`. Does NOT cover Next 16+ (Turbopack default). |
-| `@hover-dev/cli` | `npx @hover-dev/cli add` — reads the user's `package.json`, picks the right shim, AST-mutates their bundler config via [magicast](https://github.com/unjs/magicast). |
+| `@hover-dev/cli` | `npx @hover-dev/cli setup` — reads the user's `package.json`, picks the right shim, AST-mutates their bundler config via [magicast](https://github.com/unjs/magicast). |
 | `@hover-dev/security` | The first optional plugin. MITM HTTPS proxy + flow inspector + MCP server for the agent. See [Features → Security testing](/docs/features/security). |
 
 ## Examples
@@ -32,7 +32,7 @@ Each example runs on its own port and uses one of the bundler shims, so they dou
 | `webpack-app` | 5180 | Vanilla webpack 5 + `webpack-dev-server` |
 | `rn-web-app` | 5181 | React Native Web — RN components rendering to DOM |
 | `next-app` | 5182 | Next 16 App Router (Turbopack default) |
-| `turbo-monorepo` | — | turbo + pnpm-workspace with two Next.js 15 apps (`apps/web`, `apps/game`); reproduces the shape real users have when running `npx @hover-dev/cli add` on a turbo project; not part of `pnpm dev:example:*` |
+| `turbo-monorepo` | — | turbo + pnpm-workspace with two Next.js 15 apps (`apps/web`, `apps/game`); reproduces the shape real users have when running `npx @hover-dev/cli setup` on a turbo project; not part of `pnpm dev:example:*` |
 
 Concurrent examples are supported. The Hover service auto-bumps from `127.0.0.1:51789` up through `:51798`; each widget reads `window.__HOVER_PORT__` and connects only to its own service.
 

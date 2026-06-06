@@ -15,7 +15,7 @@ export interface PackageJson {
  * for spawning the package manager + resolving config-file paths).
  *
  * Walks up from `startDir` looking for `package.json` — this lets the user
- * run `npx @hover-dev/cli add` from a subdirectory and still target the
+ * run `npx @hover-dev/cli setup` from a subdirectory and still target the
  * project root. Stops at the filesystem root.
  */
 export function readUserPackageJson(startDir: string = process.cwd()): { pkg: PackageJson; rootDir: string } | null {

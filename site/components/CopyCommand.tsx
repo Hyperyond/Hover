@@ -7,7 +7,7 @@ import { useState } from 'react';
  * enough to display in full — copying is the affordance, not a reveal. Mirrors
  * the widget's mint-bordered, dark-inset code surface.
  */
-export function CopyCommand({ command = 'npx @hover-dev/cli add' }: { command?: string }) {
+export function CopyCommand({ command = 'npx @hover-dev/cli setup' }: { command?: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {

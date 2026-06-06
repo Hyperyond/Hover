@@ -23,12 +23,12 @@ import { parseOptimizeArgs, runOptimize } from './optimize.js';
  * @hover-dev/cli entrypoint.
  *
  * Usage:
- *   npx @hover-dev/cli add                # auto-detect bundler, install, wire
- *   npx @hover-dev/cli add --vite         # force a specific bundler
- *   npx @hover-dev/cli add --astro
- *   npx @hover-dev/cli add --nuxt
- *   npx @hover-dev/cli add --webpack
- *   npx @hover-dev/cli add --dry-run      # show what would happen, change nothing
+ *   npx @hover-dev/cli setup                # auto-detect bundler, install, wire
+ *   npx @hover-dev/cli setup --vite         # force a specific bundler
+ *   npx @hover-dev/cli setup --astro
+ *   npx @hover-dev/cli setup --nuxt
+ *   npx @hover-dev/cli setup --webpack
+ *   npx @hover-dev/cli setup --dry-run      # show what would happen, change nothing
  *   npx @hover-dev/cli --help             # usage
  *   npx @hover-dev/cli --version
  *
@@ -92,14 +92,14 @@ function printUsage(): void {
   console.log(`${bold('@hover-dev/cli')} — wire Hover into your dev workflow
 
 Usage:
-  npx @hover-dev/cli add                ${dim('# auto-detect bundler, install, wire')}
-  npx @hover-dev/cli add --vite         ${dim('# force a specific bundler')}
-  npx @hover-dev/cli add --astro
-  npx @hover-dev/cli add --nuxt
-  npx @hover-dev/cli add --next
-  npx @hover-dev/cli add --webpack
-  npx @hover-dev/cli add --cwd apps/web ${dim('# target a specific workspace')}
-  npx @hover-dev/cli add --dry-run      ${dim('# show what would happen, change nothing')}
+  npx @hover-dev/cli setup                ${dim('# auto-detect bundler, install, wire')}
+  npx @hover-dev/cli setup --vite         ${dim('# force a specific bundler')}
+  npx @hover-dev/cli setup --astro
+  npx @hover-dev/cli setup --nuxt
+  npx @hover-dev/cli setup --next
+  npx @hover-dev/cli setup --webpack
+  npx @hover-dev/cli setup --cwd apps/web ${dim('# target a specific workspace')}
+  npx @hover-dev/cli setup --dry-run      ${dim('# show what would happen, change nothing')}
 
   npx @hover-dev/cli re-record <spec>   ${dim('# regenerate a Playwright spec against the current UI')}
   npx @hover-dev/cli re-record --dry-run <spec>
@@ -125,7 +125,7 @@ For more: https://github.com/Hyperyond/Hover
 `);
 }
 
-async function runAdd(args: ParsedArgs): Promise<number> {
+async function runSetup(args: ParsedArgs): Promise<number> {
   // --cwd lets the user point us at an app inside a monorepo without changing
   // shell directories. Resolve it before walking up so we land in the right
   // package, not the parent monorepo root.
@@ -202,7 +202,7 @@ async function runAdd(args: ParsedArgs): Promise<number> {
           info(`  - ${cyan(relative(rootDir, m.dir))} (${m.framework.label})`);
         }
         info(`Pick one with --cwd <path>, e.g.:`);
-        info(`  npx @hover-dev/cli add --cwd ${relative(rootDir, matches[0].dir)}`);
+        info(`  npx @hover-dev/cli setup --cwd ${relative(rootDir, matches[0].dir)}`);
         return 1;
       }
     }
@@ -315,8 +315,13 @@ async function main(): Promise<void> {
     console.log(own.version);
     return;
   }
-  if (args.command === 'add') {
-    const code = await runAdd(args);
+  if (args.command === 'setup' || args.command === 'add') {
+    // `add` is the deprecated former name — still works, will be removed in a
+    // future release. Nudge users to `setup` without breaking their scripts.
+    if (args.command === 'add') {
+      info(`${dim('`add` is deprecated and will be removed — use `setup`:')} npx @hover-dev/cli setup`);
+    }
+    const code = await runSetup(args);
     process.exit(code);
   }
   if (args.command === 're-record') {

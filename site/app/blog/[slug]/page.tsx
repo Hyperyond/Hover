@@ -126,7 +126,7 @@ export default async function BlogPost(
           ship plain Playwright.
         </p>
         <code className="mt-5 inline-block rounded-md border border-[rgba(124,255,168,0.5)] bg-bg px-5 py-2.5 font-mono text-[14px] text-mint">
-          npx @hover-dev/cli add
+          npx @hover-dev/cli setup
         </code>
       </div>
     </article>

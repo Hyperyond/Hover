@@ -19,7 +19,7 @@ Each example sets `autoLaunchChrome: true` so a debug Chrome opens on `:9222` po
 
 ## Manual-validation example: `turbo-monorepo`
 
-`examples/turbo-monorepo/` is a minimal turbo + pnpm-workspace monorepo with two Next.js 15 apps (`apps/web`, `apps/game`). It exists to reproduce the shape real users have when they run `npx @hover-dev/cli add` on a turbo project — and to surface bugs that hide in the single-package examples above. Not part of `pnpm dev:example:*` because the install step requires real-network npm to bring in `next` / `react`. Validate by hand from the example's own root:
+`examples/turbo-monorepo/` is a minimal turbo + pnpm-workspace monorepo with two Next.js 15 apps (`apps/web`, `apps/game`). It exists to reproduce the shape real users have when they run `npx @hover-dev/cli setup` on a turbo project — and to surface bugs that hide in the single-package examples above. Not part of `pnpm dev:example:*` because the install step requires real-network npm to bring in `next` / `react`. Validate by hand from the example's own root:
 
 ```bash
 cd examples/turbo-monorepo

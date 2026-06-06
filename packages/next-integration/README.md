@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-`npx @hover-dev/cli add` wires up the first two for you (config wrapper + instrumentation) and prints the `<HoverScript />` step as a manual one-liner — we deliberately don't AST-mutate user JSX.
+`npx @hover-dev/cli setup` wires up the first two for you (config wrapper + instrumentation) and prints the `<HoverScript />` step as a manual one-liner — we deliberately don't AST-mutate user JSX.
 
 ## Options
 

@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
  * /api/waitlist (server route → Resend). No third-party form UI, so the modal
  * matches the dark site exactly.
  *
- * The install path is fully public (npx @hover-dev/cli add), so this is NOT a
+ * The install path is fully public (npx @hover-dev/cli setup), so this is NOT a
  * "request a demo" gate — it's a waitlist for the future hosted Cloud product.
  * Copy stays honest: open-source ready *today*, Cloud "coming" with no date.
  */
@@ -49,7 +49,7 @@ export function Waitlist() {
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-text-mute">
               Everything on this page works right now with{' '}
               <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">
-                npx @hover-dev/cli add
+                npx @hover-dev/cli setup
               </code>
               . Cloud keeps the specs you author locally alive with AI — it
               re-records the ones UI drift breaks and flags the ones that have
@@ -193,7 +193,7 @@ function WaitlistModal({ onClose }: { onClose: () => void }) {
               We&rsquo;ll email you when Hover Cloud opens. Meanwhile it&rsquo;s
               ready right now —{' '}
               <code className="rounded bg-bg-3 px-1 py-0.5 font-mono text-[12px] text-mint">
-                npx @hover-dev/cli add
+                npx @hover-dev/cli setup
               </code>
             </p>
           </div>

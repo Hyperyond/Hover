@@ -4,7 +4,7 @@ export default function Page() {
       <h1>turbo-monorepo / game</h1>
       <p>
         Second workspace, intentionally NOT wired to Hover — exists so
-        running <code>npx @hover-dev/cli add</code> at the repo root
+        running <code>npx @hover-dev/cli setup</code> at the repo root
         triggers the interactive multi-workspace picker.
       </p>
     </main>
