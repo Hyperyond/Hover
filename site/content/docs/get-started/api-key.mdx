@@ -1,0 +1,40 @@
+# Use an API key
+
+Hover normally rides the subscription you logged your CLI into (`claude login`,
+`codex login`). If you'd rather run on a **model API key** — no subscription
+login required — drop it into the widget and Hover passes it to the spawned CLI.
+
+## Where to set it
+
+Open the widget's **⚙ settings** and paste your key into **Model API key**.
+Leave it blank to keep using your CLI subscription.
+
+The key maps to the active agent's environment variable:
+
+| Agent | Env var |
+|---|---|
+| Claude Code | `ANTHROPIC_API_KEY` |
+| OpenAI Codex | `OPENAI_API_KEY` |
+
+## How it's handled
+
+- **Stored in your browser only** (`localStorage`), and sent over the local
+  `127.0.0.1` WebSocket to the Hover service.
+- The service holds it **in memory** and injects it into the spawned CLI's
+  environment for that run. It is **never written to disk, never logged, never
+  put into a saved spec, never uploaded** anywhere.
+- It lives for the service's lifetime; the widget re-sends it on reconnect, so a
+  service restart re-asserts it from your browser.
+
+`@hover-dev/core` ships zero LLM SDK code — there is no model client inside
+Hover to send a key to in the first place. The key only ever reaches the CLI you
+already trust on your `PATH`.
+
+## CI is unaffected
+
+This is an **authoring-time** convenience. The saved `.spec.ts` runs in CI with
+`npx playwright test` — no agent, no model, no key. Setting an API key here
+never wires one into CI.
+
+You can also set the env var directly in the shell that runs your dev server
+(`ANTHROPIC_API_KEY=… pnpm dev`); the service picks it up as the default.

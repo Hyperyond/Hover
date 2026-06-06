@@ -15,6 +15,7 @@ export const DOCS_NAV: DocSection[] = [
       { text: 'Install', href: '/docs/get-started/install' },
       { text: 'Your first session', href: '/docs/get-started/first-session' },
       { text: 'Pick an agent', href: '/docs/get-started/agents' },
+      { text: 'Use an API key', href: '/docs/get-started/api-key' },
     ],
   },
   {
@@ -24,6 +25,9 @@ export const DOCS_NAV: DocSection[] = [
       { text: 'Security testing', href: '/docs/features/security' },
       { text: 'Voice mode', href: '/docs/features/voice-mode' },
       { text: 'Save as Spec', href: '/docs/features/save-as-spec' },
+      { text: 'Structured spec output', href: '/docs/features/structured-output' },
+      { text: 'Optimize a spec', href: '/docs/features/optimization-pass' },
+      { text: 'Seed library', href: '/docs/features/seed-library' },
       { text: 'Re-record a spec', href: '/docs/features/re-record' },
       { text: 'Save as Skill', href: '/docs/features/save-as-skill' },
       { text: 'Save as Security spec', href: '/docs/features/security-spec' },

@@ -1,0 +1,46 @@
+# Structured spec output
+
+A Hover spec isn't a flat dump of clicks. The deterministic translator shapes a
+verified session into a small architecture — readable on its own, and ready to
+grow as you save more flows.
+
+## What the translator emits
+
+- **`test.step(...)` stages.** Each logical step (open the form, fill
+  credentials, verify the result) is wrapped in a named `test.step`, so the
+  Playwright HTML report reads as stages instead of a flat action list.
+- **Visibility-guarded interactions.** Every action is wrapped so it asserts the
+  element is visible first — UI drift fails in ~3 s with a named assertion
+  instead of a 30 s actionability timeout.
+- **Popup / new-tab pairing.** A click that opens a payment popup or OAuth tab
+  crystallises with the `Promise.all([context.waitForEvent('page'), …])` pairing
+  Playwright needs, and the subsequent steps are retargeted onto the new page —
+  no race on replay.
+- **A structured sidecar.** Alongside `<slug>.spec.ts`, Hover writes
+  `.hover/<slug>.json` — the structured `SpecStep[]` plus the signals the run
+  observed. It's the machine-readable record the [optimization
+  pass](/docs/features/optimization-pass) reads, and it keeps the spec file
+  itself clean.
+
+## Page Objects from repeated flows
+
+When the same prefix (a login, a setup wizard) recurs across several saved
+specs, Hover can lift it into a shared **Page Object** plus a Playwright
+**fixture**, so the selectors live in one file instead of five. New specs
+consume the fixture and call the method (`await loginPage.login(...)`) instead
+of repeating the steps inline.
+
+```
+__vibe_tests__/
+├── pages/LoginPage.ts      # the lifted Page Object
+├── fixtures.ts             # exposes it as a fixture
+└── login-and-checkout.spec.ts
+```
+
+Run it over your existing specs with `npx hover extract`.
+
+## Still plain Playwright
+
+Everything here is standard `@playwright/test` — Page Objects, fixtures, and
+`test.step` are Playwright's own primitives. The spec runs in CI with
+`npx playwright test`, no agent and no Hover runtime in the loop.

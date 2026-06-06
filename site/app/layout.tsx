@@ -3,7 +3,7 @@ import './globals.css';
 
 const TITLE = 'Hover — AI authors your tests, CI runs plain Playwright';
 const DESCRIPTION =
-  'Describe a flow in plain English; AI drives your real Chrome once to explore, then crystallises a standard @playwright/test spec that runs in CI with zero AI, zero tokens. No API key — Hover spawns the coding-agent CLI you already pay for.';
+  'Describe a flow in plain English; AI drives your real Chrome once to explore, then crystallises a standard @playwright/test spec that runs in CI with zero AI, zero tokens. Hover spawns the coding-agent CLI on your PATH — your subscription or your own API key.';
 const OG_DESCRIPTION =
   'AI explores once, then hands off a deterministic Playwright spec. Zero AI at runtime, zero tokens in CI.';
 

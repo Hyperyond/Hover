@@ -81,6 +81,39 @@ const ROWS: Row[] = [
     ],
   },
   {
+    dim: 'Structured output — Page Objects, test.step, fixtures',
+    hover: yes('Lifts repeated flows into Page Objects + fixtures; wraps each step in test.step'),
+    cols: [
+      na('No code artifact — runtime YAML'),
+      partial('Exportable Playwright, but you organise its structure by hand'),
+      no('Flat recorded script — no Page Objects or test.step stages'),
+      no('Stagehand script; no Page Object extraction'),
+      no('Own JS / YAML; no Page Object extraction'),
+    ],
+  },
+  {
+    dim: 'Optional AI polish pass (diff-reviewed, original kept)',
+    hover: yes('Deterministic draft first, then an opt-in AI pass you accept via diff'),
+    cols: [
+      na('Runtime-AI YAML — nothing deterministic to polish'),
+      na('Managed — their team maintains the suite'),
+      no('Deterministic recorder — no AI authoring or polishing'),
+      no('AI stays in the loop; no deterministic draft to diff against'),
+      no('Runtime AI; no separate original to optimize'),
+    ],
+  },
+  {
+    dim: 'Community-extensible translation (drop-in seed library)',
+    hover: yes('Add a worked example to .hover/rules/ to teach a new pattern — no fork, no plugin code'),
+    cols: [
+      no('Closed platform; no user-extensible translation layer'),
+      na('Managed — you do not author the translation'),
+      na('No translation layer — it transcribes clicks'),
+      no('AI re-plans each run; no shareable pattern library'),
+      no('Vision agent re-plans each run; no shareable pattern library'),
+    ],
+  },
+  {
     dim: 'Open source / self-hosted',
     hover: yes('Apache-2.0, runs entirely on your machine'),
     cols: [

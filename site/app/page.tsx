@@ -144,22 +144,22 @@ function Hero() {
           </div>
 
           <p className="mt-5 text-[13px] text-text-dim">
-            No API key, no per-token billing — Hover spawns the{' '}
+            No per-token resale — Hover spawns the{' '}
             <span className="text-text-mute">claude</span> /{' '}
             <span className="text-text-mute">codex</span> CLI already on your{' '}
-            <code className="font-mono text-text-mute">PATH</code>.
+            <code className="font-mono text-text-mute">PATH</code>, on your
+            subscription or your own API key.
           </p>
 
           <p className="mt-3 text-[13px] text-text-dim">
-            Today, a clean portable spec.{' '}
-            <span className="text-text-mute">Next</span>: structured reports,
-            page objects, a community seed library, and an optional AI polish
-            pass —{' '}
+            Not a flat dump — page objects, <span className="text-text-mute">test.step</span>{' '}
+            stages, a community seed library, and an optional AI polish pass you
+            accept via diff.{' '}
             <a
               href="#roadmap"
               className="text-text underline-offset-2 hover:underline"
             >
-              see the roadmap
+              See what shipped
             </a>
             .
           </p>
@@ -194,8 +194,8 @@ const PILLARS = [
   },
   {
     k: 'byo',
-    title: 'BYO-CLI — reuse the subscription you have',
-    body: 'Hover bundles no AI runtime. It spawns whatever coding-agent CLI is on your PATH — claude, codex, cursor-agent, aider — riding on the Pro / Max / ChatGPT plan you already pay for. No .env, no API key.',
+    title: 'BYO-CLI — your subscription or your API key',
+    body: 'Hover bundles no AI runtime. It spawns whatever coding-agent CLI is on your PATH — claude, codex, cursor-agent, aider — on the Pro / Max / ChatGPT plan you already pay for, or your own model API key dropped into the widget (kept in your browser, injected into the CLI env, never uploaded).',
   },
   {
     k: 'coverage',
@@ -389,73 +389,104 @@ function Security() {
   );
 }
 
-/* ── On the roadmap ─────────────────────────────────────────────────────
- * Planned spec-output work (page objects, test.step, popup pairing, a
- * conventions file, a community seed library, an optional AI optimization pass).
- * Dashed borders + a Planned tag keep it visually apart from shipped features,
- * so nothing here reads as a current capability. */
+/* ── Structured output — shipped + what's next ──────────────────────────
+ * The structured spec-output suite (page objects, test.step, popup pairing, a
+ * conventions file, a community seed library, the optional AI optimization
+ * pass) has landed on `main`. Chrome extension + Hover Cloud remain planned.
+ * Each card carries a `status` so shipped vs planned renders distinctly. */
 const ROADMAP = [
   {
+    status: 'shipped',
     title: 'Page objects from repeated flows',
     body: 'When a login or setup flow recurs across saved specs, Hover lifts it into a shared Page Object plus a fixture, so the selectors live in one file instead of five.',
   },
   {
+    status: 'shipped',
     title: 'Structured test.step reports',
-    body: 'Saved flows wrap their actions in Given / When / Then test.step calls, so the Playwright HTML report reads as named stages instead of a flat action list.',
+    body: 'Saved flows wrap their actions in named test.step(...) stages, so the Playwright HTML report reads as logical steps instead of a flat action list.',
   },
   {
+    status: 'shipped',
     title: 'Multi-tab & popup flows',
     body: 'A click that opens a payment popup or OAuth tab crystallises with the Promise.all listener pairing Playwright needs, so the saved spec drives the new tab without a race.',
   },
   {
+    status: 'shipped',
     title: 'Project conventions file',
     body: 'A .hover/conventions.md in your repo (which flows matter, where login lives, your preferred selectors) feeds the agent at exploration time, so generated specs follow your house style.',
   },
   {
+    status: 'shipped',
     title: 'Community translation seeds',
-    body: 'Hover translates actions off a library of worked examples — built-in for common patterns like popups and downloads, and extensible: you or the community add a seed to teach it a new pattern, no fork, no plugin code.',
+    body: 'The optimization pass learns from a library of worked examples — built-in for common patterns like downloads, and extensible: you or the community add a seed in .hover/rules/ to teach a new pattern, no fork, no plugin code.',
   },
   {
+    status: 'shipped',
     title: 'Optional AI optimization pass',
-    body: 'Let AI read a generated spec and propose a polished version you accept via a diff. The deterministic original is always kept and the pass is off by default — nothing is rewritten behind your back.',
+    body: 'AI reads a generated spec and proposes a polished version you accept via a diff — observed assertions added, buggy behaviour flagged // KNOWN BUG. The deterministic original is always kept and the pass is off by default.',
+  },
+  {
+    status: 'planned',
+    title: 'Chrome extension',
+    body: 'Drop the bundler-plugin dependency so Hover can drive any tab — staging URLs, third-party sites, multi-origin flows. Likely a separate repo; loses source attribution, gains universal page coverage.',
+  },
+  {
+    status: 'planned',
+    title: 'Hover Cloud',
+    body: 'A hosted layer over the specs you author locally: intent-driven self-heal, test-rot detection, AI failure diagnosis. Authoring stays local and free; CI still runs plain Playwright.',
   },
 ];
 
 function Roadmap() {
   return (
     <section id="roadmap" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>On the roadmap</SectionLabel>
+      <SectionLabel>Structured output</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        Next, Hover shapes the output into a{' '}
+        Hover grows the output into a{' '}
         <span className="text-mint">maintainable suite</span>.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Today Hover saves a clean, portable spec &mdash; flat but correct. Next
-        it grows an architecture: structured Given/When/Then reports, page
-        objects and fixtures lifted from flows repeated across specs, a
-        community-extensible seed library that teaches the translator new
-        patterns, and an optional AI pass that polishes a spec while always
-        keeping the deterministic original. Still plain Playwright, no agent in
-        CI. None of this ships today. Follow along on{' '}
+        Hover saves a clean, portable spec, then grows it into an architecture:
+        page objects and fixtures lifted from flows repeated across specs, named
+        test.step stages, popup / new-tab pairing, a community-extensible seed
+        library, and an optional AI pass that polishes a spec while always
+        keeping the deterministic original. All shipped, all still plain
+        Playwright with no agent in CI. Next: a Chrome extension and Hover
+        Cloud. Follow along on{' '}
         <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
           GitHub
         </a>
         .
       </p>
       <div className="mt-12 grid gap-5 md:grid-cols-2">
-        {ROADMAP.map((r) => (
-          <article
-            key={r.title}
-            className="rounded-lg border border-dashed border-line bg-bg-2 p-7"
-          >
-            <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider text-text-dim">
-              <span className="h-1.5 w-1.5 rounded-full bg-text-dim" />
-              Planned
-            </span>
-            <h3 className="text-[17px] font-semibold tracking-tight text-text">{r.title}</h3>
-            <p className="mt-3 text-[14px] leading-relaxed text-text-mute">{r.body}</p>
-          </article>
-        ))}
+        {ROADMAP.map((r) => {
+          const shipped = r.status === 'shipped';
+          return (
+            <article
+              key={r.title}
+              className={
+                shipped
+                  ? 'rounded-lg border border-[rgba(124,255,168,0.35)] bg-[rgba(124,255,168,0.04)] p-7'
+                  : 'rounded-lg border border-dashed border-line bg-bg-2 p-7'
+              }
+            >
+              <span
+                className={
+                  shipped
+                    ? 'mb-4 inline-flex items-center gap-1.5 rounded-full border border-[rgba(124,255,168,0.35)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider text-mint'
+                    : 'mb-4 inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider text-text-dim'
+                }
+              >
+                <span className={shipped ? 'text-mint' : 'h-1.5 w-1.5 rounded-full bg-text-dim'}>
+                  {shipped ? '✓' : ''}
+                </span>
+                {shipped ? 'Shipped' : 'Planned'}
+              </span>
+              <h3 className="text-[17px] font-semibold tracking-tight text-text">{r.title}</h3>
+              <p className="mt-3 text-[14px] leading-relaxed text-text-mute">{r.body}</p>
+            </article>
+          );
+        })}
       </div>
     </section>
   );

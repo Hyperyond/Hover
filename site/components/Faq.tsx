@@ -87,13 +87,14 @@ const ITEMS: Item[] = [
   },
   {
     q: 'Do I need an API key or a credit card?',
-    a: 'No. Hover bundles no AI runtime and resells no tokens — it rides on the Claude Pro / Max or ChatGPT plan whose CLI is already on your PATH. No .env, no API key, no signup, no card. CI runs plain Playwright with no AI at all.',
+    a: 'No — neither is required. Hover bundles no AI runtime and resells no tokens; it rides on the Claude Pro / Max or ChatGPT plan whose CLI is already on your PATH. No signup, no card. Prefer not to use a subscription? Drop your own model API key into the widget — optional, never required. CI runs plain Playwright with no AI at all.',
     answer: (
       <>
-        No. Hover bundles no AI runtime and resells no tokens — it rides on the
-        Claude Pro / Max or ChatGPT plan whose CLI is already on your{' '}
-        <Code>PATH</Code>. No <Code>.env</Code>, no API key, no signup, no card.
-        CI runs plain Playwright with no AI at all.
+        No &mdash; neither is required. Hover bundles no AI runtime and resells
+        no tokens; it rides on the Claude Pro / Max or ChatGPT plan whose CLI is
+        already on your <Code>PATH</Code>. No signup, no card. Prefer not to use
+        a subscription? Drop your own model API key into the widget &mdash;
+        optional, never required. CI runs plain Playwright with no AI at all.
       </>
     ),
   },

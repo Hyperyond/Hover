@@ -1,0 +1,39 @@
+# Optimize a spec
+
+The deterministic translator always gives you a complete, runnable spec. The
+**optimization pass** is an optional second step: it lets an LLM read that spec
+and propose a polished version you accept via a diff — without ever rewriting
+the original behind your back.
+
+## What it improves
+
+- **Adds the assertions the run observed.** The agent saw a "Welcome, alice"
+  heading, an "Invalid email" error, a counter tick to `03` — the pass turns
+  those observations into `await expect(...)` assertions.
+- **Completes multi-step shapes.** Where the deterministic draft left a
+  `// hover:optimizable` marker (a file upload, a download), the pass can fill it
+  in, learning from the [seed library](/docs/features/seed-library).
+- **Flags buggy behaviour, doesn't hide it.** When an observed outcome looks
+  like a bug (a stale error that never clears), the pass still asserts what
+  actually happened but marks the line `// KNOWN BUG: …`, so a human can find it
+  and the test breaks loudly once the app is fixed.
+
+## You always keep the original
+
+The pass writes a **candidate** to `.hover/optimized/<slug>.spec.ts.draft` — a
+path the Playwright runner never collects. You review the diff in the widget and
+either **promote** it (it replaces the spec; the prior version is in git) or
+**discard** it. The deterministic original is the fallback, always.
+
+It's **off by default**: a spec is only flagged for review when it carries
+optimizable markers or a relevant seed applies. Run it on demand from the
+widget's Specs overlay, or `npx hover optimize <spec>`.
+
+## Why it doesn't dent the moat
+
+The pass is a code-generation helper issued by the local service — its input is
+data the service already holds (the draft, the [sidecar](/docs/features/structured-output),
+your seeds), never live page content. It runs through the same validator as the
+deterministic path (no XPath, no `waitForTimeout`, must parse). And it never
+becomes the spec without a human diff. CI still runs plain Playwright, zero
+tokens.

@@ -19,3 +19,6 @@ Everything Hover does today.
 - **[Save as Jira case](/docs/features/save-as-jira-case)** — `.case.csv`, imports straight into Jira / Xray / Zephyr.
 - **[Save as Security spec](/docs/features/security-spec)** — `__vibe_tests__/<slug>.security.spec.ts` using Playwright's `request` fixture. Crystallises authz / IDOR / parameter-tampering probes into CI-runnable regression specs. Requires `@hover-dev/security`.
 - **[Findings cards](/docs/features/findings-cards)** — bugs and observations the agent flagged, severity-coloured. First-class output, not buried in narration.
+- **[Structured spec output](/docs/features/structured-output)** ✨ NEW — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, a `.hover/<slug>.json` sidecar, and Page Objects + fixtures lifted from flows repeated across specs (`npx hover extract`).
+- **[Optimize a spec](/docs/features/optimization-pass)** ✨ NEW — an optional, off-by-default AI pass polishes a deterministic draft into a diff-reviewed candidate: adds the assertions the run observed, flags buggy behaviour `// KNOWN BUG`, always keeps the original. `npx hover optimize <spec>`.
+- **[Seed library](/docs/features/seed-library)** ✨ NEW — teach the optimization pass new patterns by dropping a worked example in `.hover/rules/` — no fork, no plugin code.
