@@ -26,6 +26,78 @@ The local Node service. Owns:
 
 To add an agent: implement an `AgentDescriptor`, register it in `registry.ts`. Done.
 
+## Spec generation (specs/)
+
+A verified session crystallizes into a standard `@playwright/test` file under
+`<devRoot>/__vibe_tests__/`. Translation is **deterministic — no LLM on the
+per-save path** (reproducible by construction):
+
+- `writeSpec.ts` walks the captured `browser_*` actions and emits one Playwright
+  call each (`getByRole` / `getByLabel` / `getByText` selectors — never XPath).
+  A few high-frequency multi-action shapes are hardcoded (popup / new-tab →
+  `Promise.all([context.waitForEvent('page'), …click()])`). An action with no
+  single-step translation (file upload, drag, …) leaves a structured
+  `// hover:optimizable: <tool>` marker rather than a `// TODO` — the draft stays
+  runnable around it. `countOptimizableMarkers()` reads the count back; `listSpecs`
+  surfaces it as `SpecSummary.optimizableCount`.
+- Alongside the `.spec.ts`, a **sidecar** is written to
+  `.hover/<slug>.json` — the structured `SpecStep[]` + observed signals. This is
+  the machine-readable behavior record the optimization pass reads (it keeps the
+  spec itself clean).
+
+### Optional optimization pass (F7)
+
+The **service** (never the sandboxed browser agent) can optionally run an LLM
+**codegen** call over a draft to polish it — chiefly to add assertions for the
+feedback the session observed. Its input is data the service already holds (the
+draft + sidecar + relevant seeds), not live page content, so it sits outside the
+agent's prompt-injection surface and needs no filesystem access. It writes an
+**optimization candidate** to `.hover/optimized/<slug>.spec.ts.draft` (never
+`*.spec.ts`, so the test runner can't collect an unreviewed candidate). A human
+promotes or discards it via diff — **the deterministic original is always
+preserved**. Off by default.
+
+### Seed library — extending translation (`.hover/rules/`)
+
+The optimization pass generalizes from **seeds**: human-written worked examples
+of "captured steps → the Playwright code they should produce." This is how
+coverage of new multi-step patterns grows **without core changes** — you (or the
+community) drop a JSON file; the pass picks it up as few-shot.
+
+A seed lives at `<projectRoot>/.hover/rules/<name>.json` and matches
+[`src/specs/seed.schema.json`](src/specs/seed.schema.json):
+
+```json
+{
+  "name": "oauth-popup",
+  "signature": ["browser_click", "browser_tabs:select"],
+  "note": "sign in through a provider popup that opens a new tab",
+  "example": {
+    "steps": [
+      { "tool": "browser_click", "element": "Sign in with Google button" },
+      { "tool": "browser_tabs", "action": "select", "idx": 1 }
+    ],
+    "code": "const [popup] = await Promise.all([\n  context.waitForEvent('page'),\n  page.getByRole('button', { name: 'Sign in with Google' }).click(),\n]);\nawait popup.getByLabel('Email').fill('user@example.com');"
+  }
+}
+```
+
+- **`signature`** is a cheap relevance filter only — `relevantSeeds()` keeps a
+  seed if any of its base tools (`browser_tabs:select` → `browser_tabs`) appears
+  in the spec being optimized. It is **not** exact-matched.
+- **`code`** must obey the same rules as generated specs: semantic selectors, no
+  XPath, no `waitForTimeout`.
+- **Built-in seeds** ship in `src/specs/seeds.ts` (`BUILTIN_SEEDS`). The bar to
+  be built-in is high — only **highly certain**, app-agnostic, deterministic
+  patterns qualify (currently just `download`). Semantic / judgement-based
+  optimizations (e.g. *which* feedback text to assert) are not seeds — they're
+  standing instructions in the prompt. Popup is hardcoded in `writeSpec.ts`, not
+  a seed. Speculative or project-specific patterns belong in your own
+  `.hover/rules/`, where the bar is your call.
+
+`readSeeds(projectRoot)` returns built-ins + your `.hover/rules/*.json`
+(malformed files are skipped, not fatal).
+
 ## Smoke test
 
 ```bash
