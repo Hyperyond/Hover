@@ -56,6 +56,12 @@ describe('buildOptimizePrompt', () => {
     expect(p).toContain('Showed Invalid email.');
     expect(p).toContain('browser_click');
   });
+
+  it('instructs marking buggy observed behavior with a KNOWN BUG comment', () => {
+    const p = buildOptimizePrompt('DRAFT', null);
+    expect(p).toContain('KNOWN BUG');
+    expect(p).toContain('looks like a BUG');
+  });
 });
 
 describe('optimizeSpec', () => {
