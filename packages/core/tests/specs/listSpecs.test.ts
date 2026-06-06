@@ -241,6 +241,46 @@ describe('listSpecs', () => {
     expect(counts['clean']).toBe(0);
   });
 
+  test('attaches an optimization suggestion — markers + sidecar → suggested', async () => {
+    mkdirSync(join(tmp, '__vibe_tests__', '.hover'), { recursive: true });
+    writeFileSync(
+      join(tmp, '__vibe_tests__', 'marked.spec.ts'),
+      [
+        `test('a', async () => {`,
+        `  // hover:optimizable: browser_file_upload — ...`,
+        `  await page.goto('/');`,
+        `});`,
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(tmp, '__vibe_tests__', '.hover', 'marked.json'),
+      JSON.stringify({ steps: [{ kind: 'step', tool: 'browser_file_upload' }] }),
+    );
+    // No marker and no sidecar → not suggested.
+    writeFileSync(join(tmp, '__vibe_tests__', 'plain.spec.ts'), `test('b', async () => {});`);
+
+    const specs = await listSpecs(tmp);
+    const byslug = Object.fromEntries(specs.map((s) => [s.slug, s]));
+    expect(byslug['marked'].optimization.suggested).toBe(true);
+    expect(byslug['marked'].optimization.reasons[0]).toContain('1 interaction');
+    expect(byslug['plain'].optimization.suggested).toBe(false);
+  });
+
+  test('optimization names a relevant seed when the sidecar tools match', async () => {
+    mkdirSync(join(tmp, '__vibe_tests__', '.hover'), { recursive: true });
+    writeFileSync(join(tmp, '__vibe_tests__', 'dl.spec.ts'), `test('c', async () => {});`);
+    // built-in `download` seed has signature ['browser_click'] → relevant here.
+    writeFileSync(
+      join(tmp, '__vibe_tests__', '.hover', 'dl.json'),
+      JSON.stringify({ steps: [{ kind: 'step', tool: 'browser_click' }] }),
+    );
+
+    const specs = await listSpecs(tmp);
+    const dl = specs.find((s) => s.slug === 'dl')!;
+    expect(dl.optimization.suggested).toBe(true);
+    expect(dl.optimization.reasons.join(' ')).toContain('download');
+  });
+
   test('reports hasSidecar — true when .hover/<slug>.json exists, false otherwise', async () => {
     mkdirSync(join(tmp, '__vibe_tests__', '.hover'), { recursive: true });
     writeFileSync(join(tmp, '__vibe_tests__', 'with.spec.ts'), `test('a', async () => {});`);

@@ -17,6 +17,9 @@ import { stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { countOptimizableMarkers } from './writeSpec.js';
+import { readSeeds, relevantSeeds } from './seeds.js';
+import { optimizationSuggestion, type OptimizationSuggestion } from './optimizationSuggestion.js';
+import type { SpecSidecar } from './sidecar.js';
 
 export interface SpecSummary {
   /** Path-relative slug, e.g. `login-and-counter`. Identifies the spec. */
@@ -41,6 +44,9 @@ export interface SpecSummary {
    *  — interactions it couldn't fully translate single-step. >0 is a strong
    *  signal to run the optimization pass (or add a seed). */
   optimizableCount: number;
+  /** The default-off "review optimization?" nudge (F7/D10): suggested + reasons,
+   *  derived from optimizable markers + relevant seeds. */
+  optimization: OptimizationSuggestion;
 }
 
 export interface SpecHeader {
@@ -124,6 +130,9 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
     return [];
   }
 
+  // Seeds are devRoot-wide; read once and reuse for every spec's suggestion.
+  const seeds = await readSeeds(devRoot);
+
   const summaries: SpecSummary[] = [];
   for (const entry of entries) {
     if (!entry.endsWith('.spec.ts')) continue;
@@ -139,6 +148,24 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
     }
     const header = parseSpecHeader(content);
     const slug = entry.replace(/\.spec\.ts$/, '');
+    const sidecarPath = join(root, '.hover', `${slug}.json`);
+    const hasSidecar = existsSync(sidecarPath);
+    const optimizableCount = countOptimizableMarkers(content);
+
+    // Which seeds could plausibly apply, from the sidecar's captured tools.
+    let relevantSeedNames: string[] = [];
+    if (hasSidecar && seeds.length > 0) {
+      try {
+        const sc = JSON.parse(await readFile(sidecarPath, 'utf-8')) as SpecSidecar;
+        const tools = new Set(
+          (sc.steps ?? []).filter(s => s.kind === 'step' && s.tool).map(s => s.tool as string),
+        );
+        relevantSeedNames = relevantSeeds(seeds, tools).map(s => s.name);
+      } catch {
+        /* malformed sidecar — treat as no relevant seeds */
+      }
+    }
+
     summaries.push({
       slug,
       path,
@@ -146,8 +173,9 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
       outcome: header.outcome,
       stepCount: header.steps.length,
       mtimeMs,
-      hasSidecar: existsSync(join(root, '.hover', `${slug}.json`)),
-      optimizableCount: countOptimizableMarkers(content),
+      hasSidecar,
+      optimizableCount,
+      optimization: optimizationSuggestion({ hasSidecar, optimizableCount, relevantSeedNames }),
     });
   }
   summaries.sort((a, b) => b.mtimeMs - a.mtimeMs);
