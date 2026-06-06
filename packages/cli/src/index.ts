@@ -18,6 +18,7 @@ import { bold, cyan, dim, err, info, ok, spark, warn } from './log.js';
 import { parseReRecordArgs, runReRecord } from './re-record.js';
 import { runExtract } from './extract.js';
 import { parseOptimizeArgs, runOptimize } from './optimize.js';
+import { parseRunArgs, runRun } from './run.js';
 
 /**
  * @hover-dev/cli entrypoint.
@@ -80,6 +81,12 @@ function parseArgs(argv: string[]): ParsedArgs {
       }
     } else if (!out.command) {
       out.command = arg;
+      // run / optimize / re-record own their argv after the command name —
+      // each has its own sub-parser that reads process.argv.slice(3). Stop the
+      // main parser here so it doesn't reject their positional (<prompt> /
+      // <spec>) or the flags it doesn't know about. (setup / extract keep
+      // using the main parser's --framework / --cwd / --dry-run flags.)
+      if (arg === 'run' || arg === 'optimize' || arg === 're-record') break;
     } else {
       err(`Unexpected positional argument: ${arg}`);
       process.exit(2);
@@ -101,6 +108,8 @@ Usage:
   npx @hover-dev/cli setup --cwd apps/web ${dim('# target a specific workspace')}
   npx @hover-dev/cli setup --dry-run      ${dim('# show what would happen, change nothing')}
 
+  npx @hover-dev/cli run "<prompt>"     ${dim('# drive the debug Chrome from the terminal (no widget); --save <slug> to keep a spec')}
+  npx @hover-dev/cli run "test login" --url http://localhost:5173 --save login
   npx @hover-dev/cli re-record <spec>   ${dim('# regenerate a Playwright spec against the current UI')}
   npx @hover-dev/cli re-record --dry-run <spec>
   npx @hover-dev/cli extract            ${dim('# lift flows shared across specs into Page Objects + fixtures')}
@@ -337,6 +346,14 @@ async function main(): Promise<void> {
     // extract only needs --cwd (which the main parser already understands);
     // the 3-spec threshold is fixed for now, so no sub-parser is required.
     const code = await runExtract({ cwd: args.cwd, minSpecs: 3 });
+    process.exit(code);
+  }
+  if (args.command === 'run') {
+    // run takes a positional <prompt> + its own flags — own argv shape.
+    const subArgv = process.argv.slice(3);
+    const { args: subArgs, exitCode } = parseRunArgs(subArgv);
+    if (!subArgs) process.exit(exitCode);
+    const code = await runRun(subArgs);
     process.exit(code);
   }
   if (args.command === 'optimize') {
