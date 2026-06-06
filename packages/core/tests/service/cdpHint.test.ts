@@ -16,6 +16,14 @@ describe('buildCdpHint — scope discipline', () => {
     expect(hint).toContain('exploratory test pass');
   });
 
+  test('specific runs still report problems hit in-scope (Findings not suppressed)', () => {
+    const hint = buildCdpHint(TABS);
+    // Scope discipline kills proactive bug-hunting, not reporting what you hit.
+    expect(hint).toContain('still');
+    expect(hint).toContain('## Findings');
+    expect(hint).toMatch(/Don't go hunting for more/);
+  });
+
   test('no longer frames bug-hunting as an always-on standing mission', () => {
     const hint = buildCdpHint(TABS);
     expect(hint).not.toContain('standing mission');
