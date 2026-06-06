@@ -26,10 +26,10 @@ export const NOTEWORTHY_AI = /\b(error|fail(ed|ure|ing)?|issue|warning|problem|b
 // Tools the widget never surfaces — they're internal to how the agent
 // composes a session and have no meaning to the user reading the run.
 export const HIDDEN_TOOLS = new Set([
-  // Skill: agent calling a previously-saved Hover skill (replay script).
-  // The browser_* tools that the skill itself triggers DO appear, but
-  // attributed to whichever natural-language title is in flight, not
-  // labeled "Skill".
+  // Skill: Claude Code's built-in Skill tool. Hover no longer grants it
+  // (Save-as-Skill was retired, so it's off the allow list), but we keep the
+  // classification defensively — if it ever surfaces, it's noise to the user,
+  // not a browser action worth rendering.
   'Skill',
 ]);
 

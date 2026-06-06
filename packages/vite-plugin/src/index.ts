@@ -104,7 +104,7 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
           optimizeMode,
           cdpUrl: `http://localhost:${chromeDebugPort}`,
           // The Vite project root is where the agent runs (cwd) and where
-          // `Save as Skill` writes `.claude/skills/<slug>/SKILL.md`.
+          // saved specs (`__vibe_tests__/`) + sidecars/seeds (`.hover/`) land.
           devRoot: server.config.root,
           plugins,
           // Single-Chrome model: the service launches the debug Chrome itself

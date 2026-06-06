@@ -93,10 +93,10 @@ export interface ServiceOptions {
   mcpConfig?: string;
   /** CDP URL to preflight before each command (default http://localhost:9222). */
   cdpUrl?: string;
-  /** Working directory for the spawned agent. Also where skills are saved
-   *  ('<devRoot>/.claude/skills/<slug>/SKILL.md'). Defaults to process.cwd().
-   *  In Vite plugin context, set to `server.config.root` so Claude
-   *  auto-discovers skills the user previously saved from this project. */
+  /** Working directory for the spawned agent. Also the root under which saved
+   *  specs (`__vibe_tests__/`), sidecars + seeds (`.hover/`) live. Defaults to
+   *  process.cwd(); in Vite plugin context, set to `server.config.root` so the
+   *  agent runs against the project (and Claude Code reads its CLAUDE.md). */
   devRoot?: string;
   /** Plugins contributed by the bundler-plugin wrapper. Each manifest can
    *  add a widget mode, MCP servers, Chrome flags, and lifecycle hooks.
@@ -929,8 +929,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           prompt: text,
           sessionId: resumeSessionId,
           mcpConfig,
-          // cwd = devRoot so Claude Code auto-discovers `.claude/skills/`
-          // saved from this project (and CLAUDE.md, if any).
+          // cwd = devRoot so the agent runs against the project (and Claude
+          // Code reads its CLAUDE.md, if any).
           cwd: devRoot,
           appendSystemPrompt,
           // mcp__playwright covers every browser tool. Plugin-contributed MCPs

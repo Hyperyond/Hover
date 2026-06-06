@@ -76,7 +76,7 @@ See [`@hover-dev/security`](https://www.npmjs.com/package/@hover-dev/security) f
 
 ## Sandbox
 
-The agent the plugin spawns is locked down to one capability: drive the browser. Allowed tools = `mcp__playwright` + `Skill` (so saved skills can be invoked). Everything else — `Bash`, `Edit`, `Write`, `Read`, `WebFetch`, `Task`, `EnterWorktree`, `CronCreate`, … — is explicitly denied. `--max-budget-usd 0.5` is a hard ceiling per run.
+The agent the plugin spawns is locked down to one capability: drive the browser. Allowed tools = `mcp__playwright`. Everything else — `Bash`, `Edit`, `Write`, `Read`, `WebFetch`, `Task`, `EnterWorktree`, `CronCreate`, … — is explicitly denied. `--max-budget-usd 0.5` is a hard ceiling per run.
 
 ## License
 

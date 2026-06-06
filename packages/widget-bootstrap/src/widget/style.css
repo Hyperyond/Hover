@@ -1313,7 +1313,6 @@ header {
 }
 .save-menu-item .i-icon svg { width: 16px; height: 16px; display: block; }
 .save-menu-item.item-spec .i-icon  { color: var(--accent); }
-.save-menu-item.item-skill .i-icon { color: var(--link); }
 .save-menu-item.item-case .i-icon  { color: var(--warn); }
 .save-menu-item .i-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .save-menu-item .i-label { font-weight: 600; font-size: 12.5px; color: var(--text); }
@@ -1323,7 +1322,6 @@ header {
   word-break: break-all;
 }
 .save-menu-item.item-spec .i-label  { color: var(--accent); }
-.save-menu-item.item-skill .i-label { color: var(--link); }
 .save-menu-item.item-case .i-label  { color: var(--warn); }
 
 /* ───────────────────────── footer (input area) ───────────────────────── */

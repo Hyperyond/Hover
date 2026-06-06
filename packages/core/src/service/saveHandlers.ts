@@ -22,8 +22,8 @@ interface SaveArtifactConfig<TWriteResult extends { slug: string; path: string }
   savedType: string;
   /** Emitted when the writer threw an Exists-error. */
   existsType: string;
-  /** Optional — fires after a successful write. Used by the skill flow to
-   *  push a refreshed `skills-list` to the widget. */
+  /** Optional — fires after a successful write (e.g. to push a refreshed list
+   *  to the widget). Currently unused; kept generic for future artifacts. */
   onSaved?: (ws: WebSocket, devRoot: string) => Promise<void>;
   /** Class used in `err instanceof …` to detect "already exists" errors. */
   ExistsError: new (...args: never[]) => { slug: string; path: string } & Error;
@@ -76,8 +76,8 @@ export async function handleSaveArtifact<TWriteResult extends { slug: string; pa
     return;
   }
   send(ws, { type: cfg.savedType, payload: { name: result.slug, path: result.path } });
-  // The artifact is already on disk; an onSaved failure (e.g. listSkills
-  // re-scan) shouldn't surface as if the save itself failed — log and move on.
+  // The artifact is already on disk; an onSaved failure (e.g. a follow-up
+  // list re-scan) shouldn't surface as if the save itself failed — log on.
   if (cfg.onSaved) {
     try {
       await cfg.onSaved(ws, devRoot);

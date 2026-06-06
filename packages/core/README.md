@@ -128,7 +128,7 @@ Environment variables:
 The `claude -p` invocation is locked down so Claude can only drive the browser:
 
 - `--strict-mcp-config` — ignore any MCP servers in `~/.claude/` or `.mcp.json`
-- `--allowedTools mcp__playwright Skill` — only Playwright MCP and the Skill tool are callable
+- `--allowedTools mcp__playwright` — only Playwright MCP is callable
 - `--disallowedTools Bash Edit Write Read Grep Glob Task WebFetch WebSearch EnterWorktree CronCreate …` — every built-in tool explicitly denied (full list in `CLAUDE_DEFAULT_DISALLOWED_TOOLS` in `claude.ts`)
 - `--permission-mode dontAsk` — anything not whitelisted aborts the run
 - `--max-budget-usd <n>` — optional hard $ ceiling per session (no default; pass `maxBudgetUsd` in plugin options or via the CLI flag to enable)

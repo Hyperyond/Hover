@@ -91,7 +91,7 @@ Same shape as the other Hover integrations:
 | `chromeDebugPort` | `number` | `9222` | CDP port of the debug Chrome |
 | `autoLaunchChrome` | `boolean` | `false` | Pre-spawn a debug Chrome |
 | `devUrl` | `string` | derived from `devServer.port` | Override the URL Chrome opens to |
-| `devRoot` | `string` | `compiler.context` | Override the project root for skill saves |
+| `devRoot` | `string` | `compiler.context` | Override the project root for saved specs / `.hover` artifacts |
 | `agentId` | `string` | `'claude'` | One of `@hover-dev/core`'s registered agents |
 | `model` | `string` | `'sonnet'` | Default model |
 | `maxBudgetUsd` | `number` | none | Hard $ ceiling per command |

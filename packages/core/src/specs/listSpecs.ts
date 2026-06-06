@@ -10,7 +10,7 @@
  * `originalPrompt: null` — the UI / CLI surfaces that "this spec can't be
  * re-recorded automatically; the natural-language intent isn't recorded."
  *
- * Mirrors the listSkills shape so widget UI can use the same row renderer.
+ * Shares the SpecSummary row shape the widget's Specs tab renders.
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { stat } from 'node:fs/promises';

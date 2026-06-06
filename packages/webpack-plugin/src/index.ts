@@ -28,7 +28,7 @@ export interface HoverOptions {
    *  `http://localhost:<port>/`. Set this if your dev server lives
    *  elsewhere. */
   devUrl?: string;
-  /** Override the project root used for skill saves. Default is
+  /** Override the project root for saved specs / .hover artifacts. Default is
    *  `compiler.context`. */
   devRoot?: string;
   /** Agent id from @hover-dev/core's registry (default 'claude'). */

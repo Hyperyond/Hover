@@ -33,12 +33,14 @@
   const panel = $('.panel');
   const statusEl = $('.status');
   const newBtn = $('.newbtn');
+  // The Saved-sessions overlay (Specs + Seeds tabs). Class names keep the
+  // historical `skills-*` prefix — the launcher button + overlay + close —
+  // since the overlay was originally the Skills surface; renaming the CSS
+  // isn't worth the churn.
   const skillsBtn = $('.skillsbtn');
   const starBtn = $('.starbtn');
   const skillsOverlay = $('.skills-overlay');
   const skillsCloseBtn = $('.skills-close');
-  // Specs tab — v0.11 added. Same overlay as Skills (tabbed), so the
-  // close button is shared.
   const specsListEl = $('.specs-list-items');
   const specsCountEl = $('.specs-count');
   // Seeds tab — read-only list of translation seeds Hover sees (built-in +
@@ -1186,10 +1188,10 @@
     return wrap;
   }
 
-  // ───────────────────────── save as skill ─────────────────────────
+  // ───────────────────────── save as artifact ─────────────────────────
 
   // Pluck the most recent session out of state.messages: everything from the
-  // last user message to the end. Used as the payload of {type:'save-skill'}.
+  // last user message to the end. Used as the payload of a save-* message.
   const lastSessionSlice = () => {
     let idx = -1;
     for (let i = state.messages.length - 1; i >= 0; i--) {
@@ -1200,10 +1202,9 @@
 
   // Pending save state — remembered so a confirm-overwrite reply can re-send
   // with overwrite=true without re-prompting the user for name/description.
-  // Two slots, one per output format (skill vs spec).
-  // ───── save-as-artifact flow (skill / spec / jira case CSV) ─────
+  // ───── save-as-artifact flow (spec / jira case CSV) ─────
   //
-  // All three save flows share the same shape: confirm a name+description
+  // Both save flows share the same shape: confirm a name+description
   // in a modal, send a save-X request, await save-X-saved / save-X-exists,
   // optionally re-prompt for overwrite on exists, on success surface a
   // system message + restore the trigger button. The ARTIFACTS table holds
@@ -1445,13 +1446,11 @@
   // ───────────────────────── saved-sessions overlay ─────────────────────────
   //
   // The overlay carries two tabs:
-  //   • Skills — replayable agent instructions. Self-adapting (agent
-  //     re-resolves selectors each run), so they're "list, click to
-  //     replay, no maintenance" surface.
   //   • Specs — Playwright tests under __vibe_tests__/. CI runs them
-  //     pure, no AI. v0.11 adds a [⟳ Re-record] action per spec — the
-  //     agent replays the original prompt on the current UI and
-  //     overwrites the file.
+  //     pure, no AI. A [⟳ Re-record] action per spec replays the original
+  //     prompt on the current UI and overwrites the file.
+  //   • Seeds — read-only view of the translation seeds the optimization
+  //     pass sees (built-in + .hover/rules/). Added by hand, no UI to edit.
 
   const requestSpecsList = () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -2952,8 +2951,8 @@
   // "Record" toggle in the footer. While recording, every manual click /
   // text input / select change / checkbox toggle on the host page is
   // captured and appended to state.messages as a step in the same shape
-  // the agent emits — so writeSkill / writeSpec downstream don't care
-  // whether the steps came from claude or from the user.
+  // the agent emits — so writeSpec downstream doesn't care whether the
+  // steps came from claude or from the user.
   //
   // Sub-toolbar lets the user switch what the next click captures:
   //   • action            — record click / fill / select as a Playwright step
@@ -3651,7 +3650,7 @@
       } else {
         // Plugin-namespaced messages (any `<plugin>:<event>` shape) are
         // routed to the plugin's registered onMessage handler. The WS
-        // protocol has too many one-off types (skill-saved, spec-exists,
+        // protocol has too many one-off types (spec-saved, spec-exists,
         // agents, …) that legitimately fall through here, so we don't
         // log unmatched messages.
         hostCtl.dispatchMessage(msg);

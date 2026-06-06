@@ -88,8 +88,8 @@ export function hover(
             model,
             maxBudgetUsd,
             cdpUrl: `http://localhost:${chromeDebugPort}`,
-            // Project root for skill saves. Astro exposes this via
-            // `config.root` which is a URL — convert to filesystem path.
+            // Project root for saved specs / .hover artifacts. Astro exposes
+            // this via `config.root` which is a URL — convert to fs path.
             devRoot: fileURLToPath(config.root),
             plugins,
             // Single-Chrome model: service launches the debug Chrome itself.
