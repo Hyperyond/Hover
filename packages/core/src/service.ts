@@ -46,7 +46,7 @@
  *     { type: 'list-modes' }
  */
 import { WebSocketServer, WebSocket } from 'ws';
-import { invokeAgent } from './agents/invoke.js';
+import { runSession } from './runSession.js';
 import { readConventions } from './service/conventions.js';
 import { optimizeSpecWithAgent } from './specs/optimizeSpecWithAgent.js';
 import { promoteOptimized, discardOptimized } from './specs/optimizeSpec.js';
@@ -60,7 +60,6 @@ import type { InvokeEvent } from './agents/types.js';
 import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
 import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
 import { launchDebugChrome } from './playwright/launchChrome.js';
-import { type SkillStep } from './skills/writeSkill.js';
 import { listSpecs } from './specs/listSpecs.js';
 import { readSeeds, BUILTIN_SEEDS } from './specs/seeds.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
@@ -776,11 +775,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           ? msg.payload.sessionId
           : undefined;
       // Re-record mode: when the client (widget Specs tab or hover CLI)
-      // passes `reRecord: { slug }`, we collect tool_use events server-side
-      // into a SkillStep[] and, on session_end with no error, overwrite the
-      // existing __vibe_tests__/<slug>.spec.ts. This is the same flow the
-      // widget uses for "Save as Spec", but the spec already exists and is
-      // being regenerated for the current UI.
+      // passes `reRecord: { slug }`, runSession collects the tool_use events
+      // into a SpecStep[] and, on a clean finish, we overwrite the existing
+      // __vibe_tests__/<slug>.spec.ts. Same flow the widget uses for "Save as
+      // Spec", but the spec already exists and is being regenerated for the
+      // current UI.
       const reRecordSlug =
         msg.payload && typeof msg.payload === 'object' && 'reRecord' in msg.payload
           ? ((msg.payload as { reRecord?: { slug?: unknown } }).reRecord?.slug as string | undefined)
@@ -797,16 +796,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       busy = true;
       cancelled = false;
       inflight = new AbortController();
-      // Re-record step collector — populated as tool_use events stream by,
-      // consumed at session_end to overwrite the original spec. Empty unless
-      // reRecordSlug is set on this command. We seed with a synthetic
-      // `user` step so writeSpec's JSDoc Original-prompt: line carries the
-      // text the agent was actually given (which is the prompt we read out
-      // of the existing spec — the same one we're regenerating).
-      const reRecordSteps: SkillStep[] = [];
-      if (reRecordSlug) {
-        reRecordSteps.push({ kind: 'user', text });
-      }
       try {
         // Build the MCP config first — it's pure local file IO and lets
         // us assert plugin-contributed servers landed in the config even
@@ -895,16 +884,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
 
         // Snapshot the agent id so a switch-agent message during the run
         // can't smear two agents across one invocation. (We also gate
-        // switch-agent on `busy`, but defense in depth.)
+        // switch-agent on `busy`, but defense in depth.) runSession gates the
+        // allow/deny lists on the agent's sandboxStrength internally.
         const invokedAgentId = currentAgentId;
-        const invokedDescriptor = getAgent(invokedAgentId);
-        // Only Claude's `--allowedTools`/`--disallowedTools` flags are
-        // honoured — passing them to a soft-sandbox agent like codex is a
-        // no-op (its buildArgs ignores them). We still gate at the service
-        // layer for clarity: a hard-sandbox agent gets the tight allowlist,
-        // a soft one gets nothing and relies on its descriptor's built-in
-        // sandbox flags + developer_instructions.
-        const isHardSandbox = invokedDescriptor?.sandboxStrength === 'hard';
         // Active mode's plugin-contributed MCP server ids — added to the
         // hard-sandbox allow list so Claude can actually call them. Claude
         // sanitises non-alphanumeric chars in the id when forming tool
@@ -924,86 +906,63 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             }
           }
         }
-        for await (const ev of invokeAgent({
-          agentId: invokedAgentId,
-          prompt: text,
-          sessionId: resumeSessionId,
-          mcpConfig,
-          // cwd = devRoot so the agent runs against the project (and Claude
-          // Code reads its CLAUDE.md, if any).
-          cwd: devRoot,
-          appendSystemPrompt,
-          // mcp__playwright covers every browser tool. Plugin-contributed MCPs
-          // are appended when the corresponding mode is active. (Save-as-Skill
-          // was retired, so the agent's built-in Skill tool is no longer
-          // allowed — nothing writes or invokes Claude Code skills now.)
-          allowedTools: isHardSandbox
-            ? ['mcp__playwright', ...activePluginMcpIds]
-            : undefined,
-          disallowedTools: isHardSandbox
-            ? (invokedDescriptor?.defaultDisallowedTools
-                ? [...invokedDescriptor.defaultDisallowedTools]
-                : undefined)
-            : undefined,
-          maxBudgetUsd,
-          model,
-          apiKey: currentApiKey,
-          signal: inflight.signal,
-        })) {
-          if (cancelled || ws.readyState !== WebSocket.OPEN) return;
-          send(ws, { type: 'event', payload: ev });
-          // Re-record collection. Mirror what widget client.js does on the
-          // way past tool_use events: accumulate into a SkillStep[] so we
-          // can write a fresh spec when the session ends. We do this only
-          // when this command was launched in re-record mode; ordinary
-          // commands don't need server-side step retention (widget owns
-          // that for normal saves).
-          if (reRecordSlug && ev.kind === 'tool_use') {
-            reRecordSteps.push({
-              kind: 'step',
-              tool: ev.tool,
-              input: ev.input,
+        const runResult = await runSession(
+          {
+            agentId: invokedAgentId,
+            prompt: text,
+            sessionId: resumeSessionId,
+            mcpConfig,
+            // cwd = devRoot so the agent runs against the project (and Claude
+            // Code reads its CLAUDE.md, if any).
+            cwd: devRoot,
+            appendSystemPrompt,
+            // mcp__playwright covers every browser tool; active-mode plugin MCP
+            // servers are appended. (Save-as-Skill retired → no Skill tool.)
+            allowedToolsExtra: activePluginMcpIds,
+            maxBudgetUsd,
+            model,
+            apiKey: currentApiKey,
+            signal: inflight.signal,
+          },
+          (ev) => {
+            if (cancelled || ws.readyState !== WebSocket.OPEN) return;
+            send(ws, { type: 'event', payload: ev });
+          },
+        );
+
+        // Re-record: write a fresh spec from the steps runSession accumulated
+        // (`user` → `step`* → `done`). Only on a clean, non-cancelled finish —
+        // a cancelled/aborted run throws out of runSession into the catch
+        // below, and an errored agent leaves the original spec untouched.
+        if (reRecordSlug && !cancelled) {
+          if (runResult.isError) {
+            sendIfOpen(ws, {
+              type: 'error',
+              payload: {
+                message:
+                  `Re-record failed: ${runResult.summary || 'agent reported an error'}. ` +
+                  `Original spec left unchanged.`,
+              },
             });
-          }
-          if (reRecordSlug && ev.kind === 'session_end') {
-            // Cancelled or errored runs: don't overwrite — the existing
-            // spec is still valid. Tell the client what happened.
-            if (ev.isError) {
+          } else {
+            try {
+              const { writeSpec } = await import('./specs/writeSpec.js');
+              const written = await writeSpec({
+                devRoot,
+                name: reRecordSlug,
+                steps: runResult.steps,
+                overwrite: true,
+              });
+              sendIfOpen(ws, {
+                type: 'spec-saved',
+                payload: { name: reRecordSlug, path: written.path },
+              });
+            } catch (e) {
+              const m = e instanceof Error ? e.message : String(e);
               sendIfOpen(ws, {
                 type: 'error',
-                payload: {
-                  message:
-                    `Re-record failed: ${ev.summary ?? 'agent reported an error'}. ` +
-                    `Original spec left unchanged.`,
-                },
+                payload: { message: `Re-record could not write spec: ${m}` },
               });
-            } else {
-              // Snapshot the agent's final summary into a synthetic `done`
-              // step so writeSpec's `Outcome:` header reflects the new run.
-              if (ev.summary) {
-                reRecordSteps.push({ kind: 'done', summary: ev.summary });
-              }
-              // Overwrite. writeSpec uses the slug to name the file; we
-              // pass the original slug verbatim so the path is stable.
-              try {
-                const { writeSpec } = await import('./specs/writeSpec.js');
-                const result = await writeSpec({
-                  devRoot,
-                  name: reRecordSlug,
-                  steps: reRecordSteps,
-                  overwrite: true,
-                });
-                sendIfOpen(ws, {
-                  type: 'spec-saved',
-                  payload: { name: reRecordSlug, path: result.path },
-                });
-              } catch (e) {
-                const m = e instanceof Error ? e.message : String(e);
-                sendIfOpen(ws, {
-                  type: 'error',
-                  payload: { message: `Re-record could not write spec: ${m}` },
-                });
-              }
             }
           }
         }
