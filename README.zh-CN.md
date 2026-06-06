@@ -102,6 +102,12 @@ log in, then add a todo named "verify hover"
 
 `run` 是 CLI-only authoring（只需 `@hover-dev/core`、无 widget）；其余是对已存 spec 的后处理。完整参考：[文档](https://gethover.dev/docs/reference/cli)。
 
+**在用 Claude Code？** 把 [`skills/hover-cli`](skills/hover-cli/SKILL.md) 放进你的 `.claude/skills/`，Claude 就学会了整套 CLI——从安装到 crystallize：
+
+```bash
+cp -r skills/hover-cli ~/.claude/skills/        # 或 <project>/.claude/skills/
+```
+
 ## 示例
 
 [`examples/`](./examples/) 下有十个可跑的应用。四个压测**测试面**（[`basic-app`](./examples/basic-app)、[`stock-registration`](./examples/stock-registration) ~50 字段表单、[`e-commerce`](./examples/e-commerce) 购物车/结账、[`canvas-paint`](./examples/canvas-paint) canvas 里找 DOM），其余是各**打包器的专属 dogfood 场**：

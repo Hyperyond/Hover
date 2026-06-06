@@ -102,6 +102,12 @@ Everything runs through the `hover` CLI (`npx @hover-dev/cli <command>`):
 
 `run` is CLI-only authoring (needs just `@hover-dev/core`, no widget); the rest post-process saved specs. Full reference: [docs](https://gethover.dev/docs/reference/cli).
 
+**Using Claude Code?** Drop [`skills/hover-cli`](skills/hover-cli/SKILL.md) into your `.claude/skills/` and Claude learns the whole CLI — install through crystallize:
+
+```bash
+cp -r skills/hover-cli ~/.claude/skills/        # or <project>/.claude/skills/
+```
+
 ## Examples
 
 Ten runnable apps under [`examples/`](./examples/). Four stress **testing surfaces** ([`basic-app`](./examples/basic-app), [`stock-registration`](./examples/stock-registration) ~50-field form, [`e-commerce`](./examples/e-commerce) cart/checkout, [`canvas-paint`](./examples/canvas-paint) DOM-amid-canvas); the rest are dedicated **bundler dogfood grounds**:
