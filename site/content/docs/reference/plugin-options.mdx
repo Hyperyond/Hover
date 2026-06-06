@@ -43,6 +43,18 @@ interface HoverOptions {
    * Rarely needed.
    */
   chromeDebugPort?: number;
+
+  /**
+   * How the optional AI [optimization pass](/docs/features/optimization-pass)
+   * surfaces. Default: `'suggest'`.
+   *
+   * - `'off'`     — never nudge; the Optimize action stays available manually.
+   * - `'suggest'` — show a ✦ hint on specs the pass could improve (default).
+   * - `'on'`      — auto-run the pass after every Save-as-spec. One LLM call
+   *   per save — opt in deliberately. The deterministic original is always
+   *   kept; the candidate is written for diff review, never auto-promoted.
+   */
+  optimize?: 'off' | 'suggest' | 'on';
 }
 ```
 

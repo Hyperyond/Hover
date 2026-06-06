@@ -90,6 +90,9 @@ export interface ServiceOptions {
   agentId?: string;
   model?: string;
   maxBudgetUsd?: number;
+  /** How the optimization pass (F7) surfaces in the widget. Default 'suggest'.
+   *  'off' = no nudge, 'suggest' = ✦ hint, 'on' = auto-run after Save-as-spec. */
+  optimizeMode?: 'off' | 'suggest' | 'on';
   mcpConfig?: string;
   /** CDP URL to preflight before each command (default http://localhost:9222). */
   cdpUrl?: string;
@@ -226,6 +229,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   // so the user can hit Stop when they've seen enough. Pass maxBudgetUsd
   // explicitly (or via the Vite plugin option) if a hard ceiling is needed.
   const maxBudgetUsd = opts.maxBudgetUsd;
+  const optimizeMode = opts.optimizeMode ?? 'suggest';
   const cdpUrl = opts.cdpUrl ?? 'http://localhost:9222';
   const devRoot = opts.devRoot ?? process.cwd();
 
@@ -488,7 +492,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   wss.on('connection', ws => {
     send(ws, {
       type: 'hello',
-      payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION },
+      payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION, optimizeMode },
     });
     // Send the agent list as a follow-up event so the widget can render the
     // dropdown immediately on connect / reconnect (e.g. after HMR). The

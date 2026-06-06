@@ -1462,6 +1462,12 @@
     });
     cfg.onSuccess?.(entry);
     pending.delete(kind);
+    // optimize: 'on' — auto-run the optimization pass on the just-saved spec
+    // (one LLM call per save; the deterministic original is always kept).
+    if (kind === 'spec' && optimizeMode === 'on' && payload?.slug) {
+      addMessage({ kind: 'system', text: `Auto-optimizing "${payload.slug}" (optimize: 'on')…` });
+      optimizeSpecAction({ slug: payload.slug });
+    }
   };
 
   // ───────────────────────── saved-sessions overlay ─────────────────────────
@@ -1539,6 +1545,9 @@
   // last specs list (so async optimize-result can re-render the overlay).
   let optimizing = null;
   let lastSpecs = [];
+  // Project-level optimization mode from the service's `hello` (off/suggest/on).
+  // 'off' hides the ✦ nudge; 'on' auto-optimizes after each Save-as-spec.
+  let optimizeMode = 'suggest';
 
   const renderSpecs = (specs) => {
     lastSpecs = specs;
@@ -1571,7 +1580,7 @@
       // Default-off optimization nudge (F7): a subtle ✦ when the server flags
       // this spec as improvable; hovering shows why (reasons from the sidecar
       // markers + relevant seeds).
-      if (s.optimization && s.optimization.suggested) {
+      if (optimizeMode !== 'off' && s.optimization && s.optimization.suggested) {
         const chip = document.createElement('span');
         chip.textContent = ' ✦';
         chip.style.cssText = 'color:var(--accent);font-size:11px;cursor:help;';
@@ -1651,7 +1660,7 @@
         ? mkItem('⟳ Re-record', { run: () => reRecordSpec(s) })
         : mkItem('⟳ Re-record', { disabled: true, tip: 'No Original prompt header — cannot re-record' }),
     );
-    const suggested = s.optimization && s.optimization.suggested;
+    const suggested = optimizeMode !== 'off' && s.optimization && s.optimization.suggested;
     menu.appendChild(
       s.hasSidecar
         ? mkItem(suggested ? '✦ Optimize' : 'Optimize', {
@@ -3620,6 +3629,10 @@
             // availability cache ready and we don't race the switch.
             setTimeout(() => switchAgent(remembered), 50);
           }
+        }
+        if (typeof msg.payload?.optimizeMode === 'string') {
+          optimizeMode = msg.payload.optimizeMode;
+          renderSpecs(lastSpecs); // re-render so the ✦ nudge reflects the mode
         }
       } else if (msg.type === 'agents') {
         const p = msg.payload ?? {};
