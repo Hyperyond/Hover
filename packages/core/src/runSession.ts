@@ -77,7 +77,14 @@ export async function runSession(
 
   const mcpConfig =
     opts.mcpConfig ??
-    resolveMcpConfig({ cdpUrl: opts.cdpUrl ?? 'http://localhost:9222', port: opts.port ?? 51789 });
+    resolveMcpConfig({
+      cdpUrl: opts.cdpUrl ?? 'http://localhost:9222',
+      port: opts.port ?? 51789,
+      // Resolve @playwright/mcp from the run's cwd, not the dir the CLI was
+      // invoked from — `hover run --cwd apps/web` must find the MCP package
+      // under the target workspace in a monorepo.
+      cwd: opts.cwd,
+    });
 
   for await (const ev of invokeAgent({
     agentId: opts.agentId,

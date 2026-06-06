@@ -47,6 +47,11 @@ export function resolveMcpConfig(opts: {
   /** Suffix for the output filename so multiple parallel configs from
    *  the same service (e.g. mode toggle round-trips) don't share state. */
   suffix?: string;
+  /** Project root to resolve `@playwright/mcp` from. Defaults to
+   *  `process.cwd()`. `hover run --cwd apps/web` passes the target workspace
+   *  so a monorepo that installed `@hover-dev/core` only under that app (not
+   *  the repo root the CLI was invoked from) still resolves the MCP package. */
+  cwd?: string;
 }): string {
   // Resolve the package's main file, then walk back to its package root.
   // Using `package.json` as the resolution target is the documented
@@ -63,7 +68,8 @@ export function resolveMcpConfig(opts: {
   // can't actually load. `process.cwd()` is the user's project root,
   // and `@playwright/mcp` is always reachable from there because it's
   // a declared dependency of `@hover-dev/core`, which the user installed.
-  const require = createRequire(resolve(process.cwd(), 'package.json'));
+  // The caller may override with an explicit `cwd` (e.g. `hover run --cwd`).
+  const require = createRequire(resolve(opts.cwd ?? process.cwd(), 'package.json'));
   const pkgJsonPath = require.resolve('@playwright/mcp/package.json');
   const pkgRoot = dirname(pkgJsonPath);
   // The package's `bin` map declares "playwright-mcp": "cli.js" — we

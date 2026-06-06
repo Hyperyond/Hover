@@ -105,6 +105,11 @@ const CLAUDE_DEFAULT_DISALLOWED_TOOLS: readonly string[] = [
   'Monitor', 'TaskOutput', 'TaskStop',
   'AskUserQuestion',
   'ShareOnboardingGuide',
+  // Skills are loaded independently of the --allowedTools allow-list, so an
+  // allow-list of `mcp__playwright` does NOT block the `Skill` tool. Left
+  // through, the agent burns a turn "checking for a project skill first" and
+  // pollutes the crystallized spec with a junk `When · Skill` step. Deny it.
+  'Skill',
   // Playwright MCP's arbitrary-JS tools. browser_run_code_unsafe /
   // browser_evaluate run any JS in the page — a real prompt-injection exfil
   // path (fetch a token out, read localStorage) that punches through the
