@@ -1,12 +1,7 @@
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { detectAgents } from './agents/detect.js';
-import { invokeAgent } from './agents/invoke.js';
 import type { InvokeEvent } from './agents/types.js';
 import { connectAndListTabs } from './playwright/preflight.js';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const MCP_CONFIG = resolve(HERE, '..', 'mcp.config.json');
+import { runSession } from './runSession.js';
 
 const CDP_URL = process.env.HOVER_CDP ?? 'http://localhost:9222';
 const AGENT_ID = process.env.HOVER_AGENT ?? 'claude';
@@ -113,17 +108,12 @@ async function main(): Promise<number> {
     : undefined;
   const budgetTag = maxBudgetUsd != null ? `$${maxBudgetUsd} budget` : 'no budget cap';
   console.log(`\n• Invoking ${AGENT_ID} (model: ${MODEL}, strict MCP sandbox, ${budgetTag})\n`);
-  for await (const ev of invokeAgent({
-    agentId: AGENT_ID,
-    prompt: PROMPT,
-    mcpConfig: MCP_CONFIG,
-    allowedTools: ['mcp__playwright'],
-    disallowedTools: ['Bash', 'Edit', 'Write', 'Read', 'Grep', 'Glob', 'Task', 'WebFetch', 'WebSearch'],
-    maxBudgetUsd,
-    model: MODEL,
-  })) {
-    render(ev);
-  }
+  // The invoke + sandbox + step-accumulation engine now lives in runSession,
+  // shared with (future) `hover run`. The smoke test just streams events.
+  await runSession(
+    { agentId: AGENT_ID, prompt: PROMPT, cdpUrl: CDP_URL, model: MODEL, maxBudgetUsd },
+    render,
+  );
   return 0;
 }
 
