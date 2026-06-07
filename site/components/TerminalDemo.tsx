@@ -8,15 +8,16 @@ import { useEffect, useRef, useState } from 'react';
  * left-rail steps light up, and the spec on the right reveals line by line — as
  * if Hover were generating it live.
  *
- * Two kinds of scene:
- *   • basic   — type → deterministic spec reveals → hold. (login-flow)
- *   • pass    — type → naive DRAFT reveals → an "✦ Optimize pass" step fires →
- *               the racy lines are rewritten in place into a `Promise.all([…])`
- *               pairing (removed lines struck red, added lines mint). This is the
- *               download / file-chooser / popup case: the event listener must be
- *               registered BEFORE the action or it races and flakes; the
- *               optimisation pass pairs them. It's what makes the demo *show* the
- *               pipeline-code optimisation, not just claim it.
+ * Every scene is a "pass" scene: type → naive DRAFT reveals → an "✦ Optimize
+ * pass" step fires → the racy lines are rewritten in place into a
+ * `Promise.all([…])` pairing (removed lines struck red, added lines mint). This
+ * is the download / file-chooser / popup case: the event listener must be
+ * registered BEFORE the action or it races and flakes; the optimisation pass
+ * pairs them. It's what makes the demo *show* the pipeline-code optimisation,
+ * not just claim it. (The basic-spec story lives in the docs, not the hero.)
+ *
+ * Scenes still carry a `pass` flag + a build-phase code path for non-pass
+ * scenes, so a plain crystallise scene can be added back without new wiring.
  *
  * Each spec is the shape writeSpec.ts emits — getByLabel / getByRole semantic
  * selectors, every interaction wrapped in a visibility guard, relative goto,

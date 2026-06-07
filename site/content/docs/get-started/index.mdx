@@ -21,7 +21,7 @@ Building Hover itself? See **[Development](/docs/development)** for the monorepo
 
 ## At a glance
 
-- **No API key required.** Hover spawns the coding-agent CLI you already have on PATH (`claude`, `codex`, …) and reuses the subscription you already pay for.
+- **No API key required.** Hover spawns the coding-agent CLI you already have on PATH (`claude`, `codex`, …) and reuses the subscription you already pay for — or [set a model API key](/docs/get-started/api-key) if you'd rather.
 - **No production overhead.** Plugins are no-op in production builds (`apply: 'serve'`).
 - **Local-first.** The Node service binds to `127.0.0.1` only. Cookies and localStorage never transit it.
 - **One artefact, multiple formats.** Save the same session as a Playwright spec or a Jira / Xray-compatible test case CSV — and with the optional [`@hover-dev/security`](/docs/features/security) plugin loaded, a Security spec entry also appears in the Save dropdown.
