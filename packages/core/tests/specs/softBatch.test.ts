@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { softBatch } from '../../src/specs/restructure/softBatch.js';
+import { softBatch } from '../../src/specs/softBatch.js';
 
 const HEAD = `import { test, expect } from '@playwright/test';\n\n`;
 
@@ -87,6 +87,65 @@ describe('softBatch', () => {
     expect(res.softened).toBe(2); // both in test 'a', none in 'b'
     expect(res.code).toContain(`expect.soft(page.getByTestId('x'))`);
     expect(res.code).toContain(`await expect(page.getByTestId('z'))`); // 'b' stays hard
+  });
+
+  it('softens a trailing run of Hover test.step("Then · …") assertion closures', () => {
+    // The real Hover emit: one assertion per `await test.step('Then · …')`,
+    // all after the action steps.
+    const src =
+      `${HEAD}test('checkout summary', async ({ page }) => {\n` +
+      `  await test.step('When · open summary', async () => {\n` +
+      `    await page.goto('/checkout/summary');\n` +
+      `  });\n` +
+      `  await test.step('Then · coupon', async () => {\n` +
+      `    await expect(page.getByTestId('coupon-code')).toHaveText('SAVE10');\n` +
+      `  });\n` +
+      `  await test.step('Then · total', async () => {\n` +
+      `    await expect(page.getByTestId('total')).toHaveText('$55');\n` +
+      `  });\n` +
+      `});\n`;
+    const res = softBatch(src);
+    expect(res.changed).toBe(true);
+    expect(res.softened).toBe(2);
+    expect(res.code).toContain(`expect.soft(page.getByTestId('coupon-code'))`);
+    expect(res.code).toContain(`expect.soft(page.getByTestId('total'))`);
+    // the action step is untouched
+    expect(res.code).toContain(`await page.goto('/checkout/summary');`);
+  });
+
+  it('does NOT soften a Then-step that is gated by a later action step', () => {
+    const src =
+      `${HEAD}test('gated', async ({ page }) => {\n` +
+      `  await test.step('Then · logged in', async () => {\n` +
+      `    await expect(page.getByText('Logged in')).toBeVisible();\n` + // gating
+      `  });\n` +
+      `  await test.step('When · checkout', async () => {\n` +
+      `    await page.getByRole('button', { name: 'Checkout' }).click();\n` +
+      `  });\n` +
+      `  await test.step('Then · total', async () => {\n` +
+      `    await expect(page.getByTestId('total')).toHaveText('$55');\n` +
+      `  });\n` +
+      `});\n`;
+    // only one trailing assertion-step (total) → run of 1 → nothing softened
+    const res = softBatch(src);
+    expect(res.changed).toBe(false);
+    expect(res.code).toContain(`await expect(page.getByText('Logged in')).toBeVisible();`);
+  });
+
+  it('does not soften a test.step that also performs an action', () => {
+    const src =
+      `${HEAD}test('mixed', async ({ page }) => {\n` +
+      `  await test.step('When · click + check', async () => {\n` +
+      `    await page.getByRole('button').click();\n` +
+      `    await expect(page.getByTestId('a')).toHaveText('1');\n` +
+      `  });\n` +
+      `  await test.step('Then · b', async () => {\n` +
+      `    await expect(page.getByTestId('b')).toHaveText('2');\n` +
+      `  });\n` +
+      `});\n`;
+    // the mixed step isn't a pure assertion unit, so the trailing run is just
+    // the single pure Then-step → run of 1 → no change
+    expect(softBatch(src).changed).toBe(false);
   });
 
   it('ignores assertions outside a test() (e.g. in a helper)', () => {

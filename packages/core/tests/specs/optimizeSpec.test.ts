@@ -104,6 +104,34 @@ test('login', async ({ page }) => {
     expect(readFileSync(res.candidatePath, 'utf-8')).toContain("getByText('Welcome')");
   });
 
+  it('soft-batches the LLM candidate: a trailing run of ≥2 assertions becomes expect.soft', async () => {
+    seedSpec();
+    const optimized = `import { test, expect } from '@playwright/test';
+test('login', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('a')).toHaveText('1');
+  await expect(page.getByTestId('b')).toHaveText('2');
+});`;
+    const res = await optimizeSpec(devRoot, 'login', async () => optimized);
+    const code = readFileSync(res.candidatePath, 'utf-8');
+    expect(code).toContain("expect.soft(page.getByTestId('a'))");
+    expect(code).toContain("expect.soft(page.getByTestId('b'))");
+    expect(code).toContain("await page.goto('/');"); // action untouched
+  });
+
+  it('does not soft-batch a single trailing assertion (soft buys nothing)', async () => {
+    seedSpec();
+    const optimized = `import { test, expect } from '@playwright/test';
+test('login', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByText('Welcome')).toBeVisible();
+});`;
+    const res = await optimizeSpec(devRoot, 'login', async () => optimized);
+    const code = readFileSync(res.candidatePath, 'utf-8');
+    expect(code).toContain("await expect(page.getByText('Welcome'))");
+    expect(code).not.toContain('expect.soft');
+  });
+
   it('strips a fence the model added around its output', async () => {
     seedSpec();
     const res = await optimizeSpec(devRoot, 'login', async () =>

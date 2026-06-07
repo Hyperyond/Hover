@@ -14,6 +14,7 @@ import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sidecarDir, type SpecSidecar } from './sidecar.js';
 import { readSeeds, relevantSeeds, type SeedRule } from './seeds.js';
+import { softBatch } from './softBatch.js';
 
 export class OptimizeError extends Error {
   constructor(message: string) {
@@ -64,11 +65,16 @@ export async function optimizeSpec(
   );
   const seeds = relevantSeeds(await readSeeds(devRoot), specTools);
   const raw = await runCodegen(buildOptimizePrompt(draft, sidecar, seeds));
-  const code = extractCode(raw);
-  const check = validateSpecCode(code);
+  const llmCode = extractCode(raw);
+  const check = validateSpecCode(llmCode);
   if (!check.ok) {
     throw new OptimizeError(`optimization rejected — ${check.errors.join('; ')}`);
   }
+
+  // Deterministic finishing step: the LLM decided WHAT to assert; soft-batch
+  // applies the safe mechanical rewrite (trailing run of independent assertions
+  // → expect.soft) surgically on its output. See softBatch.ts for the guard.
+  const code = softBatch(llmCode).code;
 
   const dir = join(devRoot, '__vibe_tests__', '.hover', 'optimized');
   await mkdir(dir, { recursive: true });

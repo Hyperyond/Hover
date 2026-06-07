@@ -18,7 +18,6 @@ import { bold, cyan, dim, err, info, ok, warn, head, gap, done, tail } from './l
 import { parseReRecordArgs, runReRecord } from './re-record.js';
 import { runExtract } from './extract.js';
 import { parseOptimizeArgs, runOptimize } from './optimize.js';
-import { parseRefactorArgs, runRefactor } from './refactor.js';
 import { parseRunArgs, runRun } from './run.js';
 
 /**
@@ -87,7 +86,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       // main parser here so it doesn't reject their positional (<prompt> /
       // <spec>) or the flags it doesn't know about. (setup / extract keep
       // using the main parser's --framework / --cwd / --dry-run flags.)
-      if (arg === 'run' || arg === 'optimize' || arg === 're-record' || arg === 'refactor') break;
+      if (arg === 'run' || arg === 'optimize' || arg === 're-record') break;
     } else {
       err(`Unexpected positional argument: ${arg}`);
       process.exit(2);
@@ -115,7 +114,6 @@ Usage:
   npx @hover-dev/cli re-record --dry-run <spec>
   npx @hover-dev/cli extract            ${dim('# lift flows shared across specs into Page Objects + fixtures')}
   npx @hover-dev/cli optimize <spec>    ${dim('# LLM pass: propose an improved spec (candidate + diff, original kept)')}
-  npx @hover-dev/cli refactor [spec]    ${dim('# deterministic structural passes (soft-batch); candidate + diff, original kept')}
   npx @hover-dev/cli --help
   npx @hover-dev/cli --version
 
@@ -371,14 +369,6 @@ async function main(): Promise<void> {
     const { args: subArgs, exitCode } = parseOptimizeArgs(subArgv);
     if (!subArgs) process.exit(exitCode);
     const code = await runOptimize(subArgs);
-    process.exit(code);
-  }
-  if (args.command === 'refactor') {
-    // refactor takes an OPTIONAL positional <spec> (omit = all specs) + --cwd.
-    const subArgv = process.argv.slice(3);
-    const { args: subArgs, exitCode } = parseRefactorArgs(subArgv);
-    if (!subArgs) process.exit(exitCode);
-    const code = await runRefactor(subArgs);
     process.exit(code);
   }
   if (!args.command) {
