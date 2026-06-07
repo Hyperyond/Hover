@@ -2,7 +2,9 @@
  * `hover optimize <spec>` — run the optional LLM optimization pass (Stage 7 /
  * F7) over a saved spec. The agent reads the spec + its captured session and
  * proposes improvements (chiefly: assertions for the feedback the session
- * observed). The result is validated and written as a CANDIDATE under
+ * observed). As a deterministic finishing step the candidate is then
+ * soft-batched (a trailing run of independent field assertions → expect.soft).
+ * The result is validated and written as a CANDIDATE under
  * .hover/optimized/<slug>.spec.ts.draft; a git diff is printed for review. The
  * original spec is never overwritten — you promote or discard it by hand.
  *
@@ -56,6 +58,7 @@ export async function runOptimize(args: OptimizeArgs): Promise<number> {
   };
 
   line('reading the spec + captured session, proposing improvements…');
+  line(dim('then soft-batching any trailing field assertions → expect.soft'));
   let res: { candidatePath: string; code: string };
   try {
     res = await optimizeSpecWithAgent(cwd, slug, {

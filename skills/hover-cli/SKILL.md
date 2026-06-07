@@ -130,8 +130,11 @@ npx @hover-dev/cli re-record --dry-run <spec>
 - **`optimize <spec>`** — proposes an improved spec as a **candidate + diff**; the original
   is kept untouched. Writes the candidate to `.hover/optimized/<slug>.spec.ts.draft` for you
   to diff-review. Steps it can't translate deterministically are marked `// KNOWN BUG` /
-  `hover:optimizable:` rather than silently dropped. See the project's `optimize` mode
-  (off / suggest / on) for whether this runs automatically.
+  `hover:optimizable:` rather than silently dropped. As a deterministic finishing step it
+  also **soft-batches** the candidate: a trailing run of ≥2 independent field assertions
+  becomes `expect.soft(...)`, so a failing run reports every bad field at once instead of
+  halting on the first. Gating assertions (any with an action after them) are left hard. See
+  the project's `optimize` mode (off / suggest / on) for whether this runs automatically.
 - **`extract`** — lifts flows repeated across multiple specs into shared Page Objects +
   fixtures, then rewrites the specs to use them.
 - **`re-record <spec>`** — reads the spec's JSDoc `Original prompt:` header, replays that
