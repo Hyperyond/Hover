@@ -1,0 +1,41 @@
+---
+title: "Test for IDOR and broken access control from your dev browser"
+description: "Broken access control is the #1 web security risk and rarely gets an automated test. Hover's security mode replays your app's own API calls with mutated IDs and tokens, then saves the probe as a Playwright spec."
+date: 2026-06-07
+author: "Hover"
+tags: [security, idor, access-control]
+---
+
+# Test for IDOR and broken access control from your dev browser
+
+Broken access control sits at the top of the OWASP Top 10, and it's the bug class your end-to-end suite almost never covers. Your tests log in as the right user and check that the right things happen. They don't log in as user A and try to read user B's invoice. That second test is the one that catches an IDOR, and writing it usually means leaving the browser for Burp or a stack of curl commands.
+
+## Why access-control bugs slip through
+
+An IDOR (insecure direct object reference) is simple: the server trusts an ID in the request instead of checking who's asking. `GET /api/invoices/1043` returns your invoice. Change `1043` to `1044` and it returns someone else's. The frontend never renders that URL, so a click-driven test never tries it. You find the hole only by taking a real request and tampering with it.
+
+## Replay your own requests, mutated
+
+Switch the Hover widget into Security mode and the orange bar comes on. A local MITM proxy (built on [mockttp](https://github.com/httptoolkit/mockttp), no Python and no system CA install) starts recording every HTTPS call your dev page makes. Now you have the real requests, carrying real session cookies, sitting in a panel.
+
+From there you point the agent at them: re-issue `GET /api/invoices/1043` with the next ID, drop the auth header, swap a tenant parameter. It checks whether the response leaks data it shouldn't, the probe a happy-path test never runs.
+
+```bash
+pnpm add -D @hover-dev/security
+```
+
+```ts
+// vite.config.ts (Astro / Nuxt / Next / Webpack mirror the pattern)
+import { hover } from 'vite-plugin-hover';
+import securityMode from '@hover-dev/security';
+
+export default defineConfig({
+  plugins: [hover({}, securityMode())],
+});
+```
+
+## A finding becomes a regression test
+
+When the agent confirms a hole, you save it. Hover writes `__vibe_tests__/<slug>.security.spec.ts`: plain Playwright on the `request` fixture, one `test()` per check, recording the intent and the status code each one expects. It runs in CI with `npx playwright test`, no proxy and no agent, so the authz hole you found today stays closed tomorrow.
+
+[Read the security-testing docs →](/docs/features/security) · [Save as Security spec →](/docs/features/security-spec)

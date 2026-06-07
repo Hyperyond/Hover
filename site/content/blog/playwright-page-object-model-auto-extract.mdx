@@ -1,0 +1,45 @@
+---
+title: "Auto-extract Playwright Page Objects from your existing specs"
+description: "Every spec re-types the login flow. hover extract finds the steps your specs share, lifts them into a Page Object plus a fixture, and rewrites the specs to use it. No agent, no tokens."
+date: 2026-06-07
+author: "Hover"
+tags: [playwright, page-object-model, fixtures]
+---
+
+# Auto-extract Playwright Page Objects from your existing specs
+
+Open three of your Playwright specs and you'll see the same eight lines at the top of each: go to the login page, fill the email, fill the password, click submit. Rename that submit button and you edit all three. This is the duplication the Page Object Model exists to kill, and writing the page objects by hand is the chore that stops most people from bothering.
+
+## The cost of copy-pasted setup
+
+A shared flow you pasted into ten specs is ten places to update when the flow changes. The duplication also buries intent: a reader skims forty lines of setup to find the one assertion the test actually makes. The suite grows, the signal drops, and the login flow lives in your clipboard instead of in one named method.
+
+## What hover extract does
+
+`hover extract` reads the `.hover/<slug>.json` sidecars Hover saves next to each spec, finds the entry flow that three or more of them share, and writes it out:
+
+```bash
+npx @hover-dev/cli extract
+```
+
+```
+◇ hover extract
+│
+│  scanning saved specs for flows shared by 3+ specs…
+│  ✓ LoginPage ← login.spec.ts, cart.spec.ts, checkout.spec.ts
+│    pages/LoginPage.ts
+│  fixtures → fixtures.ts
+│
+◆ Extracted shared Page Objects + fixtures
+╰─ new specs import { test, expect } from './fixtures' and use the page objects
+```
+
+You get a `pages/LoginPage.ts` with a real method (`login(email, password)`) and a single `fixtures.ts` that exposes it. From now on a renamed button changes in one place.
+
+It runs on the filesystem only. No browser, no agent, no tokens. It reads specs you already saved and rewrites them in place, and you review the diff like any other change.
+
+## Plain Playwright, still
+
+The output is the Page Object Model the Playwright docs recommend, written for you instead of by hand. A teammate who never touched Hover opens `pages/LoginPage.ts` and `fixtures.ts` and understands both, because that's all they are. The specs still run with `npx playwright test`.
+
+[See how Hover structures specs →](/docs/features/structured-output)
