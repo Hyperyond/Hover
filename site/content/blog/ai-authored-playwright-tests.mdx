@@ -12,7 +12,7 @@ When a tool says "AI testing," ask one question: is the model running when the t
 
 Some tools answer yes. A language model reads the steps on every run, looks at the page, decides what to click, and recovers when something moved. The test is a prompt that re-resolves itself each time. Other tools, Hover among them, answer no. A model explores your app once, works out the flow, and writes ordinary test code. After that the model is gone, and a deterministic script runs the same way every time.
 
-That single yes-or-no decides what your test suite costs you for the rest of its life. Here is why.
+That single yes-or-no decides what your test suite costs you for the rest of its life.
 
 ## Runtime AI is a bill that arrives forever
 
@@ -46,7 +46,7 @@ No agent lives in that file. It runs with `npx playwright test`, in your CI, wit
 
 ## "But selectors break when the UI changes"
 
-Fair, and you should ask it of any AI-authored test. Hover answers in three ways, and none of them is "call a model on every run."
+Fair, and you should ask it of any AI-authored test. Hover handles it without putting a model on the hot path.
 
 Most churn never reaches the spec. Hover writes semantic locators (`getByRole`, `getByLabel`, `getByText`), so a layout refactor leaves "the Sign in button" as "the Sign in button."
 

@@ -10,7 +10,7 @@ tags: [playwright, codegen, comparison]
 
 `npx playwright codegen` is one of the best free things in the testing ecosystem. It opens a browser, you click through your app, and it writes down every interaction as Playwright code with role- and text-based locators. No account, no model, no cost. If you have never run it, run it today.
 
-So why reach for anything else? Because recording your clicks and authoring a test are different jobs. This post draws the line.
+Recording your clicks and authoring a test are different jobs. That difference is the whole story.
 
 ## What codegen does
 
@@ -26,7 +26,7 @@ Hover starts from what you want, not from your clicks. You type a sentence, "log
 
 A few things change as a result. You author by saying what you want instead of performing it, which helps when the flow is long or when you're specifying a test for an app someone else built. Assertions come from the agent understanding the goal, so you don't have to remember to record the check that proves it worked. And the agent walks past small surprises, a cookie banner or an interstitial, that would interrupt a manual recording.
 
-Then comes the part that matters: Hover's output is the same kind of file codegen produces. A plain `@playwright/test` spec, semantic locators, runs in CI with no model. Hover spends the model while authoring and hands you ordinary Playwright. You don't trade codegen's clean, dependency-free output for a vendor format.
+Hover's output is the same kind of file codegen produces: a plain `@playwright/test` spec, semantic locators, runs in CI with no model. Hover spends the model while authoring and hands you ordinary Playwright. You don't trade codegen's clean, dependency-free output for a vendor format.
 
 ## Which one to reach for
 

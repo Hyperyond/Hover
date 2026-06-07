@@ -8,7 +8,7 @@ tags: [architecture, byo-cli, pricing]
 
 # Bring your own CLI: AI testing with no API key and no token resale
 
-Most AI dev tools open with a text field that wants your API key. You paste it in, the tool calls the model for you, and someone bills you: the provider directly, or the tool with a margin stacked on top. It's the default, and the cost structure hides in plain sight.
+Most AI dev tools open with a text field that wants your API key. You paste it in, the tool calls the model for you, and someone bills you: the provider directly, or the tool with a margin stacked on top. That's the default, and the margin rarely shows up on the invoice as a line item.
 
 Hover skips the field, because Hover ships no model client. There's nothing inside it to hold a key. Instead it runs the coding-agent CLI you already installed.
 
@@ -18,7 +18,7 @@ When you ask Hover to drive your browser, it shells out to a binary on your `PAT
 
 - `claude` (Claude Code)
 - `codex` (OpenAI Codex CLI)
-- more on the roadmap: `cursor-agent`, `aider`, `gemini-cli`
+- `cursor-agent`, `aider`, `gemini-cli`, `qwen-code`
 
 That CLI talks to its own provider on your existing plan: the Claude Pro or Max or ChatGPT subscription you already pay for. Hover reads whatever the CLI streams back, normalises it into one event stream, and shows it in the widget. It never touches your key, because it never makes the call. The service detects which agents you have installed, picks one, shows it as a pill in the widget header, and lets you switch from a dropdown without editing an environment variable.
 
@@ -36,6 +36,6 @@ You stay free to switch models. The model is a binary on your PATH, so changing 
 
 This design assumes you already have a coding-agent CLI installed and logged in. If you don't, installing one is a real first step that a hosted tool skips. Different CLIs sandbox the agent differently, too; Hover puts a badge on soft-sandbox agents so you know the tool surface is wider than the locked-down ones.
 
-For the growing number of developers who live in `claude` or `codex` all day, "reuse the thing you already pay for" beats "paste another API key and pay a margin." That's the bet Hover makes.
+For the growing number of developers who live in `claude` or `codex` all day, reusing the plan you already pay for beats pasting another API key and paying a margin on top of it.
 
 [Read about the agent registry →](/docs/reference/agent-registry)
