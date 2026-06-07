@@ -6,6 +6,36 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-06-07
+
+Theme: **structured spec output + CLI mode**. The deterministic translator now emits Page Objects, `test.step` stages, and `Promise.all`-paired popup/upload/download flows; an off-by-default AI pass can polish a spec further; and the whole workflow is drivable from the terminal — no widget required.
+
+### Added
+
+- **Structured spec output.** Crystallized specs wrap each step in a named `test.step` (Given/When/Then) and persist a `.hover/<slug>.json` sidecar of the captured session. `hover extract` lifts flows shared across 3+ specs into Page Objects + a single `fixtures.ts`. Popup / new-tab / file-upload / download flows are emitted as `Promise.all([...])` pairings so the event listener can't race the action.
+- **AI optimization pass (off by default).** `hover optimize <spec>` (and a widget Actions entry) runs an optional LLM pass that proposes an improved spec as a diff-reviewed **candidate** under `.hover/optimized/` — the original is always kept. Steps it can't translate deterministically are flagged with `// KNOWN BUG` / `hover:optimizable:` rather than dropped. A project-level `optimize` mode (`off` / `suggest` / `on`) controls whether the suggestion surfaces automatically.
+- **Seed library.** `.hover/rules/*.json` worked examples feed the optimization pass as few-shot guidance; the widget gains a read-only **Seeds** tab listing what Hover sees. Companion catalogue repo: [`hover-seeds`](https://github.com/Hyperyond/hover-seeds).
+- **CLI mode — `hover run "<prompt>"`.** Author a spec entirely from the terminal: no widget, no DOM injection. Auto-launches the isolated debug Chrome, drives it over CDP, streams the run, and (with `--save <slug>`) crystallizes it. Needs only `@hover-dev/core` — no bundler config.
+- **Optional model API key.** A key set in the widget (or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) is injected into the spawned CLI's env. Held in browser localStorage + service memory only — never logged, persisted, or uploaded.
+- **`hover-cli` Claude skill** under `skills/` — teaches Claude Code the full CLI, install through crystallize.
+- **Prompt-scoped exploration** — the agent's exploration depth is gated on how specific the prompt is.
+
+### Changed
+
+- **`hover add` → `hover setup`.** `add` still works as a deprecated alias (prints a notice).
+- **One CLI frame.** `setup` / `run` / `optimize` / `extract` / `re-record` all render the same Clack-style vertical-connector output (`◇ title → │ lines → ◆ result → ╰─ hint`).
+- **Sandbox tightened.** Playwright MCP's arbitrary-JS tools (`browser_run_code_unsafe` / `browser_evaluate`) are denied — they punch through the MCP-only sandbox and don't translate to a deterministic spec.
+- **Landing-page hero** now demonstrates the optimization pass (naive draft → `Promise.all` pairing) for download / file-upload / OAuth-popup flows.
+
+### Removed
+
+- **Save-as-Skill** is retired. Reloading a spec + `Re-record` + the seed library cover what it did; the widget overlay is now Specs + Seeds.
+
+### Fixed
+
+- **`Skill` tool leaked into the sandbox.** Claude's `Skill` tool loads independently of the `--allowedTools` allow-list; it's now denied, so a run no longer burns a turn "checking for a project skill" or pollutes the spec with a junk `When · Skill` step.
+- **`hover run --cwd` in monorepos.** `resolveMcpConfig` now resolves `@playwright/mcp` from the run's `cwd`, not the directory the CLI was invoked from.
+
 ## [0.14.0] — 2026-05-31
 
 Theme: **single-Chrome security + a real landing site**. Security mode no longer needs a second browser, the marketing site lands, and the widget gains a plugin-mode theming system.
