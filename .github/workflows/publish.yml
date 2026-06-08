@@ -1,10 +1,18 @@
 name: Publish
 
 # Auto-publishes the Hover packages to the public npm.org registry
-# (https://registry.npmjs.org) when a v* tag is pushed. The same tarballs
+# (https://registry.npmjs.org) when a tag is pushed. The same tarballs
 # are also attached to a GitHub Release for archival.
 #
-# Trigger:    git tag -a v0.3.0 -m "..." && git push --tags
+# Tag scheme (the tag prefix decides what publishes):
+#   v0.16.0        → the 8 main packages, lockstep at that version
+#   security-v0.1.0 → @hover-dev/security only, at 0.1.0
+#   pentest-v0.1.0  → @hover-dev/pentest only (when it lands)
+# The two plugins version independently from the main packages and from each
+# other; only their own tag prefix publishes them.
+#
+# Trigger:    git tag -a v0.16.0 -m "..." && git push origin v0.16.0
+#         or: git tag -a security-v0.1.0 -m "..." && git push origin security-v0.1.0
 # Auth:       NPM_TOKEN repo secret (a granular automation token from
 #             https://www.npmjs.com/settings/<user>/tokens with read+write
 #             on @hover-dev/* and vite-plugin-hover / webpack-plugin-hover)
@@ -32,9 +40,9 @@ name: Publish
 #
 # What it does:
 #   1. Checkout, install pnpm + Node 24, restore pnpm cache
-#   2. Rewrite each publishable package.json's version from the tag
-#      (v0.3.0 → "0.3.0") so we don't have to remember to bump
-#      package.json in lockstep
+#   2. Resolve which packages this tag publishes + the version, then rewrite
+#      those package.json versions from the tag (v0.16.0 → "0.16.0"). A plugin
+#      tag also pins the plugin's @hover-dev/core range to the published core.
 #   3. Typecheck + unit tests as a release gate
 #   4. Build each package (tsc + asset copy for the packages that ship
 #      non-TS files — widget-bootstrap copies src/widget/ to dist/widget/)
@@ -51,7 +59,9 @@ name: Publish
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'            # main packages, lockstep             (e.g. v0.16.0)
+      - 'security-v*'   # @hover-dev/security only            (e.g. security-v0.1.0)
+      - 'pentest-v*'    # @hover-dev/pentest only, when it lands (e.g. pentest-v0.1.0)
   # Allow manual reruns from the Actions tab. Uses the workflow's current
   # tip — useful for re-publishing a botched release without retagging.
   workflow_dispatch:
@@ -60,24 +70,23 @@ on:
         description: 'Version to publish (e.g. 0.3.0). Required for manual runs.'
         required: true
         type: string
+      target:
+        description: 'Which set to publish (manual runs only).'
+        required: true
+        default: main
+        type: choice
+        options: [main, security, pentest]
 
 permissions:
   contents: write   # softprops/action-gh-release needs this to create the Release
 
-# Single source of truth for the publishable-package filter chain — every
-# step below reuses it via ${{ env.PKG_FILTERS }}. Adding a new package?
-# Update this one variable.
-env:
-  PKG_FILTERS: >-
-    --filter @hover-dev/core
-    --filter @hover-dev/widget-bootstrap
-    --filter vite-plugin-hover
-    --filter @hover-dev/astro
-    --filter @hover-dev/nuxt
-    --filter @hover-dev/next
-    --filter webpack-plugin-hover
-    --filter @hover-dev/cli
-    --filter @hover-dev/security
+# Which packages publish is decided per-tag by the "Resolve target" step:
+#   v*           → the 8 main packages, lockstep
+#   security-v*  → @hover-dev/security only
+#   pentest-v*   → @hover-dev/pentest only (when it lands)
+# The two plugins are dropped from the main set — they version independently
+# via their own tag prefixes. A plugin release also rewrites its
+# @hover-dev/core peer range to the published core (see that step).
 
 jobs:
   publish:
@@ -102,21 +111,69 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Resolve version
-        id: version
+      - name: Resolve target + version
+        id: resolve
         run: |
+          # Main packages publish in lockstep on a plain v* tag. Each plugin
+          # versions independently on its own tag prefix and publishes alone.
+          MAIN_FILTERS="--filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro --filter @hover-dev/nuxt --filter @hover-dev/next --filter webpack-plugin-hover --filter @hover-dev/cli"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET="${{ inputs.target }}"
             VERSION="${{ inputs.version }}"
           else
-            # GITHUB_REF_NAME is e.g. "v0.3.0"; strip the leading "v"
-            VERSION="${GITHUB_REF_NAME#v}"
+            REF="${GITHUB_REF_NAME}"
+            case "$REF" in
+              security-v*) TARGET="security"; VERSION="${REF#security-v}" ;;
+              pentest-v*)  TARGET="pentest";  VERSION="${REF#pentest-v}" ;;
+              v*)          TARGET="main";     VERSION="${REF#v}" ;;
+              *) echo "::error::Unrecognized tag '$REF' (expected v*, security-v*, or pentest-v*)."; exit 1 ;;
+            esac
           fi
           if [ -z "$VERSION" ]; then
             echo "::error::Could not resolve a version to publish."
             exit 1
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Will publish version $VERSION"
+          case "$TARGET" in
+            main)     FILTERS="$MAIN_FILTERS";              IS_PLUGIN=false; PKG_DIR="" ;;
+            security) FILTERS="--filter @hover-dev/security"; IS_PLUGIN=true;  PKG_DIR="packages/security" ;;
+            pentest)  FILTERS="--filter @hover-dev/pentest";  IS_PLUGIN=true;  PKG_DIR="packages/pentest" ;;
+            *) echo "::error::Unknown target '$TARGET'."; exit 1 ;;
+          esac
+          {
+            echo "target=$TARGET"
+            echo "version=$VERSION"
+            echo "filters=$FILTERS"
+            echo "is_plugin=$IS_PLUGIN"
+            echo "pkg_dir=$PKG_DIR"
+          } >> "$GITHUB_OUTPUT"
+          echo "Publishing target=$TARGET version=$VERSION"
+
+      - name: Pin plugin's @hover-dev/core range to the published core
+        # A plugin (security / pentest) versions independently, so core is NOT
+        # bumped in this run and still reads 0.0.0 in the checkout. Left alone,
+        # pnpm would replace the plugin's `workspace:*` core dep with `0.0.0`
+        # and publish an uninstallable peer. Instead, rewrite the plugin's
+        # @hover-dev/core refs to a real range against the LATEST published core
+        # before publish. CI-only — the repo keeps `workspace:*` for local dev.
+        if: steps.resolve.outputs.is_plugin == 'true'
+        run: |
+          CORE_VER="$(npm view @hover-dev/core version)"
+          if [ -z "$CORE_VER" ]; then
+            echo "::error::Could not read the published @hover-dev/core version from npm."
+            exit 1
+          fi
+          echo "Pinning core: peer >=$CORE_VER (works with that core or newer)"
+          PKG="${{ steps.resolve.outputs.pkg_dir }}/package.json" CORE_VER="$CORE_VER" node -e '
+            const fs = require("node:fs");
+            const f = process.env.PKG;
+            const v = process.env.CORE_VER;
+            const p = JSON.parse(fs.readFileSync(f, "utf8"));
+            for (const field of ["peerDependencies", "devDependencies", "dependencies"]) {
+              const dep = p[field] && p[field]["@hover-dev/core"];
+              if (dep) p[field]["@hover-dev/core"] = field === "peerDependencies" ? ">=" + v : "^" + v;
+            }
+            fs.writeFileSync(f, JSON.stringify(p, null, 2) + "\n");
+          '
 
       - name: Bump package versions in-place
         run: |
@@ -124,8 +181,8 @@ jobs:
           # committing or git-tagging (the tag already exists, that's why
           # we're here). --allow-same-version is a safety net if someone
           # already bumped manually before tagging.
-          pnpm ${{ env.PKG_FILTERS }} exec npm version \
-            "${{ steps.version.outputs.version }}" \
+          pnpm ${{ steps.resolve.outputs.filters }} exec npm version \
+            "${{ steps.resolve.outputs.version }}" \
             --no-git-tag-version \
             --allow-same-version
 
@@ -137,7 +194,7 @@ jobs:
         # fans out to examples/basic-app whose tests are Playwright e2e
         # against an actual dev server (not appropriate as a publish gate,
         # and would need a chromium install in CI).
-        run: pnpm ${{ env.PKG_FILTERS }} --if-present test
+        run: pnpm ${{ steps.resolve.outputs.filters }} --if-present test
 
       - name: Build
         run: pnpm build
@@ -151,14 +208,14 @@ jobs:
         # --access public: required on the first publish of a scoped
         # package; npm.org defaults scoped packages to restricted/private
         # unless you say otherwise.
-        run: pnpm ${{ env.PKG_FILTERS }} publish --no-git-checks --access public
+        run: pnpm ${{ steps.resolve.outputs.filters }} publish --no-git-checks --access public
 
       - name: Pack tarballs for release assets
         # Re-pack so the GitHub Release has the same tarballs we just
         # published — useful for archival / offline mirroring.
         run: |
           mkdir -p release-tarballs
-          pnpm ${{ env.PKG_FILTERS }} exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release-tarballs"
+          pnpm ${{ steps.resolve.outputs.filters }} exec pnpm pack --pack-destination "$GITHUB_WORKSPACE/release-tarballs"
 
       - name: Create GitHub Release
         # Only on real tag pushes; manual workflow_dispatch reuses an
