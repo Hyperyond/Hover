@@ -1104,9 +1104,17 @@
         agentOnly: true,
       },
     ];
-    const items = source === 'recording'
-      ? allItems.filter((it) => !it.agentOnly)
-      : allItems;
+    // When a plugin mode is engaged it OWNS the save surface — the default
+    // authoring outputs (Playwright spec / Jira CSV) are for the record →
+    // crystallize flow and don't belong to e.g. pentest (whose output is a
+    // findings report, not a spec). Mirror applyDefaultModeVisibility, which
+    // already hides the default Record/Fix buttons in plugin modes: start from
+    // an empty core list and let the active mode's plugin entries be the menu.
+    const items = state.currentMode !== null
+      ? []
+      : source === 'recording'
+        ? allItems.filter((it) => !it.agentOnly)
+        : allItems;
     // v0.12 — plugin-contributed save entries are appended after the
     // core save items. Only the active plugin mode's entries are
     // returned by hostCtl.getActiveSaveEntries(); when no plugin mode
