@@ -70,6 +70,9 @@ importers:
         specifier: ^6.4.2
         version: 6.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
     devDependencies:
+      '@hover-dev/pentest':
+        specifier: workspace:*
+        version: link:../../packages/pentest
       '@hover-dev/security':
         specifier: workspace:*
         version: link:../../packages/security
@@ -508,7 +511,14 @@ importers:
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
 
   packages/pentest:
+    dependencies:
+      '@hover-dev/security':
+        specifier: workspace:*
+        version: link:../security
     devDependencies:
+      '@hover-dev/core':
+        specifier: workspace:*
+        version: link:../core
       '@hover-dev/probe-engine':
         specifier: workspace:*
         version: link:../probe-engine

@@ -35,6 +35,41 @@ import { fileURLToPath } from 'node:url';
 import { startProxy, type ProxyHandle } from './mitm/index.js';
 import { startControlPlane, type ControlPlaneHandle } from './control-plane.js';
 
+// ---------------------------------------------------------------------------
+// Resident MITM proxy — a PROCESS singleton, refcounted.
+//
+// Only ONE proxy can own the debug Chrome: Chrome is born with `--proxy-server`
+// pointed at it (setChromeProxy at service start), so a second proxy would run
+// orphaned and capture nothing. But two plugins legitimately need it — the
+// orange security mode AND the red pentest mode (`@hover-dev/pentest/plugin`,
+// which reaches the proxy through `startSecurityRuntime` below). Both resolve
+// `@hover-dev/security` to the same module instance, so this module-level
+// singleton is genuinely shared between them: the first to start the proxy wins,
+// the rest get the same handle (same port + CA), and it stops only when the last
+// holder releases. The active mode owns intercept/passthrough — the modes are
+// mutually exclusive (`conflictsWith`), so they never fight over it.
+let residentProxy: { proxy: ProxyHandle; refs: number } | null = null;
+
+async function acquireResidentProxy(devRoot: string): Promise<ProxyHandle> {
+  if (residentProxy) {
+    residentProxy.refs += 1;
+    return residentProxy.proxy;
+  }
+  const proxy = await startProxy(devRoot); // defaults to passthrough
+  residentProxy = { proxy, refs: 1 };
+  return proxy;
+}
+
+async function releaseResidentProxy(): Promise<void> {
+  if (!residentProxy) return;
+  residentProxy.refs -= 1;
+  if (residentProxy.refs <= 0) {
+    const { proxy } = residentProxy;
+    residentProxy = null;
+    await proxy.stop();
+  }
+}
+
 export interface SecurityModeOptions {
   /** @deprecated Single-Chrome model: security no longer launches a second
    *  Chrome on a separate port. The one debug Chrome (normal CDP port) is born
@@ -274,7 +309,9 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
       async 'hover:service:start'(ctx) {
         if (proxy && control) return; // idempotent
 
-        proxy = await startProxy(ctx.devRoot); // defaults to passthrough
+        // Shared resident proxy (refcounted) — co-exists with the pentest
+        // plugin, which acquires the same one via startSecurityRuntime.
+        proxy = await acquireResidentProxy(ctx.devRoot); // defaults to passthrough
         // Tell the host to bake the proxy + CA pin into the single Chrome
         // launch. Set once; lasts the whole session.
         ctx.setChromeProxy({ port: proxy.port, spki: proxy.ca.spki });
@@ -326,7 +363,7 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
       async 'hover:service:shutdown'() {
         await control?.stop();
         control = null;
-        await proxy?.stop();
+        await releaseResidentProxy();
         proxy = null;
       },
     },
@@ -357,6 +394,14 @@ export interface SecurityRuntimeOptions {
   /** Second identities for cross-identity (IDOR/BOLA) replay — label →
    *  storageState path relative to devRoot. */
   identities?: Record<string, string>;
+  /** Start recording immediately. The CLI scan wants this (no mode toggle).
+   *  The widget pentest plugin passes `false` and flips it via `setIntercept`
+   *  on mode activate/deactivate. Default `true`. */
+  intercept?: boolean;
+  /** Override the MCP server id (the tool prefix + allow-list entry). The
+   *  pentest plugin passes its own id so it doesn't collide with the security
+   *  plugin's server when both are loaded. Defaults to the security id. */
+  mcpServerId?: string;
 }
 
 export interface SecurityRuntimeHandle {
@@ -373,20 +418,26 @@ export interface SecurityRuntimeHandle {
   mcpScriptPath: string;
   /** Env the MCP server needs to reach the control plane. */
   mcpEnv: Record<string, string>;
+  /** Flip recording on (intercept) / off (passthrough) without a restart —
+   *  the widget pentest plugin calls this on mode activate/deactivate. */
+  setIntercept(on: boolean): void;
   /** Snapshot the checks the agent recorded so far (a copy). */
   listChecks(): import('./control-plane.js').SecurityCheckStep[];
-  /** Stop the control plane + proxy. Idempotent. */
+  /** Subscribe to each recorded check (for a widget running count). */
+  onCheck(listener: (check: import('./control-plane.js').SecurityCheckStep) => void): void;
+  /** Stop this caller's control plane + release the shared proxy. Idempotent. */
   stop(): Promise<void>;
 }
 
-/** Boot the security sidecars for a headless (no-service) caller. */
+/** Boot the security sidecars for a caller that DOESN'T own the Hover service
+ *  (the `hover scan` CLI; the `@hover-dev/pentest/plugin` widget mode). Shares
+ *  the refcounted resident proxy so it coexists with the security plugin. */
 export async function startSecurityRuntime(
   opts: SecurityRuntimeOptions,
 ): Promise<SecurityRuntimeHandle> {
-  const proxy = await startProxy(opts.devRoot);
-  // A scan always records — go straight to intercept (the widget path toggles
-  // this on mode:activate instead; here there's no toggle).
-  proxy.setMode('intercept');
+  const proxy = await acquireResidentProxy(opts.devRoot);
+  // CLI scan records immediately; the widget plugin starts quiet and toggles.
+  proxy.setMode(opts.intercept === false ? 'passthrough' : 'intercept');
 
   const control = await startControlPlane(proxy.store, {
     devRoot: opts.devRoot,
@@ -397,20 +448,29 @@ export async function startSecurityRuntime(
   return {
     proxyPort: proxy.port,
     spki: proxy.ca.spki,
-    mcpServerId: MCP_SERVER_ID,
+    mcpServerId: opts.mcpServerId ?? MCP_SERVER_ID,
     mcpScriptPath: resolveMcpScriptPath(),
     mcpEnv: {
       HOVER_SECURITY_API: `http://127.0.0.1:${control.port}`,
       HOVER_SECURITY_API_TOKEN: control.token,
     },
+    setIntercept: (on) => proxy.setMode(on ? 'intercept' : 'passthrough'),
     listChecks: () => control.listChecks(),
+    onCheck: (listener) => control.on('check', listener),
     async stop() {
       if (stopped) return;
       stopped = true;
       await control.stop();
-      await proxy.stop();
+      await releaseResidentProxy();
     },
   };
+}
+
+/** Absolute path to the bundled security MCP server script — so a sibling
+ *  plugin (pentest) can register the SAME server under its own id without
+ *  duplicating the resolver. */
+export function securityMcpScriptPath(): string {
+  return resolveMcpScriptPath();
 }
 
 // Also re-export the internals so consumers (and our own MCP server) can
