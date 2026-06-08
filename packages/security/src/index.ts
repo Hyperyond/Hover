@@ -423,6 +423,9 @@ export interface SecurityRuntimeHandle {
   setIntercept(on: boolean): void;
   /** Snapshot the checks the agent recorded so far (a copy). */
   listChecks(): import('./control-plane.js').SecurityCheckStep[];
+  /** Browser-confirmed findings (XSS via input, DOM-based, …) — attacks driven
+   *  through the page rather than via replay_flow. */
+  listFindings(): import('@hover-dev/probe-engine').BrowserFinding[];
   /** Coverage gaps the agent recorded (what it did NOT test) — feeds the
    *  findings report's "Not tested" section. */
   listGaps(): string[];
@@ -459,6 +462,7 @@ export async function startSecurityRuntime(
     },
     setIntercept: (on) => proxy.setMode(on ? 'intercept' : 'passthrough'),
     listChecks: () => control.listChecks(),
+    listFindings: () => control.listFindings(),
     listGaps: () => control.listGaps(),
     onCheck: (listener) => control.on('check', listener),
     async stop() {
