@@ -256,9 +256,17 @@ export async function startControlPlane(
           sendJson(res, 400, { error: 'note is required' });
           return;
         }
-        // De-dup (agents repeat themselves) + cap.
+        // De-dup (agents repeat themselves) + cap. A duplicate counts as
+        // recorded (idempotent); only a genuine cap-overflow is a failure the
+        // agent must hear about (otherwise its tool prints "recorded" for a note
+        // that was silently dropped).
+        const gapAtCap = !gaps.includes(note) && gaps.length >= MAX_GAPS;
         if (!gaps.includes(note) && gaps.length < MAX_GAPS) gaps.push(note);
-        sendJson(res, 200, { recorded: true, gaps: gaps.length });
+        sendJson(res, 200, {
+          recorded: !gapAtCap,
+          gaps: gaps.length,
+          ...(gapAtCap ? { reason: 'coverage-gap cap reached' } : {}),
+        });
         return;
       }
 
@@ -283,7 +291,8 @@ export async function startControlPlane(
           return;
         }
         const sev = p.severity === 'High' || p.severity === 'Low' ? p.severity : 'Medium';
-        if (findings.length < MAX_FINDINGS) {
+        const findingAtCap = findings.length >= MAX_FINDINGS;
+        if (!findingAtCap) {
           findings.push({
             id: nextFindingId++,
             class: typeof p.class === 'string' ? (p.class as BrowserFinding['class']) : undefined,
@@ -294,7 +303,13 @@ export async function startControlPlane(
             recordedAt: Date.now(),
           });
         }
-        sendJson(res, 200, { recorded: true, findings: findings.length });
+        // Don't falsely confirm a finding that overflowed the cap — the agent
+        // needs to know it vanished, not see "recorded".
+        sendJson(res, 200, {
+          recorded: !findingAtCap,
+          findings: findings.length,
+          ...(findingAtCap ? { reason: 'findings cap reached' } : {}),
+        });
         return;
       }
 

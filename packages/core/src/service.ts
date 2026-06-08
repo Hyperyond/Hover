@@ -545,7 +545,13 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     // in). Cancel the pending abort, point the run's event stream at this fresh
     // socket, and tell the widget so it can restore its "running" UI. Without
     // this the run would be killed on every agent navigation.
-    if (activeRun) {
+    // Only re-attach during a genuine reconnect GAP (the prior client is gone).
+    // If a live client is still attached, this is a SECOND widget (e.g. the
+    // user's regular tab alongside the debug-Chrome tab — both inject a widget
+    // on the same origin and open their own socket). Seizing the stream would
+    // silence the first widget and let the second's close abort a healthy run,
+    // so leave a second concurrent widget in idle UI rather than hijacking.
+    if (activeRun && activeRun.client === null) {
       if (activeRun.graceTimer) {
         clearTimeout(activeRun.graceTimer);
         activeRun.graceTimer = null;
@@ -1116,6 +1122,19 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   return {
     port,
     async close() {
+      // Kill any in-flight run FIRST. The run is held at service scope and is
+      // only torn down by aborting its signal (invoke.ts SIGTERMs the agent
+      // child on abort). wss.close() below stops the listener but does NOT
+      // terminate established client sockets, so no ws.on('close') fires — so
+      // without this the agent child would keep driving the debug Chrome as an
+      // orphan after the dev server is gone, and a pending grace timer would
+      // fire abort() 15s into the void.
+      if (activeRun) {
+        if (activeRun.graceTimer) clearTimeout(activeRun.graceTimer);
+        activeRun.cancelled = true;
+        activeRun.abort.abort();
+        activeRun = null;
+      }
       // Deactivate the active mode first, then run every plugin's
       // shutdown hook (regardless of which mode is active — a plugin may
       // own background state even outside its mode). Best-effort: log

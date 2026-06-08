@@ -46,4 +46,19 @@ describe('sanitizeRequest', () => {
     expect(s.headers['proxy-authorization']).toBeUndefined();
     expect(s.redactions).toContain('proxy-authorization');
   });
+
+  test('redacts a NUMERIC credential value (SSN / credit-card sent as a JSON number)', () => {
+    const s = sanitizeRequest(req({ bodyText: '{"ssn":123456789,"credit_card":4111111111111111,"qty":3}' }));
+    expect(s.bodyText).not.toContain('123456789');
+    expect(s.bodyText).not.toContain('4111111111111111');
+    expect(s.bodyText).toContain('"ssn":"<redacted>"');
+    expect(s.bodyText).toContain('"qty":3'); // non-credential numeric kept
+  });
+
+  test('redacts a body field named `auth` (URL/body key lists must not diverge)', () => {
+    const s = sanitizeRequest(req({ bodyText: '{"auth":"credential","note":"ok"}' }));
+    expect(s.bodyText).not.toContain('credential');
+    expect(s.bodyText).toContain('"auth":"<redacted>"');
+    expect(s.bodyText).toContain('"note":"ok"');
+  });
 });
