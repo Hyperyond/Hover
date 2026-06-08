@@ -19,6 +19,7 @@ import { parseReRecordArgs, runReRecord } from './re-record.js';
 import { runExtract } from './extract.js';
 import { parseOptimizeArgs, runOptimize } from './optimize.js';
 import { parseRunArgs, runRun } from './run.js';
+import { parseScanArgs, runScan } from './scan.js';
 
 /**
  * @hover-dev/cli entrypoint.
@@ -86,7 +87,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       // main parser here so it doesn't reject their positional (<prompt> /
       // <spec>) or the flags it doesn't know about. (setup / extract keep
       // using the main parser's --framework / --cwd / --dry-run flags.)
-      if (arg === 'run' || arg === 'optimize' || arg === 're-record') break;
+      if (arg === 'run' || arg === 'scan' || arg === 'optimize' || arg === 're-record') break;
     } else {
       err(`Unexpected positional argument: ${arg}`);
       process.exit(2);
@@ -110,6 +111,8 @@ Usage:
 
   npx @hover-dev/cli run "<prompt>"     ${dim('# drive the debug Chrome from the terminal (no widget); --save <slug> to keep a spec')}
   npx @hover-dev/cli run "test login" --url http://localhost:5173 --save login
+  npx @hover-dev/cli scan --url http://localhost:5173        ${dim('# RED pentest: attack your own dev app, write a findings report')}
+  npx @hover-dev/cli scan "the checkout flow" --url http://localhost:5173
   npx @hover-dev/cli re-record <spec>   ${dim('# regenerate a Playwright spec against the current UI')}
   npx @hover-dev/cli re-record --dry-run <spec>
   npx @hover-dev/cli extract            ${dim('# lift flows shared across specs into Page Objects + fixtures')}
@@ -361,6 +364,14 @@ async function main(): Promise<void> {
     const { args: subArgs, exitCode } = parseRunArgs(subArgv);
     if (!subArgs) process.exit(exitCode);
     const code = await runRun(subArgs);
+    process.exit(code);
+  }
+  if (args.command === 'scan') {
+    // scan takes an optional positional <scope> + its own flags — own argv shape.
+    const subArgv = process.argv.slice(3);
+    const { args: subArgs, exitCode } = parseScanArgs(subArgv);
+    if (!subArgs) process.exit(exitCode);
+    const code = await runScan(subArgs);
     process.exit(code);
   }
   if (args.command === 'optimize') {
