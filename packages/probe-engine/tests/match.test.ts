@@ -1,14 +1,13 @@
 import { describe, test, expect } from 'vitest';
-import { matchesFlow, matchSeeds, hasAuth } from '../../src/probes/match.js';
-import type { Flow } from '../../src/mitm/flows.js';
-import type { SecuritySeed } from '../../src/probes/seed.js';
+import { matchesFlow, matchSeeds, hasAuth } from '../src/match.js';
+import type { ProbeFlow } from '../src/types.js';
+import type { SecuritySeed } from '../src/seed.js';
 
-function flow(over: Partial<Flow['request']> = {}): Flow {
+function flow(over: Partial<ProbeFlow['request']> = {}): ProbeFlow {
   return {
-    id: 'f1', mutated: false,
     request: {
-      method: 'GET', url: 'https://app.test/api/orders?id=42', httpVersion: '1.1',
-      headers: { cookie: 'sid=abc' }, bodyText: null, bodyLen: 0, startedAt: 0, ...over,
+      method: 'GET', url: 'https://app.test/api/orders?id=42',
+      headers: { cookie: 'sid=abc' }, bodyText: null, ...over,
     },
   };
 }
@@ -50,8 +49,6 @@ describe('matchesFlow', () => {
     expect(matchesFlow(seed({ match: { urlParam: '(' } }), flow())).toBe(false);
   });
   test('a method given as a bare string does not throw — the filter is skipped', () => {
-    // a malformed seed should never crash matching (the loader guard also
-    // rejects these, but matchesFlow is defensive too)
     const bad = seed({ match: { method: 'GET' as unknown as string[] } });
     expect(() => matchesFlow(bad, flow())).not.toThrow();
     expect(matchesFlow(bad, flow())).toBe(true);

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadSecuritySeeds, isSecuritySeed } from '../../src/probes/seed.js';
+import { loadSecuritySeeds, isSecuritySeed } from '../src/seed.js';
 
 let devRoot: string;
 beforeEach(() => { devRoot = mkdtempSync(join(tmpdir(), 'hover-sec-seed-')); });

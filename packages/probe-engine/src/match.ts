@@ -1,9 +1,9 @@
-import type { Flow } from '../mitm/flows.js';
+import type { ProbeFlow } from './types.js';
 import type { SecuritySeed } from './seed.js';
 
 /** Case-insensitive header lookup — matches regardless of how the captured
  *  header key was cased (`Cookie` vs `cookie`). */
-function header(flow: Flow, name: string): string | string[] | undefined {
+function header(flow: ProbeFlow, name: string): string | string[] | undefined {
   const want = name.toLowerCase();
   for (const [k, v] of Object.entries(flow.request.headers)) {
     if (k.toLowerCase() === want) return v;
@@ -12,7 +12,7 @@ function header(flow: Flow, name: string): string | string[] | undefined {
 }
 
 /** Does this captured flow carry an auth credential? */
-export function hasAuth(flow: Flow): boolean {
+export function hasAuth(flow: ProbeFlow): boolean {
   return Boolean(header(flow, 'cookie') || header(flow, 'authorization') || header(flow, 'x-api-key'));
 }
 
@@ -27,7 +27,7 @@ function safeTest(pattern: string, value: string): boolean {
 
 /** Evaluate a seed's `match` block against a captured flow. Cheap relevance
  *  filter — never an exact match. */
-export function matchesFlow(seed: SecuritySeed, flow: Flow): boolean {
+export function matchesFlow(seed: SecuritySeed, flow: ProbeFlow): boolean {
   const m = seed.match;
   // Array.isArray guard: a malformed seed (method as a bare string) must skip
   // the method filter, never throw on `.map()`.
@@ -42,6 +42,6 @@ export function matchesFlow(seed: SecuritySeed, flow: Flow): boolean {
 }
 
 /** All seeds relevant to a flow — the "what to probe" list. */
-export function matchSeeds(flow: Flow, seeds: SecuritySeed[]): SecuritySeed[] {
+export function matchSeeds(flow: ProbeFlow, seeds: SecuritySeed[]): SecuritySeed[] {
   return seeds.filter(s => matchesFlow(s, flow));
 }

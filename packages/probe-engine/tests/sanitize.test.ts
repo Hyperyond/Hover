@@ -1,12 +1,12 @@
 import { describe, test, expect } from 'vitest';
-import { sanitizeRequest } from '../../src/probes/sanitize.js';
-import type { FlowRequest } from '../../src/mitm/flows.js';
+import { sanitizeRequest } from '../src/sanitize.js';
+import type { ProbeRequest } from '../src/types.js';
 
-function req(over: Partial<FlowRequest> = {}): FlowRequest {
+function req(over: Partial<ProbeRequest> = {}): ProbeRequest {
   return {
-    method: 'POST', url: 'https://app.test/api/me', httpVersion: '1.1',
+    method: 'POST', url: 'https://app.test/api/me',
     headers: { cookie: 'sid=secret', 'content-type': 'application/json', authorization: 'Bearer xyz' },
-    bodyText: '{"name":"alice","password":"hunter2"}', bodyLen: 0, startedAt: 0, ...over,
+    bodyText: '{"name":"alice","password":"hunter2"}', ...over,
   };
 }
 

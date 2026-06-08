@@ -1,4 +1,4 @@
-import type { FlowRequest } from '../mitm/flows.js';
+import type { ProbeRequest } from './types.js';
 
 const SENSITIVE_HEADERS = [
   'cookie', 'set-cookie', 'authorization', 'proxy-authorization',
@@ -26,7 +26,7 @@ export interface SanitizedRequest {
  * baked into a test file — CI auth comes from a Playwright `storageState`
  * fixture, not inline.
  */
-export function sanitizeRequest(req: FlowRequest): SanitizedRequest {
+export function sanitizeRequest(req: ProbeRequest): SanitizedRequest {
   const redactions: string[] = [];
 
   // Headers: drop credential-bearing ones entirely.
