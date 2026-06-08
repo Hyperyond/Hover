@@ -708,9 +708,9 @@ header {
   top: 68px;
 }
 .launcher.mode-engaged {
-  border-color: rgba(251, 146, 60, 0.7);
-  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.18), 0 6px 22px rgba(0, 0, 0, 0.5);
-  color: #fb923c;
+  border-color: color-mix(in srgb, var(--mode-accent) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mode-accent) 18%, transparent), 0 6px 22px rgba(0, 0, 0, 0.5);
+  color: var(--mode-accent);
 }
 
 .modes-overlay {
