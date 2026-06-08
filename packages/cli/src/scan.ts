@@ -50,12 +50,6 @@ function resolvePkgDist(cwd: string, scopedPkg: string, sentinel: string): strin
   }
 }
 
-/** Same sanitisation the core service applies to derive the agent's allow-list
- *  prefix from an MCP server id (Claude maps non-alphanumerics to `_`). */
-function mcpAllowPrefix(serverId: string): string {
-  return `mcp__${serverId.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
-}
-
 export async function runScan(args: ScanArgs): Promise<number> {
   const cwd = args.cwd
     ? (isAbsolute(args.cwd) ? args.cwd : resolve(process.cwd(), args.cwd))
@@ -106,9 +100,9 @@ export async function runScan(args: ScanArgs): Promise<number> {
   const { launchDebugChrome } = (await import(
     `file://${join(coreDist!, 'playwright', 'launchChrome.js')}`
   )) as { launchDebugChrome: (o: LaunchOpts) => Promise<LaunchResult> };
-  const { resolveMcpConfig } = (await import(
+  const { resolveMcpConfig, mcpToolPrefix } = (await import(
     `file://${join(coreDist!, 'playwright', 'resolveMcpConfig.js')}`
-  )) as { resolveMcpConfig: (o: McpConfigOpts) => string };
+  )) as { resolveMcpConfig: (o: McpConfigOpts) => string; mcpToolPrefix: (id: string) => string };
   const { runSession } = (await import(`file://${join(coreDist!, 'runSession.js')}`)) as {
     runSession: (o: RunSessionOpts, onEvent: (ev: RunEvent) => void) => Promise<RunSessionResult>;
   };
@@ -145,6 +139,10 @@ export async function runScan(args: ScanArgs): Promise<number> {
       return 1;
     }
     line(dim(launch.alreadyRunning ? `reusing scan Chrome on :${scanPort}` : `launched scan Chrome on :${scanPort}`));
+    // launchDebugChrome unref()s the process and returns no closable handle, so
+    // this scan Chrome (own port + profile) stays open after the scan ends —
+    // tell the user it's theirs to inspect and to close by hand.
+    line(dim(`scan Chrome stays open on :${scanPort} for inspection — close it by hand when done`));
     gap();
 
     // 3 · MCP config = Playwright (drive) + security flows (probe). Allow-list
@@ -180,7 +178,7 @@ export async function runScan(args: ScanArgs): Promise<number> {
         cdpUrl,
         cwd,
         mcpConfig,
-        allowedToolsExtra: [mcpAllowPrefix(rt.mcpServerId)],
+        allowedToolsExtra: [mcpToolPrefix(rt.mcpServerId)],
         appendSystemPrompt: buildScanObjective({ scope: args.scope, origin }),
         maxBudgetUsd: args.maxBudgetUsd ?? undefined,
       },

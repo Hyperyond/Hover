@@ -45,12 +45,15 @@ export async function preflightCDP(
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
-      reason: `Chrome debug session not detected at ${cdpUrl}. Click the ✨ launcher in the widget to start it, or run \`pnpm exec hover-chrome\` (npx hover-chrome).`,
+      reason: `Chrome debug session not detected at ${cdpUrl} (${msg}). Click the ✨ launcher in the widget to start it, or run \`pnpm exec hover-chrome\` (npx hover-chrome).`,
     };
   }
   if (!versionRes.ok) {
+    // Drain the keep-alive socket — we won't read the body on the error path.
+    await versionRes.body?.cancel();
     return { ok: false, reason: `CDP returned HTTP ${versionRes.status}` };
   }
 
@@ -75,6 +78,8 @@ export async function preflightCDP(
     } else {
       // /json/version was healthy but /json/list wasn't — surface it so the
       // agent's system prompt isn't silently built from an empty tab list.
+      // Drain the keep-alive socket since we won't read the body here.
+      await listRes.body?.cancel();
       console.warn(`[hover] CDP /json/list returned HTTP ${listRes.status}; agent tab hint will be empty`);
     }
   } catch (err) {

@@ -1,7 +1,7 @@
 import { parse } from 'svelte/compiler';
 import MagicString from 'magic-string';
-import path from 'node:path';
 import { SOURCE_ATTR, type AttributionInput, type AttributionResult } from './types.js';
+import { lineColForOffset, toRelPath } from './util.js';
 
 interface SvelteNode {
   type: string;
@@ -28,10 +28,7 @@ export function transformSvelte(input: AttributionInput): AttributionResult | nu
   } catch {
     return null;
   }
-  const relPath = (() => {
-    const rel = path.relative(root, filename);
-    return rel.split(path.sep).join('/');
-  })();
+  const relPath = toRelPath(root, filename);
   const s = new MagicString(code);
   let touched = false;
 
@@ -63,19 +60,4 @@ export function transformSvelte(input: AttributionInput): AttributionResult | nu
     code: s.toString(),
     map: s.generateMap({ hires: true, source: filename }),
   };
-}
-
-function lineColForOffset(code: string, offset: number): { line: number; col: number } | null {
-  if (offset < 0 || offset > code.length) return null;
-  let line = 1;
-  let col = 1;
-  for (let i = 0; i < offset; i++) {
-    if (code.charCodeAt(i) === 10) {
-      line++;
-      col = 1;
-    } else {
-      col++;
-    }
-  }
-  return { line, col };
 }

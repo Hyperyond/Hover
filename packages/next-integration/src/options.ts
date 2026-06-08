@@ -82,7 +82,11 @@ function readBool(raw: string | undefined): boolean | undefined {
 }
 
 function readNumber(raw: string | undefined): number | undefined {
-  return raw ? Number(raw) : undefined;
+  // A present-but-non-numeric value (`Number('abc')` -> NaN) must not poison
+  // the downstream `?? default` fallback, since `NaN ?? x` is still `NaN`.
+  // Map anything non-finite back to undefined so the default applies.
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) ? n : undefined;
 }
 
 export function readOptionsFromEnv(): HoverOptions {

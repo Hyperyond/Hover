@@ -118,6 +118,11 @@ export async function runSession(
     }
   }
 
+  // On abort (opts.signal), invokeAgent SIGTERMs the child and no session_end
+  // arrives, so the error flag above never gets set. Honour the doc contract
+  // ("True if the run ended in error or was aborted") by flipping it here.
+  if (opts.signal?.aborted) isError = true;
+
   if (summary) steps.push({ kind: 'done', summary });
   return { steps, summary, isError };
 }

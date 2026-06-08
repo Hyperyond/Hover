@@ -2,8 +2,8 @@ import { parse } from '@astrojs/compiler';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 import * as compilerUtils from '@astrojs/compiler/utils';
 const serialize = compilerUtils.serialize as unknown as (node: unknown) => string;
-import path from 'node:path';
 import { SOURCE_ATTR, type AttributionInput, type AttributionResult } from './types.js';
+import { toRelPath } from './util.js';
 
 interface AstroAttribute {
   type: 'attribute';
@@ -54,10 +54,7 @@ export async function transformAstro(input: AttributionInput): Promise<Attributi
     return null;
   }
   const ast = result.ast as unknown as AstroNode;
-  const relPath = (() => {
-    const rel = path.relative(root, filename);
-    return rel.split(path.sep).join('/');
-  })();
+  const relPath = toRelPath(root, filename);
   let touched = false;
 
   const visit = (node: AstroNode) => {

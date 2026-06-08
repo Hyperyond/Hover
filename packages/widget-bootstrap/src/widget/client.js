@@ -856,7 +856,7 @@
     return root;
   };
 
-  const renderGroup = (g, isLastGroup, isLiveRun) => {
+  const renderGroup = (g) => {
     const root = document.createElement('div');
     root.className = 'group ' + g.status;
     // No auto-expand — even the running group stays collapsed. The user
@@ -979,12 +979,11 @@
     const previousCount = lastRenderedGroupCount;
     for (let i = 0; i < groups.length; i++) {
       const g = groups[i];
-      const isLast = i === groups.length - 1;
       let node;
       if (g.kind === 'user') node = renderUserRow(g.text);
       else if (g.kind === 'system') node = renderSystemRow(g.text);
       else if (g.kind === 'ai') node = renderAiRow(g.text);
-      else if (g.kind === 'group') node = renderGroup(g, isLast, running);
+      else if (g.kind === 'group') node = renderGroup(g);
       else if (g.kind === 'report') node = renderReport(g);
       else if (g.kind === 'findings') node = renderFindings(g);
       if (node) {
@@ -1452,9 +1451,11 @@
     pending.delete(kind);
     // optimize: 'on' — auto-run the optimization pass on the just-saved spec
     // (one LLM call per save; the deterministic original is always kept).
-    if (kind === 'spec' && optimizeMode === 'on' && payload?.slug) {
-      addMessage({ kind: 'system', text: `Auto-optimizing "${payload.slug}" (optimize: 'on')…` });
-      optimizeSpecAction({ slug: payload.slug });
+    // The spec-saved payload is `{ name, path }` (name holds the slug); there
+    // is no `slug` field, so read the slug off `payload.name`.
+    if (kind === 'spec' && optimizeMode === 'on' && payload?.name) {
+      addMessage({ kind: 'system', text: `Auto-optimizing "${payload.name}" (optimize: 'on')…` });
+      optimizeSpecAction({ slug: payload.name });
     }
   };
 
@@ -1612,18 +1613,28 @@
     );
 
     const closeOnOutside = (e) => { if (!e.composedPath().includes(wrap)) closeMenu(); };
+    // Esc closes the Actions menu (not the whole panel) when it's open —
+    // stopPropagation keeps the root Esc handler from also closing the panel.
+    const closeOnEsc = (e) => {
+      if (e.key === 'Escape' && !menu.hidden) {
+        e.stopPropagation();
+        closeMenu();
+      }
+    };
     let attachTimer = null;
     function openMenu() {
       menu.hidden = false;
       attachTimer = setTimeout(() => {
         attachTimer = null;
         document.addEventListener('click', closeOnOutside, { capture: true });
+        root.addEventListener('keydown', closeOnEsc, { capture: true });
       }, 0);
     }
     function closeMenu() {
       menu.hidden = true;
       if (attachTimer != null) { clearTimeout(attachTimer); attachTimer = null; }
       document.removeEventListener('click', closeOnOutside, { capture: true });
+      root.removeEventListener('keydown', closeOnEsc, { capture: true });
     }
     if (!busy) {
       trigger.addEventListener('click', (e) => {
@@ -2851,16 +2862,6 @@
     return lines.join('\n');
   }
 
-  function inspectElement(el) {
-    const sel = bestSelector(el);
-    const ass = bestAssertion(el);
-    if (!sel || !ass) return null;
-    return {
-      code: ass.code.replace('SEL', sel.code),
-      hint: `${sel.hint} ${ass.hint}`,
-    };
-  }
-
   function bestSelector(el) {
     const testid = el.getAttribute('data-testid');
     if (testid) return { code: `page.getByTestId(${JSON.stringify(testid)})`, hint: `testid="${testid}"` };
@@ -2931,36 +2932,6 @@
       return el.placeholder || '';
     }
     return (el.textContent || '').trim().slice(0, 80);
-  }
-
-  function bestAssertion(el) {
-    const tag = el.tagName.toLowerCase();
-    if (tag === 'input') {
-      const t = (el.getAttribute('type') || 'text').toLowerCase();
-      if (t === 'checkbox' || t === 'radio') {
-        return el.checked
-          ? { code: `expect(SEL).toBeChecked()`, hint: '· is checked' }
-          : { code: `expect(SEL).not.toBeChecked()`, hint: '· is unchecked' };
-      }
-      const v = el.value ?? '';
-      if (v) return { code: `expect(SEL).toHaveValue(${JSON.stringify(v)})`, hint: `· value "${String(v).slice(0, 30)}"` };
-      return { code: `expect(SEL).toBeVisible()`, hint: '· visible' };
-    }
-    if (tag === 'textarea') {
-      const v = el.value ?? '';
-      if (v) return { code: `expect(SEL).toHaveValue(${JSON.stringify(v)})`, hint: '· has value' };
-      return { code: `expect(SEL).toBeVisible()`, hint: '· visible' };
-    }
-    if (tag === 'select') {
-      const v = el.value ?? '';
-      return { code: `expect(SEL).toHaveValue(${JSON.stringify(v)})`, hint: `· "${v}" selected` };
-    }
-    if (el.disabled) return { code: `expect(SEL).toBeDisabled()`, hint: '· is disabled' };
-    const text = (el.textContent || '').trim();
-    if (text && text.length < 120) {
-      return { code: `expect(SEL).toHaveText(${JSON.stringify(text)})`, hint: `· text "${text.slice(0, 30)}${text.length > 30 ? '…' : ''}"` };
-    }
-    return { code: `expect(SEL).toBeVisible()`, hint: '· visible' };
   }
 
   function cssEscape(s) {
@@ -3257,10 +3228,10 @@
     { capture: true },
   );
 
-  // Build an assertion {code, hint} pinned to a specific assert kind,
-  // mirroring the existing inspectElement() shape so writeSpec consumes
-  // it identically. Returns null when the element can't produce that
-  // assertion (e.g. assert-value on a <div> with no value).
+  // Build an assertion {code, hint} pinned to a specific assert kind, in the
+  // {code, hint} shape writeSpec consumes (code carries a `SEL` placeholder
+  // that bestSelector's output is spliced into). Returns null when the element
+  // can't produce that assertion (e.g. assert-value on a <div> with no value).
   function buildRecordingAssertion(el, mode) {
     const sel = bestSelector(el);
     if (!sel) return null;

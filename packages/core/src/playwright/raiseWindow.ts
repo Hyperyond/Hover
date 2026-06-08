@@ -80,9 +80,26 @@ export async function raiseChromeWindow(pid: number): Promise<void> {
     if (os === 'linux') {
       // wmctrl is the most common helper for X11; not always installed,
       // but the alternative (xdotool) needs the same dependency story.
-      // We try wmctrl with the PID match; if it isn't installed the
-      // outer try/catch swallows the ENOENT and we degrade gracefully.
-      await runDetached('wmctrl', ['-ia', String(pid)]);
+      // If it isn't installed the runCapture/runDetached calls swallow the
+      // ENOENT and we degrade gracefully.
+      //
+      // `wmctrl -i` expects an X11 WINDOW id, NOT a unix PID, so we first
+      // map PID → window id. `wmctrl -l -p` lists windows with their owning
+      // PID in the third column:
+      //   0x03c00007  0 12345  hostname  Title…
+      const listing = await runCapture('wmctrl', ['-l', '-p']);
+      if (!listing) return;
+      let windowId: string | null = null;
+      for (const line of listing.split('\n')) {
+        // columns: <window-id> <desktop> <pid> <host> <title…>
+        const m = line.match(/^(0x[0-9a-fA-F]+)\s+\S+\s+(\d+)\s/);
+        if (m && Number(m[2]) === pid) {
+          windowId = m[1];
+          break;
+        }
+      }
+      if (!windowId) return; // no matching window — no-op gracefully
+      await runDetached('wmctrl', ['-ia', windowId]);
       return;
     }
 

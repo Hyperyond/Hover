@@ -58,7 +58,7 @@ import {
 import { getAgent } from './agents/registry.js';
 import type { InvokeEvent } from './agents/types.js';
 import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
-import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
+import { resolveMcpConfig, mcpToolPrefix } from './playwright/resolveMcpConfig.js';
 import { launchDebugChrome } from './playwright/launchChrome.js';
 import { listSpecs } from './specs/listSpecs.js';
 import { readSeeds, BUILTIN_SEEDS } from './specs/seeds.js';
@@ -865,13 +865,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Playwright MCP server would silently launch its own Chromium —
         // and Hover's premise is to drive the user's existing Chrome (with
         // their dev state, cookies, devtools open), never spawn a fresh one.
-        // In an active mode, the relevant CDP endpoint may be the mode's
-        // own port (e.g. 9333 for security), not the default cdpUrl.
-        const preflightExtras = effectiveLaunchExtras();
-        const preflightCdpUrl = preflightExtras?.cdpPort
-          ? `http://localhost:${preflightExtras.cdpPort}`
-          : cdpUrl;
-        const cdp = await getPreflight(preflightCdpUrl);
+        const cdp = await getPreflight(cdpUrl);
         if (!cdp.ok) {
           send(ws, {
             type: 'event',
@@ -952,14 +946,13 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // and `--allowedTools mcp__foo` matches every tool under that
         // prefix. We pass the prefix `mcp__<sanitized>` so all of the
         // server's tools are reachable.
-        const sanitize = (s: string): string => s.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
         const activePluginMcpIds: string[] = [];
         if (currentModeId) {
           for (const p of plugins) {
             for (const srv of p.mcpServers ?? []) {
               const scope = srv.activeInModes ?? (p.mode ? [p.mode.id] : []);
               if (scope.includes('*') || scope.includes(currentModeId)) {
-                activePluginMcpIds.push(`mcp__${sanitize(srv.id)}`);
+                activePluginMcpIds.push(mcpToolPrefix(srv.id));
               }
             }
           }
@@ -1044,14 +1037,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           // Force the next command to re-probe CDP. The error could be from
           // Chrome dying, MCP spawning a stray Chromium, the user closing
           // their debug window — anything that would make a cached "all
-          // healthy" result lie. Invalidate the mode-effective URL (see
-          // preflightCdpUrl above) — not the static cdpUrl — so security
-          // mode invalidations don't no-op against the default port.
-          const invalExtras = effectiveLaunchExtras();
-          const invalCdpUrl = invalExtras?.cdpPort
-            ? `http://localhost:${invalExtras.cdpPort}`
-            : cdpUrl;
-          invalidatePreflight(invalCdpUrl);
+          // healthy" result lie.
+          invalidatePreflight(cdpUrl);
         }
       } finally {
         if (run.graceTimer) clearTimeout(run.graceTimer);

@@ -1,5 +1,5 @@
 import type { IdentifiedFlow } from './suggest.js';
-import type { SecurityClass, SecuritySeed } from './seed.js';
+import type { SecurityClass, SecuritySeed, SeedCategory } from './seed.js';
 import { matchSeeds } from './match.js';
 import { builtinSecuritySeeds } from './builtins.js';
 
@@ -29,6 +29,10 @@ export interface SweepOptions {
    *  default — the engine enforces this, never the recipe. */
   allowDestructive?: boolean;
   seeds?: SecuritySeed[];
+  /** Gate seeds by `category` (a seed with no category defaults to `authz`) so
+   *  orange security mode and red pentest mode each draw their own slice.
+   *  Omitting it keeps ALL seeds (back-compat). */
+  categories?: SeedCategory[];
 }
 
 /**
@@ -37,7 +41,10 @@ export interface SweepOptions {
  * `skipped` unless `allowDestructive` is set, never silently run. Pure.
  */
 export function planSweep(flows: IdentifiedFlow[], opts: SweepOptions = {}): SweepPlan {
-  const seeds = opts.seeds ?? builtinSecuritySeeds;
+  const all = opts.seeds ?? builtinSecuritySeeds;
+  const seeds = opts.categories
+    ? all.filter(s => opts.categories!.includes(s.category ?? 'authz'))
+    : all;
   const probes: SweepProbe[] = [];
   const skipped: SweepProbe[] = [];
   for (const f of flows) {

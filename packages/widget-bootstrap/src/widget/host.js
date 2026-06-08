@@ -51,10 +51,19 @@ export function initHost(ctx) {
   // ─── CSS namespacing ────────────────────────────────────────────────
   // Rewrites every selector in the plugin's CSS to be prefixed with
   // `[data-plugin-active="<name>"]`. Naive but adequate for hand-written
-  // plugin CSS: splits on top-level commas, prefixes each selector group,
-  // leaves @-rules (`@media`, `@keyframes`) intact.
+  // plugin CSS: splits on top-level commas, prefixes each selector group.
+  // Conditional group at-rules (`@media`, `@supports`) are recursed into so
+  // the selectors nested under them get namespaced too; other at-rules
+  // (`@keyframes`, `@font-face`, `@import`, …) are copied verbatim since
+  // their bodies hold keyframe stops / descriptors, not page selectors.
   const namespaceCss = (raw, pluginName) => {
     const attr = `[data-plugin-active="${pluginName}"]`;
+    // Strip /* … */ comments first. CSS comments don't nest, so a single
+    // non-greedy pass is correct; without this a comment ahead of a rule
+    // would be swept into the selector scan and split on its commas, yielding
+    // garbage namespaced selectors. (Naive re: comment-like sequences inside
+    // strings, but plugin CSS is small and authored, not minified.)
+    raw = raw.replace(/\/\*[\s\S]*?\*\//g, '');
     // Split rules by `}` boundary while keeping the trailing brace; not a
     // full parser, but plugin CSS is small and authored, not minified.
     const out = [];
@@ -63,13 +72,16 @@ export function initHost(ctx) {
       // Skip whitespace.
       while (i < raw.length && /\s/.test(raw[i])) i++;
       if (i >= raw.length) break;
-      // @-rule: copy through to matching closing brace.
+      // @-rule: capture through to its matching closing brace (or `;` for
+      // block-less rules like @import / @charset).
       if (raw[i] === '@') {
         const start = i;
         let depth = 0;
         let started = false;
+        let blockStart = -1; // index of the at-rule's first `{`, if any
         while (i < raw.length) {
           if (raw[i] === '{') {
+            if (!started) blockStart = i;
             depth++;
             started = true;
           } else if (raw[i] === '}') {
@@ -84,7 +96,20 @@ export function initHost(ctx) {
           }
           i++;
         }
-        out.push(raw.slice(start, i));
+        const full = raw.slice(start, i);
+        // Conditional group rules wrap ordinary style rules — recurse so the
+        // nested selectors get the namespace attr too. Identified by their
+        // prelude keyword; everything else (keyframes/font-face/page/…) is
+        // copied verbatim.
+        const prelude = blockStart >= 0 ? raw.slice(start, blockStart).trim() : full.trim();
+        const isGroupRule = /^@(media|supports|container|layer|scope)\b/i.test(prelude);
+        if (started && blockStart >= 0 && isGroupRule) {
+          // Inner body is everything between the outer `{` and the final `}`.
+          const innerBody = raw.slice(blockStart + 1, i - 1);
+          out.push(`${prelude} {\n${namespaceCss(innerBody, pluginName)}\n}`);
+        } else {
+          out.push(full);
+        }
         continue;
       }
       // Regular rule: selector list up to `{`, body up to matching `}`.
@@ -342,11 +367,12 @@ export function initHost(ctx) {
     },
 
     setState(patch) {
-      // Find which plugin is asking by walking the call stack? No — too
-      // fragile. Instead expect plugin code to set the namespaced shape:
-      //   host.setState({ [pluginName]: { ...newSubstate } })
-      // For ergonomic shorthand, also accept { ...substate } merged into
-      // the active plugin's namespace.
+      // Determining which plugin is asking by walking the call stack would be
+      // too fragile, so we resolve it from the currently-active mode instead:
+      // `patch` is the substate to shallow-merge into the active plugin's slot
+      //   host.setState({ ...newSubstate })
+      // (i.e. it's already scoped to the active plugin — no { [name]: substate }
+      // namespacing). Dropped silently when no mode is active.
       if (!patch || typeof patch !== 'object') return;
       if (activeModeId) {
         // Find the plugin owning the active mode and merge into its slot.

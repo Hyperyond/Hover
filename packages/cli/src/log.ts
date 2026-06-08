@@ -11,7 +11,6 @@ export const bold = (s: string): string => wrap('1', s);
 export const green = (s: string): string => wrap('32', s);
 export const yellow = (s: string): string => wrap('33', s);
 export const red = (s: string): string => wrap('31', s);
-export const blue = (s: string): string => wrap('34', s);
 export const cyan = (s: string): string => wrap('36', s);
 
 // ── Clack/Claude-style vertical-connector frame ────────────────────────────

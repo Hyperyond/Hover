@@ -237,7 +237,7 @@ async function runSetup(args: ParsedArgs): Promise<number> {
   } else if (!args.cwd) {
     // Quietly omit the "Detected …" line in monorepo-dispatch mode — the
     // workspace-selection line above already told the user what we picked.
-    if (rootDir === (args.cwd ?? startDir) || rootDir === startDir) {
+    if (rootDir === startDir) {
       info(`Detected ${bold(framework.label)} project.`);
     }
   } else {

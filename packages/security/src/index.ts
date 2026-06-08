@@ -34,6 +34,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startProxy, type ProxyHandle } from './mitm/index.js';
 import { startControlPlane, type ControlPlaneHandle } from './control-plane.js';
+import type { SeedCategory } from '@hover-dev/probe-engine';
 
 // ---------------------------------------------------------------------------
 // Resident MITM proxy — a PROCESS singleton, refcounted.
@@ -251,6 +252,10 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
       // widget's Specs / Findings UI uses it to surface "agent recorded
       // a security check" rows.
       'security:check:recorded',
+      // Emitted when the agent runs clear_flows (DELETE /flows wipes the
+      // store + checks). The widget resets its flows/checks state + badge so
+      // they don't go stale after a session reset.
+      'security:flows:cleared',
     ],
 
     // v0.12 — Save dropdown contribution. Widget surfaces this in the
@@ -322,6 +327,10 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
         control = await startControlPlane(proxy.store, {
           devRoot: ctx.devRoot,
           identities: opts?.identities,
+          // Orange security mode is access-control only — restrict probe
+          // suggestions to authz seeds (the red pentest plugin / CLI scan get
+          // the full set by not passing this).
+          seedCategories: ['authz'],
         });
         ctx.setMcpServerEnv(MCP_SERVER_ID, {
           HOVER_SECURITY_API: `http://127.0.0.1:${control.port}`,
@@ -343,6 +352,15 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
           ctx.broadcast({
             type: 'security:check:recorded',
             payload: check,
+          });
+        });
+
+        // Forward clear_flows (DELETE /flows) to the widget so its flows +
+        // checks state and the network badge reset on a session reset.
+        control.onClear(() => {
+          ctx.broadcast({
+            type: 'security:flows:cleared',
+            payload: null,
           });
         });
       },
@@ -402,6 +420,10 @@ export interface SecurityRuntimeOptions {
    *  pentest plugin passes its own id so it doesn't collide with the security
    *  plugin's server when both are loaded. Defaults to the security id. */
   mcpServerId?: string;
+  /** Restrict probe suggestions to these seed categories. Left undefined (the
+   *  CLI scan + pentest plugin) means all seeds; the orange security plugin
+   *  passes `['authz']` directly to its own startControlPlane call. */
+  seedCategories?: SeedCategory[];
 }
 
 export interface SecurityRuntimeHandle {
@@ -448,6 +470,8 @@ export async function startSecurityRuntime(
   const control = await startControlPlane(proxy.store, {
     devRoot: opts.devRoot,
     identities: opts.identities,
+    // Undefined by default (CLI scan + pentest plugin) ⇒ all seeds.
+    seedCategories: opts.seedCategories,
   });
 
   let stopped = false;

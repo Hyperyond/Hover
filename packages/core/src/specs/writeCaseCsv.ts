@@ -33,6 +33,7 @@ import { join } from 'node:path';
 import type { SkillStep } from '../skills/writeSkill.js';
 import { humanSteps } from './humanSteps.js';
 import type { SpecAssertion } from './writeSpec.js';
+import { slugify, firstSentence } from './text.js';
 
 export class CaseCsvExistsError extends Error {
   constructor(public readonly slug: string, public readonly path: string) {
@@ -79,14 +80,6 @@ export async function writeCaseCsv(opts: WriteCaseCsvOptions): Promise<WriteCase
 }
 
 // ───────── helpers ─────────
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
 
 function renderCsv(slug: string, opts: WriteCaseCsvOptions): string {
   const rows = buildRows(slug, opts);
@@ -137,7 +130,7 @@ function expectedFor(assertions: SpecAssertion[], steps: SkillStep[]): string {
   }
   const done = [...steps].reverse().find(s => s.kind === 'done');
   if (done?.summary) {
-    return done.summary.split(/(?<=[.!?])\s+/)[0]?.trim() ?? done.summary.trim();
+    return firstSentence(done.summary);
   }
   return '';
 }

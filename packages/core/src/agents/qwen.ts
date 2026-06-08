@@ -1,4 +1,5 @@
 import type { AgentDescriptor, InvokeOptions, InvokeEvent, ParserState } from './types.js';
+import { HOVER_PROMPT_PREFACE, stripMcpPrefix } from './shared.js';
 
 /**
  * Qwen Code CLI descriptor (`qwen`, https://github.com/QwenLM/qwen-code).
@@ -145,20 +146,6 @@ function resetQwenCounters(s: QwenParserState): void {
   s.toolNameByUseId.clear();
 }
 
-/** Strip the `mcp__playwright__` / `mcp__hover-playwright__` prefix so tool
- *  names match the normalised names claude / codex / cursor emit. */
-function stripMcpPrefix(raw: string): string {
-  return raw.replace(/^mcp__playwright__/, '').replace(/^mcp__hover-playwright__/, '');
-}
-
-const QWEN_PROMPT_PREFACE = [
-  'You are operating in Hover, a browser-testing tool.',
-  'Use ONLY the MCP playwright tools (prefixed `mcp__playwright__` / `mcp__hover-playwright__`) to drive the browser.',
-  'Do NOT use shell, file-edit, web-search, or any other built-in tool.',
-  'Do NOT navigate to a URL the user is already on; check the page state via `browser_snapshot` first.',
-  'When the task is complete, emit a short summary and stop.',
-].join(' ');
-
 export const qwenAgent: AgentDescriptor = {
   id: 'qwen',
   binName: 'qwen',
@@ -198,8 +185,8 @@ export const qwenAgent: AgentDescriptor = {
     // prepending to the user prompt. Concatenate the standing Hover-mode
     // preface with whatever the caller appended.
     const sysPrompt = opts.appendSystemPrompt && opts.appendSystemPrompt.trim().length > 0
-      ? `${QWEN_PROMPT_PREFACE} ${opts.appendSystemPrompt}`
-      : QWEN_PROMPT_PREFACE;
+      ? `${HOVER_PROMPT_PREFACE} ${opts.appendSystemPrompt}`
+      : HOVER_PROMPT_PREFACE;
     args.push('--append-system-prompt', sysPrompt);
 
     // MCP servers configured in ~/.qwen/settings.json — no per-invocation

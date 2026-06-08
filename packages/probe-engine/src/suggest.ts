@@ -1,5 +1,5 @@
 import type { ProbeFlow } from './types.js';
-import type { SecurityClass, SecuritySeed } from './seed.js';
+import type { SecurityClass, SecuritySeed, SeedCategory } from './seed.js';
 import { matchSeeds } from './match.js';
 import { builtinSecuritySeeds } from './builtins.js';
 
@@ -25,13 +25,22 @@ export interface ProbeSuggestion {
 /**
  * Match captured flows against probe seeds and return per-flow suggestions —
  * the deterministic "what's worth probing" list the agent acts on. Pure.
+ *
+ * `opts.categories`, when given, gates seeds by their `category` (defaulting a
+ * seed with no category to `authz`) so orange security mode and red pentest
+ * mode can each draw their own slice of the seed set. Omitting it keeps ALL
+ * seeds (back-compat).
  */
 export function suggestProbes(
   flows: IdentifiedFlow[],
   seeds: SecuritySeed[] = builtinSecuritySeeds,
+  opts: { categories?: SeedCategory[] } = {},
 ): ProbeSuggestion[] {
+  const active = opts.categories
+    ? seeds.filter(s => opts.categories!.includes(s.category ?? 'authz'))
+    : seeds;
   return flows.flatMap(f =>
-    matchSeeds(f, seeds).map(s => ({
+    matchSeeds(f, active).map(s => ({
       flowId: f.id,
       method: f.request.method,
       url: f.request.url,
