@@ -130,11 +130,17 @@
  * override. Default mode (currentMode === null) never gets .mode-engaged, so
  * it stays mint. */
 :host(.mode-engaged) {
+  /* The single knob. The widget JS sets this inline from the active mode's
+   * `accent` (plugin-api HoverPluginMode.accent); when no plugin sets one this
+   * literal applies = security orange. Everything below is derived from it via
+   * color-mix so a plugin retints the whole engaged chrome with one colour. */
   --mode-accent: #fb923c;
   --accent: var(--mode-accent);
-  --accent-dim: rgba(251, 146, 60, 0.16);
-  --accent-hover: #fdab5e;
-  --accent-ink: #2a1006;
+  --accent-dim: color-mix(in srgb, var(--mode-accent) 16%, transparent);
+  --accent-hover: color-mix(in srgb, var(--mode-accent) 86%, white);
+  --accent-ink: color-mix(in srgb, var(--mode-accent) 20%, black);
+  /* soft light tint for engaged mode-bar text (the old #fed7aa for orange). */
+  --mode-tint: color-mix(in srgb, var(--mode-accent) 38%, white);
 }
 
 /* ───────────────────────── launcher (unchanged colour) ───────────────────────── */
@@ -657,23 +663,24 @@ header {
 }
 .modebar.engaged .modebar-hint { font-weight: 600; }
 
-/* Engaged state — non-default mode is active. Orange-red (warn-ish) so
- * it reads as "you're in altered state, be aware" without being
- * actually-danger red. Pattern borrowed from Burp's "intercept on"
- * banner — a persistent toolbar tint, not a transient flash. */
+/* Engaged state — non-default mode is active. A persistent toolbar tint in
+ * the mode's accent (security orange by default; pentest red) so it reads as
+ * "you're in altered state, be aware" — pattern borrowed from Burp's
+ * "intercept on" banner. All shades derive from --mode-accent so the bar
+ * retints with the mode. */
 .modebar.engaged {
-  background: linear-gradient(180deg, rgba(251, 146, 60, 0.18), rgba(251, 146, 60, 0.08));
-  border-bottom-color: rgba(251, 146, 60, 0.55);
-  color: #fed7aa;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mode-accent) 18%, transparent), color-mix(in srgb, var(--mode-accent) 8%, transparent));
+  border-bottom-color: color-mix(in srgb, var(--mode-accent) 55%, transparent);
+  color: var(--mode-tint);
 }
 .modebar.engaged .modebar-dot {
-  background: #fb923c;
-  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.18);
+  background: var(--mode-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mode-accent) 18%, transparent);
 }
-.modebar.engaged .modebar-label { color: #fed7aa; }
-.modebar.engaged .modebar-hint  { color: rgba(254, 215, 170, 0.85); }
-.modebar.engaged .modebar-caret { color: rgba(254, 215, 170, 0.7); }
-.modebar.engaged:hover { background: linear-gradient(180deg, rgba(251, 146, 60, 0.26), rgba(251, 146, 60, 0.14)); }
+.modebar.engaged .modebar-label { color: var(--mode-tint); }
+.modebar.engaged .modebar-hint  { color: color-mix(in srgb, var(--mode-tint) 85%, transparent); }
+.modebar.engaged .modebar-caret { color: color-mix(in srgb, var(--mode-tint) 70%, transparent); }
+.modebar.engaged:hover { background: linear-gradient(180deg, color-mix(in srgb, var(--mode-accent) 26%, transparent), color-mix(in srgb, var(--mode-accent) 14%, transparent)); }
 
 /* Panel + launcher mirror the engaged tint so the user spots it from
  * across the page. We hook the state via a class on .panel set by the
@@ -683,8 +690,8 @@ header {
  * :host(.mode-engaged) (top of file) so it reaches the tooltip + launcher
  * too; here we only set the panel's own border/shadow. */
 .panel.mode-engaged {
-  border-color: rgba(251, 146, 60, 0.7);
-  box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.35), 0 20px 60px rgba(0, 0, 0, 0.55);
+  border-color: color-mix(in srgb, var(--mode-accent) 70%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mode-accent) 35%, transparent), 0 20px 60px rgba(0, 0, 0, 0.55);
 }
 
 /* When the modebar is present, every overlay that anchored its top at

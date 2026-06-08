@@ -2017,6 +2017,12 @@
     host.classList.toggle('mode-engaged', engaged);
     if (!hasModes) return;
     const cur = state.availableModes.find((m) => m.id === state.currentMode);
+    // Retint the engaged chrome to the active mode's accent. Setting
+    // --mode-accent inline on the host overrides the CSS default (security
+    // orange); removing it falls back to that default. Everything else (dim /
+    // hover / ink / tint, mode bar, panel) derives from it via color-mix.
+    if (engaged && cur?.accent) host.style.setProperty('--mode-accent', cur.accent);
+    else host.style.removeProperty('--mode-accent');
     modeLabelEl.textContent = cur?.label || 'Default';
     // Hint is a short affordance ("click to switch") or a short engaged
     // tag ("plugin active") — NOT the full description, which pushed the

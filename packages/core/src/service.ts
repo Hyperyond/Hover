@@ -361,6 +361,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         id: p.mode.id,
         label: p.mode.label,
         description: p.mode.description,
+        // Widget retints to this while the mode is engaged (falls back to
+        // security orange in the widget when absent).
+        accent: p.mode.accent,
         pluginName: p.name,
       }));
     const payload = { current: currentModeId, available };
