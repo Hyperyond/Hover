@@ -423,6 +423,9 @@ export interface SecurityRuntimeHandle {
   setIntercept(on: boolean): void;
   /** Snapshot the checks the agent recorded so far (a copy). */
   listChecks(): import('./control-plane.js').SecurityCheckStep[];
+  /** Coverage gaps the agent recorded (what it did NOT test) — feeds the
+   *  findings report's "Not tested" section. */
+  listGaps(): string[];
   /** Subscribe to each recorded check (for a widget running count). */
   onCheck(listener: (check: import('./control-plane.js').SecurityCheckStep) => void): void;
   /** Stop this caller's control plane + release the shared proxy. Idempotent. */
@@ -456,6 +459,7 @@ export async function startSecurityRuntime(
     },
     setIntercept: (on) => proxy.setMode(on ? 'intercept' : 'passthrough'),
     listChecks: () => control.listChecks(),
+    listGaps: () => control.listGaps(),
     onCheck: (listener) => control.on('check', listener),
     async stop() {
       if (stopped) return;
