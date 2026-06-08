@@ -57,6 +57,10 @@ export interface ControlPlaneHandle {
    *  plugin's hooks to forward checks to the widget without going
    *  through HTTP. Returns a copy so callers can mutate freely. */
   listChecks(): SecurityCheckStep[];
+  /** Coverage gaps the agent recorded — what it did NOT test and why. Feeds the
+   *  findings report's "Not tested" section so a scan never reads as full
+   *  coverage. */
+  listGaps(): string[];
   /** Subscribe to per-check events (one per recorded check). */
   on(event: 'check', listener: (check: SecurityCheckStep) => void): void;
   off(event: 'check', listener: (check: SecurityCheckStep) => void): void;
@@ -144,6 +148,14 @@ export async function startControlPlane(
   let nextCheckId = 1;
   const emitter = new EventEmitter();
 
+  // Coverage gaps the agent reports — free-text notes of what it did NOT test
+  // (out-of-scope areas, probe classes held back, anything only confirmable
+  // out-of-band, surface it couldn't reach). Read into the findings report's
+  // "Not tested" section. De-duplicated, trimmed, capped so a runaway agent
+  // can't balloon the list.
+  const gaps: string[] = [];
+  const MAX_GAPS = 200;
+
   const recordCheck = (raw: {
     sourceFlowId: string;
     replayFlow: Flow;
@@ -213,6 +225,30 @@ export async function startControlPlane(
         const n = checks.length;
         checks.length = 0;
         sendJson(res, 200, { cleared: n });
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/coverage-gaps') {
+        sendJson(res, 200, { gaps: [...gaps] });
+        return;
+      }
+
+      if (req.method === 'POST' && path === '/coverage-gap') {
+        const body = await readBody(req);
+        let note = '';
+        try {
+          note = String((JSON.parse(body || '{}') as { note?: unknown }).note ?? '').trim();
+        } catch {
+          sendJson(res, 400, { error: 'invalid JSON body' });
+          return;
+        }
+        if (!note) {
+          sendJson(res, 400, { error: 'note is required' });
+          return;
+        }
+        // De-dup (agents repeat themselves) + cap.
+        if (!gaps.includes(note) && gaps.length < MAX_GAPS) gaps.push(note);
+        sendJson(res, 200, { recorded: true, gaps: gaps.length });
         return;
       }
 
@@ -366,6 +402,7 @@ export async function startControlPlane(
     port: boundPort,
     token,
     listChecks: () => [...checks],
+    listGaps: () => [...gaps],
     on: (event, listener) => {
       emitter.on(event, listener);
     },

@@ -192,10 +192,12 @@ export async function runScan(args: ScanArgs): Promise<number> {
     done(`${result.isError ? 'Ended with an error' : 'Scan complete'}${meta ? ` ${dim('·')} ${meta}` : ''}`);
     if (result.summary) line(result.summary.trim());
 
-    // 5 · render the findings report from the recorded checks.
+    // 5 · render the findings report from the recorded checks + the agent's
+    //     own coverage-gap notes (so "Not tested" reflects what it skipped).
     const checks = rt.listChecks();
+    const notTested = rt.listGaps();
     const reportName = args.name ?? (args.scope ?? 'scan');
-    const written = await writeFindingsReport({ devRoot: cwd, name: reportName, checks });
+    const written = await writeFindingsReport({ devRoot: cwd, name: reportName, checks, notTested });
     gap();
     if (checks.length === 0) {
       ok(`report written: ${cyan(relative(cwd, written.path))} ${dim('(no probes were recorded — see the agent summary above)')}`);
@@ -267,6 +269,6 @@ interface RunSessionResult { steps: unknown[]; summary: string; isError: boolean
 interface RunEvent { kind: string; text?: string; tool?: string; costUsd?: number; turns?: number }
 interface SecurityRuntime {
   proxyPort: number; spki: string; mcpServerId: string; mcpScriptPath: string;
-  mcpEnv: Record<string, string>; listChecks(): unknown[]; stop(): Promise<void>;
+  mcpEnv: Record<string, string>; listChecks(): unknown[]; listGaps(): string[]; stop(): Promise<void>;
 }
 interface WriteReportOpts { devRoot: string; name: string; checks: unknown[]; notTested?: string[] }

@@ -130,6 +130,28 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  'record_coverage_gap',
+  {
+    description:
+      'Record something you did NOT test, and why. Call this once per gap, in plain language: an area you skipped (out of scope, or you ran out of session), a probe class you held back, anything only confirmable out-of-band (forbidden here — note it as SUSPECTED, not confirmed), or surface you could not reach (auth wall, missing test data, flaky UI). These notes become the findings report\'s "Not tested" section, so the report is honest about coverage. Treat untested surface as UNKNOWN, never as safe.',
+    inputSchema: {
+      note: z
+        .string()
+        .describe(
+          'One coverage gap — what you did not test and why. e.g. "the /admin area — out of scope" or "blind SSRF on /webhook — only confirmable out-of-band, left as suspected".',
+        ),
+    },
+  },
+  async ({ note }) => {
+    const { gaps } = await api<{ gaps: number }>('/coverage-gap', {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    });
+    return md(`📝 Coverage gap recorded (${gaps} total): ${note}`);
+  },
+);
+
 interface ProbeSuggestion {
   flowId: string;
   method: string;
