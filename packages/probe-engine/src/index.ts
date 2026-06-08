@@ -5,6 +5,7 @@
  * report) via each consumer's tsup `noExternal`. Zero external dependencies.
  */
 export type { ProbeRequest, ProbeFlow } from './types.js';
+export type { SecurityCheckStep } from './check.js';
 export {
   type SecurityClass,
   type SecuritySeed,

@@ -28,7 +28,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
 import type { Flow, FlowStore } from './mitm/flows.js';
 import { replayFlow, type MutateOptions } from './mitm/replay.js';
-import { suggestProbes, cookieHeaderFor, type StorageState } from '@hover-dev/probe-engine';
+import { suggestProbes, cookieHeaderFor, type StorageState, type SecurityCheckStep } from '@hover-dev/probe-engine';
 
 const PORT_RETRIES = 10;
 const DEFAULT_PORT = 51850;
@@ -44,51 +44,11 @@ const DEFAULT_PORT = 51850;
  * real ground truth (and so the user can see "expected 403, observed
  * 200 — vulnerability!" findings the agent noticed).
  */
-export interface SecurityCheckStep {
-  /** Monotonic id within this session, useful for stable ordering. */
-  id: number;
-  /** Source flow this check derives from. The captured request gave
-   *  the agent the URL / cookies / auth state it then mutated. */
-  sourceFlowId: string;
-  /** Resulting replayed flow id (the mutation's target). */
-  replayId: string;
-  /** Agent-supplied human description, e.g. "IDOR: access another
-   *  user's order". Required — without intent the check is just a
-   *  replay, not a security assertion. */
-  intent: string;
-  /** Agent-stated expectation. Spec emit uses this to write the
-   *  assertion. The observed status is recorded separately so the
-   *  spec can distinguish "passed" from "vulnerability found". */
-  expectStatus: number;
-  /** The replayed request, so the crystallized spec can reproduce it
-   *  faithfully (method/url/body) — sanitized at spec-write time so real
-   *  cookies/tokens never land in the committed file. Optional for
-   *  backward compatibility with checks recorded before this field. */
-  request?: {
-    method: string;
-    url: string;
-    headers: Record<string, string | string[] | undefined>;
-    bodyText: string | null;
-  };
-  /** Set when the replay was issued AS a second identity (B) — the
-   *  storageState path of that identity. Drives the multi-role
-   *  `browser.newContext({ storageState })` emit in writeSecuritySpec. */
-  crossIdentity?: { identityB: string };
-  /** What actually came back. */
-  observed: {
-    method: string;
-    url: string;
-    status: number;
-    statusMessage: string | null;
-    bodyExcerpt: string | null;
-  };
-  /** Whether observed === expected. Spec emit uses this to bucket
-   *  checks into "regression assertions" (pass on fix) vs "verified
-   *  controls" (already passing). */
-  matched: boolean;
-  /** Wall-clock when the check was recorded. */
-  recordedAt: number;
-}
+// The recorded-check shape now lives in the shared engine (the data contract
+// security + pentest both use); imported above for local use. Re-export it so
+// existing `from './control-plane.js'` imports — and security's public index —
+// keep working unchanged.
+export type { SecurityCheckStep };
 
 export interface ControlPlaneHandle {
   port: number;
