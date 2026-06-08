@@ -273,4 +273,46 @@ describe('writeSecuritySpec', () => {
     expect(src).toContain('Suppressed 1 noise check(s)');
     expect(src).toContain('Self-XSS in the profile name field');
   });
+
+  test('reproduces a POST body (sanitized) when the check carries a request', async () => {
+    const result = await writeSecuritySpec({
+      devRoot: tmp,
+      name: 'mass-assign',
+      checks: [
+        buildCheck({
+          intent: 'mass assignment: set role=admin',
+          expectStatus: 200,
+          observed: { ...buildCheck().observed, method: 'PATCH', url: 'http://localhost/api/me' },
+          request: {
+            method: 'PATCH',
+            url: 'http://localhost/api/me',
+            headers: { cookie: 'sid=secret', 'content-type': 'application/json' },
+            bodyText: '{"name":"a","role":"admin","password":"hunter2"}',
+          },
+        }),
+      ],
+    });
+    const src = readFileSync(result.path, 'utf-8');
+    // body is carried so the replay isn't empty…
+    expect(src).toContain('await request.patch("http://localhost/api/me"');
+    expect(src).toContain('data:');
+    expect(src).toMatch(/role.{0,8}admin/); // the non-secret payload survives (JSON-escaped in source)
+    expect(src).toContain("'content-type': \"application/json\"");
+    // …but credentials/secrets are stripped, never baked into the file
+    expect(src).not.toContain('sid=secret');
+    expect(src).not.toContain('hunter2');
+    expect(src).toContain('<redacted>');
+    expect(src).toContain('Redacted from the captured request');
+  });
+
+  test('omits request options for a GET check with no body (back-compat)', async () => {
+    const result = await writeSecuritySpec({
+      devRoot: tmp,
+      name: 'get-idor',
+      checks: [buildCheck({ observed: { ...buildCheck().observed, method: 'GET' } })],
+    });
+    const src = readFileSync(result.path, 'utf-8');
+    expect(src).toMatch(/await request\.get\("[^"]+"\);/);
+    expect(src).not.toContain('data:');
+  });
 });

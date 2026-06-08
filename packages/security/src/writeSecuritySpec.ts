@@ -28,7 +28,19 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SecurityCheckStep } from './control-plane.js';
-import { gateFinding } from '@hover-dev/probe-engine';
+import { gateFinding, sanitizeRequest } from '@hover-dev/probe-engine';
+
+/** Case-insensitive single-value header lookup. */
+function headerValue(
+  h: Record<string, string | string[] | undefined>,
+  name: string,
+): string | undefined {
+  const want = name.toLowerCase();
+  for (const [k, v] of Object.entries(h)) {
+    if (k.toLowerCase() === want) return Array.isArray(v) ? v[0] : (v ?? undefined);
+  }
+  return undefined;
+}
 
 /** A recorded check is noise (not worth a regression test) when its intent
  *  matches the engine's never-submit list — self-XSS, missing security header,
@@ -192,11 +204,26 @@ function renderSpec(
       );
       lines.push(`    // After fix, this test passes (server now returns ${c.expectStatus}).`);
     }
-    const methodLower = c.observed.method.toLowerCase();
+    // Reproduce the captured request, SANITIZED — credentials/secrets are
+    // stripped (they come from storageState, never inline). Carries the body
+    // for POST/PUT/PATCH so the replay is faithful, not an empty request.
+    const sanitized = c.request ? sanitizeRequest(c.request) : null;
+    const methodLower = (sanitized?.method ?? c.observed.method).toLowerCase();
     const playwrightMethod = mapToPlaywrightMethod(methodLower);
-    const urlJson = JSON.stringify(c.observed.url);
+    const urlJson = JSON.stringify(sanitized?.url ?? c.observed.url);
 
-    lines.push(`    const response = await request.${playwrightMethod}(${urlJson});`);
+    const reqOpts: string[] = [];
+    if (sanitized?.bodyText) {
+      const ct = headerValue(sanitized.headers, 'content-type');
+      if (ct) reqOpts.push(`headers: { 'content-type': ${JSON.stringify(ct)} }`);
+      reqOpts.push(`data: ${JSON.stringify(sanitized.bodyText)}`);
+    }
+    if (sanitized && sanitized.redactions.length > 0) {
+      const what = [...new Set(sanitized.redactions)].join(', ');
+      lines.push(`    // Redacted from the captured request: ${what} (supply auth via storageState).`);
+    }
+    const optsStr = reqOpts.length > 0 ? `, { ${reqOpts.join(', ')} }` : '';
+    lines.push(`    const response = await request.${playwrightMethod}(${urlJson}${optsStr});`);
     lines.push(`    expect(response.status()).toBe(${c.expectStatus});`);
 
     // Body-leak check: when the security control is "this request must

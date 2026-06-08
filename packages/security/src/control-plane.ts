@@ -58,6 +58,16 @@ export interface SecurityCheckStep {
    *  assertion. The observed status is recorded separately so the
    *  spec can distinguish "passed" from "vulnerability found". */
   expectStatus: number;
+  /** The replayed request, so the crystallized spec can reproduce it
+   *  faithfully (method/url/body) — sanitized at spec-write time so real
+   *  cookies/tokens never land in the committed file. Optional for
+   *  backward compatibility with checks recorded before this field. */
+  request?: {
+    method: string;
+    url: string;
+    headers: Record<string, string | string[] | undefined>;
+    bodyText: string | null;
+  };
   /** What actually came back. */
   observed: {
     method: string;
@@ -147,12 +157,19 @@ export async function startControlPlane(store: FlowStore): Promise<ControlPlaneH
           ? obs.bodyText.slice(0, 500)
           : null,
     };
+    const req = raw.replayFlow.request;
     const check: SecurityCheckStep = {
       id: nextCheckId++,
       sourceFlowId: raw.sourceFlowId,
       replayId: raw.replayFlow.id,
       intent: raw.intent,
       expectStatus: raw.expectStatus,
+      request: {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        bodyText: req.bodyText,
+      },
       observed,
       matched: observed.status === raw.expectStatus,
       recordedAt: Date.now(),
