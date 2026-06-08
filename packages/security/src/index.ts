@@ -335,6 +335,84 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
   return manifest;
 });
 
+// ---------------------------------------------------------------------------
+// Headless runtime entry — the composition seat for callers that DON'T have the
+// Hover Vite service (the `hover scan` CLI; future headless harnesses). It boots
+// the exact same sidecars the `hover:service:start` hook does — resident MITM
+// proxy (flipped straight to intercept, since a scan always records) + the local
+// control plane the security MCP server talks to — and hands back everything the
+// caller needs to: launch a proxied Chrome (proxyPort + spki), wire the security
+// MCP server into an agent's MCP config (mcpServerId + mcpScriptPath + mcpEnv),
+// read the recorded checks (listChecks), and tear it all down (stop).
+//
+// Why it lives here, not in the CLI: `mitm` and `control-plane` are bundled into
+// this package's dist by tsup, so they're unreachable by deep import — the
+// composition has to be exported from the package that owns the internals. The
+// CLI stays a thin orchestrator.
+
+export interface SecurityRuntimeOptions {
+  /** Project root — where the MITM CA is cached and identity storageState paths
+   *  resolve against. */
+  devRoot: string;
+  /** Second identities for cross-identity (IDOR/BOLA) replay — label →
+   *  storageState path relative to devRoot. */
+  identities?: Record<string, string>;
+}
+
+export interface SecurityRuntimeHandle {
+  /** mockttp proxy port — pass to Chrome's `--proxy-server=127.0.0.1:<port>`. */
+  proxyPort: number;
+  /** base64 SHA-256 of the MITM CA SubjectPublicKeyInfo — pass to Chrome's
+   *  `--ignore-certificate-errors-spki-list` (via launchDebugChrome's `proxy`). */
+  spki: string;
+  /** MCP server id — the `mcp__<sanitised id>__*` tool prefix and the
+   *  allow-list entry the agent needs (`allowedToolsExtra`). */
+  mcpServerId: string;
+  /** Absolute path to the bundled security MCP server script (spawn with
+   *  `process.execPath`). */
+  mcpScriptPath: string;
+  /** Env the MCP server needs to reach the control plane. */
+  mcpEnv: Record<string, string>;
+  /** Snapshot the checks the agent recorded so far (a copy). */
+  listChecks(): import('./control-plane.js').SecurityCheckStep[];
+  /** Stop the control plane + proxy. Idempotent. */
+  stop(): Promise<void>;
+}
+
+/** Boot the security sidecars for a headless (no-service) caller. */
+export async function startSecurityRuntime(
+  opts: SecurityRuntimeOptions,
+): Promise<SecurityRuntimeHandle> {
+  const proxy = await startProxy(opts.devRoot);
+  // A scan always records — go straight to intercept (the widget path toggles
+  // this on mode:activate instead; here there's no toggle).
+  proxy.setMode('intercept');
+
+  const control = await startControlPlane(proxy.store, {
+    devRoot: opts.devRoot,
+    identities: opts.identities,
+  });
+
+  let stopped = false;
+  return {
+    proxyPort: proxy.port,
+    spki: proxy.ca.spki,
+    mcpServerId: MCP_SERVER_ID,
+    mcpScriptPath: resolveMcpScriptPath(),
+    mcpEnv: {
+      HOVER_SECURITY_API: `http://127.0.0.1:${control.port}`,
+      HOVER_SECURITY_API_TOKEN: control.token,
+    },
+    listChecks: () => control.listChecks(),
+    async stop() {
+      if (stopped) return;
+      stopped = true;
+      await control.stop();
+      await proxy.stop();
+    },
+  };
+}
+
 // Also re-export the internals so consumers (and our own MCP server) can
 // build on the FlowStore primitives. These are not part of the plugin
 // contract — they're a sibling public surface.
