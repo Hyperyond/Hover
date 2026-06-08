@@ -28,6 +28,7 @@ import {
   type PageObjectManifest,
 } from './pageObjectManifest.js';
 import { stepSignature } from './detectSharedFlows.js';
+import { slugify, firstSentence } from './text.js';
 
 export type SpecStep = SkillStep;
 
@@ -108,14 +109,6 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   return { path, slug };
 }
 
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
 // Escape sequences that would prematurely terminate the JSDoc block.
 // (Backtick literal of close-comment sequence omitted on purpose — see how
 // the regex below is built — to avoid recursively poisoning *this* file.)
@@ -141,8 +134,7 @@ function collectExpected(
   }
   if (doneSummary && doneSummary.trim()) {
     // Take the first sentence only — agents sometimes ramble.
-    const first = doneSummary.split(/(?<=[.!?])\s+/)[0] ?? doneSummary;
-    return [first.trim()];
+    return [firstSentence(doneSummary)];
   }
   return [];
 }

@@ -1,4 +1,5 @@
 import type { AgentDescriptor, InvokeOptions, InvokeEvent, ParserState } from './types.js';
+import { stripMcpPrefix } from './shared.js';
 
 /**
  * OpenAI Codex CLI descriptor.
@@ -43,9 +44,7 @@ import type { AgentDescriptor, InvokeOptions, InvokeEvent, ParserState } from '.
 
 interface CodexUsage {
   input_tokens?: number;
-  cached_input_tokens?: number;
   output_tokens?: number;
-  reasoning_output_tokens?: number;
 }
 
 interface CodexItem {
@@ -71,8 +70,10 @@ interface CodexItem {
 interface CodexStreamEvent {
   type: string;
   thread_id?: string;
-  /** Only present on some events; codex doesn't echo the model id on
-   *  `thread.started`, so we synthesize from `--model` at invocation time. */
+  /** Only present on some events; passed through to the `session_start`
+   *  event when codex includes it. Cost estimation does NOT depend on this —
+   *  the parser has no access to the invocation's `--model`, so
+   *  estimateCostUsd uses a fixed default tier (see estimateCostUsd). */
   model?: string;
   item?: CodexItem;
   usage?: CodexUsage;
@@ -99,6 +100,9 @@ const PRICE_PER_M_USD: Record<string, { in: number; out: number }> = {
   'gpt-4':   { in: 30,  out: 60 },
 };
 
+// `modelHint` is currently always passed as undefined — the parser can't see
+// the invocation's --model — so the default tier below is what gets used. The
+// parameter is kept so a future caller that does have the model id can pass it.
 function estimateCostUsd(modelHint: string | undefined, usage: CodexUsage): number {
   const m = (modelHint ?? 'gpt-5.5').toLowerCase();
   // Match by longest-prefix so 'gpt-5.5-mini' picks up the 'gpt-5.5' tier.
@@ -119,7 +123,6 @@ function estimateCostUsd(modelHint: string | undefined, usage: CodexUsage): numb
 interface CodexParserState extends ParserState {
   runningCost: number;
   runningTurns: number;
-  runningModel: string | undefined;
   runningSessionId: string | undefined;
   lastAgentMessage: string | undefined;
   sawErrorEvent: boolean;
@@ -133,7 +136,6 @@ function codexState(state: ParserState): CodexParserState {
   if (typeof state.runningCost !== 'number') {
     state.runningCost = 0;
     state.runningTurns = 0;
-    state.runningModel = undefined;
     state.runningSessionId = undefined;
     state.lastAgentMessage = undefined;
     state.sawErrorEvent = false;
@@ -145,7 +147,6 @@ function codexState(state: ParserState): CodexParserState {
 function resetCodexCounters(s: CodexParserState): void {
   s.runningCost = 0;
   s.runningTurns = 0;
-  s.runningModel = undefined;
   s.runningSessionId = undefined;
   s.lastAgentMessage = undefined;
   s.sawErrorEvent = false;
@@ -250,7 +251,7 @@ export const codexAgent: AgentDescriptor = {
         // The exact field names aren't published. Read defensively: prefer
         // `name`, fall back to `tool`. Same for input.
         const rawName = it.name ?? it.tool ?? '';
-        const tool = rawName.replace(/^mcp__playwright__/, '').replace(/^mcp__hover-playwright__/, '');
+        const tool = stripMcpPrefix(rawName);
         out.push({ kind: 'tool_use', tool, input: it.input ?? it.arguments, costUsdSnapshot: s.runningCost });
       } else if (it.type === 'command_execution') {
         // We DISCOURAGED this in developer_instructions but the agent can
@@ -281,7 +282,10 @@ export const codexAgent: AgentDescriptor = {
     if (ev.type === 'turn.completed') {
       s.runningTurns += 1;
       if (ev.usage) {
-        s.runningCost += estimateCostUsd(s.runningModel, ev.usage);
+        // The parser has no access to the invocation's --model, so we let
+        // estimateCostUsd fall back to its fixed default tier. Cost is a
+        // high-water "should I hit Stop now" signal, not an invoice.
+        s.runningCost += estimateCostUsd(undefined, ev.usage);
       }
       out.push({ kind: 'usage', costUsd: s.runningCost, turns: s.runningTurns });
       return out;

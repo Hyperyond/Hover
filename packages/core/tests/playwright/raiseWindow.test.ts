@@ -101,15 +101,39 @@ describe('raiseChromeWindow', () => {
     expect(args?.[1]).toContain('System Events');
   });
 
-  it('uses wmctrl with -ia on linux', async () => {
+  it('maps PID to window id then uses wmctrl with -ia on linux', async () => {
     vi.mocked(platform).mockReturnValue('linux');
-    vi.mocked(spawn).mockReturnValue(mockSpawn('') as unknown as ReturnType<typeof spawn>);
+    // First call is `wmctrl -l -p` (listing); we return a window owned by the
+    // target PID. Second call is the `-ia <window-id>` raise.
+    const listing = [
+      '0x03c00001  0 999    host  Some Other Window',
+      '0x03c00007  0 12345  host  Hover Debug Chrome',
+    ].join('\n');
+    vi.mocked(spawn)
+      .mockReturnValueOnce(mockSpawn(listing) as unknown as ReturnType<typeof spawn>)
+      .mockReturnValueOnce(mockSpawn('') as unknown as ReturnType<typeof spawn>);
 
     await raiseChromeWindow(12345);
 
-    const [cmd, args] = vi.mocked(spawn).mock.calls[0] ?? [];
+    const [listCmd, listArgs] = vi.mocked(spawn).mock.calls[0] ?? [];
+    expect(listCmd).toBe('wmctrl');
+    expect(listArgs).toEqual(['-l', '-p']);
+
+    const [cmd, args] = vi.mocked(spawn).mock.calls[1] ?? [];
     expect(cmd).toBe('wmctrl');
-    expect(args).toEqual(['-ia', '12345']);
+    expect(args).toEqual(['-ia', '0x03c00007']);
+  });
+
+  it('no-ops when no wmctrl window matches the PID on linux', async () => {
+    vi.mocked(platform).mockReturnValue('linux');
+    const listing = '0x03c00001  0 999  host  Some Other Window';
+    vi.mocked(spawn).mockReturnValue(mockSpawn(listing) as unknown as ReturnType<typeof spawn>);
+
+    await raiseChromeWindow(12345);
+
+    // Only the listing call happened; no raise call.
+    expect(vi.mocked(spawn).mock.calls.length).toBe(1);
+    expect(vi.mocked(spawn).mock.calls[0]?.[1]).toEqual(['-l', '-p']);
   });
 
   it('uses powershell AppActivate on win32', async () => {

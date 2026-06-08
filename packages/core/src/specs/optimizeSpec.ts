@@ -12,6 +12,7 @@
  */
 import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { Project } from 'ts-morph';
 import { sidecarDir, type SpecSidecar } from './sidecar.js';
 import { readSeeds, relevantSeeds, type SeedRule } from './seeds.js';
 import { softBatch } from './softBatch.js';
@@ -168,10 +169,27 @@ export function validateSpecCode(code: string): { ok: boolean; errors: string[] 
   if (!/from\s+['"](@playwright\/test|\.\/fixtures)['"]/.test(code)) {
     errors.push('missing @playwright/test (or ./fixtures) import');
   }
-  const open = (code.match(/\{/g) ?? []).length;
-  const close = (code.match(/\}/g) ?? []).length;
-  if (open !== close) errors.push('unbalanced braces');
+  if (hasSyntaxError(code)) errors.push('has a syntax error');
   return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Real syntax check via the TypeScript parser (the same ts-morph the soft-batch
+ * step uses). Replaces a naive `{`/`}` count that mis-flagged a valid spec
+ * asserting on a string like 'a { b' — braces inside string literals are not
+ * structural. We look at SYNTACTIC diagnostics only: a candidate references
+ * `page` / `expect` / `@playwright/test` that aren't resolvable in this throwaway
+ * project, so SEMANTIC ("cannot find module", "implicitly any") diagnostics are
+ * expected and must be ignored — only a genuine parse error (an unbalanced
+ * brace, a stray token) should reject the optimization.
+ */
+function hasSyntaxError(code: string): boolean {
+  const project = new Project({
+    useInMemoryFileSystem: true,
+    compilerOptions: { allowJs: true },
+  });
+  const sf = project.createSourceFile('__candidate.ts', code, { overwrite: true });
+  return project.getProgram().getSyntacticDiagnostics(sf).length > 0;
 }
 
 function candidatePathFor(devRoot: string, slug: string): string {

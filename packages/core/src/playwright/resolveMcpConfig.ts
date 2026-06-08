@@ -33,6 +33,15 @@ export interface ExtraMcpServer {
   env?: Record<string, string>;
 }
 
+/** The `mcp__<id>` tool-name prefix Claude Code exposes a plugin MCP server's
+ *  tools under: non-alphanumerics collapse to `_` and edges are trimmed (e.g.
+ *  `@hover-dev/security:flows` → `mcp__hover_dev_security_flows`). Used to build
+ *  the hard-sandbox allow-list. Single source so the service and the CLI scan
+ *  command can't drift on how the prefix is derived. */
+export function mcpToolPrefix(serverId: string): string {
+  return `mcp__${serverId.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
+}
+
 export function resolveMcpConfig(opts: {
   /** CDP URL passed to the MCP server's `--cdp-endpoint` flag. */
   cdpUrl: string;
@@ -97,8 +106,13 @@ export function resolveMcpConfig(opts: {
 
   const outDir = resolve(tmpdir(), 'hover');
   mkdirSync(outDir, { recursive: true });
-  const suffix = opts.suffix ? `-${opts.suffix}` : '';
-  const outPath = resolve(outDir, `mcp-config-${opts.port}${suffix}.json`);
+  // Sanitise the suffix before it lands in a filesystem path — it's derived
+  // from plugin/mode ids, so guard against path separators and other unsafe
+  // characters slipping into the filename.
+  const safeSuffix = opts.suffix
+    ? `-${opts.suffix.replace(/[^a-zA-Z0-9._-]+/g, '_')}`
+    : '';
+  const outPath = resolve(outDir, `mcp-config-${opts.port}${safeSuffix}.json`);
   writeFileSync(outPath, JSON.stringify(config, null, 2), 'utf-8');
   return outPath;
 }

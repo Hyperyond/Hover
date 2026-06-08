@@ -156,9 +156,11 @@ export function buildWidgetBundle(opts: WidgetScriptOptions): { preamble: string
     const stripped = stripModuleExports(src);
     pluginBodies.push(
       `// ─── @hover-dev plugin: ${p.name} ────────────────────────\n` +
+        `(function () {\n` +
         `try {\n${stripped}\n} catch (err) {\n` +
         `  console.error('[hover] plugin "${p.name}" widget init failed:', err);\n` +
-        `}`,
+        `}\n` +
+        `})();`,
     );
   }
 
@@ -200,33 +202,4 @@ export function manifestsToPluginInputs(
     modeId: m.mode?.id,
     widgetEntry: m.widgetEntry,
   }));
-}
-
-/**
- * Lowest-level escape hatch: the raw, mtime-cached asset bytes. Useful for
- * future webpack plugins that want to register the widget files as real
- * `Compilation.assets` entries (separate .css / .js URLs the browser fetches
- * with proper caching headers) instead of stuffing everything into one
- * inline `<script>`.
- *
- * Note: `reducer` is the *raw* ESM source (with `export` keywords intact).
- * If you concatenate it into an IIFE you must strip those yourself — or
- * call `buildWidgetBundle` / `getWidgetScript` which do this for you.
- */
-export function readWidgetAssets(): {
-  html: string;
-  css: string;
-  js: string;
-  reducer: string;
-  voice: string;
-  host: string;
-} {
-  return {
-    html: readWidget(WIDGET_HTML),
-    css: readWidget(WIDGET_CSS),
-    js: readWidget(WIDGET_JS),
-    reducer: readWidget(WIDGET_REDUCER),
-    voice: readWidget(WIDGET_VOICE),
-    host: readWidget(WIDGET_HOST),
-  };
 }

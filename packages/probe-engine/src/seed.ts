@@ -21,7 +21,6 @@ export interface SecuritySeed {
   note?: string;
   match: { method?: string[]; urlParam?: string; bodyField?: string; needsAuth?: boolean };
   probe: { strategy: string; secondIdentity?: boolean; destructive?: boolean; signal: string };
-  assert?: string;
 }
 
 /** A security seed is distinguished from an optimization seed by its `probe`

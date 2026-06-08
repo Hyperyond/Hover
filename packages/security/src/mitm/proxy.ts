@@ -32,8 +32,6 @@ export interface ProxyHandle {
   store: FlowStore;
   /** Flip recording on/off at runtime. No proxy or Chrome restart. */
   setMode(mode: ProxyMode): void;
-  /** Current mode — handy for tests / status. */
-  getMode(): ProxyMode;
   stop(): Promise<void>;
 }
 
@@ -155,10 +153,13 @@ export async function startProxy(devRoot: string): Promise<ProxyHandle> {
     ca,
     store,
     setMode(next: ProxyMode) {
+      // Flipping mode restarts recording semantics, so drop any pending
+      // request→flow correlations. beforeResponse is the only place that
+      // deletes idMap entries, and it never fires for requests that error or
+      // abort (cancelled navigations, etc) — without this reset, idMap would
+      // leak one entry per such request across the session.
+      idMap.clear();
       mode = next;
-    },
-    getMode() {
-      return mode;
     },
     async stop() {
       if (stopped) return;

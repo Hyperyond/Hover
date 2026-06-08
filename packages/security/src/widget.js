@@ -249,6 +249,12 @@ if (host) {
         const checks = api.getState()['@hover-dev/security']?.checks ?? [];
         api.setState({ checks: [...checks, payload] });
       },
+      // The agent ran clear_flows (DELETE /flows) — the service wiped the
+      // flow store + recorded checks. Reset our mirrored state so the network
+      // panel + the toolbar badge don't go stale.
+      'security:flows:cleared': (_payload, api) => {
+        api.setState({ flows: [], checks: [] });
+      },
     },
 
     onDeactivate: (api) => {

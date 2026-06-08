@@ -251,9 +251,14 @@ export class HoverPlugin {
     // covers `compiler.close()`. Tapping both is safe — close() is
     // idempotent via the `this.service` guard.
     const tearDown = async (): Promise<void> => {
-      if (!this.service) return;
+      // A fast Ctrl-C can race service boot: `bootService` sets
+      // `this.servicePromise` immediately but only assigns `this.service`
+      // inside the resolved `.then()`. Await the promise so a shutdown that
+      // arrives mid-boot still closes the resolved handle instead of leaking it.
+      const svc = this.service ?? (await this.servicePromise);
+      if (!svc) return;
       try {
-        await this.service.close();
+        await svc.close();
       } catch (err) {
         console.warn(
           `[webpack-plugin-hover] error closing service: ${err instanceof Error ? err.message : String(err)}`,

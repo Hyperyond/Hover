@@ -28,10 +28,24 @@ import { readFile } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
 import type { Flow, FlowStore } from './mitm/flows.js';
 import { replayFlow, type MutateOptions } from './mitm/replay.js';
-import { suggestProbes, cookieHeaderFor, type StorageState, type SecurityCheckStep, type BrowserFinding } from '@hover-dev/probe-engine';
+import { suggestProbes, cookieHeaderFor, type StorageState, type SecurityCheckStep, type BrowserFinding, type SeedCategory } from '@hover-dev/probe-engine';
 
 const PORT_RETRIES = 10;
 const DEFAULT_PORT = 51850;
+
+// The closed SecurityClass union (probe-engine seed.ts) as a runtime set, so
+// POST /finding can validate the agent-supplied `class` string instead of
+// force-casting an arbitrary value into the typed union. Unrecognised values
+// drop to undefined rather than corrupting the BrowserFinding shape.
+const KNOWN_SECURITY_CLASSES: ReadonlySet<BrowserFinding['class']> = new Set<
+  BrowserFinding['class']
+>([
+  // business / authorization
+  'idor', 'bola', 'bfla', 'mass-assignment', 'auth-bypass',
+  // vulnerability / attack
+  'ssrf', 'open-redirect', 'path-traversal', 'cors', 'jwt',
+  'sqli', 'xss', 'ssti', 'xxe', 'deserialization', 'rce', 'csrf', 'graphql',
+]);
 
 /**
  * One recorded security check — a replay the agent did with a stated
@@ -66,7 +80,10 @@ export interface ControlPlaneHandle {
   listGaps(): string[];
   /** Subscribe to per-check events (one per recorded check). */
   on(event: 'check', listener: (check: SecurityCheckStep) => void): void;
-  off(event: 'check', listener: (check: SecurityCheckStep) => void): void;
+  /** Subscribe to session-reset events — fired when `DELETE /flows`
+   *  (the `clear_flows` tool) wipes the store + checks. The plugin forwards
+   *  this to the widget so its flows/checks state + badge don't go stale. */
+  onClear(listener: () => void): void;
   stop(): Promise<void>;
 }
 
@@ -107,6 +124,10 @@ export interface ControlPlaneOptions {
   /** Label → Playwright storageState file path, for replaying as a second
    *  identity (IDOR/BOLA). e.g. { userB: 'state/userB.json' }. */
   identities?: Record<string, string>;
+  /** Restrict probe suggestions to these seed categories. Security mode passes
+   *  `['authz']` so the agent only sees access-control probes; left undefined
+   *  (the CLI scan + pentest plugin) means all seeds. */
+  seedCategories?: SeedCategory[];
 }
 
 export async function startControlPlane(
@@ -291,11 +312,18 @@ export async function startControlPlane(
           return;
         }
         const sev = p.severity === 'High' || p.severity === 'Low' ? p.severity : 'Medium';
+        // Only keep `class` when it's one of the known SecurityClass members —
+        // an arbitrary agent-supplied string would otherwise be force-cast into
+        // the closed union and corrupt downstream report/spec rendering.
+        const cls =
+          typeof p.class === 'string' && KNOWN_SECURITY_CLASSES.has(p.class as BrowserFinding['class'])
+            ? (p.class as BrowserFinding['class'])
+            : undefined;
         const findingAtCap = findings.length >= MAX_FINDINGS;
         if (!findingAtCap) {
           findings.push({
             id: nextFindingId++,
-            class: typeof p.class === 'string' ? (p.class as BrowserFinding['class']) : undefined,
+            class: cls,
             intent,
             severity: sev,
             evidence,
@@ -343,7 +371,10 @@ export async function startControlPlane(
         // Match captured flows against the built-in probe seeds → the
         // "what's worth probing" list the agent acts on. store.list()
         // returns full flows (headers + body), which suggestProbes needs.
-        sendJson(res, 200, { suggestions: suggestProbes(store.list()) });
+        // Security mode restricts to authz seeds via `seedCategories`.
+        sendJson(res, 200, {
+          suggestions: suggestProbes(store.list(), undefined, { categories: options.seedCategories }),
+        });
         return;
       }
 
@@ -428,6 +459,9 @@ export async function startControlPlane(
         // We don't broadcast a 'check' event for each cleared entry;
         // callers should treat clear-flows as "session reset" too.
         checks.length = 0;
+        // Tell subscribers (the plugin → widget) the session was reset so the
+        // widget's flows/checks state + badge don't go stale after clear_flows.
+        emitter.emit('clear');
         sendJson(res, 200, { cleared: n });
         return;
       }
@@ -468,8 +502,8 @@ export async function startControlPlane(
     on: (event, listener) => {
       emitter.on(event, listener);
     },
-    off: (event, listener) => {
-      emitter.off(event, listener);
+    onClear: (listener) => {
+      emitter.on('clear', listener);
     },
     async stop() {
       await new Promise<void>((res) => {

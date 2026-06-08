@@ -17,13 +17,9 @@ import { launchDebugChrome, type LaunchOptions } from '../playwright/launchChrom
 import { send, type ClientMessage } from './types.js';
 
 /** Extra launch options surfaced from the active mode (security plugin
- *  needs proxy + spki + separate profile + non-default CDP port). When
- *  none are set, behaviour is identical to pre-v0.7 normal-mode launch. */
-export type LaunchExtras = Pick<LaunchOptions, 'userDataDir' | 'proxy'> & {
-  /** Override CDP port (mode-specific, e.g. 9333 for security). When set,
-   *  this also wins over the `port` parsed from cdpUrl. */
-  cdpPort?: number;
-};
+ *  needs a resident proxy + spki). When none are set, behaviour is identical
+ *  to pre-v0.7 normal-mode launch. */
+export type LaunchExtras = Pick<LaunchOptions, 'proxy'>;
 
 /**
  * "Is this widget running inside the debug Chrome?" The widget asks this on
@@ -44,10 +40,7 @@ export async function handleCheckCdp(
     send(ws, { type: 'error', payload: { message: 'check-cdp: pageUrl is required' } });
     return;
   }
-  const effectiveCdpUrl = extras?.cdpPort
-    ? `http://localhost:${extras.cdpPort}`
-    : cdpUrl;
-  const status = await checkCdpStatus(effectiveCdpUrl, pageUrl);
+  const status = await checkCdpStatus(cdpUrl, pageUrl);
   send(ws, { type: 'cdp-status', payload: status });
 }
 
@@ -72,7 +65,7 @@ export async function handleLaunchChrome(
   // findChromeBinary + spawn + ready-poll can take a few seconds.
   send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', launching: true } });
 
-  const port = extras?.cdpPort ?? (() => {
+  const port = (() => {
     try {
       return Number(new URL(cdpUrl).port) || 9222;
     } catch {
@@ -82,19 +75,13 @@ export async function handleLaunchChrome(
   const result = await launchDebugChrome({
     url: pageUrl,
     port,
-    userDataDir: extras?.userDataDir,
     proxy: extras?.proxy,
   });
   if (!result.ok) {
     send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', reason: result.reason } });
     return;
   }
-  // Re-check status against the port we actually launched on, so a mode-
-  // specific port (9333 for security) doesn't get probed at 9222.
-  const effectiveCdpUrl = extras?.cdpPort
-    ? `http://localhost:${extras.cdpPort}`
-    : cdpUrl;
-  const status = await checkCdpStatus(effectiveCdpUrl, pageUrl);
+  const status = await checkCdpStatus(cdpUrl, pageUrl);
   send(ws, { type: 'cdp-status', payload: status });
 }
 
@@ -116,10 +103,7 @@ export async function handleFocusDebug(
     send(ws, { type: 'error', payload: { message: 'focus-debug: pageUrl is required' } });
     return;
   }
-  const effectiveCdpUrl = extras?.cdpPort
-    ? `http://localhost:${extras.cdpPort}`
-    : cdpUrl;
-  const result = await focusDebugTab(effectiveCdpUrl, pageUrl);
+  const result = await focusDebugTab(cdpUrl, pageUrl);
   if (!result.ok) {
     send(ws, { type: 'error', payload: { message: `focus-debug: ${result.reason}` } });
   }

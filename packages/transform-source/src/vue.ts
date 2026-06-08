@@ -1,7 +1,7 @@
 import { parse } from '@vue/compiler-sfc';
 import MagicString from 'magic-string';
-import path from 'node:path';
 import { SOURCE_ATTR, type AttributionInput, type AttributionResult } from './types.js';
+import { lineColForOffset, toRelPath } from './util.js';
 
 // Vue's compiler-core ElementTypes (re-declared here so we don't import
 // the symbol — it's a runtime enum that costs a require() chain).
@@ -31,10 +31,7 @@ export function transformVue(input: AttributionInput): AttributionResult | null 
   }
   const template = descriptor.template;
   if (!template || !template.ast) return null;
-  const relPath = (() => {
-    const rel = path.relative(root, filename);
-    return rel.split(path.sep).join('/');
-  })();
+  const relPath = toRelPath(root, filename);
   const s = new MagicString(code);
   let touched = false;
 
@@ -64,28 +61,4 @@ export function transformVue(input: AttributionInput): AttributionResult | null 
     code: s.toString(),
     map: s.generateMap({ hires: true, source: filename }),
   };
-}
-
-/** Compute 1-indexed line + 1-indexed column for a byte offset.
- *  Vue's `loc.start.offset` is absolute in the SFC source. We could pull
- *  line/col directly off `node.loc.start` but the JSX transform formats
- *  columns 1-indexed (matching how editors show "Ln 3, Col 12") while
- *  Vue's compiler emits 1-indexed lines + 1-indexed columns too — so we
- *  align here for consistency across frameworks. */
-function lineColForOffset(code: string, offset: number): { line: number; col: number } | null {
-  if (offset < 0 || offset > code.length) return null;
-  let line = 1;
-  let col = 1;
-  for (let i = 0; i < offset; i++) {
-    if (code.charCodeAt(i) === 10) {
-      line++;
-      col = 1;
-    } else {
-      col++;
-    }
-  }
-  // Point at the `<` itself; widget reads this to navigate to the tag.
-  // The +1 makes it 1-indexed (Vue's loc is already 1-indexed line/col,
-  // but we compute from scratch to handle injected offsets uniformly).
-  return { line, col };
 }

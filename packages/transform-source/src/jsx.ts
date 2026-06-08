@@ -1,8 +1,8 @@
 import { parse } from '@babel/parser';
 import _traverse from '@babel/traverse';
 import MagicString from 'magic-string';
-import path from 'node:path';
 import { SOURCE_ATTR, type AttributionInput, type AttributionResult } from './types.js';
+import { toRelPath } from './util.js';
 
 // @babel/traverse ships as CJS with the function on .default under ESM import.
 // Falls back to the namespace itself for type-only consumers.
@@ -23,10 +23,7 @@ export function transformJsx(input: AttributionInput): AttributionResult | null 
   } catch {
     return null;
   }
-  const relPath = (() => {
-    const rel = path.relative(root, filename);
-    return rel.split(path.sep).join('/');
-  })();
+  const relPath = toRelPath(root, filename);
   const s = new MagicString(code);
   let touched = false;
   _traverseFn(ast, {

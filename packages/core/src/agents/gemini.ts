@@ -1,4 +1,5 @@
 import type { AgentDescriptor, InvokeOptions, InvokeEvent, ParserState } from './types.js';
+import { HOVER_PROMPT_PREFACE, stripMcpPrefix } from './shared.js';
 
 /**
  * Google Gemini CLI descriptor (`gemini`, https://github.com/google-gemini/gemini-cli).
@@ -136,12 +137,6 @@ function resetGeminiCounters(s: GeminiParserState): void {
   s.toolNameByUseId.clear();
 }
 
-/** Strip the `mcp__playwright__` / `mcp__hover-playwright__` prefix so tool
- *  names match the normalised names claude / codex / cursor / qwen emit. */
-function stripMcpPrefix(raw: string): string {
-  return raw.replace(/^mcp__playwright__/, '').replace(/^mcp__hover-playwright__/, '');
-}
-
 /**
  * Extract assistant text from a `message` event whose `content` may be a
  * plain string OR an array of `{type:'text', text}` content blocks. Gemini's
@@ -162,14 +157,6 @@ function extractMessageText(ev: GeminiStreamEvent): string | undefined {
   return undefined;
 }
 
-const GEMINI_PROMPT_PREFACE = [
-  'You are operating in Hover, a browser-testing tool.',
-  'Use ONLY the MCP playwright tools (prefixed `mcp__playwright__` / `mcp__hover-playwright__`) to drive the browser.',
-  'Do NOT use shell, file-edit, web-search, or any other built-in tool.',
-  'Do NOT navigate to a URL the user is already on; check the page state via `browser_snapshot` first.',
-  'When the task is complete, emit a short summary and stop.',
-].join(' ');
-
 export const geminiAgent: AgentDescriptor = {
   id: 'gemini',
   binName: 'gemini',
@@ -188,8 +175,8 @@ export const geminiAgent: AgentDescriptor = {
     // GEMINI_SYSTEM_MD env var which writes a file). Prepend the HOVER-mode
     // preface to the prompt instead — same pattern as cursor.ts / aider.ts.
     const preface = opts.appendSystemPrompt && opts.appendSystemPrompt.trim().length > 0
-      ? `${GEMINI_PROMPT_PREFACE} ${opts.appendSystemPrompt}`
-      : GEMINI_PROMPT_PREFACE;
+      ? `${HOVER_PROMPT_PREFACE} ${opts.appendSystemPrompt}`
+      : HOVER_PROMPT_PREFACE;
     const finalPrompt = `${preface}\n\n${opts.prompt}`;
 
     const args: string[] = ['-p', finalPrompt];

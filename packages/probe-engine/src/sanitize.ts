@@ -66,7 +66,14 @@ export function sanitizeRequest(req: ProbeRequest): SanitizedRequest {
 }
 
 /** Mask query-param values whose key looks like a credential. Leaves the URL
- *  untouched (byte-identical) when it doesn't parse or nothing matched. */
+ *  untouched (byte-identical) when it doesn't parse or nothing matched.
+ *
+ *  We mutate the sensitive `key=value` segments IN PLACE on the original
+ *  string rather than round-tripping through `URL`/`URLSearchParams`. The
+ *  round-trip re-serialises the whole query and silently rewrites unrelated
+ *  params (`arr[]=1` → `arr%5B%5D=1`, `a+b` normalised), so the committed spec
+ *  would replay a subtly different URL. `URL` is still used only to detect a
+ *  parseable absolute URL and to discover which param keys are present. */
 function sanitizeUrl(raw: string, redactions: string[]): string {
   let u: URL;
   try {
@@ -74,13 +81,24 @@ function sanitizeUrl(raw: string, redactions: string[]): string {
   } catch {
     return raw; // relative or malformed — nothing safe to do
   }
-  let changed = false;
-  for (const key of [...u.searchParams.keys()]) {
-    if (SENSITIVE_KEY.test(key)) {
-      u.searchParams.set(key, 'REDACTED');
-      redactions.push(key.toLowerCase());
-      changed = true;
-    }
+  for (const key of new Set(u.searchParams.keys())) {
+    if (!SENSITIVE_KEY.test(key)) continue;
+    // Replace every `key=<value>` segment for this key in the original query
+    // string, matching the key exactly as it appears (it has no regex-special
+    // chars when it's a credential name, but escape defensively) and leaving
+    // all other params byte-identical.
+    const keyPattern = new RegExp(`([?&])${escapeRegExp(key)}=[^&#]*`, 'g');
+    let matchedKey = false;
+    raw = raw.replace(keyPattern, (_m, sep: string) => {
+      matchedKey = true;
+      return `${sep}${key}=REDACTED`;
+    });
+    if (matchedKey) redactions.push(key.toLowerCase());
   }
-  return changed ? u.toString() : raw;
+  return raw;
+}
+
+/** Escape a string for literal use inside a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

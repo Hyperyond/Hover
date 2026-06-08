@@ -1,4 +1,5 @@
 import type { AgentDescriptor, InvokeOptions, InvokeEvent, ParserState } from './types.js';
+import { HOVER_PROMPT_PREFACE } from './shared.js';
 
 /**
  * Aider CLI descriptor (`aider`, https://aider.chat).
@@ -77,18 +78,9 @@ function resetAiderCounters(s: AiderParserState): void {
   s.runningSessionId = undefined;
 }
 
-/**
- * Aider has no system-prompt flag, so we prepend this preface to the user
- * prompt (same approach as cursor.ts). The agent treats it as the leading
- * user-message text.
- */
-const AIDER_PROMPT_PREFACE = [
-  'You are operating in Hover, a browser-testing tool.',
-  'Use ONLY the MCP playwright tools (prefixed `mcp__playwright__` / `mcp__hover-playwright__`) to drive the browser.',
-  'Do NOT use shell, file-edit, web-search, or any other built-in tool.',
-  'Do NOT navigate to a URL the user is already on; check the page state via `browser_snapshot` first.',
-  'When the task is complete, emit a short summary and stop.',
-].join(' ');
+// Aider has no system-prompt flag, so we prepend the standing HOVER-mode
+// preface (HOVER_PROMPT_PREFACE, from shared.ts) to the user prompt (same
+// approach as cursor.ts). The agent treats it as the leading user-message text.
 
 /**
  * Lines we treat as noise and drop instead of surfacing as text events.
@@ -134,8 +126,8 @@ export const aiderAgent: AgentDescriptor = {
     // to the prompt. Aider has no --append-system-prompt flag, so this is
     // the closest functional analogue (same trick as cursor.ts).
     const preface = opts.appendSystemPrompt && opts.appendSystemPrompt.trim().length > 0
-      ? `${AIDER_PROMPT_PREFACE} ${opts.appendSystemPrompt}`
-      : AIDER_PROMPT_PREFACE;
+      ? `${HOVER_PROMPT_PREFACE} ${opts.appendSystemPrompt}`
+      : HOVER_PROMPT_PREFACE;
     const finalPrompt = `${preface}\n\n${opts.prompt}`;
 
     const args: string[] = ['--message', finalPrompt];

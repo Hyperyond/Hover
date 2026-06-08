@@ -1,4 +1,5 @@
 import type { AgentDescriptor, InvokeOptions, InvokeEvent, ParserState } from './types.js';
+import { HOVER_PROMPT_PREFACE, stripMcpPrefix } from './shared.js';
 
 /**
  * Cursor CLI agent descriptor (`cursor-agent`, aka `agent`).
@@ -144,9 +145,7 @@ function extractToolName(tc: CursorToolCall | undefined): { tool: string; input:
     null;
   const kindFromKey = wrapperKey ? wrapperKey.replace(/ToolCall$/, '') : 'unknown';
   const rawName = innerName || kindFromKey;
-  const tool = rawName
-    .replace(/^mcp__playwright__/, '')
-    .replace(/^mcp__hover-playwright__/, '');
+  const tool = stripMcpPrefix(rawName);
   const input =
     (inner && typeof inner === 'object' && 'input' in inner && inner.input) ||
     (inner && typeof inner === 'object' && 'arguments' in inner && inner.arguments) ||
@@ -165,18 +164,10 @@ function detectToolError(tc: CursorToolCall | undefined): boolean {
   return false;
 }
 
-/**
- * The closest analogue Cursor has to claude's --append-system-prompt or
- * codex's developer_instructions. Since there is no CLI flag, we prepend
- * this to the user prompt so the agent sees it as the leading instruction.
- */
-const CURSOR_PROMPT_PREFACE = [
-  'You are operating in Hover, a browser-testing tool.',
-  'Use ONLY the MCP playwright tools (prefixed `mcp__playwright__` / `mcp__hover-playwright__`) to drive the browser.',
-  'Do NOT use shell, file-edit, web-search, or any other built-in tool.',
-  'Do NOT navigate to a URL the user is already on; check the page state via `browser_snapshot` first.',
-  'When the task is complete, emit a short summary and stop.',
-].join(' ');
+// The closest analogue Cursor has to claude's --append-system-prompt or
+// codex's developer_instructions is prepending the standing HOVER-mode
+// preface (HOVER_PROMPT_PREFACE, from shared.ts) to the user prompt so the
+// agent sees it as the leading instruction. There is no CLI flag for it.
 
 export const cursorAgent: AgentDescriptor = {
   id: 'cursor',
@@ -197,8 +188,8 @@ export const cursorAgent: AgentDescriptor = {
     // Cursor has to claude's --append-system-prompt / codex's
     // developer_instructions, because Cursor exposes no CLI flag for it.
     const preface = opts.appendSystemPrompt && opts.appendSystemPrompt.trim().length > 0
-      ? `${CURSOR_PROMPT_PREFACE} ${opts.appendSystemPrompt}`
-      : CURSOR_PROMPT_PREFACE;
+      ? `${HOVER_PROMPT_PREFACE} ${opts.appendSystemPrompt}`
+      : HOVER_PROMPT_PREFACE;
     const finalPrompt = `${preface}\n\n${opts.prompt}`;
 
     const args: string[] = ['-p', finalPrompt];

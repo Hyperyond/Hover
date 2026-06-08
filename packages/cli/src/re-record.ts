@@ -339,6 +339,7 @@ export function parseReRecordArgs(argv: string[]): { args: RecordArgs | null; ex
       if (!Number.isFinite(out.port)) { err(`--port must be a number.`); return { args: null, exitCode: 2 }; }
     } else if (a.startsWith('--port=')) {
       out.port = Number(a.slice('--port='.length));
+      if (!Number.isFinite(out.port)) { err(`--port must be a number.`); return { args: null, exitCode: 2 }; }
     } else if (a.startsWith('-')) {
       err(`Unknown flag for re-record: ${a}`);
       return { args: null, exitCode: 2 };
