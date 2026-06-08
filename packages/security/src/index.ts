@@ -338,3 +338,26 @@ export {
   replayFlow,
   type MutateOptions,
 } from './mitm/index.js';
+
+// Probe engine — the shared access-control primitives from the private
+// @hover-dev/probe-engine (inlined into our dist at build via tsup noExternal;
+// never a runtime npm dependency). Re-exported so consumers can match/sanitize/
+// gate against captured flows. A FlowRequest is structurally a ProbeRequest.
+export {
+  type ProbeRequest,
+  type ProbeFlow,
+  type SecurityClass,
+  type SecuritySeed,
+  isSecuritySeed,
+  loadSecuritySeeds,
+  hasAuth,
+  matchesFlow,
+  matchSeeds,
+  type SanitizedRequest,
+  sanitizeRequest,
+  type Verdict,
+  type FindingSignals,
+  type GateResult,
+  NEVER_SUBMIT,
+  gateFinding,
+} from '@hover-dev/probe-engine';
