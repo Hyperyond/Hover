@@ -35,6 +35,18 @@ describe('suggestProbes', () => {
     const out = suggestProbes([flow('f2', { url: 'https://app.test/fetch?url=x' })]);
     expect(out.some(s => s.class === 'ssrf' && s.flowId === 'f2')).toBe(true);
   });
+  test('flags a redirect-target param as an open-redirect candidate', () => {
+    const out = suggestProbes([flow('or', { url: 'https://app.test/login?return_to=/home' })]);
+    expect(out.some(s => s.class === 'open-redirect' && s.flowId === 'or')).toBe(true);
+  });
+  test('flags a file param as a path-traversal candidate', () => {
+    const out = suggestProbes([flow('pt', { url: 'https://app.test/dl?file=report.pdf' })]);
+    expect(out.some(s => s.class === 'path-traversal' && s.flowId === 'pt')).toBe(true);
+  });
+  test('flags a /graphql endpoint as a graphql candidate', () => {
+    const out = suggestProbes([flow('gq', { method: 'POST', url: 'https://app.test/graphql', bodyText: '{"query":"{me{id}}"}' })]);
+    expect(out.some(s => s.class === 'graphql' && s.flowId === 'gq')).toBe(true);
+  });
   test('a plain authed GET with no interesting shape yields a bfla/auth hint at most, not IDOR/SSRF', () => {
     const out = suggestProbes([flow('f3', { url: 'https://app.test/api/profile' })]);
     expect(out.some(s => s.class === 'idor')).toBe(false);

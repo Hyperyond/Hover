@@ -7,6 +7,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "smoke": "pnpm --filter @hover-dev/core smoke",
+    "smoke:scan": "tsx packages/cli/src/index.ts scan --url http://localhost:5173 --cwd examples/basic-app",
     "smoke:chrome": "pnpm --filter @hover-dev/core smoke:chrome",
     "detect": "pnpm --filter @hover-dev/core detect",
     "verify-widget": "pnpm --filter @hover-dev/core verify-widget",

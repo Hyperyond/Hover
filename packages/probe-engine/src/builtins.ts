@@ -83,4 +83,28 @@ export const builtinSecuritySeeds: SecuritySeed[] = [
     match: { method: ['GET', 'POST'], urlParam: '[?&](name|template|page|q|greeting)=', needsAuth: false },
     probe: { strategy: 'Send {{7*7}} / ${7*7} / #{7*7}; if the response contains 49, fingerprint the engine ({{7*\'7\'}} → 7777777 = Jinja2, 49 = Twig) and, in pentest mode only, attempt the engine\'s class-walker to confirm RCE (read `id`). In-band confirmation.', secondIdentity: false, destructive: false, signal: 'A math expression evaluates in the response (49), or command output appears.' },
   },
+  {
+    name: 'open-redirect',
+    class: 'open-redirect',
+    category: 'vuln',
+    note: 'A param that sets a redirect target reflected into a 3xx Location.',
+    match: { method: ['GET', 'POST'], urlParam: '[?&](redirect|redirect_uri|redirect_url|redir|return|returnurl|return_to|next|dest|destination|continue|goto|forward|rurl)=', needsAuth: false },
+    probe: { strategy: 'Replace the value with an absolute external origin (https://evil.example) and a protocol-relative //evil.example, with redirects set to manual. Confirm IN-BAND by reading the Location header — no external callback.', secondIdentity: false, destructive: false, signal: 'A 3xx whose Location points at the attacker-controlled external origin.' },
+  },
+  {
+    name: 'path-traversal',
+    class: 'path-traversal',
+    category: 'vuln',
+    note: 'A param naming a file/path the server reads back.',
+    match: { method: ['GET', 'POST'], urlParam: '[?&](file|filename|filepath|path|doc|document|download|template|include|attachment|dir|folder)=', needsAuth: false },
+    probe: { strategy: 'Send ../../../../etc/passwd and an encoded ..%2f variant (Windows: ..\\..\\windows\\win.ini). Confirm IN-BAND by the file contents appearing in the response — do not write or delete anything.', secondIdentity: false, destructive: false, signal: 'Server file contents (e.g. root:x:0:0 from /etc/passwd) appear in the response.' },
+  },
+  {
+    name: 'graphql-introspection',
+    class: 'graphql',
+    category: 'vuln',
+    note: 'A GraphQL endpoint that may expose its full schema.',
+    match: { method: ['GET', 'POST'], urlParam: '/graphql', needsAuth: false },
+    probe: { strategy: 'POST the introspection query ({__schema{types{name}}}); if it returns the schema, enumerate mutations/queries the UI never exposes and probe those for missing authz. In-band.', secondIdentity: false, destructive: false, signal: 'Introspection returns the full __schema (types/mutations) that should be disabled in production.' },
+  },
 ];
