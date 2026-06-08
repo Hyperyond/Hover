@@ -3,7 +3,7 @@ export type Verdict = 'pass' | 'downgrade' | 'kill' | 'chain';
 /** Patterns never worth a regression spec on your own dev app — noise the gate
  *  suppresses (adapted from Claude-BugHunter's never-submit list). */
 export const NEVER_SUBMIT = [
-  'self-xss', 'missing security header', 'missing header',
+  'self-xss', 'missing security header',
   'clickjacking', 'logout csrf', 'csrf on logout',
   'rate limit only', 'rate-limit only',
 ];

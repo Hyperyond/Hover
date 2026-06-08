@@ -1,10 +1,14 @@
 import type { Flow } from '../mitm/flows.js';
 import type { SecuritySeed } from './seed.js';
 
-/** Header lookup that tolerates any-case keys. */
+/** Case-insensitive header lookup — matches regardless of how the captured
+ *  header key was cased (`Cookie` vs `cookie`). */
 function header(flow: Flow, name: string): string | string[] | undefined {
-  const h = flow.request.headers;
-  return h[name] ?? h[name.toLowerCase()];
+  const want = name.toLowerCase();
+  for (const [k, v] of Object.entries(flow.request.headers)) {
+    if (k.toLowerCase() === want) return v;
+  }
+  return undefined;
 }
 
 /** Does this captured flow carry an auth credential? */
@@ -25,8 +29,10 @@ function safeTest(pattern: string, value: string): boolean {
  *  filter — never an exact match. */
 export function matchesFlow(seed: SecuritySeed, flow: Flow): boolean {
   const m = seed.match;
-  if (m.method && m.method.length > 0) {
-    const want = m.method.map(x => x.toUpperCase());
+  // Array.isArray guard: a malformed seed (method as a bare string) must skip
+  // the method filter, never throw on `.map()`.
+  if (Array.isArray(m.method) && m.method.length > 0) {
+    const want = m.method.map(x => String(x).toUpperCase());
     if (!want.includes(flow.request.method.toUpperCase())) return false;
   }
   if (m.urlParam && !safeTest(m.urlParam, flow.request.url)) return false;

@@ -28,4 +28,22 @@ describe('sanitizeRequest', () => {
   test('a null body is preserved', () => {
     expect(sanitizeRequest(req({ bodyText: null })).bodyText).toBeNull();
   });
+  test('masks a body value containing an escaped quote without corrupting the JSON', () => {
+    const s = sanitizeRequest(req({ bodyText: '{"token":"ab\\"cd","name":"alice"}' }));
+    expect(s.bodyText).toContain('"token":"<redacted>"');
+    expect(s.bodyText).toContain('"name":"alice"');
+    expect(s.bodyText).not.toContain('ab\\"cd');
+    expect(() => JSON.parse(s.bodyText!)).not.toThrow();
+  });
+  test('masks credential-looking query params in the URL', () => {
+    const s = sanitizeRequest(req({ url: 'https://app.test/api/me?token=supersecret&page=2' }));
+    expect(s.url).not.toContain('supersecret');
+    expect(s.url).toContain('page=2');
+    expect(s.redactions).toContain('token');
+  });
+  test('drops proxy-authorization too', () => {
+    const s = sanitizeRequest(req({ headers: { 'proxy-authorization': 'Basic xyz' } }));
+    expect(s.headers['proxy-authorization']).toBeUndefined();
+    expect(s.redactions).toContain('proxy-authorization');
+  });
 });

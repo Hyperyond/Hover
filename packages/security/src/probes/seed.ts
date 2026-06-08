@@ -19,22 +19,35 @@ export interface SecuritySeed {
 export function isSecuritySeed(o: unknown): o is SecuritySeed {
   if (!o || typeof o !== 'object') return false;
   const s = o as Record<string, unknown>;
+  const match = s.match as Record<string, unknown> | undefined;
   const probe = s.probe as Record<string, unknown> | undefined;
-  return typeof s.name === 'string'
-    && typeof s.class === 'string'
-    && typeof s.match === 'object' && s.match !== null
-    && typeof probe === 'object' && probe !== null
-    && typeof probe.strategy === 'string';
+  if (typeof s.name !== 'string' || typeof s.class !== 'string') return false;
+  if (typeof match !== 'object' || match === null) return false;
+  // `method`, if present, MUST be an array — otherwise matchesFlow's `.map()`
+  // would throw on a malformed seed (untrusted input must never crash matching).
+  if (match.method !== undefined && !Array.isArray(match.method)) return false;
+  if (typeof probe !== 'object' || probe === null) return false;
+  // Both `strategy` and `signal` are required by the type — validate both so a
+  // seed missing `signal` can't pass the guard and surprise downstream readers.
+  if (typeof probe.strategy !== 'string' || typeof probe.signal !== 'string') return false;
+  return true;
 }
 
 /** Load security-probe seeds from `<devRoot>/.hover/rules/` (flat) and its
  *  `security/` subdir. Optimization seeds in the same tree are skipped. */
 export async function loadSecuritySeeds(devRoot: string): Promise<SecuritySeed[]> {
   const root = join(devRoot, '.hover', 'rules');
-  const out: SecuritySeed[] = [];
-  await collect(root, out);
-  await collect(join(root, 'security'), out);
-  return out;
+  const collected: SecuritySeed[] = [];
+  await collect(root, collected);
+  await collect(join(root, 'security'), collected);
+  // A seed can land in both rules/ and rules/security/ (copy or symlink) —
+  // keep the first per name so one flow never gets probed twice by it.
+  const seen = new Set<string>();
+  return collected.filter(s => {
+    if (seen.has(s.name)) return false;
+    seen.add(s.name);
+    return true;
+  });
 }
 
 async function collect(dir: string, out: SecuritySeed[]): Promise<void> {

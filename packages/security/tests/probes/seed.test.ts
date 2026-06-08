@@ -27,6 +27,13 @@ describe('isSecuritySeed', () => {
     expect(isSecuritySeed(optimizationSeed)).toBe(false);
     expect(isSecuritySeed(null)).toBe(false);
   });
+  test('rejects a seed whose probe is missing signal', () => {
+    expect(isSecuritySeed({ ...idor, probe: { strategy: 'x' } })).toBe(false);
+  });
+  test('rejects a seed whose match.method is not an array', () => {
+    // would otherwise crash matchesFlow with a TypeError on .map()
+    expect(isSecuritySeed({ ...idor, match: { method: 'GET' } })).toBe(false);
+  });
 });
 
 describe('loadSecuritySeeds', () => {
@@ -38,5 +45,11 @@ describe('loadSecuritySeeds', () => {
   });
   test('returns [] when no rules dir exists', async () => {
     expect(await loadSecuritySeeds(devRoot)).toEqual([]);
+  });
+  test('dedupes by name when a seed is in both rules/ and rules/security/', async () => {
+    writeRule('idor.json', idor);
+    writeRule('security/idor.json', idor);
+    const seeds = await loadSecuritySeeds(devRoot);
+    expect(seeds.map(s => s.name)).toEqual(['idor-numeric-id']);
   });
 });
