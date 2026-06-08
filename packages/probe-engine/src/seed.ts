@@ -2,12 +2,22 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export type SecurityClass =
-  | 'idor' | 'bola' | 'bfla' | 'mass-assignment' | 'ssrf'
-  | 'auth-bypass' | 'open-redirect' | 'path-traversal' | 'cors' | 'jwt';
+  // business / authorization (orange "security mode")
+  | 'idor' | 'bola' | 'bfla' | 'mass-assignment' | 'auth-bypass'
+  // vulnerability / attack (red "pentest mode")
+  | 'ssrf' | 'open-redirect' | 'path-traversal' | 'cors' | 'jwt'
+  | 'sqli' | 'xss' | 'ssti' | 'xxe' | 'deserialization' | 'rce' | 'csrf' | 'graphql';
+
+/** Which mode a seed belongs to: `authz` (business/access-control, security
+ *  mode) or `vuln` (attack/exploit, pentest mode). Defaults to authz when
+ *  absent. */
+export type SeedCategory = 'authz' | 'vuln';
 
 export interface SecuritySeed {
   name: string;
   class: SecurityClass;
+  /** authz (security mode) vs vuln (pentest mode). */
+  category?: SeedCategory;
   note?: string;
   match: { method?: string[]; urlParam?: string; bodyField?: string; needsAuth?: boolean };
   probe: { strategy: string; secondIdentity?: boolean; destructive?: boolean; signal: string };

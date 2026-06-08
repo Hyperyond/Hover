@@ -35,9 +35,9 @@ describe('planSweep', () => {
     expect(plan.skipped).toEqual([]);
   });
 
-  test('unauthenticated flows yield nothing (built-ins need auth)', () => {
+  test('unauthenticated flows still surface vuln probes (injection needs no auth), but no authz', () => {
     const plan = planSweep([flow('f3', { url: 'https://app.test/api/orders?id=7', headers: {} })]);
-    expect(plan.probes).toEqual([]);
-    expect(plan.skipped).toEqual([]);
+    expect(plan.probes.some(p => p.class === 'idor')).toBe(false); // authz needs auth
+    expect(plan.probes.some(p => p.class === 'sqli')).toBe(true);  // injection doesn't
   });
 });

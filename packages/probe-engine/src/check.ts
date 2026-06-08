@@ -5,9 +5,15 @@
  * (records checks, crystallizes them into a spec) and `@hover-dev/pentest`
  * (renders them into a findings report). Pure data — no runtime dependency.
  */
+import type { SecurityClass } from './seed.js';
+
 export interface SecurityCheckStep {
   /** Monotonic id within this session, useful for stable ordering. */
   id: number;
+  /** The vulnerability class probed, when known (set by the probe that
+   *  produced the check). Lets the report enrich with per-class
+   *  impact/recommendation. Optional/back-compat. */
+  class?: SecurityClass;
   /** Source flow this check derives from. */
   sourceFlowId: string;
   /** Resulting replayed flow id (the mutation's target). */

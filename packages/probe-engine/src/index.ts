@@ -8,6 +8,7 @@ export type { ProbeRequest, ProbeFlow } from './types.js';
 export type { SecurityCheckStep } from './check.js';
 export {
   type SecurityClass,
+  type SeedCategory,
   type SecuritySeed,
   isSecuritySeed,
   loadSecuritySeeds,

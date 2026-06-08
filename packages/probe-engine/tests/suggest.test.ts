@@ -40,9 +40,10 @@ describe('suggestProbes', () => {
     expect(out.some(s => s.class === 'idor')).toBe(false);
     expect(out.some(s => s.class === 'ssrf')).toBe(false);
   });
-  test('an unauthenticated request yields no suggestions (all built-ins need auth)', () => {
+  test('an unauthenticated request surfaces vuln candidates (injection needs no auth) but no authz', () => {
     const out = suggestProbes([flow('f4', { url: 'https://app.test/api/orders?id=42', headers: {} })]);
-    expect(out).toEqual([]);
+    expect(out.some(s => s.class === 'idor')).toBe(false); // authz seeds need auth
+    expect(out.some(s => s.class === 'sqli')).toBe(true);  // injection doesn't
   });
   test('returns flat suggestions across multiple flows', () => {
     const out = suggestProbes([
