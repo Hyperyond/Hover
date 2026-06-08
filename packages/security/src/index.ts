@@ -348,6 +348,10 @@ export {
   type MutateOptions,
 } from './mitm/index.js';
 
+// The recorded-check shape, so downstream packages (e.g. @hover-dev/pentest)
+// can render reports / specs from a session's checks without re-deriving it.
+export type { SecurityCheckStep } from './control-plane.js';
+
 // Probe engine — the shared access-control primitives from the private
 // @hover-dev/probe-engine (inlined into our dist at build via tsup noExternal;
 // never a runtime npm dependency). Re-exported so consumers can match/sanitize/
