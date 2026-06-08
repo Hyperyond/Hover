@@ -17,3 +17,4 @@ export { type Verdict, type FindingSignals, type GateResult, NEVER_SUBMIT, gateF
 export { builtinSecuritySeeds } from './builtins.js';
 export { type IdentifiedFlow, type ProbeSuggestion, suggestProbes } from './suggest.js';
 export { type StorageState, type StorageStateCookie, cookieHeaderFor } from './storageState.js';
+export { type SweepProbe, type SweepPlan, type SweepOptions, planSweep } from './sweep.js';
