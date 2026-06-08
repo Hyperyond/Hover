@@ -4,12 +4,23 @@ const SENSITIVE_HEADERS = [
   'cookie', 'set-cookie', 'authorization', 'proxy-authorization',
   'x-api-key', 'x-auth-token', 'x-amz-security-token',
 ];
+// Single source of credential-naming alternatives — both the URL-param and the
+// JSON-body matchers derive from it so their coverage can never drift (they did:
+// `auth` and `apikey` were in the URL list but missing from the body list, so a
+// body field named `auth` leaked into committed specs).
+const CREDENTIAL_NAME =
+  'password|passwd|token|secret|api[_-]?key|apikey|authorization|access[_-]?token|auth|ssn|credit[_-]?card';
 // A query-param/JSON key that names a credential.
-const SENSITIVE_KEY = /^(password|passwd|token|secret|api[_-]?key|apikey|authorization|access[_-]?token|auth|ssn|credit[_-]?card)$/i;
-// JSON string value is `(?:[^"\\]|\\.)*` — escaped-quote-safe so a value like
-// "it\"s" doesn't truncate the match and corrupt the surrounding JSON.
-const SENSITIVE_BODY_KEY =
-  /"(password|passwd|token|secret|api[_-]?key|authorization|access[_-]?token|ssn|credit[_-]?card)"\s*:\s*"(?:[^"\\]|\\.)*"/gi;
+const SENSITIVE_KEY = new RegExp(`^(?:${CREDENTIAL_NAME})$`, 'i');
+// Match `"<credential>": <value>` for ANY JSON value type — string, number,
+// boolean, or null. A string value is `(?:[^"\\]|\\.)*` (escaped-quote-safe so
+// `"it\"s"` doesn't truncate). Numbers MUST be redacted too: an SSN or
+// credit-card sent as a JSON number (`"ssn":123456789`) previously slipped
+// through the string-only matcher straight into the committed spec.
+const SENSITIVE_BODY_KEY = new RegExp(
+  `"(${CREDENTIAL_NAME})"\\s*:\\s*(?:"(?:[^"\\\\]|\\\\.)*"|-?\\d[\\d.eE+-]*|true|false|null)`,
+  'gi',
+);
 
 export interface SanitizedRequest {
   method: string;

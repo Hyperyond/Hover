@@ -144,11 +144,12 @@ server.registerTool(
     },
   },
   async ({ note }) => {
-    const { gaps } = await api<{ gaps: number }>('/coverage-gap', {
+    const r = await api<{ recorded: boolean; gaps: number; reason?: string }>('/coverage-gap', {
       method: 'POST',
       body: JSON.stringify({ note }),
     });
-    return md(`📝 Coverage gap recorded (${gaps} total): ${note}`);
+    if (!r.recorded) return md(`⚠ Coverage gap NOT recorded (${r.reason ?? 'rejected'}): ${note}`);
+    return md(`📝 Coverage gap recorded (${r.gaps} total): ${note}`);
   },
 );
 
@@ -171,11 +172,12 @@ server.registerTool(
     },
   },
   async ({ intent, evidence, class: cls, severity, location }) => {
-    const { findings } = await api<{ findings: number }>('/finding', {
+    const r = await api<{ recorded: boolean; findings: number; reason?: string }>('/finding', {
       method: 'POST',
       body: JSON.stringify({ intent, evidence, class: cls, severity, location }),
     });
-    return md(`🎯 Finding recorded (${findings} total): [${severity ?? 'Medium'}] ${intent}`);
+    if (!r.recorded) return md(`⚠ Finding NOT recorded (${r.reason ?? 'rejected'}): ${intent}`);
+    return md(`🎯 Finding recorded (${r.findings} total): [${severity ?? 'Medium'}] ${intent}`);
   },
 );
 
