@@ -28,6 +28,20 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SecurityCheckStep } from './control-plane.js';
+import { gateFinding } from '@hover-dev/probe-engine';
+
+/** A recorded check is noise (not worth a regression test) when its intent
+ *  matches the engine's never-submit list — self-XSS, missing security header,
+ *  clickjacking, logout-CSRF, rate-limit-only. We pass exploitableNow:true so
+ *  the only `kill` path is the never-submit match. */
+function isNoiseCheck(c: SecurityCheckStep): boolean {
+  return gateFinding({
+    title: c.intent,
+    exploitableNow: true,
+    impactProven: true,
+    alreadyKnown: false,
+  }).verdict === 'kill';
+}
 
 export class SecuritySpecExistsError extends Error {
   constructor(public readonly slug: string, public readonly path: string) {
@@ -104,7 +118,11 @@ function renderSpec(
   const lines: string[] = [];
   const date = new Date().toISOString().slice(0, 10);
 
-  const vulnerableChecks = checks.filter((c) => !c.matched);
+  // Drop never-submit noise (self-XSS, missing headers, …) so it never becomes
+  // a regression test. Surface what was dropped — no silent suppression.
+  const suppressed = checks.filter(isNoiseCheck);
+  const kept = checks.filter((c) => !isNoiseCheck(c));
+  const vulnerableChecks = kept.filter((c) => !c.matched);
 
   // ─── JSDoc header ─────────────────────────────────────────────────
   lines.push(`import { test, expect } from '@playwright/test';`);
@@ -115,7 +133,7 @@ function renderSpec(
   if (summary) lines.push(` * Outcome: ${jsdocEscape(summary.split('\n')[0]).slice(0, 240)}`);
   lines.push(' *');
   lines.push(' * Checks:');
-  checks.forEach((c, i) => {
+  kept.forEach((c, i) => {
     const verdict = c.matched ? 'pass' : '**VULNERABILITY**';
     lines.push(
       ` *   ${i + 1}. ${jsdocEscape(c.intent)}`,
@@ -127,6 +145,14 @@ function renderSpec(
       ` *      → expected ${c.expectStatus}, observed ${c.observed.status} — ${verdict}`,
     );
   });
+
+  if (suppressed.length > 0) {
+    lines.push(' *');
+    lines.push(` * Suppressed ${suppressed.length} noise check(s) (never-submit list):`);
+    for (const c of suppressed) {
+      lines.push(` *   • ${jsdocEscape(c.intent)}`);
+    }
+  }
 
   if (vulnerableChecks.length > 0) {
     lines.push(' *');
@@ -155,7 +181,7 @@ function renderSpec(
   const safeTitle = displayName.replace(/'/g, "\\'");
   lines.push(`test.describe('security: ${safeTitle}', () => {`);
 
-  checks.forEach((c, i) => {
+  kept.forEach((c, i) => {
     const num = String(i + 1).padStart(2, '0');
     const testTitle = `${num} — ${c.intent.replace(/'/g, "\\'").slice(0, 80)}`;
     lines.push('');

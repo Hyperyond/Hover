@@ -255,4 +255,22 @@ describe('writeSecuritySpec', () => {
     // Truncated at 240 chars, matches the writeSpec behaviour.
     expect(m![1].length).toBeLessThanOrEqual(240);
   });
+
+  test('suppresses never-submit noise checks (e.g. self-XSS) from the tests', async () => {
+    const result = await writeSecuritySpec({
+      devRoot: tmp,
+      name: 'mixed',
+      checks: [
+        buildCheck({ id: 1, intent: 'IDOR: read another user order' }),
+        buildCheck({ id: 2, intent: 'Self-XSS in the profile name field' }),
+      ],
+    });
+    const src = readFileSync(result.path, 'utf-8');
+    // the real finding becomes a test; the self-XSS noise does not
+    expect(src).toMatch(/test\('01 — IDOR: read another user order'/);
+    expect(src).not.toMatch(/test\('0\d — Self-XSS/);
+    // surfaced as suppressed, not silently dropped
+    expect(src).toContain('Suppressed 1 noise check(s)');
+    expect(src).toContain('Self-XSS in the profile name field');
+  });
 });
