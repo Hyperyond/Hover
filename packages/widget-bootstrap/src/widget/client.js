@@ -3569,6 +3569,15 @@
       if (msg.type === 'event' && msg.payload) {
         handleServerEvent(msg.payload);
         if (msg.payload.kind === 'session_end') setRunning(false);
+      } else if (msg.type === 'run-active') {
+        // The service re-attached us to a run still in flight — our previous
+        // socket dropped (usually the agent navigated and reloaded the page the
+        // widget lives in). Restore the running UI; subsequent events stream in
+        // as normal and the final session_end closes the run.
+        if (!running) {
+          setRunning(true);
+          addMessage({ kind: 'system', text: '↻ reconnected — run still in progress' });
+        }
       } else if (msg.type === 'error') {
         addMessage({ kind: 'system', text: `error: ${msg.payload?.message ?? 'unknown'}` });
         setRunning(false);

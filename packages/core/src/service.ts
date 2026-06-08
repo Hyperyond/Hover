@@ -324,6 +324,34 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
 
   /** id of the currently-active mode, or null for normal (unmoded) mode. */
   let currentModeId: string | null = null;
+
+  /**
+   * The single in-flight agent run, held at SERVICE scope (not per-connection)
+   * so it SURVIVES the widget's WS dropping. The widget lives in the page the
+   * agent drives, so any agent navigation (a pentest payload in the URL, an
+   * HMR reload) tears the widget down and closes its socket — but the agent is
+   * still happily driving the tab over CDP and recording findings server-side.
+   * Killing it on every navigation made pentest mode (which navigates
+   * constantly) unusable. Instead: detach on close, keep streaming to whichever
+   * ws is attached, and only abort if no widget reconnects within the grace
+   * window. Single active run — Hover binds 127.0.0.1 for one local user.
+   */
+  const RECONNECT_GRACE_MS = 15_000;
+  interface ActiveRun {
+    abort: AbortController;
+    cancelled: boolean;
+    /** ws currently receiving this run's events; null during a reconnect gap. */
+    client: WebSocket | null;
+    graceTimer: ReturnType<typeof setTimeout> | null;
+    /** the prompt, echoed to a reconnecting widget so it can restore context. */
+    prompt: string;
+  }
+  let activeRun: ActiveRun | null = null;
+  /** Send a run event to whichever ws is currently attached (survives reconnect). */
+  const emitToRun = (msg: { type: string; payload?: unknown }): void => {
+    const c = activeRun?.client;
+    if (c && c.readyState === WebSocket.OPEN) send(c, msg);
+  };
   /** Chrome-proxy settings a plugin's `hover:service:start` hook set on us
    *  (security's resident MITM). RESIDENT for the whole session — set once
    *  before Chrome launches, never cleared on mode change — so the single
@@ -512,21 +540,37 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     // toggle immediately. Empty list when no plugins are loaded.
     broadcastModes(ws);
 
-    let busy = false;
-    let inflight: AbortController | null = null;
-    let cancelled = false;
+    // Re-attach to a run that's still in flight (the previous widget dropped —
+    // most commonly the agent navigated and reloaded the page the widget lives
+    // in). Cancel the pending abort, point the run's event stream at this fresh
+    // socket, and tell the widget so it can restore its "running" UI. Without
+    // this the run would be killed on every agent navigation.
+    if (activeRun) {
+      if (activeRun.graceTimer) {
+        clearTimeout(activeRun.graceTimer);
+        activeRun.graceTimer = null;
+      }
+      activeRun.client = ws;
+      send(ws, { type: 'run-active', payload: { prompt: activeRun.prompt } });
+    }
 
-    // If the page reloads (e.g. AI navigated to a same-origin URL), the WS
-    // connection drops. Abort the in-flight agent so we don't leave an
-    // orphan claude process driving the now-vanished browser tab.
+    // If the widget's socket closes while a run it owns is in flight, DON'T
+    // abort — the agent is still driving the tab over CDP. Detach this ws and
+    // start a grace window; a reconnecting widget (above) cancels the abort.
+    // Only if nobody comes back do we abort, so we still never leave an orphan.
     ws.on('close', () => {
-      inflight?.abort();
+      if (activeRun && activeRun.client === ws) {
+        activeRun.client = null;
+        activeRun.graceTimer = setTimeout(() => {
+          activeRun?.abort.abort();
+        }, RECONNECT_GRACE_MS);
+      }
     });
 
     const cancel = () => {
-      if (!busy) return;
-      cancelled = true;
-      inflight?.abort();
+      if (!activeRun) return;
+      activeRun.cancelled = true;
+      activeRun.abort.abort();
       // Send a synthetic session_end so the widget resets to idle immediately.
       // The for-await loop below short-circuits on `cancelled`, so no events
       // from the dying child will arrive after this.
@@ -536,7 +580,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // stays false because the agent didn't fail: the user chose to
       // end the run. The widget renders this as a neutral "Stopped"
       // state rather than a red Failed card.
-      send(ws, {
+      emitToRun({
         type: 'event',
         payload: {
           kind: 'session_end',
@@ -563,7 +607,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         return;
       }
       if (msg.type === 'set-mode') {
-        if (busy) {
+        if (activeRun) {
           send(ws, {
             type: 'error',
             payload: { message: 'set-mode: a command is already running; stop it first' },
@@ -617,7 +661,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Refuse to switch mid-flight; the user's running command would
         // otherwise outlive its own descriptor and the events it produces
         // would be parsed against the wrong wire format.
-        if (busy) {
+        if (activeRun) {
           send(ws, {
             type: 'error',
             payload: { message: 'switch-agent: a command is already running; stop it first' },
@@ -788,17 +832,22 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           ? ((msg.payload as { reRecord?: { slug?: unknown } }).reRecord?.slug as string | undefined)
           : undefined;
       if (typeof text !== 'string' || !text.trim()) return;
-      if (busy) {
+      if (activeRun) {
         send(ws, {
           type: 'error',
-          payload: { message: 'A command is already running on this connection.' },
+          payload: { message: 'A command is already running.' },
         });
         return;
       }
 
-      busy = true;
-      cancelled = false;
-      inflight = new AbortController();
+      const run: ActiveRun = {
+        abort: new AbortController(),
+        cancelled: false,
+        client: ws,
+        graceTimer: null,
+        prompt: text,
+      };
+      activeRun = run;
       try {
         // Build the MCP config first — it's pure local file IO and lets
         // us assert plugin-contributed servers landed in the config even
@@ -887,8 +936,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
 
         // Snapshot the agent id so a switch-agent message during the run
         // can't smear two agents across one invocation. (We also gate
-        // switch-agent on `busy`, but defense in depth.) runSession gates the
-        // allow/deny lists on the agent's sandboxStrength internally.
+        // switch-agent on an active run, but defense in depth.) runSession gates
+        // the allow/deny lists on the agent's sandboxStrength internally.
         const invokedAgentId = currentAgentId;
         // Active mode's plugin-contributed MCP server ids — added to the
         // hard-sandbox allow list so Claude can actually call them. Claude
@@ -925,11 +974,13 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             maxBudgetUsd,
             model,
             apiKey: currentApiKey,
-            signal: inflight.signal,
+            signal: run.abort.signal,
           },
           (ev) => {
-            if (cancelled || ws.readyState !== WebSocket.OPEN) return;
-            send(ws, { type: 'event', payload: ev });
+            // Stream to whichever ws is attached NOW — survives the widget
+            // reconnecting mid-run (emitToRun is a no-op during a reconnect gap).
+            if (run.cancelled) return;
+            emitToRun({ type: 'event', payload: ev });
           },
         );
 
@@ -937,9 +988,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // (`user` → `step`* → `done`). Only on a clean, non-cancelled finish —
         // a cancelled/aborted run throws out of runSession into the catch
         // below, and an errored agent leaves the original spec untouched.
-        if (reRecordSlug && !cancelled) {
+        if (reRecordSlug && !run.cancelled) {
           if (runResult.isError) {
-            sendIfOpen(ws, {
+            emitToRun({
               type: 'error',
               payload: {
                 message:
@@ -956,13 +1007,13 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
                 steps: runResult.steps,
                 overwrite: true,
               });
-              sendIfOpen(ws, {
+              emitToRun({
                 type: 'spec-saved',
                 payload: { name: reRecordSlug, path: written.path },
               });
             } catch (e) {
               const m = e instanceof Error ? e.message : String(e);
-              sendIfOpen(ws, {
+              emitToRun({
                 type: 'error',
                 payload: { message: `Re-record could not write spec: ${m}` },
               });
@@ -976,14 +1027,14 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // widget to reconcile two terminal events for one run. CDP isn't
         // suspect either — the user just stopped — so skip preflight
         // invalidation too.
-        if (!cancelled) {
+        if (!run.cancelled) {
           const message = err instanceof Error ? err.message : String(err);
           const errorEvent: InvokeEvent = {
             kind: 'session_end',
             isError: true,
             summary: message,
           };
-          sendIfOpen(ws, { type: 'event', payload: errorEvent });
+          emitToRun({ type: 'event', payload: errorEvent });
           // Force the next command to re-probe CDP. The error could be from
           // Chrome dying, MCP spawning a stray Chromium, the user closing
           // their debug window — anything that would make a cached "all
@@ -997,8 +1048,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           invalidatePreflight(invalCdpUrl);
         }
       } finally {
-        busy = false;
-        inflight = null;
+        if (run.graceTimer) clearTimeout(run.graceTimer);
+        activeRun = null;
       }
     });
   });
