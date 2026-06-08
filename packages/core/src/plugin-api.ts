@@ -46,6 +46,13 @@ export interface HoverPluginMode {
   /** Mode ids this mode cannot be active alongside. Two plugins both
    *  needing an exclusive proxy would set each other here. */
   conflictsWith?: string[];
+  /** CSS colour the widget tints to while this mode is engaged — the mode
+   *  bar, launcher, and panel chrome all retint to it. Any CSS colour the
+   *  user's Chrome accepts (the widget derives the dim/hover/ink/tint shades
+   *  from it via `color-mix`). Defaults to security orange (`#fb923c`) when
+   *  omitted, so a plugin only sets this to stand apart — e.g. pentest's
+   *  `#ef4444` red signalling "offensive mode". */
+  accent?: string;
 }
 
 export interface HoverPluginMcpServer {
