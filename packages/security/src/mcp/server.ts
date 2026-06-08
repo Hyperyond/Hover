@@ -152,6 +152,33 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  'record_finding',
+  {
+    description:
+      'Record a vulnerability you CONFIRMED by driving the browser — reflected / DOM XSS you watched execute, a client-side injection, a UI-level auth or logic flaw you triggered. Use `replay_flow` (with intent + expectStatus) for HTTP-level probes like IDOR / mass-assignment; use THIS for anything you confirmed in the page itself, which produces no replayed request. Both feed the findings report — a browser attack you DON\'T record here will NOT appear in the report. Only record what you actually confirmed in-band; put the payload you sent + the effect you observed in `evidence`, and never include real user data.',
+    inputSchema: {
+      intent: z.string().describe('Short description, e.g. "Reflected XSS in the search field".'),
+      evidence: z
+        .string()
+        .describe('What you sent + what you observed, in-band. e.g. "typed <script>alert(1)</script> into ?q= ; it reflected unencoded and the alert fired".'),
+      class: z
+        .string()
+        .optional()
+        .describe('Vulnerability class when known: xss / sqli / ssti / open-redirect / idor / csrf / …'),
+      severity: z.enum(['High', 'Medium', 'Low']).optional().describe('Your severity assessment. Defaults to Medium.'),
+      location: z.string().optional().describe('Page URL / field where it lives, sanitized (no tokens).'),
+    },
+  },
+  async ({ intent, evidence, class: cls, severity, location }) => {
+    const { findings } = await api<{ findings: number }>('/finding', {
+      method: 'POST',
+      body: JSON.stringify({ intent, evidence, class: cls, severity, location }),
+    });
+    return md(`🎯 Finding recorded (${findings} total): [${severity ?? 'Medium'}] ${intent}`);
+  },
+);
+
 interface ProbeSuggestion {
   flowId: string;
   method: string;

@@ -1089,6 +1089,11 @@
     // produce no summary or findings (the user just clicked through a UI),
     // so the resulting CSV would be empty of useful test-design fields —
     // hide the item to avoid suggesting an artifact that won't be useful.
+    // Built fresh each time the menu opens (see openMenu) so it always reflects
+    // the CURRENT mode — switching mode while a Result is on screen updates the
+    // options without needing a page refresh.
+    function populateMenu() {
+    menu.replaceChildren();
     const allItems = [
       {
         icon: SPEC_ICON_SVG, label: 'Playwright spec',
@@ -1151,6 +1156,7 @@
       });
       menu.appendChild(btn);
     }
+    }
 
     const closeOnOutside = (e) => {
       if (!e.composedPath().includes(wrap)) closeMenu();
@@ -1163,6 +1169,7 @@
     };
     let attachTimer = null;
     function openMenu() {
+      populateMenu();
       menu.hidden = false;
       trigger.setAttribute('aria-expanded', 'true');
       // Listeners attached on next tick so the click that opened the

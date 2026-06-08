@@ -28,7 +28,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
 import type { Flow, FlowStore } from './mitm/flows.js';
 import { replayFlow, type MutateOptions } from './mitm/replay.js';
-import { suggestProbes, cookieHeaderFor, type StorageState, type SecurityCheckStep } from '@hover-dev/probe-engine';
+import { suggestProbes, cookieHeaderFor, type StorageState, type SecurityCheckStep, type BrowserFinding } from '@hover-dev/probe-engine';
 
 const PORT_RETRIES = 10;
 const DEFAULT_PORT = 51850;
@@ -57,6 +57,9 @@ export interface ControlPlaneHandle {
    *  plugin's hooks to forward checks to the widget without going
    *  through HTTP. Returns a copy so callers can mutate freely. */
   listChecks(): SecurityCheckStep[];
+  /** Browser-confirmed findings the agent recorded (XSS via input, DOM-based,
+   *  etc.) — attacks driven through the page, not via replay_flow. */
+  listFindings(): BrowserFinding[];
   /** Coverage gaps the agent recorded — what it did NOT test and why. Feeds the
    *  findings report's "Not tested" section so a scan never reads as full
    *  coverage. */
@@ -156,6 +159,13 @@ export async function startControlPlane(
   const gaps: string[] = [];
   const MAX_GAPS = 200;
 
+  // Browser-confirmed findings — attacks the agent landed by driving the page
+  // (reflected/DOM XSS, client-side injection, UI-level logic flaws) rather than
+  // via replay_flow. Capped like gaps.
+  const findings: BrowserFinding[] = [];
+  let nextFindingId = 1;
+  const MAX_FINDINGS = 200;
+
   const recordCheck = (raw: {
     sourceFlowId: string;
     replayFlow: Flow;
@@ -249,6 +259,42 @@ export async function startControlPlane(
         // De-dup (agents repeat themselves) + cap.
         if (!gaps.includes(note) && gaps.length < MAX_GAPS) gaps.push(note);
         sendJson(res, 200, { recorded: true, gaps: gaps.length });
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/findings') {
+        sendJson(res, 200, { findings: [...findings] });
+        return;
+      }
+
+      if (req.method === 'POST' && path === '/finding') {
+        const body = await readBody(req);
+        let p: { class?: unknown; intent?: unknown; severity?: unknown; evidence?: unknown; location?: unknown };
+        try {
+          p = JSON.parse(body || '{}') as typeof p;
+        } catch {
+          sendJson(res, 400, { error: 'invalid JSON body' });
+          return;
+        }
+        const intent = String(p.intent ?? '').trim();
+        const evidence = String(p.evidence ?? '').trim();
+        if (!intent || !evidence) {
+          sendJson(res, 400, { error: 'intent and evidence are required' });
+          return;
+        }
+        const sev = p.severity === 'High' || p.severity === 'Low' ? p.severity : 'Medium';
+        if (findings.length < MAX_FINDINGS) {
+          findings.push({
+            id: nextFindingId++,
+            class: typeof p.class === 'string' ? (p.class as BrowserFinding['class']) : undefined,
+            intent,
+            severity: sev,
+            evidence,
+            location: typeof p.location === 'string' && p.location.trim() ? p.location.trim() : undefined,
+            recordedAt: Date.now(),
+          });
+        }
+        sendJson(res, 200, { recorded: true, findings: findings.length });
         return;
       }
 
@@ -402,6 +448,7 @@ export async function startControlPlane(
     port: boundPort,
     token,
     listChecks: () => [...checks],
+    listFindings: () => [...findings],
     listGaps: () => [...gaps],
     on: (event, listener) => {
       emitter.on(event, listener);

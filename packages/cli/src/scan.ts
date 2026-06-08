@@ -192,17 +192,19 @@ export async function runScan(args: ScanArgs): Promise<number> {
     done(`${result.isError ? 'Ended with an error' : 'Scan complete'}${meta ? ` ${dim('·')} ${meta}` : ''}`);
     if (result.summary) line(result.summary.trim());
 
-    // 5 · render the findings report from the recorded checks + the agent's
-    //     own coverage-gap notes (so "Not tested" reflects what it skipped).
+    // 5 · render the findings report from the recorded checks (replay) + the
+    //     browser-confirmed findings + the agent's own coverage-gap notes.
     const checks = rt.listChecks();
+    const findings = rt.listFindings();
     const notTested = rt.listGaps();
     const reportName = args.name ?? (args.scope ?? 'scan');
-    const written = await writeFindingsReport({ devRoot: cwd, name: reportName, checks, notTested });
+    const written = await writeFindingsReport({ devRoot: cwd, name: reportName, checks, findings, notTested });
     gap();
-    if (checks.length === 0) {
-      ok(`report written: ${cyan(relative(cwd, written.path))} ${dim('(no probes were recorded — see the agent summary above)')}`);
+    const recorded = checks.length + findings.length;
+    if (recorded === 0) {
+      ok(`report written: ${cyan(relative(cwd, written.path))} ${dim('(nothing recorded — see the agent summary above)')}`);
     } else {
-      ok(`report written: ${cyan(relative(cwd, written.path))} ${dim(`(${checks.length} recorded check${checks.length === 1 ? '' : 's'})`)}`);
+      ok(`report written: ${cyan(relative(cwd, written.path))} ${dim(`(${recorded} recorded item${recorded === 1 ? '' : 's'})`)}`);
     }
     tail(`open it, then lock any real finding into a CI regression with ${cyan('@hover-dev/security')}`);
 
@@ -269,6 +271,7 @@ interface RunSessionResult { steps: unknown[]; summary: string; isError: boolean
 interface RunEvent { kind: string; text?: string; tool?: string; costUsd?: number; turns?: number }
 interface SecurityRuntime {
   proxyPort: number; spki: string; mcpServerId: string; mcpScriptPath: string;
-  mcpEnv: Record<string, string>; listChecks(): unknown[]; listGaps(): string[]; stop(): Promise<void>;
+  mcpEnv: Record<string, string>;
+  listChecks(): unknown[]; listFindings(): unknown[]; listGaps(): string[]; stop(): Promise<void>;
 }
-interface WriteReportOpts { devRoot: string; name: string; checks: unknown[]; notTested?: string[] }
+interface WriteReportOpts { devRoot: string; name: string; checks: unknown[]; findings?: unknown[]; notTested?: string[] }
