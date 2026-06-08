@@ -26,6 +26,7 @@ import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import type { Flow, FlowStore } from './mitm/flows.js';
 import { replayFlow, type MutateOptions } from './mitm/replay.js';
+import { suggestProbes } from '@hover-dev/probe-engine';
 
 const PORT_RETRIES = 10;
 const DEFAULT_PORT = 51850;
@@ -215,6 +216,14 @@ export async function startControlPlane(store: FlowStore): Promise<ControlPlaneH
             : null,
         }));
         sendJson(res, 200, { flows });
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/suggest-probes') {
+        // Match captured flows against the built-in probe seeds → the
+        // "what's worth probing" list the agent acts on. store.list()
+        // returns full flows (headers + body), which suggestProbes needs.
+        sendJson(res, 200, { suggestions: suggestProbes(store.list()) });
         return;
       }
 

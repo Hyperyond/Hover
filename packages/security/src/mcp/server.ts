@@ -130,6 +130,40 @@ server.registerTool(
   },
 );
 
+interface ProbeSuggestion {
+  flowId: string;
+  method: string;
+  url: string;
+  class: string;
+  seed: string;
+  strategy: string;
+  signal: string;
+}
+
+server.registerTool(
+  'suggest_probes',
+  {
+    description:
+      'Scan the captured flows for access-control probe candidates (IDOR / BFLA / mass-assignment / SSRF / auth-bypass). Returns, per matching flow, what to try and what a real finding looks like. Start here, then use get_flow + replay_flow to probe a candidate.',
+    inputSchema: {},
+  },
+  async () => {
+    const { suggestions } = await api<{ suggestions: ProbeSuggestion[] }>('/suggest-probes');
+    if (suggestions.length === 0) {
+      return md(
+        'No probe candidates yet. Drive the app (log in, open a record, submit a form) so the proxy captures authenticated requests, then re-run.',
+      );
+    }
+    const lines = suggestions.map(
+      (s) =>
+        `- \`${s.flowId}\` **${s.class}** — ${s.method} ${s.url}\n` +
+        `  - try: ${s.strategy}\n` +
+        `  - finding: ${s.signal}`,
+    );
+    return md(`${suggestions.length} probe candidate(s):\n${lines.join('\n')}`);
+  },
+);
+
 server.registerTool(
   'get_flow',
   {
