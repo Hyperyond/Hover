@@ -315,4 +315,28 @@ describe('writeSecuritySpec', () => {
     expect(src).toMatch(/await request\.get\("[^"]+"\);/);
     expect(src).not.toContain('data:');
   });
+
+  test('emits a multi-role browser.newContext test for a cross-identity check', async () => {
+    const result = await writeSecuritySpec({
+      devRoot: tmp,
+      name: 'idor-cross',
+      checks: [
+        buildCheck({
+          intent: 'IDOR: B reads A order',
+          expectStatus: 403,
+          observed: { ...buildCheck().observed, method: 'GET', url: 'http://localhost/api/orders/1', status: 200 },
+          request: { method: 'GET', url: 'http://localhost/api/orders/1', headers: { cookie: 'sid=a' }, bodyText: null },
+          crossIdentity: { identityB: 'state/userB.json' },
+        }),
+      ],
+    });
+    const src = readFileSync(result.path, 'utf-8');
+    expect(src).toContain('async ({ browser })');
+    expect(src).toContain('browser.newContext({ storageState: "state/userB.json" })');
+    expect(src).toContain('ctxB.request.get(');
+    expect(src).toContain('expect(response.status()).toBe(403)');
+    expect(src).toContain('await ctxB.close();');
+    // A's cookie is never baked in — B's session comes from storageState
+    expect(src).not.toContain('sid=a');
+  });
 });

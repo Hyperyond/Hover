@@ -44,6 +44,12 @@ export interface SecurityModeOptions {
   cdpPort?: number;
   /** @deprecated See `cdpPort` — ignored in the single-Chrome model. */
   userDataDir?: string;
+  /** Second identities for IDOR/BOLA probing — label → Playwright
+   *  `storageState` file path (relative to the project root). The agent can
+   *  replay a captured request AS one of these via the `replay_flow` tool's
+   *  `as` argument, and a cross-identity finding crystallizes into a
+   *  multi-role `browser.newContext({ storageState })` spec. */
+  identities?: Record<string, string>;
 }
 
 const MCP_SERVER_ID = '@hover-dev/security:flows';
@@ -162,7 +168,7 @@ function resolveWidgetScriptPath(): string {
   return resolve(here, 'widget.js');
 }
 
-export default defineHoverPlugin<SecurityModeOptions | void>(() => {
+export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
   // Closed-over handles so the service:start hook can boot the resident
   // sidecars and the shutdown hook can stop them. One factory call ⇒ one set
   // of handles (Hover instantiates the manifest once per service).
@@ -276,7 +282,10 @@ export default defineHoverPlugin<SecurityModeOptions | void>(() => {
         // Control plane (the local HTTP API the agent's MCP server talks to)
         // is also resident — harmless when idle, and avoids a start/stop race
         // on every mode toggle.
-        control = await startControlPlane(proxy.store);
+        control = await startControlPlane(proxy.store, {
+          devRoot: ctx.devRoot,
+          identities: opts?.identities,
+        });
         ctx.setMcpServerEnv(MCP_SERVER_ID, {
           HOVER_SECURITY_API: `http://127.0.0.1:${control.port}`,
           HOVER_SECURITY_API_TOKEN: control.token,

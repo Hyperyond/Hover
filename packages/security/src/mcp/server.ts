@@ -231,10 +231,16 @@ server.registerTool(
         .describe(
           'HTTP status code that proves the security control is working. Example: probing IDOR by changing /orders/me → /orders/999, expectStatus is 403 (the server SHOULD reject the cross-user lookup). When this matches the observed status, the check is recorded as a verified control; when it doesn\'t, the check is recorded as a vulnerability finding.',
         ),
+      as: z
+        .string()
+        .optional()
+        .describe(
+          'Replay AS a second identity — the label of a storageState configured in securityMode({ identities }). This is the core IDOR/BOLA test: issue identity A\'s captured request with identity B\'s session. B\'s cookies override the captured ones. A recorded check then crystallises into a multi-role browser.newContext({ storageState }) spec. Example: as: "userB" with expectStatus 403 — B must NOT reach A\'s resource.',
+        ),
     },
   },
-  async ({ id, method, url, headers, bodyText, allowCrossOrigin, intent, expectStatus }) => {
-    const payload = { method, url, headers, bodyText, allowCrossOrigin, intent, expectStatus };
+  async ({ id, method, url, headers, bodyText, allowCrossOrigin, intent, expectStatus, as }) => {
+    const payload = { method, url, headers, bodyText, allowCrossOrigin, intent, expectStatus, as };
     const result = await api<{
       replayId: string;
       flow: FullFlow;

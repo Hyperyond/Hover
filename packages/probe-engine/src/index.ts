@@ -16,3 +16,4 @@ export { type SanitizedRequest, sanitizeRequest } from './sanitize.js';
 export { type Verdict, type FindingSignals, type GateResult, NEVER_SUBMIT, gateFinding } from './gate.js';
 export { builtinSecuritySeeds } from './builtins.js';
 export { type IdentifiedFlow, type ProbeSuggestion, suggestProbes } from './suggest.js';
+export { type StorageState, type StorageStateCookie, cookieHeaderFor } from './storageState.js';

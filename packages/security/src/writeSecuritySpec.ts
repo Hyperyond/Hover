@@ -196,8 +196,12 @@ function renderSpec(
   kept.forEach((c, i) => {
     const num = String(i + 1).padStart(2, '0');
     const testTitle = `${num} — ${c.intent.replace(/'/g, "\\'").slice(0, 80)}`;
+    // A cross-identity check replays AS identity B (its storageState), so it
+    // needs the `browser` fixture to spin up B's context; otherwise the
+    // lighter `request` fixture is enough.
+    const xid = c.crossIdentity;
     lines.push('');
-    lines.push(`  test('${testTitle}', async ({ request }) => {`);
+    lines.push(`  test('${testTitle}', async ({ ${xid ? 'browser' : 'request'} }) => {`);
     if (!c.matched) {
       lines.push(
         `    // Recorded as a vulnerability: observed ${c.observed.status}, expected ${c.expectStatus}.`,
@@ -223,7 +227,14 @@ function renderSpec(
       lines.push(`    // Redacted from the captured request: ${what} (supply auth via storageState).`);
     }
     const optsStr = reqOpts.length > 0 ? `, { ${reqOpts.join(', ')} }` : '';
-    lines.push(`    const response = await request.${playwrightMethod}(${urlJson}${optsStr});`);
+
+    let requester = 'request';
+    if (xid) {
+      lines.push(`    // Issued as a second identity — it must NOT reach the first identity's resource.`);
+      lines.push(`    const ctxB = await browser.newContext({ storageState: ${JSON.stringify(xid.identityB)} });`);
+      requester = 'ctxB.request';
+    }
+    lines.push(`    const response = await ${requester}.${playwrightMethod}(${urlJson}${optsStr});`);
     lines.push(`    expect(response.status()).toBe(${c.expectStatus});`);
 
     // Body-leak check: when the security control is "this request must
@@ -238,6 +249,7 @@ function renderSpec(
       lines.push(`    const body = await response.text();`);
       lines.push(`    expect(body.length).toBeLessThan(500);`);
     }
+    if (xid) lines.push(`    await ctxB.close();`);
     lines.push(`  });`);
   });
 

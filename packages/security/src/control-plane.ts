@@ -24,9 +24,11 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import { readFile } from 'node:fs/promises';
+import { resolve, isAbsolute } from 'node:path';
 import type { Flow, FlowStore } from './mitm/flows.js';
 import { replayFlow, type MutateOptions } from './mitm/replay.js';
-import { suggestProbes } from '@hover-dev/probe-engine';
+import { suggestProbes, cookieHeaderFor, type StorageState } from '@hover-dev/probe-engine';
 
 const PORT_RETRIES = 10;
 const DEFAULT_PORT = 51850;
@@ -68,6 +70,10 @@ export interface SecurityCheckStep {
     headers: Record<string, string | string[] | undefined>;
     bodyText: string | null;
   };
+  /** Set when the replay was issued AS a second identity (B) — the
+   *  storageState path of that identity. Drives the multi-role
+   *  `browser.newContext({ storageState })` emit in writeSecuritySpec. */
+  crossIdentity?: { identityB: string };
   /** What actually came back. */
   observed: {
     method: string;
@@ -128,7 +134,45 @@ async function bindServer(server: Server, port: number): Promise<void> {
   });
 }
 
-export async function startControlPlane(store: FlowStore): Promise<ControlPlaneHandle> {
+export interface ControlPlaneOptions {
+  /** Project root — relative identity storageState paths resolve against it. */
+  devRoot?: string;
+  /** Label → Playwright storageState file path, for replaying as a second
+   *  identity (IDOR/BOLA). e.g. { userB: 'state/userB.json' }. */
+  identities?: Record<string, string>;
+}
+
+export async function startControlPlane(
+  store: FlowStore,
+  options: ControlPlaneOptions = {},
+): Promise<ControlPlaneHandle> {
+  const identities = options.identities ?? {};
+  const identityRoot = options.devRoot ?? process.cwd();
+  const stateCache = new Map<string, StorageState>();
+
+  // Resolve a configured identity to a Cookie header for `url`, reading +
+  // caching its storageState file. Returns { error } on misconfig/IO failure.
+  const identityCookie = async (
+    label: string,
+    url: string,
+  ): Promise<string | { error: string }> => {
+    const rel = identities[label];
+    if (!rel) {
+      return { error: `unknown identity "${label}" — configure it in securityMode({ identities }).` };
+    }
+    let state = stateCache.get(rel);
+    if (!state) {
+      const abs = isAbsolute(rel) ? rel : resolve(identityRoot, rel);
+      try {
+        state = JSON.parse(await readFile(abs, 'utf-8')) as StorageState;
+      } catch (err) {
+        return { error: `could not read storageState for "${label}" at ${rel}: ${String(err)}` };
+      }
+      stateCache.set(rel, state);
+    }
+    return cookieHeaderFor(state, url);
+  };
+
   const token = randomBytes(24).toString('hex');
 
   // Recorded security checks. Lives next to the FlowStore but conceptually
@@ -145,6 +189,7 @@ export async function startControlPlane(store: FlowStore): Promise<ControlPlaneH
     replayFlow: Flow;
     intent: string;
     expectStatus: number;
+    crossIdentity?: { identityB: string };
   }): SecurityCheckStep => {
     const obs = raw.replayFlow.response;
     const observed: SecurityCheckStep['observed'] = {
@@ -170,6 +215,7 @@ export async function startControlPlane(store: FlowStore): Promise<ControlPlaneH
         headers: req.headers,
         bodyText: req.bodyText,
       },
+      ...(raw.crossIdentity ? { crossIdentity: raw.crossIdentity } : {}),
       observed,
       matched: observed.status === raw.expectStatus,
       recordedAt: Date.now(),
@@ -264,7 +310,7 @@ export async function startControlPlane(store: FlowStore): Promise<ControlPlaneH
         // replayFlow — only the mutation subset is honoured for actual
         // request rewriting.
         let parsed:
-          | (MutateOptions & { intent?: string; expectStatus?: number })
+          | (MutateOptions & { intent?: string; expectStatus?: number; as?: string })
           | undefined;
         try {
           const body = await readBody(req);
@@ -273,7 +319,23 @@ export async function startControlPlane(store: FlowStore): Promise<ControlPlaneH
           sendJson(res, 400, { error: 'invalid JSON body', detail: String(err) });
           return;
         }
-        const { intent, expectStatus, ...mutate } = parsed ?? {};
+        const { intent, expectStatus, as, ...mutate } = parsed ?? {};
+
+        // Replay AS a second identity: swap in that identity's cookies for the
+        // request being replayed. This is how IDOR/BOLA is probed — issue
+        // identity A's captured request with identity B's session.
+        let crossIdentity: { identityB: string } | undefined;
+        if (typeof as === 'string' && as.length > 0) {
+          const srcUrl = mutate.url ?? store.get(id)?.request.url ?? '';
+          const cookie = await identityCookie(as, srcUrl);
+          if (typeof cookie !== 'string') {
+            sendJson(res, 400, cookie);
+            return;
+          }
+          mutate.headers = { ...(mutate.headers ?? {}), cookie };
+          crossIdentity = { identityB: identities[as] };
+        }
+
         const result = await replayFlow(store, id, mutate);
         if ('error' in result) {
           sendJson(res, 404, result);
@@ -290,6 +352,7 @@ export async function startControlPlane(store: FlowStore): Promise<ControlPlaneH
             replayFlow: result.flow,
             intent: intent.trim(),
             expectStatus,
+            crossIdentity,
           });
         }
         sendJson(res, 200, {
