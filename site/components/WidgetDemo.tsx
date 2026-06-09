@@ -7,17 +7,26 @@ import { useEffect, useRef, useState } from 'react';
  * visual tokens mirror packages/widget-bootstrap/src/widget/{template.html,style.css}
  * so the hero shows the actual product, not a mockup.
  *
- * It loops two scripted sessions to show off both modes:
- *   1. Default mode (mint) — login → add todo → Save as spec.
- *   2. Security mode (orange) — the panel's mode bar flips "engaged", the
- *      agent probes for IDOR / authz, finds one, and offers a Security spec.
+ * It loops three scripted sessions to show off the three modes:
+ *   1. Default mode (mint)   — login → add todo → Save as spec.
+ *   2. Security mode (orange) — probes captured API calls for IDOR → security spec.
+ *   3. Pentest mode (red)    — attacks the app for web vulns → findings report.
  *
  * Pure client-side theatre — no WebSocket, no service. A phase machine on a
- * timer drives the cadence; `mode` swaps the script + the orange/mint theme.
+ * timer drives the cadence; the mode bar is clickable so a visitor can jump
+ * between modes (which pauses the auto-advance for that scene).
  */
 
 type StepState = 'pending' | 'running' | 'done';
-type Mode = 'default' | 'security';
+type Mode = 'default' | 'security' | 'pentest';
+
+/** Per-mode theme — `accent` for solid colour, `rgb` for rgba() tints (mint is
+ *  a CSS var for solids but needs its raw triple for tints). */
+const THEME: Record<Mode, { accent: string; rgb: string; label: string; hint: string }> = {
+  default: { accent: 'var(--color-mint)', rgb: '124,255,168', label: 'Default', hint: 'click to switch' },
+  security: { accent: '#fb923c', rgb: '251,146,60', label: 'Security testing', hint: 'MITM proxy active' },
+  pentest: { accent: '#dc2626', rgb: '220,38,38', label: 'Pentest', hint: 'RED — offensive scan' },
+};
 
 type Scene = {
   mode: Mode;
@@ -78,6 +87,29 @@ const SCENES: readonly Scene[] = [
       saveLabel: 'Save security spec',
     },
   },
+  {
+    mode: 'pentest',
+    prompt: 'pentest the search box for web vulns',
+    steps: [
+      'Operating the app for traffic',
+      'suggest_probes → candidates',
+      'Typing <script> into ?q=',
+      'Watching it execute',
+      'record_finding',
+    ],
+    result: {
+      headline: 'FINDING — reflected XSS',
+      pass: false,
+      summary: (
+        <>
+          <DemoCode>{'<script>'}</DemoCode> in <DemoCode>?q=</DemoCode> reflected
+          unencoded and fired. Report carries severity, PoC + a{' '}
+          <span className="text-text">“not tested”</span> section.
+        </>
+      ),
+      saveLabel: 'Save findings report',
+    },
+  },
 ] as const;
 
 export function WidgetDemo() {
@@ -86,35 +118,31 @@ export function WidgetDemo() {
   const [sceneIdx, setSceneIdx] = useState(0);
   const [phase, setPhase] = useState(0);
   const [typed, setTyped] = useState('');
+  // Set true when the visitor clicks the mode bar — pauses the auto-advance so
+  // they can read the mode they chose; cleared when they cycle again.
+  const [paused, setPaused] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const scene = SCENES[sceneIdx];
+  const t = THEME[scene.mode];
 
   useEffect(() => {
     const dwell: Record<number, number> = {
-      0: 1000,
-      1: 1500,
-      2: 950,
-      3: 950,
-      4: 950,
-      5: 950,
-      6: 1100,
-      7: 3400,
-      8: 500,
+      0: 1000, 1: 1500, 2: 950, 3: 950, 4: 950, 5: 950, 6: 1100, 7: 3400, 8: 500,
     };
-    const t = setTimeout(() => {
+    // While paused (a manual mode pick), still play the scene through to its
+    // result, but don't auto-advance to the next mode at the end.
+    if (paused && phase >= 7) return;
+    const timer = setTimeout(() => {
       if (phase >= 8) {
-        // End of this scene — advance to the next mode's script and restart.
-        // Done as two separate setState calls (not a nested updater) so React
-        // reliably commits both.
         setSceneIdx((s) => (s + 1) % SCENES.length);
         setPhase(0);
       } else {
         setPhase((p) => p + 1);
       }
     }, dwell[phase] ?? 1000);
-    return () => clearTimeout(t);
-  }, [phase]);
+    return () => clearTimeout(timer);
+  }, [phase, paused]);
 
   // Typewriter for the prompt during phase 1.
   useEffect(() => {
@@ -136,7 +164,13 @@ export function WidgetDemo() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [phase, sceneIdx]);
 
-  const engaged = scene.mode === 'security';
+  // Clicking the mode bar jumps to the next mode and plays it from the top.
+  const cycleMode = () => {
+    setSceneIdx((s) => (s + 1) % SCENES.length);
+    setPhase(0);
+    setPaused(true);
+  };
+
   const connected = phase >= 1;
   const showUser = phase >= 1;
   const showResult = phase >= 7;
@@ -150,13 +184,10 @@ export function WidgetDemo() {
   return (
     <div className="select-none">
       <div
-        className={`relative w-[380px] max-w-full overflow-hidden rounded-xl border bg-[var(--color-bg)] shadow-[0_18px_48px_rgba(0,0,0,0.55)] transition-colors duration-500 ${
-          engaged ? 'border-[rgba(251,146,60,0.55)]' : 'border-line'
-        }`}
+        className="relative w-[380px] max-w-full overflow-hidden rounded-xl border bg-[var(--color-bg)] shadow-[0_18px_48px_rgba(0,0,0,0.55)] transition-colors duration-500"
+        style={{ borderColor: scene.mode === 'default' ? 'var(--color-line)' : `rgba(${t.rgb},0.55)` }}
       >
-        {/* mode bar — only meaningful when a plugin contributes a mode; here it
-            is always shown so the demo can flip it. */}
-        <ModeBar engaged={engaged} />
+        <ModeBar theme={t} onCycle={cycleMode} />
 
         {/* header */}
         <header className="flex items-center gap-2 border-b border-line px-3 py-2.5">
@@ -171,16 +202,10 @@ export function WidgetDemo() {
             <path d="M8 2.2l1.85 3.75 4.15.6-3 2.92.71 4.13L8 11.65l-3.71 1.95.71-4.13-3-2.92 4.15-.6L8 2.2Z" />
           </HeaderIcon>
           <span className="flex-1" />
-          <span
-            className={`flex items-center gap-1.5 font-mono text-[11px] ${
-              connected ? 'text-text-mute' : 'text-text-dim'
-            }`}
-          >
+          <span className={`flex items-center gap-1.5 font-mono text-[11px] ${connected ? 'text-text-mute' : 'text-text-dim'}`}>
             <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                connected ? (engaged ? 'bg-[#fb923c]' : 'bg-mint') : 'bg-line-2'
-              }`}
-              style={connected ? undefined : { animation: 'wd-blink 1s steps(2) infinite' }}
+              className="h-1.5 w-1.5 rounded-full"
+              style={connected ? { background: t.accent } : { background: 'var(--color-line-2)', animation: 'wd-blink 1s steps(2) infinite' }}
             />
             {connected ? 'ready' : 'connecting…'}
           </span>
@@ -190,9 +215,11 @@ export function WidgetDemo() {
         <div ref={bodyRef} className="wd-body flex h-[336px] flex-col gap-1 overflow-y-auto px-3 py-3">
           {!showUser && (
             <p className="m-auto px-6 text-center font-mono text-[11px] leading-relaxed text-text-dim">
-              {engaged
-                ? 'Security mode — the agent probes captured API calls.'
-                : 'Describe a flow in plain English. Hover drives your real Chrome.'}
+              {scene.mode === 'pentest'
+                ? 'Pentest mode — the agent attacks your own dev app for vulns.'
+                : scene.mode === 'security'
+                  ? 'Security mode — the agent probes captured API calls.'
+                  : 'Describe a flow in plain English. Hover drives your real Chrome.'}
             </p>
           )}
 
@@ -203,8 +230,8 @@ export function WidgetDemo() {
                   <>
                     {typed}
                     <span
-                      className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 bg-mint align-middle"
-                      style={{ animation: 'wd-blink 0.9s steps(2) infinite' }}
+                      className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 align-middle"
+                      style={{ background: t.accent, animation: 'wd-blink 0.9s steps(2) infinite' }}
                     />
                   </>
                 ) : (
@@ -218,10 +245,10 @@ export function WidgetDemo() {
             scene.steps.map((label, i) => {
               const st = stepStateFor(i);
               if (!st) return null;
-              return <StepRow key={label} label={label} state={st} engaged={engaged} />;
+              return <StepRow key={label} label={label} state={st} accent={t.accent} />;
             })}
 
-          {showResult && <ResultCard scene={scene} />}
+          {showResult && <ResultCard scene={scene} theme={t} />}
         </div>
 
         {/* composer */}
@@ -234,9 +261,8 @@ export function WidgetDemo() {
               type="button"
               tabIndex={-1}
               aria-hidden
-              className={`flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-bg)] transition-colors ${
-                engaged ? 'bg-[#fb923c]' : 'bg-mint'
-              }`}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-bg)]"
+              style={{ background: t.accent }}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 8h9M8 4l4 4-4 4" />
@@ -250,9 +276,6 @@ export function WidgetDemo() {
         @keyframes wd-blink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
         @keyframes wd-spin { to { transform: rotate(360deg) } }
         @keyframes wd-row-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
-        /* Scrollbar matched to the real widget (style.css): thin, dark thumb,
-           transparent track — so a tall scene (security: 5 steps + finding)
-           scrolls instead of being squeezed. */
         .wd-body { scrollbar-width: thin; scrollbar-color: #2a2a2c transparent; }
         .wd-body::-webkit-scrollbar { width: 8px; }
         .wd-body::-webkit-scrollbar-track { background: transparent; }
@@ -266,65 +289,51 @@ export function WidgetDemo() {
   );
 }
 
-function ModeBar({ engaged }: { engaged: boolean }) {
+function ModeBar({
+  theme,
+  onCycle,
+}: {
+  theme: { accent: string; rgb: string; label: string; hint: string };
+  onCycle: () => void;
+}) {
+  const isDefault = theme.label === 'Default';
   return (
-    <div
-      className="flex h-7 w-full items-center gap-2 border-b px-3 text-[11px] font-medium transition-colors duration-500"
+    <button
+      type="button"
+      onClick={onCycle}
+      aria-label="Switch mode"
+      className="flex h-7 w-full cursor-pointer items-center gap-2 border-b px-3 text-left text-[11px] font-medium transition-colors duration-500"
       style={
-        engaged
-          ? {
-              background:
-                'linear-gradient(180deg, rgba(251,146,60,0.18), rgba(251,146,60,0.08))',
-              borderBottomColor: 'rgba(251,146,60,0.55)',
-              color: '#fed7aa',
-            }
+        isDefault
+          ? { background: 'var(--color-bg-2)', borderBottomColor: 'var(--color-line)', color: 'var(--color-text-mute)' }
           : {
-              background: 'var(--color-bg-2)',
-              borderBottomColor: 'var(--color-line)',
-              color: 'var(--color-text-mute)',
+              background: `linear-gradient(180deg, rgba(${theme.rgb},0.18), rgba(${theme.rgb},0.08))`,
+              borderBottomColor: `rgba(${theme.rgb},0.55)`,
+              color: theme.accent,
             }
       }
     >
       <span
         className="h-2 w-2 flex-shrink-0 rounded-full transition-all duration-500"
-        style={
-          engaged
-            ? { background: '#fb923c', boxShadow: '0 0 0 3px rgba(251,146,60,0.18)' }
-            : { background: 'var(--color-text-dim)' }
-        }
+        style={isDefault ? { background: 'var(--color-text-dim)' } : { background: theme.accent, boxShadow: `0 0 0 3px rgba(${theme.rgb},0.18)` }}
       />
-      <span className="font-semibold" style={{ color: engaged ? '#fed7aa' : 'var(--color-text)' }}>
-        {engaged ? 'Security testing' : 'Default'}
+      <span className="font-semibold" style={{ color: isDefault ? 'var(--color-text)' : theme.accent }}>
+        {theme.label}
       </span>
       <span className="text-[9px] opacity-70">▾</span>
-      <span className="ml-auto truncate text-[10px] opacity-70">
-        {engaged ? 'MITM proxy active' : 'click to switch'}
-      </span>
-    </div>
+      <span className="ml-auto truncate text-[10px] opacity-70">{theme.hint}</span>
+    </button>
   );
 }
 
-function StepRow({
-  label,
-  state,
-  engaged,
-}: {
-  label: string;
-  state: StepState;
-  engaged: boolean;
-}) {
+function StepRow({ label, state, accent }: { label: string; state: StepState; accent: string }) {
   const running = state === 'running';
-  const accent = engaged ? '#fb923c' : 'var(--color-mint)';
   return (
     <div
-      className={`relative flex shrink-0 items-center gap-2.5 overflow-hidden rounded-[10px] bg-bg-2 px-3 py-2 text-[12.5px] ${
-        running ? 'pl-3.5' : ''
-      }`}
+      className={`relative flex shrink-0 items-center gap-2.5 overflow-hidden rounded-[10px] bg-bg-2 px-3 py-2 text-[12.5px] ${running ? 'pl-3.5' : ''}`}
       style={{ animation: 'wd-row-in 0.25s ease both' }}
     >
-      {running && (
-        <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: accent }} />
-      )}
+      {running && <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: accent }} />}
       {running ? (
         <Spinner accent={accent} />
       ) : (
@@ -351,26 +360,23 @@ function Spinner({ accent }: { accent: string }) {
   );
 }
 
-function ResultCard({ scene }: { scene: Scene }) {
+function ResultCard({ scene, theme }: { scene: Scene; theme: { accent: string; rgb: string } }) {
   const { result } = scene;
-  const engaged = scene.mode === 'security';
-  // pass → mint check; finding → orange alert badge
-  const badgeColor = result.pass ? 'var(--color-mint)' : '#fb923c';
+  // pass → mint check; finding → the mode's accent alert badge.
+  const badgeColor = result.pass ? 'var(--color-mint)' : theme.accent;
+  const rgb = result.pass ? '124,255,168' : theme.rgb;
   return (
     <div
       className="mt-1 shrink-0 rounded-[10px] border bg-bg-2 p-3"
       style={{
-        borderColor: engaged ? 'rgba(251,146,60,0.35)' : 'var(--color-line)',
+        borderColor: scene.mode === 'default' ? 'var(--color-line)' : `rgba(${theme.rgb},0.35)`,
         animation: 'wd-row-in 0.3s ease both',
       }}
     >
       <div className="mb-2 flex items-center gap-2">
         <span
           className="flex h-4 w-4 items-center justify-center rounded-full"
-          style={{
-            background: result.pass ? 'rgba(124,255,168,0.16)' : 'rgba(251,146,60,0.18)',
-            color: badgeColor,
-          }}
+          style={{ background: `rgba(${rgb},0.17)`, color: badgeColor }}
         >
           {result.pass ? (
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
@@ -386,10 +392,7 @@ function ResultCard({ scene }: { scene: Scene }) {
           {result.headline}
         </span>
       </div>
-      <p
-        className="mb-3 border-l-2 px-2.5 py-0.5 text-[12px] leading-relaxed text-text-mute"
-        style={{ borderColor: badgeColor }}
-      >
+      <p className="mb-3 border-l-2 px-2.5 py-0.5 text-[12px] leading-relaxed text-text-mute" style={{ borderColor: badgeColor }}>
         {result.summary}
       </p>
       <button
@@ -397,11 +400,7 @@ function ResultCard({ scene }: { scene: Scene }) {
         tabIndex={-1}
         aria-hidden
         className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12px] font-semibold"
-        style={{
-          borderColor: engaged ? 'rgba(251,146,60,0.5)' : 'rgba(124,255,168,0.5)',
-          background: engaged ? 'rgba(251,146,60,0.12)' : 'rgba(124,255,168,0.12)',
-          color: badgeColor,
-        }}
+        style={{ borderColor: `rgba(${rgb},0.5)`, background: `rgba(${rgb},0.12)`, color: badgeColor }}
       >
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 3h7l3 3v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
