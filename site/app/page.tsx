@@ -207,8 +207,8 @@ const TRIAD = [
     k: 'secure',
     tag: 'Secure',
     accent: '#fb923c',
-    title: 'Flip the same widget to security mode',
-    body: 'Add @hover-dev/security and the panel grows a Security mode: a local HTTPS MITM lets the agent replay captured API calls with mutations to probe IDOR / authz, and confirmed findings crystallize into .security.spec.ts gates on every PR.',
+    title: 'Flip the same widget to a security mode',
+    body: 'Add a plugin and the panel grows two security modes: orange replays captured API calls with mutations to probe IDOR / authz and crystallizes findings into .security.spec.ts CI gates; red goes offensive — SQLi / XSS / SSTI / SSRF on your own dev app — and writes a findings report.',
   },
 ];
 
@@ -374,86 +374,109 @@ function Outputs() {
   );
 }
 
-/* ── Security testing ───────────────────────────────────────────────────
- * Orange-themed (matching the @hover-dev/security plugin) so it reads as a
- * distinct mode, not part of the mint default flow. */
-const SECURITY_CHECKS = [
-  'IDOR — replay a captured URL with another user’s resource id',
-  'Auth bypass — drop or swap the auth header',
-  'Parameter tampering — mutate user_id / role / price / isAdmin',
-  'Missing headers — CSP / X-Frame-Options / HSTS / SameSite',
-  'PII leakage — user data in query strings or pre-consent requests',
+/* ── Security testing — two modes ────────────────────────────────────────
+ * The same widget grows two distinct security modes, each its own plugin +
+ * colour: orange (@hover-dev/security — business/authz, crystallizes to a CI
+ * spec) and red (@hover-dev/pentest — offensive vuln scan, writes a findings
+ * report). Themed so they read as separate modes, not the mint default flow. */
+const SECURITY_MODES = [
+  {
+    k: 'security',
+    accent: '#fb923c',
+    glow: 'rgba(251,146,60',
+    plugin: '@hover-dev/security',
+    heading: 'orange — security',
+    pitch:
+      'Business / authorization testing. A local HTTPS MITM lets the agent replay captured API calls with mutations to probe access control; confirmed findings crystallize into .security.spec.ts regression gates that run in CI — no proxy, no agent.',
+    output: '.security.spec.ts',
+    checksTitle: 'Probes for',
+    checks: [
+      'IDOR — replay a URL with another user’s id',
+      'Auth bypass — drop or swap the auth header',
+      'Parameter tampering — user_id / role / price / isAdmin',
+      'Missing headers — CSP / HSTS / SameSite',
+      'PII leakage — user data in query strings',
+    ],
+  },
+  {
+    k: 'pentest',
+    accent: '#dc2626',
+    glow: 'rgba(220,38,38',
+    plugin: '@hover-dev/pentest',
+    heading: 'red — pentest',
+    pitch:
+      'Offensive vulnerability hunting on your own dev app. The agent operates the app to generate traffic, then attacks the captured flows — destructive on, confirmed in-band — and writes a findings report with severity, PoC, and an explicit “not tested” section. Origin-locked; authorized own-app testing only.',
+    output: 'findings report',
+    checksTitle: 'Attacks for',
+    checks: [
+      'Injection — SQLi / XSS / SSTI, confirmed in-band',
+      'SSRF — internal / metadata fetch via a url param',
+      'Open redirect & path traversal — param tampering',
+      'GraphQL — introspection left enabled',
+      'IDOR / mass-assignment / auth-bypass — replayed',
+    ],
+  },
 ];
 
 function Security() {
-  const orange = '#fb923c';
   return (
     <section className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <div
-        className="relative overflow-hidden rounded-xl border bg-bg-2 px-8 py-12 md:px-14"
-        style={{ borderColor: 'rgba(251,146,60,0.3)' }}
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(60% 80% at 80% 0%, rgba(251,146,60,0.10), transparent 70%)',
-          }}
-        />
-        <div className="relative grid gap-10 lg:grid-cols-2 lg:gap-14">
-          {/* Left — pitch */}
-          <div>
+      <SectionLabel>Two security modes</SectionLabel>
+      <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
+        The same widget, an{' '}
+        <span style={{ color: '#fb923c' }}>orange</span> and a{' '}
+        <span style={{ color: '#dc2626' }}>red</span> security mode.
+      </h2>
+      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
+        Add a plugin and the panel grows a security mode — one for the
+        defensive, business-logic side and one for the offensive. Zero external
+        deps (no mitmproxy, no Python, no system CA); both run on your own dev
+        server, authorized testing only.
+      </p>
+      <div className="mt-12 grid gap-6 lg:grid-cols-2">
+        {SECURITY_MODES.map((m) => (
+          <div
+            key={m.k}
+            className="relative overflow-hidden rounded-xl border bg-bg-2 p-8"
+            style={{ borderColor: `${m.glow},0.3)` }}
+          >
             <div
-              className="mb-4 flex items-center gap-3 font-mono text-[12px] uppercase tracking-[0.2em]"
-              style={{ color: orange }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: orange }} />
-              Optional plugin · @hover-dev/security
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{ background: `radial-gradient(60% 80% at 80% 0%, ${m.glow},0.10), transparent 70%)` }}
+            />
+            <div className="relative">
+              <div
+                className="mb-4 flex items-center gap-3 font-mono text-[12px] uppercase tracking-[0.2em]"
+                style={{ color: m.accent }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: m.accent }} />
+                {m.heading}
+              </div>
+              <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px]" style={{ color: m.accent }}>
+                {m.plugin}
+              </code>
+              <p className="mt-4 text-[14.5px] leading-relaxed text-text-mute">{m.pitch}</p>
+              <p className="mt-3 text-[13px] text-text-dim">
+                → crystallizes to{' '}
+                <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[12px] text-text">{m.output}</code>
+              </p>
+              <div className="mt-6 rounded-lg border border-line bg-bg-3 p-5">
+                <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-text-dim">
+                  {m.checksTitle}
+                </div>
+                <ul className="space-y-2.5">
+                  {m.checks.map((c) => (
+                    <li key={c} className="flex items-start gap-3 text-[13px] leading-snug text-text-mute">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: m.accent }} />
+                      <span>{c}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-            <h2 className="font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-              The same widget,{' '}
-              <span style={{ color: orange }}>a security mode</span>.
-            </h2>
-            <p className="mt-5 max-w-md text-[15px] leading-relaxed text-text-mute">
-              Add{' '}
-              <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px]" style={{ color: orange }}>
-                @hover-dev/security
-              </code>{' '}
-              and the panel grows a Security mode. Hover routes your debug
-              Chrome through a local HTTPS MITM, the agent inspects the captured
-              API calls and replays them with mutations, and confirmed findings
-              crystallise into{' '}
-              <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-text">
-                .security.spec.ts
-              </code>{' '}
-              regression tests that run in CI — no proxy, no agent. Today&rsquo;s
-              IDOR becomes a gate on every PR.
-            </p>
-            <p className="mt-4 text-[13px] text-text-dim">
-              Zero external deps — no mitmproxy, no Python, no system CA. Probes
-              run on your own dev server; authorised testing only.
-            </p>
           </div>
-
-          {/* Right — what it probes */}
-          <div className="rounded-lg border border-line bg-bg-3 p-6">
-            <div className="mb-4 font-mono text-[11px] uppercase tracking-wider text-text-dim">
-              What the agent probes for
-            </div>
-            <ul className="space-y-3">
-              {SECURITY_CHECKS.map((c) => (
-                <li key={c} className="flex items-start gap-3 text-[13.5px] leading-snug text-text-mute">
-                  <span
-                    className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ background: orange }}
-                  />
-                  <span>{c}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        ))}
       </div>
     </section>
   );
