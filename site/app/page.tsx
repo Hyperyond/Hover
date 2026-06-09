@@ -431,7 +431,13 @@ function Security() {
         Add a plugin and the panel grows a security mode — one for the
         defensive, business-logic side and one for the offensive. Zero external
         deps (no mitmproxy, no Python, no system CA); both run on your own dev
-        server, authorized testing only.
+        server, authorized testing only. Flip on the opt-in{' '}
+        <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-text">
+          codeContext
+        </code>{' '}
+        switch and the red mode goes <span className="text-text">white-box</span> —
+        the agent reads the real server code (read-only, fenced) to confirm a
+        finding and cite the exact <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-text">file:line</code>.
       </p>
       <div className="mt-12 grid gap-6 lg:grid-cols-2">
         {SECURITY_MODES.map((m) => (
@@ -517,6 +523,11 @@ const ROADMAP = [
     status: 'shipped',
     title: 'Optional AI optimization pass',
     body: 'AI reads a generated spec and proposes a polished version you accept via a diff — observed assertions added, buggy behaviour flagged // KNOWN BUG. The deterministic original is always kept and the pass is off by default.',
+  },
+  {
+    status: 'shipped',
+    title: 'White-box mode (codeContext)',
+    body: 'An opt-in, read-only, fenced source reader (read_source MCP — secrets / .env / .git / build excluded) turns the red pentest mode white-box: the agent confirms a finding against the real query / authz check and points the report at the exact file:line, and authors smarter selectors from your actual code. Default off — the agent stays browser-only.',
   },
   {
     status: 'planned',

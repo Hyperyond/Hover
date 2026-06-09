@@ -199,7 +199,7 @@ Hover spawns the coding-agent CLI on your `PATH`, sandboxed to Playwright MCP, d
 
 ## Roadmap
 
-**Landed on `main` (shipping next release):** Structured spec output — Page Objects + fixtures, `test.step` blocks, sidecars, popup pairing, the off-by-default AI optimisation pass (with `// KNOWN BUG` flagging), the `.hover/rules/` seed library, and prompt-scoped exploration.
+**Landed on `main` (shipping next release):** Structured spec output — Page Objects + fixtures, `test.step` blocks, sidecars, popup pairing, the off-by-default AI optimisation pass (with `// KNOWN BUG` flagging), the `.hover/rules/` seed library, and prompt-scoped exploration. Plus **`codeContext`** — an opt-in, read-only, fenced source-reader (`read_source` MCP; secrets / `.env` / `.git` / build excluded) that turns the **red pentest mode white-box**: the agent confirms a finding against the real query / authz check and points the report at the exact `file:line`, and authors smarter selectors from your actual code. Default off — the agent stays browser-only.
 
 **Planned:** **Chrome extension** (drive any tab, drops the bundler-plugin dependency) · **Hover Cloud** (hosted layer over local specs: intent-driven self-heal, test-rot detection, AI failure diagnosis — authoring stays local and free). [Join the waitlist](https://gethover.dev/#cloud).
 
