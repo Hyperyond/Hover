@@ -51,6 +51,7 @@ export default function Home() {
       <Backdrop />
       <Nav />
       <Hero />
+      <Triad />
       {/* Walkthrough video. Self-hosted MP4 is preferred — YouTube flagged the
        * source clip (ASWFWUyMUlc) with a server-side "confirm you're not a bot"
        * gate that no embed param can bypass. Drop the export at public/demo.mp4
@@ -113,7 +114,7 @@ function Hero() {
             className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3.5 py-1.5 text-[12px] text-text-mute transition-colors hover:border-[rgba(124,255,168,0.4)] hover:text-text"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-mint" />
-            v0.14 · latest release
+            v0.15 · latest release
           </a>
 
           <h1 className="font-mono text-[38px] font-semibold leading-[1.08] tracking-tight md:text-[52px]">
@@ -179,6 +180,82 @@ function Hero() {
 /* TerminalDemo (the You-type / generated-spec panel) now lives in
  * components/TerminalDemo.tsx — a client component that typewriter-reveals the
  * real generated spec. */
+
+/* ── The triad: one widget, three AI jobs ───────────────────────────────
+ * The page's organizing thesis. The three things the agent does for you —
+ * author, optimize, secure — over ONE widget, with the crystallize moat as the
+ * shared through-line: whatever the AI does, the artifact that lands in your
+ * repo is plain @playwright/test that runs in CI with no AI. The "secure" card
+ * is orange to match the @hover-dev/security plugin's mode. (A red "pentest"
+ * card joins once @hover-dev/pentest ships to npm.) */
+const TRIAD = [
+  {
+    k: 'author',
+    tag: 'Author',
+    accent: '#7CFFA8',
+    title: 'Describe a flow → a spec',
+    body: 'Type "log in, add a todo, check it persists" in plain English. AI drives your real Chrome once to work it out, then crystallizes the clean run into a standard @playwright/test file with semantic getByRole / getByLabel selectors.',
+  },
+  {
+    k: 'optimize',
+    tag: 'Optimize',
+    accent: '#7CFFA8',
+    title: 'Polish the specs you already have',
+    body: 'Point Hover at an existing spec and the AI proposes a cleaner version — page objects, named test.step stages, observed assertions — which you accept via a diff. The deterministic original is always kept; the pass is off by default.',
+  },
+  {
+    k: 'secure',
+    tag: 'Secure',
+    accent: '#fb923c',
+    title: 'Flip the same widget to security mode',
+    body: 'Add @hover-dev/security and the panel grows a Security mode: a local HTTPS MITM lets the agent replay captured API calls with mutations to probe IDOR / authz, and confirmed findings crystallize into .security.spec.ts gates on every PR.',
+  },
+];
+
+function Triad() {
+  return (
+    <section className="relative z-10 mx-auto max-w-6xl px-6 pb-8 pt-4 md:pt-8">
+      <SectionLabel>One widget, three jobs</SectionLabel>
+      <h2 className="mt-4 max-w-3xl font-mono text-[26px] font-semibold leading-tight tracking-tight md:text-[34px]">
+        AI <span className="text-mint">authors</span>,{' '}
+        <span className="text-mint">optimizes</span>, and{' '}
+        <span style={{ color: '#fb923c' }}>secures</span> your tests — then CI
+        runs plain Playwright.
+      </h2>
+      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
+        One floating widget in your dev page, with modes that grow as you need
+        them. The through-line never changes: whatever the AI does, the artifact
+        that checks into git is plain{' '}
+        <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">
+          @playwright/test
+        </code>{' '}
+        that runs in CI with no agent, no model, no key.
+      </p>
+      <div className="mt-10 grid gap-5 md:grid-cols-3">
+        {TRIAD.map((t) => (
+          <article
+            key={t.k}
+            className="rounded-lg border border-line bg-bg-2 p-6 transition-colors hover:border-line-2"
+          >
+            <div
+              className="mb-4 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
+              style={{ color: t.accent }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.accent }} />
+              {t.tag}
+            </div>
+            <h3 className="text-[17px] font-semibold tracking-tight text-text">
+              {t.title}
+            </h3>
+            <p className="mt-3 text-[14px] leading-relaxed text-text-mute">
+              {t.body}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 /* ── Four core pillars ──────────────────────────────────────────────── */
 const PILLARS = [
