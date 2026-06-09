@@ -1,0 +1,52 @@
+---
+title: "White-box AI testing: let the agent read your source"
+description: "A browser-only agent guesses your selectors and routes. Turn on codeContext and Hover gives the agent read-only, fenced access to your project source, so it tests your real getByRole calls and finds the route an attacker would."
+date: 2026-06-09
+author: "Hover"
+tags: [codecontext, white-box, security, playwright]
+---
+
+# White-box AI testing: let the agent read your source
+
+A browser-only test agent works from what the page shows it. It reads the accessibility tree, clicks what looks clickable, and writes a selector from the rendered DOM. That gets you a passing happy-path test. It also gets you `page.locator('div.css-1x7f9')` when your component already exposes `getByRole('button', { name: 'Checkout' })`, because the agent never saw the component, only its output.
+
+Turn on `codeContext` and that changes. Hover gives the agent read-only access to your project source through a fenced MCP server. The agent reads the real component, writes the test against the selector you actually ship, and checks routes that never render a link.
+
+## What the agent gets
+
+Two tools land next to Playwright MCP: `read_source` and `list_source`. The agent lists a directory, opens the files it needs, and stops. There is no write tool and no exec tool. It reads.
+
+Enable it on the plugin:
+
+```ts
+// vite.config.ts
+import { hover } from 'vite-plugin-hover';
+
+export default defineConfig({
+  plugins: [hover({ codeContext: true })],
+});
+```
+
+The default is `false`. Off, the agent stays browser-only, which is the safest posture and the right one when you are pointing it at a third-party origin. On, it can read your tree.
+
+## The fence is the feature
+
+Source access on a dev machine is a real surface, so the boundary does the work. The fence (`resolveSourcePath`) resolves every requested path, calls `realpath`, and rechecks that the result still sits inside the project root. A `../../` escape resolves to outside the root and gets refused. A symlink that points outside the root gets refused after the realpath check, not before.
+
+On top of containment it refuses a fixed set of names: `.env` and friends, `.git`, `node_modules`, build output, `.ssh`, anything matching `secrets` / `credentials` / `keys`. Twenty-eight unit tests pin these cases, and a functional MCP smoke proves a live agent gets a refusal when it asks for `.env` or tries to climb out of the root. Files over 256 KB and binary files get rejected too, so the agent can't drain your repo through the read tool.
+
+## Tests against your real selectors
+
+With the tree in reach, the agent reads `CheckoutButton.tsx`, sees the `aria-label`, and writes:
+
+```ts
+await page.getByRole('button', { name: 'Place order' }).click();
+```
+
+instead of inventing a brittle CSS path from the rendered class soup. When you crystallize the run, the saved `.spec.ts` already prefers role and text selectors, so it survives the next style refactor.
+
+## White-box security
+
+The bigger win is on the security side. Black-box security testing finds a symptom: a request that returns data it shouldn't. It can't tell you which handler skipped the check. With source access, the agent reads your route table, finds the endpoint that takes an ID straight from the path, and probes that one on purpose instead of fuzzing blind. The [security mode](/blog/test-idor-broken-access-control) gets sharper, and so does [pentest mode](/blog/pentest-mode-attack-your-own-app): both read the code to aim, then attack the running app to confirm.
+
+`codeContext` works in every mode, so you opt in once and the agent stays white-box whether it's writing a checkout test or hunting an IDOR. Read-only, fenced, off by default. Turn it on when you want the agent to test what you wrote, not just what it saw.
