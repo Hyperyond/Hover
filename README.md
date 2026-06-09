@@ -110,6 +110,57 @@ Everything runs through the `hover` CLI (`npx @hover-dev/cli <command>`):
 cp -r skills/hover-cli ~/.claude/skills/        # or <project>/.claude/skills/
 ```
 
+## Plugins
+
+Install one bundler integration (`npx @hover-dev/cli setup` picks it for you); add the optional mode plugins as you need them.
+
+**Bundler integration** — one per stack:
+
+| Bundler | Package |
+|---|---|
+| Vite (incl. React Native Web) | [`vite-plugin-hover`](./packages/vite-plugin/) |
+| Astro | [`@hover-dev/astro`](./packages/astro-integration/) |
+| Nuxt | [`@hover-dev/nuxt`](./packages/nuxt-integration/) |
+| Next.js (Turbopack) | [`@hover-dev/next`](./packages/next-integration/) |
+| webpack 5 / Rspack | [`webpack-plugin-hover`](./packages/webpack-plugin/) |
+
+**Optional mode plugins** — the same widget grows a mode:
+
+| Plugin | Mode | What it does |
+|---|---|---|
+| [`@hover-dev/security`](./packages/security/) | 🟠 Security | Business / authz — MITM-replay IDOR / auth-bypass / parameter-tampering → `.security.spec.ts` CI gates |
+| [`@hover-dev/pentest`](./packages/pentest/) | 🔴 Pentest | Offensive — SQLi / XSS / SSTI / SSRF / IDOR on your **own** dev app → a findings report |
+
+## Seed library
+
+The AI optimize pass and the security modes are both taught by **seeds** — small worked examples / probe recipes. A built-in set ships with Hover; drop your own JSON in `<root>/.hover/rules/` to add a pattern (no fork, no plugin code). Built-ins today:
+
+**Optimization seeds** — teach the optimize pass a translation pattern (the bar is high: only fixed, app-agnostic ones ship built-in):
+
+| Seed | Pattern |
+|---|---|
+| `download` | a click that triggers a download → `Promise.all` + `waitForEvent('download')` |
+
+(Popup / new-tab pairing is hardcoded in the translator, not a seed. Add more in `.hover/rules/`.)
+
+**Security probe seeds** — what the 🟠 security / 🔴 pentest modes try (5 access-control + 7 vulnerability):
+
+| Seed | Class | For |
+|---|---|---|
+| `idor-numeric-id`, `idor-in-body` | IDOR | 🟠 authz |
+| `bfla-privileged-endpoint` | BFLA | 🟠 authz |
+| `mass-assignment-privileged-field` | mass-assignment | 🟠 authz |
+| `auth-bypass-missing-check` | auth-bypass | 🟠 authz |
+| `sqli-error-boolean` | SQL injection | 🔴 vuln |
+| `xss-reflected` | reflected XSS | 🔴 vuln |
+| `ssti-template-injection` | SSTI | 🔴 vuln |
+| `ssrf-url-param` | SSRF | 🔴 vuln |
+| `open-redirect` | open redirect | 🔴 vuln |
+| `path-traversal` | path traversal | 🔴 vuln |
+| `graphql-introspection` | GraphQL | 🔴 vuln |
+
+Security mode pulls the `authz` set; pentest mode pulls everything.
+
 ## Examples
 
 Ten runnable apps under [`examples/`](./examples/). Four stress **testing surfaces** ([`basic-app`](./examples/basic-app), [`stock-registration`](./examples/stock-registration) ~50-field form, [`e-commerce`](./examples/e-commerce) cart/checkout, [`canvas-paint`](./examples/canvas-paint) DOM-amid-canvas); the rest are dedicated **bundler dogfood grounds**:

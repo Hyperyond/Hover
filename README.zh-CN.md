@@ -110,6 +110,57 @@ log in, then add a todo named "verify hover"
 cp -r skills/hover-cli ~/.claude/skills/        # 或 <project>/.claude/skills/
 ```
 
+## 插件
+
+装一个对应你打包器的集成（`npx @hover-dev/cli setup` 会自动选）；可选的模式插件按需加。
+
+**打包器集成** —— 按技术栈选一个：
+
+| 打包器 | 包 |
+|---|---|
+| Vite（含 React Native Web） | [`vite-plugin-hover`](./packages/vite-plugin/) |
+| Astro | [`@hover-dev/astro`](./packages/astro-integration/) |
+| Nuxt | [`@hover-dev/nuxt`](./packages/nuxt-integration/) |
+| Next.js（Turbopack） | [`@hover-dev/next`](./packages/next-integration/) |
+| webpack 5 / Rspack | [`webpack-plugin-hover`](./packages/webpack-plugin/) |
+
+**可选模式插件** —— 同一个 widget 长出一个模式：
+
+| 插件 | 模式 | 干什么 |
+|---|---|---|
+| [`@hover-dev/security`](./packages/security/) | 🟠 安全 | 业务 / 权限 —— MITM 重放 IDOR / 认证绕过 / 参数篡改 → `.security.spec.ts` CI 闸门 |
+| [`@hover-dev/pentest`](./packages/pentest/) | 🔴 渗透 | 进攻 —— 在你**自己**的 dev app 上打 SQLi / XSS / SSTI / SSRF / 越权 → 一份渗透报告 |
+
+## 种子库
+
+AI 优化环节和安全模式都靠**种子**教 —— 小的「示例 / 探针配方」。一套内置种子随 Hover 发布；往 `<root>/.hover/rules/` 丢你自己的 JSON 就能加新模式（不用 fork、不用写插件代码）。当前内置：
+
+**优化种子** —— 教优化环节一个翻译模式（门槛高:只有「固定、与应用无关」的才内置）:
+
+| 种子 | 模式 |
+|---|---|
+| `download` | 触发下载的点击 → `Promise.all` + `waitForEvent('download')` |
+
+（popup / 新标签页配对是在翻译器里硬编码的,不是种子。更多自己加在 `.hover/rules/`。）
+
+**安全探针种子** —— 🟠 安全 / 🔴 渗透 模式会试的(5 个访问控制 + 7 个漏洞):
+
+| 种子 | 类 | 给谁 |
+|---|---|---|
+| `idor-numeric-id`、`idor-in-body` | IDOR | 🟠 authz |
+| `bfla-privileged-endpoint` | BFLA | 🟠 authz |
+| `mass-assignment-privileged-field` | 越权赋值 | 🟠 authz |
+| `auth-bypass-missing-check` | 认证绕过 | 🟠 authz |
+| `sqli-error-boolean` | SQL 注入 | 🔴 vuln |
+| `xss-reflected` | 反射型 XSS | 🔴 vuln |
+| `ssti-template-injection` | SSTI | 🔴 vuln |
+| `ssrf-url-param` | SSRF | 🔴 vuln |
+| `open-redirect` | 开放重定向 | 🔴 vuln |
+| `path-traversal` | 路径穿越 | 🔴 vuln |
+| `graphql-introspection` | GraphQL | 🔴 vuln |
+
+安全模式只拉 `authz` 那组;渗透模式拉全部。
+
 ## 示例
 
 [`examples/`](./examples/) 下有十个可跑的应用。四个压测**测试面**（[`basic-app`](./examples/basic-app)、[`stock-registration`](./examples/stock-registration) ~50 字段表单、[`e-commerce`](./examples/e-commerce) 购物车/结账、[`canvas-paint`](./examples/canvas-paint) canvas 里找 DOM），其余是各**打包器的专属 dogfood 场**：
