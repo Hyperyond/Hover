@@ -37,6 +37,14 @@ export interface HoverOptions {
    *  - `'on'`      — auto-run the pass after every Save-as-spec (one LLM call
    *                  per save — opt in deliberately; the original is always kept). */
   optimize?: 'off' | 'suggest' | 'on';
+  /** Opt-in: give the agent READ-ONLY, fenced access to your project source via
+   *  a `read_source` / `list_source` MCP server (alongside Playwright MCP), in
+   *  every mode. It can then write tests against your real selectors/routes and
+   *  do white-box security/pentest. Fenced to the project root; secrets / keys /
+   *  `.env` / `.git` / `node_modules` / build output are refused; read-only (no
+   *  write or exec). Default false — the agent stays browser-only, which is the
+   *  safest posture. */
+  codeContext?: boolean;
 }
 
 export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[]): Plugin {
@@ -113,6 +121,7 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
           // known now, before httpServer 'listening' — which is fine since the
           // launch is fire-and-forget and Chrome is ready by the time it loads.
           autoLaunchChrome,
+          codeContext: opts.codeContext ?? false,
           devUrl: `http://localhost:${server.config.server.port ?? 5173}/`,
         });
         servicePort = service.port;

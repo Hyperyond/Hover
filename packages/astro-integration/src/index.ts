@@ -24,6 +24,10 @@ export interface HoverOptions {
    *  in the debug Chrome and launches one if not. Idempotent: reuses an
    *  existing debug Chrome if `chromeDebugPort` is already alive. */
   autoLaunchChrome?: boolean;
+  /** Opt-in: read-only, fenced access to your project source (read_source MCP)
+   *  so the agent authors against real code + does white-box security. Secrets /
+   *  keys / .env / .git / build are excluded. Default false. */
+  codeContext?: boolean;
   /** Agent id from @hover-dev/core's registry (default 'claude'). */
   agentId?: string;
   /** Model passed to the agent (default 'sonnet'). */
@@ -94,6 +98,7 @@ export function hover(
             plugins,
             // Single-Chrome model: service launches the debug Chrome itself.
             autoLaunchChrome,
+            codeContext: options.codeContext ?? false,
             devUrl: `http://localhost:${guessAstroPort(config)}/`,
           });
         } catch (err) {

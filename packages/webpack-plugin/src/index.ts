@@ -23,6 +23,10 @@ export interface HoverOptions {
   /** Auto-launch a debug Chrome pointed at the dev server when webpack
    *  starts. Default false. */
   autoLaunchChrome?: boolean;
+  /** Opt-in: read-only, fenced access to your project source (read_source MCP)
+   *  so the agent authors against real code + does white-box security. Secrets /
+   *  keys / .env / .git / build are excluded. Default false. */
+  codeContext?: boolean;
   /** Override the URL Chrome opens to. By default we read
    *  `compiler.options.devServer.port` (webpack-dev-server) and assume
    *  `http://localhost:<port>/`. Set this if your dev server lives
@@ -158,6 +162,7 @@ export class HoverPlugin {
         plugins: this.plugins,
         // Single-Chrome model: service launches the debug Chrome itself.
         autoLaunchChrome: this.options.autoLaunchChrome,
+        codeContext: this.options.codeContext ?? false,
         devUrl: this.options.devUrl ?? `http://localhost:${devServerPort}/`,
       })
         .then(svc => {
