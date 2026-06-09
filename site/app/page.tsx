@@ -114,7 +114,7 @@ function Hero() {
             className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3.5 py-1.5 text-[12px] text-text-mute transition-colors hover:border-[rgba(124,255,168,0.4)] hover:text-text"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-mint" />
-            v0.15 · latest release
+            v0.16 · latest release
           </a>
 
           <h1 className="font-mono text-[38px] font-semibold leading-[1.08] tracking-tight md:text-[52px]">
