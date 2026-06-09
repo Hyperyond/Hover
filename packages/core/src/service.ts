@@ -46,6 +46,8 @@
  *     { type: 'list-modes' }
  */
 import { WebSocketServer, WebSocket } from 'ws';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { runSession } from './runSession.js';
 import { readConventions } from './service/conventions.js';
 import { optimizeSpecWithAgent } from './specs/optimizeSpecWithAgent.js';
@@ -81,6 +83,12 @@ import {
   type ModeActivateCtx,
 } from './plugin-api.js';
 
+/** The source-reader MCP server (codeContext). Id → the `mcp__hover_source`
+ *  tool prefix; script path resolved relative to this module so it works from
+ *  dist/. Spawned only when codeContext is enabled. */
+const SOURCE_MCP_ID = 'hover-source';
+const SOURCE_MCP_SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), 'mcp', 'sourceServer.js');
+
 export interface ServiceOptions {
   port: number;
   agentId?: string;
@@ -111,6 +119,12 @@ export interface ServiceOptions {
    *  see the proxy; moving it here is what enables the single-Chrome model.
    *  Default false (shims pass it through from their own option). */
   autoLaunchChrome?: boolean;
+  /** Opt-in: give the agent READ-ONLY, fenced access to the project's source
+   *  via a `read_source` / `list_source` MCP server (in addition to Playwright
+   *  MCP), in every mode. Lets it author against real selectors/routes and do
+   *  white-box security/pentest. Fenced to devRoot, secrets/keys/.git/build
+   *  excluded, no write/exec. Default false — the agent stays browser-only. */
+  codeContext?: boolean;
   /** The dev-server URL the auto-launched Chrome should open. Each shim knows
    *  its own framework's dev URL and passes it here. Defaults to the cdp host
    *  if unset, but shims should always provide it. */
@@ -270,6 +284,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           });
         }
       }
+    }
+    // codeContext (opt-in, all modes): the fenced read-only source reader.
+    if (opts.codeContext) {
+      extra.push({
+        id: SOURCE_MCP_ID,
+        command: process.execPath,
+        args: [SOURCE_MCP_SCRIPT],
+        env: { HOVER_PROJECT_ROOT: devRoot },
+      });
     }
     // Single-Chrome model: the Playwright MCP always points at the one debug
     // Chrome on the normal cdpUrl. (Pre-single-Chrome this branched to a
@@ -922,6 +945,14 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           }
         }
 
+        // codeContext: tell the agent the fenced source reader exists, so it
+        // proactively reads the real code (better selectors/routes when
+        // authoring; white-box confirmation when probing) instead of only
+        // guessing from the rendered DOM.
+        if (opts.codeContext) {
+          appendSystemPrompt = `${appendSystemPrompt}\n\nYou also have read-only access to this project's source via mcp__hover_source (read_source / list_source), fenced to the repo (secrets, keys, .env, .git, node_modules and build output are refused). Use it to read the actual component / route / API code — write tests against the real selectors and, when probing for security issues, confirm a finding against the server code (the query, the authz check) rather than guessing from the page alone.`;
+        }
+
         // Mirror the prompt's language in the agent's *prose* output — the
         // verification summary (Result card), the ## Findings block, and the
         // step narration — the same way Voice mode mirrors it in TTS. A
@@ -957,6 +988,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             }
           }
         }
+        // codeContext: the fenced source reader is allowed in every mode.
+        if (opts.codeContext) activePluginMcpIds.push(mcpToolPrefix(SOURCE_MCP_ID));
         const runResult = await runSession(
           {
             agentId: invokedAgentId,

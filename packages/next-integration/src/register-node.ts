@@ -309,6 +309,7 @@ export async function registerNode(
       plugins,
       // Single-Chrome model: service launches the debug Chrome itself.
       autoLaunchChrome,
+      codeContext: opts.codeContext ?? false,
       devUrl: opts.devUrl ?? 'http://localhost:3000/',
     });
   } catch (err) {

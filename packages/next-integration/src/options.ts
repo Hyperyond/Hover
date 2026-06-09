@@ -25,6 +25,10 @@ export interface HoverOptions {
    *  in the debug Chrome and launches one if not. Idempotent: reuses an
    *  existing debug Chrome if `chromeDebugPort` is already alive. */
   autoLaunchChrome?: boolean;
+  /** Opt-in: read-only, fenced access to your project source (read_source MCP)
+   *  so the agent authors against real code + does white-box security. Secrets /
+   *  keys / .env / .git / build are excluded. Default false. */
+  codeContext?: boolean;
   /** URL Chrome opens to when `autoLaunchChrome` is on. Defaults to
    *  `http://localhost:3000/`. Set if your Next dev server lives elsewhere. */
   devUrl?: string;
@@ -49,6 +53,7 @@ export const ENV_KEYS = {
   ENABLED: '__HOVER_NEXT_ENABLED',
   CHROME_DEBUG_PORT: '__HOVER_NEXT_CHROME_DEBUG_PORT',
   AUTO_LAUNCH_CHROME: '__HOVER_NEXT_AUTO_LAUNCH_CHROME',
+  CODE_CONTEXT: '__HOVER_NEXT_CODE_CONTEXT',
   DEV_URL: '__HOVER_NEXT_DEV_URL',
   AGENT_ID: '__HOVER_NEXT_AGENT_ID',
   MODEL: '__HOVER_NEXT_MODEL',
@@ -96,6 +101,7 @@ export function readOptionsFromEnv(): HoverOptions {
     enabled: readBool(env[ENV_KEYS.ENABLED]),
     chromeDebugPort: readNumber(env[ENV_KEYS.CHROME_DEBUG_PORT]),
     autoLaunchChrome: readBool(env[ENV_KEYS.AUTO_LAUNCH_CHROME]),
+    codeContext: readBool(env[ENV_KEYS.CODE_CONTEXT]),
     devUrl: env[ENV_KEYS.DEV_URL] || undefined,
     agentId: env[ENV_KEYS.AGENT_ID] || undefined,
     model: env[ENV_KEYS.MODEL] || undefined,
@@ -112,6 +118,7 @@ export function writeOptionsToEnv(opts: HoverOptions): void {
   if (opts.enabled !== undefined) env[ENV_KEYS.ENABLED] = opts.enabled ? '1' : '0';
   if (opts.chromeDebugPort !== undefined) env[ENV_KEYS.CHROME_DEBUG_PORT] = String(opts.chromeDebugPort);
   if (opts.autoLaunchChrome !== undefined) env[ENV_KEYS.AUTO_LAUNCH_CHROME] = opts.autoLaunchChrome ? '1' : '0';
+  if (opts.codeContext !== undefined) env[ENV_KEYS.CODE_CONTEXT] = opts.codeContext ? '1' : '0';
   if (opts.devUrl !== undefined) env[ENV_KEYS.DEV_URL] = opts.devUrl;
   if (opts.agentId !== undefined) env[ENV_KEYS.AGENT_ID] = opts.agentId;
   if (opts.model !== undefined) env[ENV_KEYS.MODEL] = opts.model;
