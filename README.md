@@ -199,13 +199,15 @@ Hover spawns the coding-agent CLI on your `PATH`, sandboxed to Playwright MCP, d
 
 ## Roadmap
 
-**Landed on `main` (shipping next release):** Structured spec output — Page Objects + fixtures, `test.step` blocks, sidecars, popup pairing, the off-by-default AI optimisation pass (with `// KNOWN BUG` flagging), the `.hover/rules/` seed library, and prompt-scoped exploration. Plus **`codeContext`** — an opt-in, read-only, fenced source-reader (`read_source` MCP; secrets / `.env` / `.git` / build excluded) that turns the **red pentest mode white-box**: the agent confirms a finding against the real query / authz check and points the report at the exact `file:line`, and authors smarter selectors from your actual code. Default off — the agent stays browser-only.
+**Latest — `v0.16.0`:** **`codeContext`** — an opt-in, read-only, fenced source-reader (`read_source` MCP; secrets / `.env` / `.git` / build excluded) that turns the **red pentest mode white-box** (confirm a finding against the real query / authz check; report cites the exact `file:line`) and authors smarter selectors from your actual code; default off. Plus run-survives-reconnect and a verified code-audit pass. (Structured spec output — Page Objects + fixtures, `test.step`, the `.hover/rules/` seed library, the off-by-default optimisation pass — shipped earlier.)
 
 **Planned:** **Chrome extension** (drive any tab, drops the bundler-plugin dependency) · **Hover Cloud** (hosted layer over local specs: intent-driven self-heal, test-rot detection, AI failure diagnosis — authoring stays local and free). [Join the waitlist](https://gethover.dev/#cloud).
 
 <details>
 <summary>Shipped (✓), newest first</summary>
 
+- **v0.16.0** — `codeContext` white-box source reader · run survives widget reconnects · verified code-audit pass (orphan-agent, secret-leak, stream-hijack fixes) · pentest red mode + offensive seeds (open-redirect / path-traversal / GraphQL).
+- **v0.15.0** — Structured spec output (Page Objects, `test.step`, `.hover/rules/` seed library, optimisation pass) + CLI mode (`hover run`).
 - **v0.14.x** — Single-Chrome security (resident MITM proxy) + gethover.dev site + `--mode-accent` theming + CJK prose.
 - **v0.13.x** — Record/replay parity: per-step visibility prelude, synthetic `page.goto`.
 - **v0.12.x** — Security spec recording (`replay_flow` gains `intent` + `expectStatus`).
