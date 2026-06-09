@@ -148,29 +148,42 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Publishing target=$TARGET version=$VERSION"
 
-      - name: Pin plugin's @hover-dev/core range to the published core
+      - name: Pin plugin's internal @hover-dev/* ranges to published versions
         # A plugin (security / pentest) versions independently, so core is NOT
         # bumped in this run and still reads 0.0.0 in the checkout. Left alone,
-        # pnpm would replace the plugin's `workspace:*` core dep with `0.0.0`
-        # and publish an uninstallable peer. Instead, rewrite the plugin's
-        # @hover-dev/core refs to a real range against the LATEST published core
-        # before publish. CI-only — the repo keeps `workspace:*` for local dev.
+        # pnpm would replace the plugin's `workspace:*` refs with `0.0.0` and
+        # publish uninstallable deps. Rewrite every internal @hover-dev/* ref to
+        # a real range against the LATEST published version before publish:
+        #   - @hover-dev/core      → peer `>=<ver>` (works with that core or newer)
+        #   - @hover-dev/security  → dep  `^<ver>`  (pentest's runtime dep on the
+        #     security MITM runtime — without this it would publish as ^0.0.0)
+        # CI-only — the repo keeps `workspace:*` for local dev.
         if: steps.resolve.outputs.is_plugin == 'true'
         run: |
           CORE_VER="$(npm view @hover-dev/core version)"
+          SEC_VER="$(npm view @hover-dev/security version)"
           if [ -z "$CORE_VER" ]; then
             echo "::error::Could not read the published @hover-dev/core version from npm."
             exit 1
           fi
-          echo "Pinning core: peer >=$CORE_VER (works with that core or newer)"
-          PKG="${{ steps.resolve.outputs.pkg_dir }}/package.json" CORE_VER="$CORE_VER" node -e '
+          echo "Pinning core peer >=$CORE_VER; security dep ^${SEC_VER:-<none>}"
+          PKG="${{ steps.resolve.outputs.pkg_dir }}/package.json" CORE_VER="$CORE_VER" SEC_VER="$SEC_VER" node -e '
             const fs = require("node:fs");
             const f = process.env.PKG;
-            const v = process.env.CORE_VER;
+            const coreVer = process.env.CORE_VER;
+            const secVer = process.env.SEC_VER;
             const p = JSON.parse(fs.readFileSync(f, "utf8"));
             for (const field of ["peerDependencies", "devDependencies", "dependencies"]) {
-              const dep = p[field] && p[field]["@hover-dev/core"];
-              if (dep) p[field]["@hover-dev/core"] = field === "peerDependencies" ? ">=" + v : "^" + v;
+              if (!p[field]) continue;
+              if (p[field]["@hover-dev/core"]) {
+                p[field]["@hover-dev/core"] = field === "peerDependencies" ? ">=" + coreVer : "^" + coreVer;
+              }
+              // @hover-dev/security is a runtime dep of @hover-dev/pentest; pin it
+              // to the published security so workspace:* never escapes as ^0.0.0.
+              if (p[field]["@hover-dev/security"]) {
+                if (!secVer) { console.error("@hover-dev/security not published; cannot pin"); process.exit(1); }
+                p[field]["@hover-dev/security"] = "^" + secVer;
+              }
             }
             fs.writeFileSync(f, JSON.stringify(p, null, 2) + "\n");
           '
