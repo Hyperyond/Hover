@@ -141,7 +141,7 @@ The AI optimize pass and the security modes are both taught by **seeds** — sma
 |---|---|
 | `download` | a click that triggers a download → `Promise.all` + `waitForEvent('download')` |
 
-(Popup / new-tab pairing is hardcoded in the translator, not a seed. Add more in `.hover/rules/`.)
+(Popup / new-tab pairing is hardcoded in the translator, not a seed.) More optimization seeds live in the community [**`hover-seeds`**](https://github.com/Hyperyond/hover-seeds) repo (`seeds/optimization/` — `oauth-popup`, `file-upload`, `dialog`, `network-gated-assertion`, …); copy any into your `.hover/rules/`.
 
 **Security probe seeds** — what the 🟠 security / 🔴 pentest modes try (5 access-control + 7 vulnerability):
 
@@ -224,7 +224,7 @@ Hover spawns the coding-agent CLI on your `PATH`, sandboxed to Playwright MCP, d
 
 ## Built on the shoulders of
 
-[**`nexu-io/open-design`**](https://github.com/nexu-io/open-design) (the **Local CLI Agent First** architecture), [**Playwright Codegen**](https://playwright.dev/docs/codegen) (deterministic-spec-as-artifact), and [**Stagehand**](https://github.com/browserbase/stagehand) / [**Midscene**](https://github.com/web-infra-dev/midscene) (proved an LLM can drive a real browser). Hover shortens the loop: drive once at authoring, then step out.
+[**`nexu-io/open-design`**](https://github.com/nexu-io/open-design) (the **Local CLI Agent First** architecture), [**Playwright**](https://playwright.dev/) + its [**Codegen**](https://playwright.dev/docs/codegen) (the runtime Hover authors *for*, and deterministic-spec-as-artifact), [**Stagehand**](https://github.com/browserbase/stagehand) / [**Midscene**](https://github.com/web-infra-dev/midscene) (proved an LLM can drive a real browser), and [**`microsoft/webwright`**](https://github.com/microsoft/webwright) (code-as-action — the agent writes a script, not one click at a time). Hover shortens the loop: drive once at authoring, then step out.
 
 ## Contributing
 
