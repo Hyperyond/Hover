@@ -29,7 +29,7 @@
 </p>
 
 
-Hover 先驱动你的应用探索一遍，把验证过的会话固化成一份确定性 spec。之后还有一个可选的 **AI 优化环节**：它把这份 spec 打磨得更好 —— 补上这次运行真正观察到的成功/错误断言、补全 popup / 下载等多步流程、给疑似 bug 的行为标上 `// KNOWN BUG` —— 生成一个候选版本，你通过 diff 审核决定是否采用，确定性的原始版本永远保留。
+Hover 先驱动你的应用跑一遍，把验证过的会话存成一份纯 Playwright spec。想更好？还有个可选的 **AI 优化**：它把这份 spec 打磨一版，以 diff 给你过目 —— 你决定要不要，原始版本永远保留。
 
 **自带 CLI —— 订阅 *或* API key 都行。** Hover 直接 spawn 你 `PATH` 上已有的 coding-agent CLI（`claude` / `codex` / …）。可以复用你已经在付费的订阅，也可以把自己的模型 API key 填进 widget（它被透传到 CLI 的环境变量，只存在你的浏览器里，绝不上传）。无论哪种，LLM 成本都只是 authoring 时的一次性开销 —— 不会变成每次构建通过都要反复支付的成本，因为存下来的 `.spec.ts` 用 `npx playwright test` 永远跑得起来，回路里没有 agent。
 
