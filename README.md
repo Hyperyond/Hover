@@ -67,7 +67,8 @@ A single **💾 Save as ▾** on the done card crystallises one verified session
 - **Six agents, per-agent sandbox** — `claude` (hard sandbox, recommended), `codex`, `cursor-agent`, `aider`, `gemini-cli`, `qwen-code`. Hard-sandbox agents can reach only Playwright MCP, with a `--max-budget-usd` ceiling; soft-sandbox agents carry a ⚠ badge.
 - **Structured spec output** — Page Objects + fixtures lifted from repeated flows, `test.step(...)` blocks, a `.hover/<slug>.json` sidecar per spec, and `Promise.all` popup/new-tab pairing. An optional, off-by-default **AI optimisation pass** polishes a deterministic draft into a candidate you accept via diff (original always kept; buggy behaviour flagged inline `// KNOWN BUG`), learning from a **seed library** (`.hover/rules/`, community-extensible). `.hover/conventions.md` steers house style; exploration scope matches how specific your prompt is.
 - **Resilience + bug discovery** — visibility-guarded selectors fail loudly, not on a 30 s timeout; **⟳ Re-record** replays a spec's original prompt to rewrite selectors; the agent's `## Findings` land in a severity-coded card.
-- **Record mode, voice mode, ⌖ Fix prompt, security testing** — drive by hand and get the same spec; push-to-talk prompts (中文 / English); click any element → a source-attributed fix prompt on your clipboard; an optional MITM-proxy [security plugin](https://gethover.dev/docs/features/security). Details on the [docs site](https://gethover.dev/docs).
+- **Security & pentest — two modes, one widget** — flip the panel into orange [`@hover-dev/security`](./packages/security/) (business / authz: a local HTTPS MITM lets the agent replay captured API calls with mutations to probe IDOR / auth-bypass / parameter-tampering, and confirmed findings crystallize into `.security.spec.ts` CI gates) or red [`@hover-dev/pentest`](./packages/pentest/) (offensive: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR on your **own** dev app, destructive + confirmed in-band, → a findings report that says what it did *and didn't* test). Zero external deps — no mitmproxy, no Python, no system CA; authorized own-app testing only.
+- **Record mode, voice mode, ⌖ Fix prompt** — drive by hand and get the same spec; push-to-talk prompts (中文 / English); click any element → a source-attributed fix prompt on your clipboard. Details on the [docs site](https://gethover.dev/docs).
 
 <p align="center">
   <img src="docs/screenshots/07-findings-card.png" alt="Findings card — severity-coded bugs the agent flagged" width="48%" />
@@ -96,6 +97,7 @@ Everything runs through the `hover` CLI (`npx @hover-dev/cli <command>`):
 |---|---|
 | `setup` | Detect your bundler + package manager, install the integration, wire the config |
 | `run "<prompt>"` | Drive the debug Chrome from the terminal — no widget; `--save <slug>` crystallizes a spec |
+| `scan ["<scope>"]` | RED pentest — drive your **own** dev app for web vulns, write a findings report (needs `--url <devUrl>`) |
 | `optimize <spec>` | Optional AI pass → an improved spec candidate (diff, original kept) |
 | `extract` | Lift flows repeated across specs into shared Page Objects + fixtures |
 | `re-record <spec>` | Regenerate a spec against the current UI |
