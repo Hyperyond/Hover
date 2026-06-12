@@ -41,7 +41,7 @@ per-save path** (reproducible by construction):
   runnable around it. `countOptimizableMarkers()` reads the count back; `listSpecs`
   surfaces it as `SpecSummary.optimizableCount`.
 - Alongside the `.spec.ts`, a **sidecar** is written to
-  `.hover/<slug>.json` — the structured `SpecStep[]` + observed signals. This is
+  `.hover/sidecars/<slug>.json` — the structured `SpecStep[]` + observed signals. This is
   the machine-readable behavior record the optimization pass reads (it keeps the
   spec itself clean).
 
@@ -52,7 +52,7 @@ The **service** (never the sandboxed browser agent) can optionally run an LLM
 feedback the session observed. Its input is data the service already holds (the
 draft + sidecar + relevant seeds), not live page content, so it sits outside the
 agent's prompt-injection surface and needs no filesystem access. It writes an
-**optimization candidate** to `.hover/optimized/<slug>.spec.ts.draft` (never
+**optimization candidate** to `.hover/cache/optimized/<slug>.spec.ts.draft` (never
 `*.spec.ts`, so the test runner can't collect an unreviewed candidate). A human
 promotes or discards it via diff — **the deterministic original is always
 preserved**. Off by default.

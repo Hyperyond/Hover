@@ -19,7 +19,7 @@
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { sidecarDir, type SpecSidecar } from './sidecar.js';
+import { sidecarDir, legacySidecarDir, parseSidecarFile, type SpecSidecar } from './sidecar.js';
 import { humanStep } from './humanSteps.js';
 import type { SkillStep } from '../skills/writeSkill.js';
 
@@ -85,27 +85,28 @@ export function stepSignature(tool: string, rawInput: unknown): string | null {
   }
 }
 
-/** Read and parse every sidecar under `.hover/`. Malformed files are skipped
- *  (better to detect across the valid ones than fail because one is broken). */
+/** Read and parse every sidecar under `.hover/sidecars/`, unioned with any
+ *  still in the legacy `__vibe_tests__/.hover/` home (current home wins on a
+ *  slug collision). Malformed files are skipped (better to detect across the
+ *  valid ones than fail because one is broken). */
 async function readSidecars(devRoot: string): Promise<SpecSidecar[]> {
-  const dir = sidecarDir(devRoot);
-  let entries: string[];
-  try {
-    entries = await readdir(dir);
-  } catch {
-    return [];
-  }
-  const out: SpecSidecar[] = [];
-  for (const entry of entries) {
-    if (!entry.endsWith('.json')) continue;
+  const bySlug = new Map<string, SpecSidecar>();
+  for (const dir of [legacySidecarDir(devRoot), sidecarDir(devRoot)]) {
+    let entries: string[];
     try {
-      const sc = JSON.parse(await readFile(join(dir, entry), 'utf-8')) as SpecSidecar;
-      if (Array.isArray(sc.steps) && typeof sc.slug === 'string') out.push(sc);
+      entries = await readdir(dir);
     } catch {
-      // skip malformed sidecar
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.endsWith('.json')) continue;
+      const sc = await parseSidecarFile(join(dir, entry));
+      if (sc && Array.isArray(sc.steps) && typeof sc.slug === 'string') {
+        bySlug.set(sc.slug, sc); // later dir (current home) overwrites
+      }
     }
   }
-  return out;
+  return [...bySlug.values()];
 }
 
 /** Project a sidecar's steps to (signature, prose) lists, dropping

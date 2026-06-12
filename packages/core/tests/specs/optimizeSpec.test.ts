@@ -95,7 +95,7 @@ test('login', async ({ page }) => {
     const res = await optimizeSpec(devRoot, 'login', async () => optimized);
 
     expect(res.candidatePath.endsWith('login.spec.ts.draft')).toBe(true);
-    expect(res.candidatePath).toContain(join('.hover', 'optimized'));
+    expect(res.candidatePath).toContain(join('.hover', 'cache', 'optimized'));
     expect(existsSync(res.candidatePath)).toBe(true);
     // original is untouched
     expect(readFileSync(join(devRoot, '__vibe_tests__', 'login.spec.ts'), 'utf-8'))
