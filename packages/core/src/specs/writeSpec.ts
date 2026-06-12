@@ -29,7 +29,6 @@ import {
 } from './pageObjectManifest.js';
 import { stepSignature } from './detectSharedFlows.js';
 import { slugify, firstSentence } from './text.js';
-import { mergeAtlasFromSteps } from '../atlas/atlas.js';
 import { markSessionSaved } from '../sessions/sessions.js';
 
 export type SpecStep = SkillStep;
@@ -108,13 +107,8 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
     steps: opts.steps,
     assertions: opts.assertions ?? [],
   });
-  // Atlas + session-ledger accumulation, best-effort by contract: both calls
-  // swallow their own failures — a corrupt atlas.json must never break
-  // Save-as-spec (sidecars stay the source of truth for a rebuild).
-  const atlasResult = await mergeAtlasFromSteps(opts.devRoot, opts.steps, slug);
-  if (atlasResult && 'error' in atlasResult) {
-    console.warn(`[hover/atlas] merge skipped: ${atlasResult.error}`);
-  }
+  // Session-ledger patch, best-effort by contract: markSessionSaved swallows
+  // its own failures — it must never break Save-as-spec.
   const promptText = opts.steps.find(s => s.kind === 'user')?.text;
   if (promptText) await markSessionSaved(opts.devRoot, promptText, slug);
   return { path, slug };

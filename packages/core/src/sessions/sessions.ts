@@ -7,8 +7,7 @@
  * saved sessions and is dropped for unsaved ones (persisting unsaved
  * transcripts is a privacy decision deferred to a future opt-in).
  *
- * Like the atlas, writes are best-effort: a ledger failure must never break a
- * run or a save.
+ * Writes are best-effort: a ledger failure must never break a run or a save.
  */
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

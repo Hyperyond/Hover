@@ -38,7 +38,7 @@ export interface SpecSidecar {
 }
 
 /** Project-root `.hover/` directory — the single home for Hover-derived data
- *  (sidecars, atlas, sessions, rules, conventions). */
+ *  (sidecars, sessions, rules, conventions). */
 export function hoverDir(devRoot: string): string {
   return join(devRoot, '.hover');
 }

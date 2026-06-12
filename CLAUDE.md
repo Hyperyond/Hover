@@ -43,7 +43,7 @@ Each example's Hover plugin/integration instance (`vite-plugin-hover` for the Vi
 ## Runtime-created directories
 
 - `__vibe_tests__/` is the write target for crystallized Playwright specs. The directory is created by the runtime; do not hand-author placeholder files there. It holds **only user-facing Playwright code** (`*.spec.ts`, `pages/`) — no Hover-internal files.
-- `<devRoot>/.hover/` is the project-root home for ALL Hover-derived data: `sidecars/<slug>.json` (the structured `SpecStep[]` record per spec — relocated from the legacy nested `__vibe_tests__/.hover/`, which readers still fall back to and lazily migrate), `atlas.json` (the path graph: normalized routes as nodes, verified navigate/action steps as edges, merged at crystallize time — `packages/core/src/atlas/atlas.ts`), `sessions/` (one summary JSON per agent run: agent, model, cost, turns, outcome), `cache/` (disposable; optimization candidates live at `cache/optimized/`), plus the pre-existing `rules/` (seeds) and `conventions.md`. Atlas + session-ledger writes are best-effort by contract — they must never break Save-as-spec — and atlas data is derived ONLY from structured steps, never parsed out of generated `.spec.ts`. This repo's root `.gitignore` ignores `.hover/` wholesale (the security plugin keeps a MITM CA private key under `.hover/ca/`); in user projects the intended policy is `cache/` ignored, the rest commit-worthy. Design doc: `docs/superpowers/specs/2026-06-12-hover-dir-atlas-design.md`.
+- `<devRoot>/.hover/` is the project-root home for ALL Hover-derived data: `sidecars/<slug>.json` (the structured `SpecStep[]` record per spec — relocated from the legacy nested `__vibe_tests__/.hover/`, which readers still fall back to and lazily migrate), `sessions/` (one summary JSON per agent run: agent, model, cost, turns, outcome — `packages/core/src/sessions/sessions.ts`), `cache/` (disposable; optimization candidates live at `cache/optimized/`), plus the pre-existing `rules/` (seeds) and `conventions.md`. Session-ledger writes are best-effort by contract — they must never break a run or Save-as-spec. This repo's root `.gitignore` ignores `.hover/` wholesale (the security plugin keeps a MITM CA private key under `.hover/ca/`); in user projects the intended policy is `cache/` ignored, the rest commit-worthy. (A route-graph "atlas" feature was prototyped and removed: every Hover dogfood target is a single-URL state-machine SPA, so a URL-keyed navigation graph had nothing to bite on — see `docs/superpowers/specs/2026-06-12-hover-dir-atlas-design.md` for the post-mortem.)
 
 ## Repository status
 
@@ -231,7 +231,6 @@ pnpm detect               # list installed coding agents
 pnpm verify-widget        # validate that the injected widget reports `data-vibe-test`
 pnpm ws-smoke             # exercise the @hover-dev/core WebSocket bridge in isolation
 pnpm bench-ttfb [n=5]     # time the LLM-driven loop's first tool_use latency (needs Chrome on :9222 + a dev server). A/B perf changes by running on each branch.
-pnpm bench-atlas [n=3]    # A/B atlas grounding (HOVER_ATLAS_GROUNDING) over full sessions: duration / cost / turns / tool calls per arm. Needs Chrome on :9222, a dev server, and an accumulated .hover/atlas.json in HOVER_BENCH_DEVROOT. Full paid agent runs — budget accordingly.
 ```
 
 ```bash
