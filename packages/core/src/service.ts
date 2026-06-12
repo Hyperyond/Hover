@@ -64,6 +64,7 @@ import { resolveMcpConfig, mcpToolPrefix } from './playwright/resolveMcpConfig.j
 import { launchDebugChrome } from './playwright/launchChrome.js';
 import { listSpecs } from './specs/listSpecs.js';
 import { writeSessionRecord } from './sessions/sessions.js';
+import { buildAtlasDigest } from './atlas/digest.js';
 import { readSeeds, BUILTIN_SEEDS } from './specs/seeds.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
@@ -944,6 +945,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (!resumeSessionId) {
           const conventions = await readConventions(devRoot);
           if (conventions) appendSystemPrompt = `${appendSystemPrompt}\n\n${conventions}`;
+          // Atlas grounding (S2, experimental): feed the known route map +
+          // most-verified paths so the agent navigates directly instead of
+          // re-exploring. First turn only (prompt-cache, same as conventions).
+          // Env-gated until the bench-ttfb A/B proves the digest pays for its
+          // own tokens — flip the default only with data.
+          if (process.env.HOVER_ATLAS_GROUNDING === '1') {
+            const digest = await buildAtlasDigest(devRoot);
+            if (digest) appendSystemPrompt = `${appendSystemPrompt}\n\n${digest}`;
+          }
         }
         // Add plugin-contributed prompt additions whose scope includes the
         // current mode (or '*' for always-on). Walks ALL loaded plugins,

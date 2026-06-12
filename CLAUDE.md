@@ -231,6 +231,7 @@ pnpm detect               # list installed coding agents
 pnpm verify-widget        # validate that the injected widget reports `data-vibe-test`
 pnpm ws-smoke             # exercise the @hover-dev/core WebSocket bridge in isolation
 pnpm bench-ttfb [n=5]     # time the LLM-driven loop's first tool_use latency (needs Chrome on :9222 + a dev server). A/B perf changes by running on each branch.
+pnpm bench-atlas [n=3]    # A/B atlas grounding (HOVER_ATLAS_GROUNDING) over full sessions: duration / cost / turns / tool calls per arm. Needs Chrome on :9222, a dev server, and an accumulated .hover/atlas.json in HOVER_BENCH_DEVROOT. Full paid agent runs — budget accordingly.
 ```
 
 ```bash

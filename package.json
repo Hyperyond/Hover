@@ -13,6 +13,7 @@
     "verify-widget": "pnpm --filter @hover-dev/core verify-widget",
     "ws-smoke": "pnpm --filter @hover-dev/core ws-smoke",
     "bench-ttfb": "pnpm --filter @hover-dev/core bench-ttfb",
+    "bench-atlas": "pnpm --filter @hover-dev/core bench-atlas",
     "bench-multi-tab": "pnpm --filter @hover-dev/core bench-multi-tab",
     "dev:site": "pnpm --filter @hover-dev/site dev",
     "build:site": "pnpm --filter @hover-dev/site build",
