@@ -348,7 +348,7 @@ describe('writeSpec — test.step Given/When/Then wrapping (F1)', () => {
 describe('writeSpec — structured sidecar (Stage 1)', () => {
   it('writes a .hover/<slug>.json sidecar with the verbatim structured session', async () => {
     const r = await writeSpec({ devRoot, name: 'login + counter', steps: session });
-    const sidecarPath = join(devRoot, '__vibe_tests__', '.hover', `${r.slug}.json`);
+    const sidecarPath = join(devRoot, '.hover', 'sidecars', `${r.slug}.json`);
     const sc = JSON.parse(readFileSync(sidecarPath, 'utf-8'));
     expect(sc.version).toBe(1);
     expect(sc.slug).toBe(r.slug);
@@ -368,18 +368,20 @@ describe('writeSpec — structured sidecar (Stage 1)', () => {
       assertions: [{ code: 'expect(x).toBeVisible()', hint: 'visible' }],
     });
     const sc = JSON.parse(
-      readFileSync(join(devRoot, '__vibe_tests__', '.hover', `${r.slug}.json`), 'utf-8'),
+      readFileSync(join(devRoot, '.hover', 'sidecars', `${r.slug}.json`), 'utf-8'),
     );
     expect(sc.assertions).toEqual([{ code: 'expect(x).toBeVisible()', hint: 'visible' }]);
   });
 
-  it('lands in a dot-prefixed .hover/ dir as .json, never a collectable *.spec.ts', async () => {
+  it('lands under .hover/sidecars/ as .json, outside __vibe_tests__ and never a collectable *.spec.ts', async () => {
     const r = await writeSpec({ devRoot, name: 'guard', steps: session });
-    const sidecarPath = join(devRoot, '__vibe_tests__', '.hover', `${r.slug}.json`);
+    const sidecarPath = join(devRoot, '.hover', 'sidecars', `${r.slug}.json`);
     // readFileSync throws if absent — proves it was written.
     expect(readFileSync(sidecarPath, 'utf-8').length).toBeGreaterThan(0);
     expect(sidecarPath.endsWith('.spec.ts')).toBe(false);
-    expect(sidecarPath).toContain(`${join('__vibe_tests__', '.hover')}`);
+    // The specs dir stays 100% user code — no Hover-internal files inside it.
+    expect(sidecarPath).not.toContain('__vibe_tests__');
+    expect(sidecarPath).toContain(join('.hover', 'sidecars'));
   });
 });
 

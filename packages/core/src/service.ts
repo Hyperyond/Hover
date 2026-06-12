@@ -63,6 +63,7 @@ import { getPreflight, invalidatePreflight } from './playwright/preflightCache.j
 import { resolveMcpConfig, mcpToolPrefix } from './playwright/resolveMcpConfig.js';
 import { launchDebugChrome } from './playwright/launchChrome.js';
 import { listSpecs } from './specs/listSpecs.js';
+import { writeSessionRecord } from './sessions/sessions.js';
 import { readSeeds, BUILTIN_SEEDS } from './specs/seeds.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
@@ -877,6 +878,26 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         prompt: text,
       };
       activeRun = run;
+      // Session-ledger state — declared outside the try so the catch path can
+      // still record an aborted / thrown run (the spend view wants those too).
+      const sessionStartedAt = new Date().toISOString();
+      let sessionEnd: { turns?: number; costUsd?: number } = {};
+      let sessionRecorded = false;
+      const recordSession = async (outcome: 'completed' | 'error' | 'aborted', stepCount: number) => {
+        if (sessionRecorded) return;
+        sessionRecorded = true;
+        await writeSessionRecord(devRoot, {
+          startedAt: sessionStartedAt,
+          endedAt: new Date().toISOString(),
+          agent: currentAgentId,
+          model,
+          prompt: text,
+          outcome,
+          turns: sessionEnd.turns,
+          costUsd: sessionEnd.costUsd,
+          stepCount,
+        });
+      };
       try {
         // Build the MCP config first — it's pure local file IO and lets
         // us assert plugin-contributed servers landed in the config even
@@ -1009,11 +1030,24 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             signal: run.abort.signal,
           },
           (ev) => {
+            // Cost/turns for the session ledger ride the session_end event,
+            // not the runSession result — snoop them off the stream.
+            if (ev.kind === 'session_end') {
+              sessionEnd = { turns: ev.turns, costUsd: ev.costUsd };
+            }
             // Stream to whichever ws is attached NOW — survives the widget
             // reconnecting mid-run (emitToRun is a no-op during a reconnect gap).
             if (run.cancelled) return;
             emitToRun({ type: 'event', payload: ev });
           },
+        );
+
+        // Append to the `.hover/sessions/` ledger (best-effort, never throws).
+        // `saved`/`specSlug` are patched in later by markSessionSaved when the
+        // user crystallizes — save-spec arrives as a separate WS message.
+        await recordSession(
+          run.cancelled ? 'aborted' : runResult.isError ? 'error' : 'completed',
+          runResult.steps.filter((s) => s.kind === 'step').length,
         );
 
         // Re-record: write a fresh spec from the steps runSession accumulated
@@ -1067,11 +1101,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             summary: message,
           };
           emitToRun({ type: 'event', payload: errorEvent });
+          await recordSession('error', 0);
           // Force the next command to re-probe CDP. The error could be from
           // Chrome dying, MCP spawning a stray Chromium, the user closing
           // their debug window — anything that would make a cached "all
           // healthy" result lie.
           invalidatePreflight(cdpUrl);
+        } else {
+          // User-initiated cancel — still worth a ledger row (spend view).
+          await recordSession('aborted', 0);
         }
       } finally {
         if (run.graceTimer) clearTimeout(run.graceTimer);

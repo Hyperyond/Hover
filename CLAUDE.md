@@ -40,9 +40,10 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*
 
 Each example's Hover plugin/integration instance (`vite-plugin-hover` for the Vite examples including `rn-web-app`, `@hover-dev/astro` for `astro-app`, `@hover-dev/nuxt` for `nuxt-app`, `@hover-dev/next` for `next-app`, `webpack-plugin-hover` for `webpack-app`) starts its own Hover service. The first one to boot binds `127.0.0.1:51789`; subsequent ones auto-bump (51790, 51791, …, up to 51798). The injected widget reads `window.__HOVER_PORT__` so each example's widget connects only to its own service — running multiple examples concurrently is supported and each writes skills + specs into its own `devRoot`. `payment-provider` has no service at all.
 
-## Inactive or placeholder directories
+## Runtime-created directories
 
-- `__vibe_tests__/` is the write target for crystallized Playwright specs. The directory is created by the runtime; do not hand-author placeholder files there.
+- `__vibe_tests__/` is the write target for crystallized Playwright specs. The directory is created by the runtime; do not hand-author placeholder files there. It holds **only user-facing Playwright code** (`*.spec.ts`, `pages/`) — no Hover-internal files.
+- `<devRoot>/.hover/` is the project-root home for ALL Hover-derived data: `sidecars/<slug>.json` (the structured `SpecStep[]` record per spec — relocated from the legacy nested `__vibe_tests__/.hover/`, which readers still fall back to and lazily migrate), `sessions/` (one summary JSON per agent run: agent, model, cost, turns, outcome — `packages/core/src/sessions/sessions.ts`), `cache/` (disposable; optimization candidates live at `cache/optimized/`), plus the pre-existing `rules/` (seeds) and `conventions.md`. Session-ledger writes are best-effort by contract — they must never break a run or Save-as-spec. This repo's root `.gitignore` ignores `.hover/` wholesale (the security plugin keeps a MITM CA private key under `.hover/ca/`); in user projects the intended policy is `cache/` ignored, the rest commit-worthy. (A route-graph "atlas" feature was prototyped and removed: every Hover dogfood target is a single-URL state-machine SPA, so a URL-keyed navigation graph had nothing to bite on — see `docs/superpowers/specs/2026-06-12-hover-dir-atlas-design.md` for the post-mortem.)
 
 ## Repository status
 

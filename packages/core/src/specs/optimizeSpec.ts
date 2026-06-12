@@ -4,7 +4,7 @@
  * Reads a deterministic draft spec + its sidecar, asks an LLM (the codegen
  * mode — no browser, no MCP) to improve it (chiefly: add assertions for the
  * feedback the session observed), validates the result, and writes it as a
- * CANDIDATE at `.hover/optimized/<slug>.spec.ts.draft` — never overwriting the
+ * CANDIDATE at `.hover/cache/optimized/<slug>.spec.ts.draft` — never overwriting the
  * original (D10). A human promotes or discards it via diff.
  *
  * The LLM call is injected (`runCodegen`) so callers wire their own agent and
@@ -13,7 +13,7 @@
 import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Project } from 'ts-morph';
-import { sidecarDir, type SpecSidecar } from './sidecar.js';
+import { readSidecar, type SpecSidecar } from './sidecar.js';
 import { readSeeds, relevantSeeds, type SeedRule } from './seeds.js';
 import { softBatch } from './softBatch.js';
 
@@ -50,14 +50,8 @@ export async function optimizeSpec(
     throw new OptimizeError(`spec not found: ${slug} (looked at ${specPath})`);
   }
 
-  let sidecar: SpecSidecar | null = null;
-  try {
-    sidecar = JSON.parse(
-      await readFile(join(sidecarDir(devRoot), `${slug}.json`), 'utf-8'),
-    ) as SpecSidecar;
-  } catch {
-    /* no sidecar — optimize from the draft alone */
-  }
+  // Legacy-aware read; null → no sidecar, optimize from the draft alone.
+  const sidecar: SpecSidecar | null = await readSidecar(devRoot, slug);
 
   const specTools = new Set(
     (sidecar?.steps ?? [])
@@ -77,7 +71,9 @@ export async function optimizeSpec(
   // → expect.soft) surgically on its output. See softBatch.ts for the guard.
   const code = softBatch(llmCode).code;
 
-  const dir = join(devRoot, '__vibe_tests__', '.hover', 'optimized');
+  // Candidates are disposable derived artifacts → `.hover/cache/` (always
+  // gitignored). Losing one costs a re-run of the optimization, nothing more.
+  const dir = join(devRoot, '.hover', 'cache', 'optimized');
   await mkdir(dir, { recursive: true });
   // `.spec.ts.draft`, never `*.spec.ts` — Playwright's glob must not collect a
   // candidate before a human reviews it.
@@ -193,6 +189,12 @@ function hasSyntaxError(code: string): boolean {
 }
 
 function candidatePathFor(devRoot: string, slug: string): string {
+  return join(devRoot, '.hover', 'cache', 'optimized', `${slug}.spec.ts.draft`);
+}
+
+/** Pre-relocation candidate path (`__vibe_tests__/.hover/optimized/`) — only
+ *  consulted as a read/delete fallback for drafts written before the move. */
+function legacyCandidatePathFor(devRoot: string, slug: string): string {
   return join(devRoot, '__vibe_tests__', '.hover', 'optimized', `${slug}.spec.ts.draft`);
 }
 
@@ -200,16 +202,20 @@ function candidatePathFor(devRoot: string, slug: string): string {
  *  remove the candidate. Returns the written spec path. The human's "Use
  *  optimized" / `mv` action. */
 export async function promoteOptimized(devRoot: string, slug: string): Promise<string> {
-  const candidate = candidatePathFor(devRoot, slug);
   const specPath = join(devRoot, '__vibe_tests__', `${slug}.spec.ts`);
   let code: string;
   try {
-    code = await readFile(candidate, 'utf-8');
+    code = await readFile(candidatePathFor(devRoot, slug), 'utf-8');
   } catch {
-    throw new OptimizeError(`no optimization candidate to promote for "${slug}"`);
+    try {
+      code = await readFile(legacyCandidatePathFor(devRoot, slug), 'utf-8');
+    } catch {
+      throw new OptimizeError(`no optimization candidate to promote for "${slug}"`);
+    }
   }
   await writeFile(specPath, code, 'utf-8');
-  await rm(candidate, { force: true });
+  await rm(candidatePathFor(devRoot, slug), { force: true });
+  await rm(legacyCandidatePathFor(devRoot, slug), { force: true });
   return specPath;
 }
 
@@ -217,4 +223,5 @@ export async function promoteOptimized(devRoot: string, slug: string): Promise<s
  *  human's "Keep original". */
 export async function discardOptimized(devRoot: string, slug: string): Promise<void> {
   await rm(candidatePathFor(devRoot, slug), { force: true });
+  await rm(legacyCandidatePathFor(devRoot, slug), { force: true });
 }

@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { countOptimizableMarkers } from './writeSpec.js';
 import { readSeeds, relevantSeeds } from './seeds.js';
 import { optimizationSuggestion, type OptimizationSuggestion } from './optimizationSuggestion.js';
-import type { SpecSidecar } from './sidecar.js';
+import { readSidecar } from './sidecar.js';
 
 export interface SpecSummary {
   /** Path-relative slug, e.g. `login-and-counter`. Identifies the spec. */
@@ -148,22 +148,19 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
     }
     const header = parseSpecHeader(content);
     const slug = entry.replace(/\.spec\.ts$/, '');
-    const sidecarPath = join(root, '.hover', `${slug}.json`);
-    const hasSidecar = existsSync(sidecarPath);
+    // readSidecar checks `.hover/sidecars/` first, then the legacy
+    // `__vibe_tests__/.hover/` home (copy-forwarding when found there).
+    const sidecar = await readSidecar(devRoot, slug);
+    const hasSidecar = sidecar !== null;
     const optimizableCount = countOptimizableMarkers(content);
 
     // Which seeds could plausibly apply, from the sidecar's captured tools.
     let relevantSeedNames: string[] = [];
-    if (hasSidecar && seeds.length > 0) {
-      try {
-        const sc = JSON.parse(await readFile(sidecarPath, 'utf-8')) as SpecSidecar;
-        const tools = new Set(
-          (sc.steps ?? []).filter(s => s.kind === 'step' && s.tool).map(s => s.tool as string),
-        );
-        relevantSeedNames = relevantSeeds(seeds, tools).map(s => s.name);
-      } catch {
-        /* malformed sidecar — treat as no relevant seeds */
-      }
+    if (sidecar && seeds.length > 0) {
+      const tools = new Set(
+        (sidecar.steps ?? []).filter(s => s.kind === 'step' && s.tool).map(s => s.tool as string),
+      );
+      relevantSeedNames = relevantSeeds(seeds, tools).map(s => s.name);
     }
 
     summaries.push({

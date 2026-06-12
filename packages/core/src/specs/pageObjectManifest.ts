@@ -13,7 +13,7 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { sidecarDir } from './sidecar.js';
+import { sidecarDir, legacySidecarDir } from './sidecar.js';
 
 export const MANIFEST_VERSION = 1;
 
@@ -50,13 +50,17 @@ export async function writePageObjectManifest(
   return path;
 }
 
-/** Read the manifest, or null when none exists (no extraction has run). */
+/** Read the manifest, or null when none exists (no extraction has run).
+ *  Falls back to the legacy `__vibe_tests__/.hover/` home for manifests
+ *  written before the `.hover/sidecars/` relocation. */
 export async function readPageObjectManifest(devRoot: string): Promise<PageObjectManifest | null> {
-  try {
-    const m = JSON.parse(await readFile(manifestPath(devRoot), 'utf-8')) as PageObjectManifest;
-    if (Array.isArray(m.pages)) return m;
-  } catch {
-    /* no manifest / malformed — treat as none */
+  for (const path of [manifestPath(devRoot), join(legacySidecarDir(devRoot), 'page-objects.json')]) {
+    try {
+      const m = JSON.parse(await readFile(path, 'utf-8')) as PageObjectManifest;
+      if (Array.isArray(m.pages)) return m;
+    } catch {
+      /* no manifest / malformed — try next */
+    }
   }
   return null;
 }
