@@ -133,7 +133,14 @@ function renderSpec(
   // Drop never-submit noise (self-XSS, missing headers, …) so it never becomes
   // a regression test. Surface what was dropped — no silent suppression.
   const suppressed = checks.filter(isNoiseCheck);
-  const kept = checks.filter((c) => !isNoiseCheck(c));
+  const nonNoise = checks.filter((c) => !isNoiseCheck(c));
+  // Authz oracle gate (§4.8): a cross-identity check that WAS adjudicated must
+  // be `confirmed` to crystallize. likely / uncertain / secure / not-tested are
+  // report-only — they're surfaced in the header but never emitted as a test,
+  // so a false positive can't turn the build red. Checks that were never
+  // adjudicated (no `authz`) keep their prior status-only behaviour.
+  const reportOnly = nonNoise.filter((c) => c.authz && c.authz.verdict !== 'confirmed');
+  const kept = nonNoise.filter((c) => !(c.authz && c.authz.verdict !== 'confirmed'));
   const vulnerableChecks = kept.filter((c) => !c.matched);
 
   // ─── JSDoc header ─────────────────────────────────────────────────
@@ -163,6 +170,16 @@ function renderSpec(
     lines.push(` * Suppressed ${suppressed.length} noise check(s) (never-submit list):`);
     for (const c of suppressed) {
       lines.push(` *   • ${jsdocEscape(c.intent)}`);
+    }
+  }
+
+  if (reportOnly.length > 0) {
+    lines.push(' *');
+    lines.push(` * Report-only — ${reportOnly.length} adjudicated check(s) below the`);
+    lines.push(' * crystallization bar (authz oracle verdict ≠ confirmed). Not emitted');
+    lines.push(' * as tests; review manually before promoting:');
+    for (const c of reportOnly) {
+      lines.push(` *   • [${c.authz?.verdict}] ${jsdocEscape(c.intent)}`);
     }
   }
 

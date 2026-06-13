@@ -6,6 +6,7 @@
  * (renders them into a findings report). Pure data — no runtime dependency.
  */
 import type { SecurityClass } from './seed.js';
+import type { AuthzVerdict } from './oracle.js';
 
 export interface SecurityCheckStep {
   /** Monotonic id within this session, useful for stable ordering. */
@@ -43,6 +44,14 @@ export interface SecurityCheckStep {
   };
   /** Whether observed === expected (verified control vs. vulnerability). */
   matched: boolean;
+  /** The BOLA/authz judgment oracle's verdict for this check, when it was run
+   *  (a cross-identity check the agent adjudicated via the three-way matrix —
+   *  see `adjudicate` in oracle.ts). Drives crystallization: only a `confirmed`
+   *  verdict is allowed into a `.security.spec.ts` CI gate; `likely` /
+   *  `uncertain` / `not-tested` stay report-only so a false positive can never
+   *  turn a build red. Absent on checks that were never adjudicated (the
+   *  status-only checks behave as before). */
+  authz?: { verdict: AuthzVerdict; reasons: string[] };
   /** Wall-clock when the check was recorded. */
   recordedAt: number;
 }

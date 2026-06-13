@@ -15,6 +15,8 @@
  *   get_flow({ id })                            → full flow incl. body
  *   replay_flow({ id, method?, url?, headers?, bodyText? })
  *                                               → replayed flow
+ *   adjudicate_bola({ baselineFlowId, attackFlowId, referenceFlowId, … })
+ *                                               → BOLA verdict (three-way oracle)
  *   clear_flows()                               → drop all captured flows
  *
  * Output is human-readable Markdown so the agent can dump tool results
@@ -327,6 +329,59 @@ server.registerTool(
       out.push(
         `_(Not recorded as a check — both \`intent\` and \`expectStatus\` are required together.)_`,
       );
+    }
+    return md(out.join('\n'));
+  },
+);
+
+server.registerTool(
+  'adjudicate_bola',
+  {
+    description:
+      'Adjudicate a BOLA / object-level authorization test with the three-way judgment oracle — the deterministic way to decide whether a 2xx to a cross-object request is an ACTUAL data leak vs. public data vs. a soft denial (200 + empty body). Gather three flows first, then call this:\n' +
+      '  • baselineFlowId — R(A,objA): identity A reading A\'s OWN object (usually the original captured flow). Establishes A\'s normal view.\n' +
+      '  • attackFlowId — R(A,objB): identity A reading B\'s object (replay the captured request with the object id mutated to B\'s). The attack under test.\n' +
+      '  • referenceFlowId — R(B,objB): identity B reading B\'s own object (replay `as` B with B\'s object id, or a captured B flow). Establishes what B\'s data looks like.\n' +
+      'Pass bMarkers = B\'s identifying tokens that must NOT appear in A\'s response (B\'s object id, primary key, email). Pass attachToCheckId to attach the verdict to a recorded check — ONLY a `confirmed` verdict crystallizes into a security spec; likely/uncertain stay report-only. Prefer this over eyeballing the status code: status alone causes false positives on soft denials.',
+    inputSchema: {
+      baselineFlowId: z.string().describe('R(A,objA) flow id — A reading A\'s own object (often the original captured flow).'),
+      attackFlowId: z.string().describe('R(A,objB) flow id — A reading B\'s object (replay with the object id swapped to B\'s).'),
+      referenceFlowId: z.string().describe('R(B,objB) flow id — B reading B\'s own object (replay as B, or a captured B flow).'),
+      bMarkers: z
+        .array(z.string())
+        .optional()
+        .describe('B\'s identifying tokens that must not leak to A: B\'s object id, primary key, email, etc.'),
+      attachToCheckId: z
+        .number()
+        .optional()
+        .describe('Recorded check id (from a replay_flow with intent+expectStatus) to attach this verdict to. Gates crystallization — only a `confirmed` verdict becomes a spec.'),
+    },
+  },
+  async ({ baselineFlowId, attackFlowId, referenceFlowId, bMarkers, attachToCheckId }) => {
+    const r = await api<{
+      verdict: string;
+      reasons: string[];
+      signals: Record<string, unknown>;
+      attached: boolean;
+    }>('/adjudicate', {
+      method: 'POST',
+      body: JSON.stringify({ baselineFlowId, attackFlowId, referenceFlowId, bMarkers, attachToCheckId }),
+    });
+    const icon =
+      r.verdict === 'confirmed' ? '🚨' : r.verdict === 'likely' ? '⚠️' : r.verdict === 'secure' ? '✅' : '❓';
+    const out: string[] = [];
+    out.push(`${icon} **BOLA verdict: ${r.verdict.toUpperCase()}**`);
+    for (const reason of r.reasons) out.push(`   - ${reason}`);
+    if (r.verdict === 'confirmed') {
+      out.push('');
+      out.push('   Unauthorized access PROVEN. Record it (replay_flow with intent+expectStatus if not already) and recommend "Save as Security spec" — only `confirmed` crystallizes into a CI gate.');
+    } else if (r.verdict === 'likely') {
+      out.push('');
+      out.push('   Suspected but unproven (could be public/shared data). Use the source reader (read_source) to check the handler for a missing owner check before promoting.');
+    }
+    if (attachToCheckId !== undefined) {
+      out.push('');
+      out.push(r.attached ? `   Attached to check #${attachToCheckId}.` : `   ⚠ Check #${attachToCheckId} not found — verdict not attached.`);
     }
     return md(out.join('\n'));
   },
