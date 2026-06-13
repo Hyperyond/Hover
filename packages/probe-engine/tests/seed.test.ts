@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadSecuritySeeds, isSecuritySeed } from '../src/seed.js';
+import { loadSecuritySeeds, isSecuritySeed, readDisabledSeeds } from '../src/seed.js';
 
 let devRoot: string;
 beforeEach(() => { devRoot = mkdtempSync(join(tmpdir(), 'hover-sec-seed-')); });
@@ -51,5 +51,28 @@ describe('loadSecuritySeeds', () => {
     writeRule('security/idor.json', idor);
     const seeds = await loadSecuritySeeds(devRoot);
     expect(seeds.map(s => s.name)).toEqual(['idor-numeric-id']);
+  });
+});
+
+describe('readDisabledSeeds', () => {
+  function writeSeedsConfig(obj: unknown): void {
+    const p = join(devRoot, '.hover', 'seeds.json');
+    mkdirSync(join(p, '..'), { recursive: true });
+    writeFileSync(p, JSON.stringify(obj), 'utf-8');
+  }
+
+  test('returns an empty set when .hover/seeds.json is absent', async () => {
+    expect((await readDisabledSeeds(devRoot)).size).toBe(0);
+  });
+  test('reads the disabled name list', async () => {
+    writeSeedsConfig({ disabled: ['jwt-claim-tamper', 'cors-reflected-origin'] });
+    const disabled = await readDisabledSeeds(devRoot);
+    expect(disabled.has('jwt-claim-tamper')).toBe(true);
+    expect(disabled.has('cors-reflected-origin')).toBe(true);
+    expect(disabled.has('idor-numeric-id')).toBe(false);
+  });
+  test('ignores a malformed file and non-string entries', async () => {
+    writeSeedsConfig({ disabled: ['ok', 42, null] });
+    expect([...(await readDisabledSeeds(devRoot))]).toEqual(['ok']);
   });
 });

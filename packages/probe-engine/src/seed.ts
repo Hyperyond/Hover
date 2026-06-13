@@ -64,6 +64,23 @@ export async function loadSecuritySeeds(devRoot: string): Promise<SecuritySeed[]
   });
 }
 
+/** Names of seeds the project disabled via `<devRoot>/.hover/seeds.json`
+ *  (`{ "disabled": ["jwt-claim-tamper", …] }`). Shared opt-out file with the
+ *  optimization-seed loader in `@hover-dev/core`. Best-effort — a missing or
+ *  malformed file disables nothing. */
+export async function readDisabledSeeds(devRoot: string): Promise<Set<string>> {
+  try {
+    const raw = await readFile(join(devRoot, '.hover', 'seeds.json'), 'utf-8');
+    const cfg = JSON.parse(raw) as { disabled?: unknown };
+    if (Array.isArray(cfg.disabled)) {
+      return new Set(cfg.disabled.filter((n): n is string => typeof n === 'string'));
+    }
+  } catch {
+    /* no .hover/seeds.json, or malformed — disable nothing */
+  }
+  return new Set<string>();
+}
+
 async function collect(dir: string, out: SecuritySeed[]): Promise<void> {
   let entries: string[];
   try {

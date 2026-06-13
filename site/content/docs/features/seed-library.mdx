@@ -31,13 +31,24 @@ Drop a JSON file in `<projectRoot>/.hover/rules/`:
   `getByLabel` / `getByText` selectors, no XPath, no `waitForTimeout`.
 
 No fork, no plugin code — just an example file. Share seeds with your team by
-committing `.hover/rules/`, or with the community as a package.
+committing `.hover/rules/`.
 
 ## Built-in seeds
 
-Hover ships a small built-in set for high-certainty, app-agnostic patterns (e.g.
-`download` → `waitForEvent('download')` pairing). The bar to be built-in is
-high: only deterministic, can't-mislead patterns qualify. High-frequency
-fixed-structure shapes like popup are hardcoded straight into the translator
-instead; semantic judgements (which feedback text to assert) stay as standing
+The **full seed catalogue ships built-in** with Hover — there's no second repo
+to clone and nothing to `curl`. Optimization seeds today: `download`,
+`file-upload`, `dialog`, `network-gated-assertion`, and `oauth-popup`. They feed
+every project's optimization pass automatically.
+
+To **suppress a built-in**, list its name under `disabled` in
+`<projectRoot>/.hover/seeds.json`:
+
+```json
+{ "disabled": ["oauth-popup"] }
+```
+
+The Seeds tab in the widget shows the merged list — built-ins plus your
+`.hover/rules/` — so you can always see exactly what the pass is being taught.
+
+Semantic judgements (which feedback text to assert) stay as standing
 instructions in the pass, not seeds.

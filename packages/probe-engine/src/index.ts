@@ -13,6 +13,7 @@ export {
   type SecuritySeed,
   isSecuritySeed,
   loadSecuritySeeds,
+  readDisabledSeeds,
 } from './seed.js';
 export { hasAuth, matchesFlow, matchSeeds } from './match.js';
 export { type SanitizedRequest, sanitizeRequest } from './sanitize.js';
