@@ -5,7 +5,7 @@
   "note": "A param that sets a redirect target reflected into a 3xx Location.",
   "match": {
     "method": ["GET", "POST"],
-    "urlParam": "[?&](redirect|redirect_uri|redirect_url|redir|return|returnurl|return_to|next|dest|destination|continue|goto|forward|rurl)=",
+    "urlParam": "[?&](redirect|redirect_uri|redirect_url|redir|return|returnUrl|returnurl|return_to|next|continue|url|dest|destination|callback|goto|forward|rurl)=",
     "needsAuth": false
   },
   "probe": {

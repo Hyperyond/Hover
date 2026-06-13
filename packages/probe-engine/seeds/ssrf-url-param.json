@@ -5,7 +5,7 @@
   "note": "A param that makes the server fetch a URL.",
   "match": {
     "method": ["GET", "POST", "PUT"],
-    "urlParam": "[?&](url|uri|next|redirect|callback|target|image_url|webhook)=",
+    "urlParam": "[?&](url|uri|next|redirect|callback|target|dest|image_url|webhook|feed|src|domain)=",
     "needsAuth": true
   },
   "probe": {
