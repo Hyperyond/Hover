@@ -22,3 +22,18 @@ export { builtinSecuritySeeds } from './builtins.js';
 export { type IdentifiedFlow, type ProbeSuggestion, suggestProbes } from './suggest.js';
 export { type StorageState, type StorageStateCookie, cookieHeaderFor } from './storageState.js';
 export { type SweepProbe, type SweepPlan, type SweepOptions, planSweep } from './sweep.js';
+export {
+  type AuthzVerdict,
+  type OracleResponse,
+  type AdjudicateInput,
+  type AdjudicateResult,
+  DENY_STATUSES,
+  GENERIC_BODY_MAX_LEN,
+  HIGH_SIMILARITY,
+  DIFF_THRESHOLD,
+  tokenize,
+  bodySimilarity,
+  containsBMarker,
+  adjudicate,
+  crystallizable,
+} from './oracle.js';
