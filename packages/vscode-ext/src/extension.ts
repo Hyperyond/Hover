@@ -1,0 +1,95 @@
+/**
+ * `@hover-dev/vscode-ext` — Hover's VSCode extension entry.
+ *
+ * Per the security-direction design (`2026-06-14-security-direction-design.md`,
+ * §3.2) this is Hover's **primary surface**: a thin GUI face over the
+ * agent-agnostic engine in `@hover-dev/cli` / `@hover-dev/core`. It must stay a
+ * *surface* — it never re-implements the engine, and saved artifacts stay plain
+ * `@playwright/test`.
+ *
+ * This scaffold registers the highest-leverage feature first — F1 from the
+ * VSCode feature assessment (`2026-06-06-vscode-extension-design.md`): a native
+ * side-by-side review of an optimization candidate against the live spec. The
+ * engine writes candidates to `<workspaceRoot>/.hover/cache/optimized/`; this
+ * command opens VSCode's built-in diff editor over the pair.
+ */
+import * as vscode from 'vscode';
+import * as path from 'node:path';
+
+/**
+ * Where the optimizer writes its candidate, relative to the workspace root. The
+ * authoritative path is `@hover-dev/core`'s `optimizeSpec.ts`:
+ * `.hover/cache/optimized/<spec>.draft` (the candidate keeps the full
+ * `<slug>.spec.ts` name plus a `.draft` suffix, never overwriting the original).
+ * A legacy pre-relocation path is still read as a fallback.
+ */
+const OPTIMIZED_DIR = ['.hover', 'cache', 'optimized'];
+const LEGACY_OPTIMIZED_DIR = ['__vibe_tests__', '.hover', 'optimized'];
+const DRAFT_SUFFIX = '.draft';
+
+export function activate(context: vscode.ExtensionContext): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'hover.reviewOptimizationCandidate',
+      (uri?: vscode.Uri) => reviewOptimizationCandidate(uri),
+    ),
+  );
+}
+
+export function deactivate(): void {
+  /* nothing to tear down yet */
+}
+
+/**
+ * F1 — open `vscode.diff` between a spec and its optimization candidate. Falls
+ * back to the active editor's document when invoked without an explicit URI
+ * (command palette), so it works both from the editor title bar and the palette.
+ */
+async function reviewOptimizationCandidate(uri?: vscode.Uri): Promise<void> {
+  const specUri = uri ?? vscode.window.activeTextEditor?.document.uri;
+  if (!specUri || specUri.scheme !== 'file') {
+    void vscode.window.showWarningMessage('Hover: open a spec file to review its optimization candidate.');
+    return;
+  }
+
+  const folder = vscode.workspace.getWorkspaceFolder(specUri);
+  if (!folder) {
+    void vscode.window.showWarningMessage('Hover: the spec is not inside an open workspace folder.');
+    return;
+  }
+
+  const fileName = path.basename(specUri.fsPath);
+  const draftName = fileName + DRAFT_SUFFIX;
+  const candidate = await firstExisting([
+    vscode.Uri.joinPath(folder.uri, ...OPTIMIZED_DIR, draftName),
+    vscode.Uri.joinPath(folder.uri, ...LEGACY_OPTIMIZED_DIR, draftName),
+  ]);
+
+  if (!candidate) {
+    void vscode.window.showInformationMessage(
+      `Hover: no optimization candidate for ${fileName}. Run \`hover optimize\` first.`,
+    );
+    return;
+  }
+
+  await vscode.commands.executeCommand(
+    'vscode.diff',
+    specUri,
+    candidate,
+    `Hover · ${fileName} ↔ optimized`,
+    { preview: true } satisfies vscode.TextDocumentShowOptions,
+  );
+}
+
+/** Return the first URI that exists on disk, or undefined if none do. */
+async function firstExisting(uris: vscode.Uri[]): Promise<vscode.Uri | undefined> {
+  for (const uri of uris) {
+    try {
+      await vscode.workspace.fs.stat(uri);
+      return uri;
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return undefined;
+}

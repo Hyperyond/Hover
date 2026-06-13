@@ -1,0 +1,50 @@
+{
+  "name": "@hover-dev/vscode-ext",
+  "version": "0.0.0",
+  "private": true,
+  "displayName": "Hover",
+  "description": "Hover's VSCode extension — the primary surface over the agent-agnostic engine: review optimization candidates, jump from page element to source, and author authz/security tests in the editor.",
+  "license": "Apache-2.0",
+  "author": "Hyperyond",
+  "publisher": "hyperyond",
+  "homepage": "https://github.com/Hyperyond/Hover#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hyperyond/Hover.git",
+    "directory": "packages/vscode-ext"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Testing", "Other"],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "hover.reviewOptimizationCandidate",
+        "title": "Review Optimization Candidate",
+        "category": "Hover"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "hover.reviewOptimizationCandidate",
+          "when": "resourceFilename =~ /\\.spec\\.ts$/",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "tsup": "^8.0.0"
+  }
+}
