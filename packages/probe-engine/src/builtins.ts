@@ -1,110 +1,63 @@
-import type { SecuritySeed } from './seed.js';
+import { isSecuritySeed, type SecuritySeed } from './seed.js';
+
+import idorNumericId from '../seeds/idor-numeric-id.json';
+import idorInBody from '../seeds/idor-in-body.json';
+import idorUuid from '../seeds/idor-uuid.json';
+import idorCrossTenant from '../seeds/idor-cross-tenant.json';
+import bolaGraphqlNode from '../seeds/bola-graphql-node.json';
+import bflaPrivilegedEndpoint from '../seeds/bfla-privileged-endpoint.json';
+import massAssignmentPrivilegedField from '../seeds/mass-assignment-privileged-field.json';
+import authBypassMissingCheck from '../seeds/auth-bypass-missing-check.json';
+import ssrfUrlParam from '../seeds/ssrf-url-param.json';
+import sqliErrorBoolean from '../seeds/sqli-error-boolean.json';
+import xssReflected from '../seeds/xss-reflected.json';
+import sstiTemplateInjection from '../seeds/ssti-template-injection.json';
+import openRedirect from '../seeds/open-redirect.json';
+import pathTraversal from '../seeds/path-traversal.json';
+import graphqlIntrospection from '../seeds/graphql-introspection.json';
+import corsReflectedOrigin from '../seeds/cors-reflected-origin.json';
+import jwtClaimTamper from '../seeds/jwt-claim-tamper.json';
 
 /**
- * Built-in probe recipes that ship with the engine. Each is tagged `category`:
- * `authz` (business/access-control — orange security mode) or `vuln`
- * (attack/exploit — red pentest mode). A curated subset of the community
- * `hover-seeds` set + offensive web-vuln methodology adapted from
- * Claude-BugHunter (MIT). User seeds from `.hover/rules/` augment these.
+ * Built-in probe recipes that ship with the engine. Each is a JSON file in
+ * `packages/probe-engine/seeds/` tagged `category`: `authz` (business /
+ * access-control — orange security mode) or `vuln` (attack / exploit — red
+ * pentest mode). The recipes are a curated set adapting offensive web-vuln
+ * methodology from Claude-BugHunter (MIT). User seeds from `.hover/rules/`
+ * augment these at runtime.
+ *
+ * Why JSON files + a static-import barrel rather than `.hover/rules/`-style
+ * runtime `readdir`: this package is `private` and gets INLINED into
+ * `@hover-dev/security` / `@hover-dev/pentest` via tsup `noExternal`, so there
+ * is no on-disk `seeds/` directory next to the compiled output to read at
+ * runtime. esbuild inlines each JSON import into the consumer bundle, so the
+ * recipes travel with the code (no runtime fs read). To add a built-in:
+ * drop a JSON file in `seeds/`, import it here, and append it to the array
+ * below. End users extend without a rebuild via `<devRoot>/.hover/rules/`.
+ *
+ * The array is typed `unknown[]` then narrowed by `isSecuritySeed`, so a
+ * malformed JSON is dropped at load rather than shipping a broken recipe.
  */
-export const builtinSecuritySeeds: SecuritySeed[] = [
+const raw: unknown[] = [
   // ── authz (security mode) ──────────────────────────────────────────────
-  {
-    name: 'idor-numeric-id',
-    class: 'idor',
-    category: 'authz',
-    note: 'Numeric object-reference id in the URL — replay identity A\'s request as identity B and walk the id.',
-    match: { method: ['GET', 'PUT', 'PATCH', 'DELETE'], urlParam: '[?&](id|user_id|account|order|invoice)=\\d+', needsAuth: true },
-    probe: { strategy: 'Replay under identity B with the id pointing at A\'s resource; also ±1 the numeric id.', secondIdentity: true, destructive: false, signal: 'B receives 200 with A\'s data where 403/404 is expected.' },
-  },
-  {
-    name: 'idor-in-body',
-    class: 'idor',
-    category: 'authz',
-    note: 'Object reference in the JSON body, not the URL.',
-    match: { method: ['POST', 'PUT', 'PATCH', 'DELETE'], bodyField: '(user|account|order|invoice|customer|owner)(_?id|Id)', needsAuth: true },
-    probe: { strategy: 'Replay under identity B with the body\'s object id pointing at A\'s resource.', secondIdentity: true, destructive: false, signal: 'An identity acts on another identity\'s object by changing an id in the body.' },
-  },
-  {
-    name: 'bfla-privileged-endpoint',
-    class: 'bfla',
-    category: 'authz',
-    note: 'Admin/privileged endpoint that may check auth but not role.',
-    match: { method: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], urlParam: '/(admin|internal|manage|console)', needsAuth: true },
-    probe: { strategy: 'Replay verbatim with a low-privilege identity\'s session; expect 403.', secondIdentity: true, destructive: false, signal: 'A low-privilege identity invokes an admin-only endpoint (200 instead of 403).' },
-  },
-  {
-    name: 'mass-assignment-privileged-field',
-    class: 'mass-assignment',
-    category: 'authz',
-    note: 'A write endpoint that may bind the body straight onto the model.',
-    match: { method: ['POST', 'PUT', 'PATCH'], needsAuth: true },
-    probe: { strategy: 'Add a privileged key the UI never sends (role:"admin", isAdmin:true, verified:true); re-fetch and check it took effect.', secondIdentity: false, destructive: true, signal: 'A privileged field set only via the API persists on re-fetch.' },
-  },
-  {
-    name: 'auth-bypass-missing-check',
-    class: 'auth-bypass',
-    category: 'authz',
-    note: 'A protected endpoint that may not verify the session server-side.',
-    match: { method: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], needsAuth: true },
-    probe: { strategy: 'Replay with the credential stripped (no cookie / no Authorization), then tampered/alg:none for JWTs.', secondIdentity: false, destructive: false, signal: 'A protected endpoint returns data with no valid credential (200 instead of 401).' },
-  },
-
+  idorNumericId,
+  idorInBody,
+  idorUuid,
+  idorCrossTenant,
+  bolaGraphqlNode,
+  bflaPrivilegedEndpoint,
+  massAssignmentPrivilegedField,
+  authBypassMissingCheck,
   // ── vuln (pentest mode) — offensive web-vuln classes ───────────────────
-  {
-    name: 'ssrf-url-param',
-    class: 'ssrf',
-    category: 'vuln',
-    note: 'A param that makes the server fetch a URL.',
-    match: { method: ['GET', 'POST', 'PUT'], urlParam: '[?&](url|uri|next|redirect|callback|target|image_url|webhook)=', needsAuth: true },
-    probe: { strategy: 'Point the value at internal targets (127.0.0.1, 169.254.169.254 metadata, internal ports); confirm IN-BAND via reflected internal content or a timing delta — no external OOB callback.', secondIdentity: false, destructive: false, signal: 'The server returns internal/metadata content it should refuse, or a clear timing delta to an internal host.' },
-  },
-  {
-    name: 'sqli-error-boolean',
-    class: 'sqli',
-    category: 'vuln',
-    note: 'A parameter concatenated into a DB query.',
-    match: { method: ['GET', 'POST'], urlParam: "[?&](id|q|search|sort|order|category|filter)=", needsAuth: false },
-    probe: { strategy: "Insert a single quote (') for an error/diff; confirm with a boolean pair (' AND 1=1-- vs ' AND 1=2--) by diffing the body, and a time pair (' AND SLEEP(5)--) by the response delay. In-band only.", secondIdentity: false, destructive: false, signal: 'A DB error fragment, a stable boolean body-diff, or a >5s delay on the SLEEP payload.' },
-  },
-  {
-    name: 'xss-reflected',
-    class: 'xss',
-    category: 'vuln',
-    note: 'A parameter reflected into the HTML response.',
-    match: { method: ['GET', 'POST'], urlParam: '[?&](q|search|name|message|redirect|lang|ref)=', needsAuth: false },
-    probe: { strategy: 'Send a unique random canary (e.g. hovxss9q2k); if it reflects unencoded, escalate to a context-appropriate payload (<svg onload=...>, attribute breakout). Confirm by the marker appearing executable/unencoded in the response.', secondIdentity: false, destructive: false, signal: 'The canary appears unencoded in an executable HTML context.' },
-  },
-  {
-    name: 'ssti-template-injection',
-    class: 'ssti',
-    category: 'vuln',
-    note: 'A user-controlled value rendered through a server template engine.',
-    match: { method: ['GET', 'POST'], urlParam: '[?&](name|template|page|q|greeting)=', needsAuth: false },
-    probe: { strategy: 'Send {{7*7}} / ${7*7} / #{7*7}; if the response contains 49, fingerprint the engine ({{7*\'7\'}} → 7777777 = Jinja2, 49 = Twig) and, in pentest mode only, attempt the engine\'s class-walker to confirm RCE (read `id`). In-band confirmation.', secondIdentity: false, destructive: false, signal: 'A math expression evaluates in the response (49), or command output appears.' },
-  },
-  {
-    name: 'open-redirect',
-    class: 'open-redirect',
-    category: 'vuln',
-    note: 'A param that sets a redirect target reflected into a 3xx Location.',
-    match: { method: ['GET', 'POST'], urlParam: '[?&](redirect|redirect_uri|redirect_url|redir|return|returnurl|return_to|next|dest|destination|continue|goto|forward|rurl)=', needsAuth: false },
-    probe: { strategy: 'Replace the value with an absolute external origin (https://evil.example) and a protocol-relative //evil.example, with redirects set to manual. Confirm IN-BAND by reading the Location header — no external callback.', secondIdentity: false, destructive: false, signal: 'A 3xx whose Location points at the attacker-controlled external origin.' },
-  },
-  {
-    name: 'path-traversal',
-    class: 'path-traversal',
-    category: 'vuln',
-    note: 'A param naming a file/path the server reads back.',
-    match: { method: ['GET', 'POST'], urlParam: '[?&](file|filename|filepath|path|doc|document|download|template|include|attachment|dir|folder)=', needsAuth: false },
-    probe: { strategy: 'Send ../../../../etc/passwd and an encoded ..%2f variant (Windows: ..\\..\\windows\\win.ini). Confirm IN-BAND by the file contents appearing in the response — do not write or delete anything.', secondIdentity: false, destructive: false, signal: 'Server file contents (e.g. root:x:0:0 from /etc/passwd) appear in the response.' },
-  },
-  {
-    name: 'graphql-introspection',
-    class: 'graphql',
-    category: 'vuln',
-    note: 'A GraphQL endpoint that may expose its full schema.',
-    match: { method: ['GET', 'POST'], urlParam: '/graphql', needsAuth: false },
-    probe: { strategy: 'POST the introspection query ({__schema{types{name}}}); if it returns the schema, enumerate mutations/queries the UI never exposes and probe those for missing authz. In-band.', secondIdentity: false, destructive: false, signal: 'Introspection returns the full __schema (types/mutations) that should be disabled in production.' },
-  },
+  ssrfUrlParam,
+  sqliErrorBoolean,
+  xssReflected,
+  sstiTemplateInjection,
+  openRedirect,
+  pathTraversal,
+  graphqlIntrospection,
+  corsReflectedOrigin,
+  jwtClaimTamper,
 ];
+
+export const builtinSecuritySeeds: SecuritySeed[] = raw.filter(isSecuritySeed);

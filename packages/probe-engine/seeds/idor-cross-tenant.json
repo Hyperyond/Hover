@@ -1,0 +1,18 @@
+{
+  "name": "idor-cross-tenant",
+  "class": "idor",
+  "category": "authz",
+  "note": "Multi-tenant app: a tenant/org/workspace id scopes the data. With an identity that belongs to tenant A, swap in tenant B's id and check for cross-tenant leakage.",
+  "match": {
+    "method": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    "urlParam": "[?&/](tenant|org|organization|workspace|company|account)(_id|Id)?=",
+    "needsAuth": true
+  },
+  "probe": {
+    "strategy": "As an identity scoped to tenant A, replay the request with tenant B's identifier in the path, query, body, or header. The server must scope by the authenticated session, never by the client-supplied tenant id.",
+    "secondIdentity": true,
+    "destructive": false,
+    "signal": "Tenant A's identity reads or writes tenant B's data by changing the tenant id."
+  },
+  "assert": "expect(resCrossTenant.status(), 'tenant scoping must come from the session, not a client id').toBeGreaterThanOrEqual(400);"
+}

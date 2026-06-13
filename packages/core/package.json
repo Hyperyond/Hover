@@ -46,6 +46,7 @@
   },
   "files": [
     "dist",
+    "seeds",
     "README.md"
   ],
   "scripts": {

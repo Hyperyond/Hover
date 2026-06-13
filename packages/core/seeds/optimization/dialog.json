@@ -1,0 +1,12 @@
+{
+  "name": "dialog",
+  "signature": ["browser_handle_dialog"],
+  "note": "A click that triggers a native dialog (alert/confirm/prompt). Register the page 'dialog' handler BEFORE the click that fires it — otherwise Playwright auto-dismisses it and the assertion is wrong.",
+  "example": {
+    "steps": [
+      { "tool": "browser_click", "element": "Delete account button" },
+      { "tool": "browser_handle_dialog", "action": "accept" }
+    ],
+    "code": "page.once('dialog', dialog => dialog.accept());\nawait page.getByRole('button', { name: 'Delete account' }).click();\nawait expect(page.getByText('Account deleted')).toBeVisible();"
+  }
+}

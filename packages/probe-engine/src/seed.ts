@@ -21,6 +21,11 @@ export interface SecuritySeed {
   note?: string;
   match: { method?: string[]; urlParam?: string; bodyField?: string; needsAuth?: boolean };
   probe: { strategy: string; secondIdentity?: boolean; destructive?: boolean; signal: string };
+  /** Optional Playwright request-fixture assertion to emit into a crystallized
+   *  `.security.spec.ts` regression test. Informational today — the spec writer
+   *  derives its assertion from the recorded step, not this field — but carried
+   *  so a seed can ship a canonical assertion for future re-record tooling. */
+  assert?: string;
 }
 
 /** A security seed is distinguished from an optimization seed by its `probe`

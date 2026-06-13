@@ -1,0 +1,17 @@
+{
+  "name": "auth-bypass-missing-check",
+  "class": "auth-bypass",
+  "category": "authz",
+  "note": "A protected endpoint that may not verify the session server-side.",
+  "match": {
+    "method": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    "needsAuth": true
+  },
+  "probe": {
+    "strategy": "Replay with the credential stripped (no cookie / no Authorization), then tampered/alg:none for JWTs.",
+    "secondIdentity": false,
+    "destructive": false,
+    "signal": "A protected endpoint returns data with no valid credential (200 instead of 401)."
+  },
+  "assert": "expect(noCredResponse.status(), 'protected endpoint must reject a request with no credential').toBe(401);"
+}

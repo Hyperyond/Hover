@@ -1,0 +1,18 @@
+{
+  "name": "idor-in-body",
+  "class": "idor",
+  "category": "authz",
+  "note": "Object reference in the JSON body, not the URL.",
+  "match": {
+    "method": ["POST", "PUT", "PATCH", "DELETE"],
+    "bodyField": "(user|account|order|invoice|customer|owner)(_?id|Id)",
+    "needsAuth": true
+  },
+  "probe": {
+    "strategy": "Replay under identity B with the body's object id pointing at A's resource.",
+    "secondIdentity": true,
+    "destructive": false,
+    "signal": "An identity acts on another identity's object by changing an id in the body."
+  },
+  "assert": "expect(resAsOtherUser.status(), 'a body-supplied object id must not cross identities').toBeGreaterThanOrEqual(400);"
+}

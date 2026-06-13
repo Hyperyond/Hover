@@ -1,0 +1,12 @@
+{
+  "name": "oauth-popup",
+  "signature": ["browser_click", "browser_tabs:select"],
+  "note": "Sign in through a provider popup that opens a new tab. Pair the opener click with context.waitForEvent('page'), then drive the returned popup page.",
+  "example": {
+    "steps": [
+      { "tool": "browser_click", "element": "Sign in with Google button" },
+      { "tool": "browser_tabs", "action": "select", "idx": 1 }
+    ],
+    "code": "const [popup] = await Promise.all([\n  context.waitForEvent('page'),\n  page.getByRole('button', { name: 'Sign in with Google' }).click(),\n]);\nawait popup.getByLabel('Email').fill('user@example.com');\nawait popup.getByRole('button', { name: 'Next' }).click();\nawait popup.waitForEvent('close');\nawait expect(page.getByText('Signed in')).toBeVisible();"
+  }
+}

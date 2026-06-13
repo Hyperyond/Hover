@@ -1,0 +1,17 @@
+{
+  "name": "xss-reflected",
+  "class": "xss",
+  "category": "vuln",
+  "note": "A parameter reflected into the HTML response.",
+  "match": {
+    "method": ["GET", "POST"],
+    "urlParam": "[?&](q|search|name|message|redirect|lang|ref)=",
+    "needsAuth": false
+  },
+  "probe": {
+    "strategy": "Send a unique random canary (e.g. hovxss9q2k); if it reflects unencoded, escalate to a context-appropriate payload (<svg onload=...>, attribute breakout). Confirm by the marker appearing executable/unencoded in the response.",
+    "secondIdentity": false,
+    "destructive": false,
+    "signal": "The canary appears unencoded in an executable HTML context."
+  }
+}

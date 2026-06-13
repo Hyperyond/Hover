@@ -1,0 +1,18 @@
+{
+  "name": "path-traversal",
+  "class": "path-traversal",
+  "category": "vuln",
+  "note": "A param naming a file/path the server reads back.",
+  "match": {
+    "method": ["GET", "POST"],
+    "urlParam": "[?&](file|filename|filepath|path|doc|document|download|template|include|attachment|dir|folder)=",
+    "needsAuth": false
+  },
+  "probe": {
+    "strategy": "Send ../../../../etc/passwd and an encoded ..%2f variant (Windows: ..\\..\\windows\\win.ini). Confirm IN-BAND by the file contents appearing in the response — do not write or delete anything.",
+    "secondIdentity": false,
+    "destructive": false,
+    "signal": "Server file contents (e.g. root:x:0:0 from /etc/passwd) appear in the response."
+  },
+  "assert": "expect(traversalResponse.status(), 'a path param must not read files outside its directory').toBeGreaterThanOrEqual(400);"
+}

@@ -1,0 +1,17 @@
+{
+  "name": "graphql-introspection",
+  "class": "graphql",
+  "category": "vuln",
+  "note": "A GraphQL endpoint that may expose its full schema.",
+  "match": {
+    "method": ["GET", "POST"],
+    "urlParam": "/graphql",
+    "needsAuth": false
+  },
+  "probe": {
+    "strategy": "POST the introspection query ({__schema{types{name}}}); if it returns the schema, enumerate mutations/queries the UI never exposes and probe those for missing authz. In-band.",
+    "secondIdentity": false,
+    "destructive": false,
+    "signal": "Introspection returns the full __schema (types/mutations) that should be disabled in production."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "network-gated-assertion",
+  "signature": ["browser_click", "browser_wait_for"],
+  "note": "A click fires an XHR/fetch and the result is asserted. Pair the click with page.waitForResponse so the test waits for the real request to settle, instead of a guessed timeout or a race.",
+  "example": {
+    "steps": [
+      { "tool": "browser_click", "element": "Place order button" },
+      { "tool": "browser_wait_for", "text": "Order confirmed" }
+    ],
+    "code": "const [res] = await Promise.all([\n  page.waitForResponse(r => r.url().includes('/api/orders') && r.request().method() === 'POST'),\n  page.getByRole('button', { name: 'Place order' }).click(),\n]);\nexpect(res.ok()).toBeTruthy();\nawait expect(page.getByText('Order confirmed')).toBeVisible();"
+  }
+}

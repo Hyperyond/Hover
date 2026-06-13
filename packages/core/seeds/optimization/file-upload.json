@@ -1,0 +1,12 @@
+{
+  "name": "file-upload",
+  "signature": ["browser_file_upload"],
+  "note": "Set a file on a (often hidden) <input type=file>. The file chooser opens synchronously on click, so register waitForEvent('filechooser') before the click — same race as download.",
+  "example": {
+    "steps": [
+      { "tool": "browser_click", "element": "Upload avatar button" },
+      { "tool": "browser_file_upload", "paths": ["avatar.png"] }
+    ],
+    "code": "const [chooser] = await Promise.all([\n  page.waitForEvent('filechooser'),\n  page.getByRole('button', { name: 'Upload avatar' }).click(),\n]);\nawait chooser.setFiles('tests/fixtures/avatar.png');\nawait expect(page.getByText('avatar.png')).toBeVisible();"
+  }
+}

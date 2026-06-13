@@ -133,21 +133,26 @@ Install one bundler integration (`npx @hover-dev/cli setup` picks it for you); a
 
 ## Seed library
 
-The AI optimize pass and the security modes are both taught by **seeds** — small worked examples / probe recipes. A built-in set ships with Hover; drop your own JSON in `<root>/.hover/rules/` to add a pattern (no fork, no plugin code). Built-ins today:
+The AI optimize pass and the security modes are both taught by **seeds** — small worked examples / probe recipes. The **full catalogue ships built-in** (no second repo, no `curl`); drop your own JSON in `<root>/.hover/rules/` to add a pattern, or list a built-in's name under `disabled` in `<root>/.hover/seeds.json` to suppress it (no fork, no plugin code). Built-ins today:
 
-**Optimization seeds** — teach the optimize pass a translation pattern (the bar is high: only fixed, app-agnostic ones ship built-in):
+**Optimization seeds** — teach the optimize pass a translation pattern:
 
 | Seed | Pattern |
 |---|---|
 | `download` | a click that triggers a download → `Promise.all` + `waitForEvent('download')` |
+| `file-upload` | hidden `<input type=file>` → `waitForEvent('filechooser')` + `setFiles` |
+| `dialog` | native alert/confirm/prompt → register `page.once('dialog', …)` before the click |
+| `network-gated-assertion` | a click that fires an XHR → `waitForResponse` before asserting |
+| `oauth-popup` | sign-in through a provider popup that opens a new tab |
 
-(Popup / new-tab pairing is hardcoded in the translator, not a seed.) More optimization seeds live in the community [**`hover-seeds`**](https://github.com/Hyperyond/hover-seeds) repo (`seeds/optimization/` — `oauth-popup`, `file-upload`, `dialog`, `network-gated-assertion`, …); copy any into your `.hover/rules/`.
+(Plain popup / new-tab pairing is also hardcoded in the translator; the `oauth-popup` seed additionally teaches the optimize pass the full provider-login shape.)
 
-**Security probe seeds** — what the 🟠 security / 🔴 pentest modes try (5 access-control + 7 vulnerability):
+**Security probe seeds** — what the 🟠 security / 🔴 pentest modes try (8 access-control + 9 vulnerability):
 
 | Seed | Class | For |
 |---|---|---|
-| `idor-numeric-id`, `idor-in-body` | IDOR | 🟠 authz |
+| `idor-numeric-id`, `idor-in-body`, `idor-uuid`, `idor-cross-tenant` | IDOR | 🟠 authz |
+| `bola-graphql-node` | BOLA | 🟠 authz |
 | `bfla-privileged-endpoint` | BFLA | 🟠 authz |
 | `mass-assignment-privileged-field` | mass-assignment | 🟠 authz |
 | `auth-bypass-missing-check` | auth-bypass | 🟠 authz |
@@ -158,6 +163,8 @@ The AI optimize pass and the security modes are both taught by **seeds** — sma
 | `open-redirect` | open redirect | 🔴 vuln |
 | `path-traversal` | path traversal | 🔴 vuln |
 | `graphql-introspection` | GraphQL | 🔴 vuln |
+| `cors-reflected-origin` | CORS misconfig | 🔴 vuln |
+| `jwt-claim-tamper` | JWT tampering | 🔴 vuln |
 
 Security mode pulls the `authz` set; pentest mode pulls everything.
 

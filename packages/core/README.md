@@ -87,16 +87,18 @@ A seed lives at `<projectRoot>/.hover/rules/<name>.json` and matches
   in the spec being optimized. It is **not** exact-matched.
 - **`code`** must obey the same rules as generated specs: semantic selectors, no
   XPath, no `waitForTimeout`.
-- **Built-in seeds** ship in `src/specs/seeds.ts` (`BUILTIN_SEEDS`). The bar to
-  be built-in is high — only **highly certain**, app-agnostic, deterministic
-  patterns qualify (currently just `download`). Semantic / judgement-based
-  optimizations (e.g. *which* feedback text to assert) are not seeds — they're
-  standing instructions in the prompt. Popup is hardcoded in `writeSpec.ts`, not
-  a seed. Speculative or project-specific patterns belong in your own
-  `.hover/rules/`, where the bar is your call.
-
-`readSeeds(projectRoot)` returns built-ins + your `.hover/rules/*.json`
-(malformed files are skipped, not fatal).
+- **Built-in seeds** are JSON files in this package's
+  [`seeds/optimization/`](seeds/optimization/) directory — the full catalogue
+  ships with Hover (`download`, `file-upload`, `dialog`,
+  `network-gated-assertion`, `oauth-popup`), loaded synchronously at module init
+  into `BUILTIN_SEEDS`. Adding a built-in = dropping a JSON there (no code
+  change); `readSeeds(projectRoot)` returns those plus your `.hover/rules/*.json`
+  (malformed files skipped, not fatal). Semantic / judgement-based optimizations
+  (e.g. *which* feedback text to assert) are not seeds — they're standing
+  instructions in the prompt.
+- **Suppressing a built-in:** list its `name` under `disabled` in
+  `<projectRoot>/.hover/seeds.json` — e.g. `{ "disabled": ["oauth-popup"] }` —
+  and `readSeeds` filters it out.
 
 ## Smoke test
 

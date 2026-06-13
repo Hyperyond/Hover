@@ -1,0 +1,18 @@
+{
+  "name": "bfla-privileged-endpoint",
+  "class": "bfla",
+  "category": "authz",
+  "note": "Admin/privileged endpoint that may check auth but not role.",
+  "match": {
+    "method": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    "urlParam": "/(admin|internal|manage|console)",
+    "needsAuth": true
+  },
+  "probe": {
+    "strategy": "Replay verbatim with a low-privilege identity's session; expect 403.",
+    "secondIdentity": true,
+    "destructive": false,
+    "signal": "A low-privilege identity invokes an admin-only endpoint (200 instead of 403)."
+  },
+  "assert": "expect(adminEndpointAsLowPriv.status(), 'admin endpoint must enforce role, not just auth').toBe(403);"
+}

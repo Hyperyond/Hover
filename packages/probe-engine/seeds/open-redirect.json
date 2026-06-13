@@ -1,0 +1,18 @@
+{
+  "name": "open-redirect",
+  "class": "open-redirect",
+  "category": "vuln",
+  "note": "A param that sets a redirect target reflected into a 3xx Location.",
+  "match": {
+    "method": ["GET", "POST"],
+    "urlParam": "[?&](redirect|redirect_uri|redirect_url|redir|return|returnurl|return_to|next|dest|destination|continue|goto|forward|rurl)=",
+    "needsAuth": false
+  },
+  "probe": {
+    "strategy": "Replace the value with an absolute external origin (https://evil.example) and a protocol-relative //evil.example, with redirects set to manual. Confirm IN-BAND by reading the Location header — no external callback.",
+    "secondIdentity": false,
+    "destructive": false,
+    "signal": "A 3xx whose Location points at the attacker-controlled external origin."
+  },
+  "assert": "expect(new URL(redirectResponse.headers()['location'] ?? '/', baseURL).host, 'redirect target must stay on an allow-listed host').toBe(new URL(baseURL).host);"
+}

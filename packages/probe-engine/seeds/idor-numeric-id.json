@@ -1,0 +1,18 @@
+{
+  "name": "idor-numeric-id",
+  "class": "idor",
+  "category": "authz",
+  "note": "Numeric object-reference id in the URL — replay identity A's request as identity B and walk the id.",
+  "match": {
+    "method": ["GET", "PUT", "PATCH", "DELETE"],
+    "urlParam": "[?&](id|user_id|account|order|invoice)=\\d+",
+    "needsAuth": true
+  },
+  "probe": {
+    "strategy": "Replay under identity B with the id pointing at A's resource; also ±1 the numeric id.",
+    "secondIdentity": true,
+    "destructive": false,
+    "signal": "B receives 200 with A's data where 403/404 is expected."
+  },
+  "assert": "expect(resAsB.status(), \"A's resource must not be readable by B\").toBeGreaterThanOrEqual(400);"
+}
