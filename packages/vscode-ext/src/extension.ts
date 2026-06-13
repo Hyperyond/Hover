@@ -33,6 +33,10 @@ export function activate(context: vscode.ExtensionContext): void {
       'hover.reviewOptimizationCandidate',
       (uri?: vscode.Uri) => reviewOptimizationCandidate(uri),
     ),
+    vscode.commands.registerCommand(
+      'hover.openSource',
+      (source?: string) => openSource(source),
+    ),
   );
 }
 
@@ -79,6 +83,62 @@ async function reviewOptimizationCandidate(uri?: vscode.Uri): Promise<void> {
     `Hover · ${fileName} ↔ optimized`,
     { preview: true } satisfies vscode.TextDocumentShowOptions,
   );
+}
+
+/**
+ * F2 (editor-side half) — reveal the source location behind a page element.
+ *
+ * `@hover-dev/transform-source` stamps every host element with
+ * `data-hover-source="<rel-path>:<line>:<col>"`. This command takes that value
+ * and jumps the editor to the exact line/col. The page→editor transport (a
+ * click in the running app surfacing the attribute to the extension) is the
+ * follow-on; for now the command accepts the value directly (from a future
+ * message) or prompts for it, so the editor capability is testable standalone.
+ */
+async function openSource(source?: string): Promise<void> {
+  let value = source;
+  if (!value) {
+    value = await vscode.window.showInputBox({
+      title: 'Hover: open source',
+      prompt: 'Paste a data-hover-source value',
+      placeHolder: 'src/components/Login.tsx:42:5',
+    });
+  }
+  const parsed = value ? parseHoverSource(value) : null;
+  if (!parsed) {
+    if (value) void vscode.window.showWarningMessage(`Hover: "${value}" is not a valid path:line:col source.`);
+    return;
+  }
+
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    void vscode.window.showWarningMessage('Hover: open a workspace folder to resolve the source path.');
+    return;
+  }
+
+  // The attribute is a workspace-relative POSIX path; try each folder root.
+  const target = await firstExisting(folders.map(f => vscode.Uri.joinPath(f.uri, parsed.path)));
+  if (!target) {
+    void vscode.window.showWarningMessage(`Hover: could not find ${parsed.path} in the open workspace.`);
+    return;
+  }
+
+  const doc = await vscode.workspace.openTextDocument(target);
+  const editor = await vscode.window.showTextDocument(doc);
+  // data-hover-source is 1-indexed (line + column); VSCode Position is 0-indexed.
+  const pos = new vscode.Position(Math.max(0, parsed.line - 1), Math.max(0, parsed.col - 1));
+  editor.selection = new vscode.Selection(pos, pos);
+  editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+}
+
+/** Parse a `data-hover-source` value `<rel-path>:<line>:<col>` (1-indexed).
+ *  The path may itself contain colons only on Windows-absolute paths, which the
+ *  attribute never carries (it's a workspace-relative POSIX path), so anchoring
+ *  the two trailing `:<num>` groups is unambiguous. */
+export function parseHoverSource(value: string): { path: string; line: number; col: number } | null {
+  const m = /^(.+):(\d+):(\d+)$/.exec(value.trim());
+  if (!m) return null;
+  return { path: m[1], line: Number(m[2]), col: Number(m[3]) };
 }
 
 /** Return the first URI that exists on disk, or undefined if none do. */

@@ -25,6 +25,11 @@
         "command": "hover.reviewOptimizationCandidate",
         "title": "Review Optimization Candidate",
         "category": "Hover"
+      },
+      {
+        "command": "hover.openSource",
+        "title": "Open Source from Element",
+        "category": "Hover"
       }
     ],
     "menus": {

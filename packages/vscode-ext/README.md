@@ -11,13 +11,19 @@ why-primary) and `docs/superpowers/specs/2026-06-06-vscode-extension-design.md`
 
 ## Status
 
-Scaffold. Implements **F1** only — *Review Optimization Candidate*: opens a
-native `vscode.diff` between the active spec and its candidate at
-`<workspaceRoot>/.hover/cache/optimized/<spec>`. Invoke from the editor title
-bar on a `*.spec.ts` file or via the command palette
-(`Hover: Review Optimization Candidate`).
+Scaffold. Two commands so far:
 
-Planned next (see the feature-assessment doc): F2 page-element → source jump,
+- **F1** *Review Optimization Candidate* — opens a native `vscode.diff` between
+  the active spec and its candidate at
+  `<workspaceRoot>/.hover/cache/optimized/<spec>.draft`. Invoke from the editor
+  title bar on a `*.spec.ts` file or via the palette.
+- **F2 (editor-side half)** *Open Source from Element* — takes a
+  `data-hover-source` value (`<rel-path>:<line>:<col>`, stamped by
+  `@hover-dev/transform-source`) and jumps the editor to that location. The
+  page→editor transport (a click in the running app surfacing the attribute) is
+  the follow-on; today the command accepts the value directly or prompts.
+
+Planned next (see the feature-assessment doc): F2 page→editor transport,
 F3 spec-lifecycle CodeLens, F4 seed-library authoring.
 
 ## Develop
