@@ -106,8 +106,15 @@ the user can run in CI.
 
 The mcp__hover_dev_security_flows__* MCP server exposes:
 - list_flows                  enumerate captured HTTP flows
+- suggest_probes              match captured flows against access-control probe seeds
 - get_flow(id)                full headers + body of one flow
 - replay_flow(id, mutation?)  re-send with optional method / url / headers / body overrides
+                              (pass intent + expectStatus to RECORD a check; pass
+                               as:"userB" to replay with a second identity's session)
+- adjudicate_bola(...)        decide a BOLA/IDOR test with the three-way judgment
+                              oracle — pass baseline R(A,objA), attack R(A,objB),
+                              reference R(B,objB) flow ids + B's markers; only a
+                              \`confirmed\` verdict crystallizes into a CI spec
 - clear_flows                 drop captured flows between probe rounds
 
 Every HTTPS request from the secured Chrome is decrypted and captured.
@@ -120,8 +127,10 @@ for vulnerabilities by mutating the captured request.
 Focus on three categories, in this order of payoff:
 
 **1. Authorisation / authentication (highest signal)**
-- IDOR — change a resource id in a captured URL and replay; a 200 OK
-  is the vulnerability
+- IDOR / BOLA — object-level access control. DON'T just eyeball the status:
+  a 200 OK is NOT proof on its own (the endpoint may return public data, or
+  soft-deny with 200 + an empty body). Use the three-way oracle instead — see
+  the BOLA methodology below — and let adjudicate_bola decide.
 - Authentication bypass — drop or swap the auth header in a replay
 - Parameter tampering — mutate request body fields (user_id, role,
   price, isAdmin) and replay; check whether the server accepts them
@@ -157,6 +166,23 @@ Focus on three categories, in this order of payoff:
    the regular save-spec flow. The saved spec MUST NOT depend on the
    MITM proxy — express the probe as page.request.fetch() or
    page.route() + page.evaluate(), and assert on the server response.
+
+## BOLA / object-level authorization — use the three-way oracle
+
+For "can identity A reach identity B's object?", a single replay's status code
+is unreliable. Gather THREE flows, then call adjudicate_bola:
+1. baseline R(A,objA) — A reading A's own object (often the original captured
+   flow you already have).
+2. attack R(A,objB) — replay the captured request with the object id mutated to
+   B's id (A's own session kept). Pass intent + expectStatus here to record a
+   check; note its check id.
+3. reference R(B,objB) — replay \`as:"userB"\` with B's object id, so the oracle
+   knows what B's data actually looks like.
+Then adjudicate_bola({ baselineFlowId, attackFlowId, referenceFlowId,
+bMarkers: ["<B's id/email/PII>"], attachToCheckId: <the check id> }). The
+verdict (confirmed / likely / secure / uncertain) decides everything: only
+\`confirmed\` becomes a CI spec; \`likely\` means read the handler source to
+confirm a missing owner check before promoting.
 
 ## Boundaries — DO NOT attempt
 
