@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -109,6 +109,12 @@
         "command": "hover.openSite",
         "title": "Open gethover.dev",
         "category": "Hover"
+      },
+      {
+        "command": "hover.addCiWorkflow",
+        "title": "Add CI Workflow (run specs on PR)",
+        "category": "Hover",
+        "icon": "$(github-action)"
       },
       {
         "command": "hover.refreshSpecs",
@@ -272,6 +278,11 @@
           "command": "hover.switchMode",
           "when": "view == hover.specs",
           "group": "navigation@1"
+        },
+        {
+          "command": "hover.addCiWorkflow",
+          "when": "view == hover.specs",
+          "group": "navigation@2"
         },
         {
           "command": "hover.refreshSpecs",

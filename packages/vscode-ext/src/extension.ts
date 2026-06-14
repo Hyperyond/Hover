@@ -28,8 +28,9 @@ import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
 import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
-import { EnvironmentStore, LOCAL_ENV_ID } from './environments.js';
+import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar } from './environments.js';
 import { registerEnvironmentsView } from './environmentsView.js';
+import { buildWorkflowYaml } from './ciWorkflow.js';
 import { startEngine, stopEngine } from './engine.js';
 import { candidateUri, uriExists } from './optimized.js';
 
@@ -511,6 +512,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel()),
     vscode.commands.registerCommand('hover.optimizeSpec', (a?: vscode.TreeItem | vscode.Uri) => optimizeSpec(a)),
     vscode.commands.registerCommand('hover.reRecordSpec', (a?: vscode.TreeItem | vscode.Uri) => reRecordSpec(a)),
+    vscode.commands.registerCommand('hover.addCiWorkflow', () => addCiWorkflow()),
     vscode.commands.registerCommand('hover.startApp', () => startApp()),
     vscode.commands.registerCommand('hover.toggleBrowser', () => toggleBrowser()),
     vscode.commands.registerCommand('hover.appStatus', () => appStatus()),
@@ -783,6 +785,60 @@ async function runSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   const terminal = vscode.window.createTerminal({ name: 'Hover · Playwright', cwd });
   terminal.show();
   terminal.sendText(`npx playwright test ${JSON.stringify(rel)}`);
+}
+
+/** Generate a GitHub Actions workflow that runs the crystallized specs on every
+ *  PR — deterministic, no AI. Wires test-account credentials as GitHub secrets
+ *  reusing the same HOVER_<LABEL>_* names the Environments export emits. */
+async function addCiWorkflow(): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showWarningMessage('Hover: open a project folder first.');
+    return;
+  }
+  const root = folder.uri.fsPath;
+  const packageManager = detectPackageManager(root);
+  const devScript = (await pickDevScript(root)) ?? 'dev';
+  const appUrl = (await resolveTargetUrl()) ?? 'http://localhost:5173';
+
+  const envs = (await envStore?.load()) ?? [];
+  const secretSet = new Set<string>();
+  for (const e of envs) {
+    for (const a of e.accounts) {
+      secretSet.add(accountEnvVar(a.label, 'USER'));
+      secretSet.add(accountEnvVar(a.label, 'PASS'));
+    }
+  }
+  const secretNames = [...secretSet];
+  const yaml = buildWorkflowYaml({ packageManager, devScript, appUrl, secretNames });
+
+  const fileUri = vscode.Uri.joinPath(folder.uri, '.github', 'workflows', 'hover-e2e.yml');
+  try {
+    await vscode.workspace.fs.stat(fileUri);
+    const ow = await vscode.window.showWarningMessage(
+      'Hover: .github/workflows/hover-e2e.yml already exists. Overwrite it?',
+      { modal: true },
+      'Overwrite',
+    );
+    if (ow !== 'Overwrite') return;
+  } catch {
+    /* doesn't exist yet */
+  }
+  await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(folder.uri, '.github', 'workflows'));
+  await vscode.workspace.fs.writeFile(fileUri, Buffer.from(yaml, 'utf8'));
+  await vscode.window.showTextDocument(fileUri);
+
+  if (secretNames.length) {
+    const pick = await vscode.window.showInformationMessage(
+      `Hover: wrote .github/workflows/hover-e2e.yml. Add these GitHub repo secrets so the specs can log in: ${secretNames.join(', ')}`,
+      'Copy secret names',
+    );
+    if (pick === 'Copy secret names') await vscode.env.clipboard.writeText(secretNames.join('\n'));
+  } else {
+    void vscode.window.showInformationMessage(
+      'Hover: wrote .github/workflows/hover-e2e.yml. Add test accounts in the Environments view if your specs need to log in.',
+    );
+  }
 }
 
 /** Spec slug from a `<slug>.spec.ts` / `<slug>.security.spec.ts` URI. */
