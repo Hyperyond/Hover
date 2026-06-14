@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -76,6 +76,18 @@
         "command": "hover.cancelRun",
         "title": "Cancel Run",
         "category": "Hover"
+      },
+      {
+        "command": "hover.optimizeSpec",
+        "title": "Optimize",
+        "category": "Hover",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "hover.reRecordSpec",
+        "title": "Re-record",
+        "category": "Hover",
+        "icon": "$(record)"
       },
       {
         "command": "hover.startApp",
@@ -244,6 +256,21 @@
           "command": "hover.reviewOptimizationCandidate",
           "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
           "group": "inline@2"
+        },
+        {
+          "command": "hover.optimizeSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "1_hover@1"
+        },
+        {
+          "command": "hover.reRecordSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "1_hover@2"
+        },
+        {
+          "command": "hover.runSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "1_hover@3"
         }
       ]
     },

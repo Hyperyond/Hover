@@ -62,6 +62,10 @@ export interface ServiceClientPool {
   /** Ask the engine to launch the isolated debug Chrome at `pageUrl`
    *  (headless = silent, no window). */
   launchChrome(pageUrl: string, headless: boolean): boolean;
+  /** Run the deterministic + LLM optimization pass on a saved spec. */
+  optimizeSpec(slug: string): boolean;
+  /** Re-record a spec: re-run its original prompt and overwrite the spec. */
+  reRecord(text: string, slug: string): boolean;
   dispose(): void;
 }
 
@@ -182,6 +186,18 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       const ws = firstOpen();
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'launch-chrome', payload: { pageUrl, headless } }));
+      return true;
+    },
+    optimizeSpec(slug: string): boolean {
+      const ws = firstOpen();
+      if (!ws) return false;
+      ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug } }));
+      return true;
+    },
+    reRecord(text: string, slug: string): boolean {
+      const ws = firstOpen();
+      if (!ws) return false;
+      ws.send(JSON.stringify({ type: 'command', payload: { text, reRecord: { slug } } }));
       return true;
     },
     dispose(): void {

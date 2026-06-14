@@ -408,6 +408,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.newSession', () => newSession()),
     vscode.commands.registerCommand('hover.saveSpec', () => saveSpec()),
     vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel()),
+    vscode.commands.registerCommand('hover.optimizeSpec', (a?: vscode.TreeItem | vscode.Uri) => optimizeSpec(a)),
+    vscode.commands.registerCommand('hover.reRecordSpec', (a?: vscode.TreeItem | vscode.Uri) => reRecordSpec(a)),
     vscode.commands.registerCommand('hover.startApp', () => startApp()),
     vscode.commands.registerCommand('hover.toggleBrowser', () => toggleBrowser()),
     vscode.commands.registerCommand('hover.appStatus', () => appStatus()),
@@ -632,6 +634,69 @@ async function runSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   const terminal = vscode.window.createTerminal({ name: 'Hover · Playwright', cwd });
   terminal.show();
   terminal.sendText(`npx playwright test ${JSON.stringify(rel)}`);
+}
+
+/** Spec slug from a `<slug>.spec.ts` / `<slug>.security.spec.ts` URI. */
+function specSlug(uri: vscode.Uri): string {
+  return path.basename(uri.fsPath).replace(/\.security\.spec\.ts$/, '').replace(/\.spec\.ts$/, '');
+}
+
+function resolveSpecUri(arg?: vscode.TreeItem | vscode.Uri): vscode.Uri | undefined {
+  if (arg instanceof vscode.Uri) return arg;
+  return arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri;
+}
+
+async function optimizeSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const uri = resolveSpecUri(arg);
+  if (!uri) return;
+  if (!pool || connectedServices === 0) {
+    void vscode.window.showWarningMessage('Hover: engine not connected.');
+    return;
+  }
+  const slug = specSlug(uri);
+  if (pool.optimizeSpec(slug)) {
+    await chatProvider?.reveal();
+    chatProvider?.pushSystem(`Optimizing "${slug}"… when it finishes, run "Review Optimization Candidate" on the spec to see the diff.`);
+  }
+}
+
+async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const uri = resolveSpecUri(arg);
+  if (!uri) return;
+  if (!pool || connectedServices === 0) {
+    void vscode.window.showWarningMessage('Hover: engine not connected.');
+    return;
+  }
+  let prompt: string | null = null;
+  try {
+    const txt = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+    prompt = (/Original prompt:\s*(.+)/.exec(txt) ?? [])[1]?.trim() ?? null;
+  } catch {
+    /* unreadable */
+  }
+  if (!prompt) {
+    void vscode.window.showWarningMessage('Hover: this spec has no "Original prompt:" header (hand-authored) — it can\'t be re-recorded.');
+    return;
+  }
+  const slug = specSlug(uri);
+  await chatProvider?.reveal();
+  chatProvider?.pushSystem(`Re-recording "${slug}" — ${prompt}`);
+  stepCount = 0;
+  runCost = 0;
+  chatProvider?.setRunning(true);
+  const url = vscode.workspace.getConfiguration('hover').get<string>('appUrl') || detectedUrl;
+  if (url) {
+    const ready = await ensureBrowser(url);
+    if (!ready) {
+      chatProvider?.setRunning(false);
+      chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Click "▶ Start App".`);
+      return;
+    }
+  }
+  if (!pool?.reRecord(prompt, slug)) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem('Could not reach the engine.');
+  }
 }
 
 /**
