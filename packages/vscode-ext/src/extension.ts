@@ -629,6 +629,7 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
+  if (optimizeTimer) { clearTimeout(optimizeTimer); optimizeTimer = undefined; }
   pool?.dispose();
   stopEngine();
 }
