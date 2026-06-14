@@ -28,15 +28,23 @@ export interface ModeEntry {
   pluginName?: string;
 }
 
+export interface AgentEntry {
+  id: string;
+  installed?: boolean;
+}
+
 export interface PoolHandlers {
   onRevealSource?: (source: string) => void;
   onStatus?: (connectedCount: number) => void;
   onModes?: (current: string | null, available: ModeEntry[]) => void;
+  onAgents?: (current: string | null, available: AgentEntry[]) => void;
 }
 
 export interface ServiceClientPool {
   /** Switch the active mode on every connected service (null = normal). */
   setMode(modeId: string | null): void;
+  /** Switch the coding agent on every connected service. */
+  switchAgent(agentId: string): void;
   dispose(): void;
 }
 
@@ -78,6 +86,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         const current = typeof msg.payload?.current === 'string' ? msg.payload.current : null;
         const available = Array.isArray(msg.payload?.available) ? (msg.payload!.available as ModeEntry[]) : [];
         handlers.onModes(current, available);
+      } else if (msg.type === 'agents' && handlers.onAgents) {
+        const current = typeof msg.payload?.current === 'string' ? msg.payload.current : null;
+        const available = Array.isArray(msg.payload?.available) ? (msg.payload!.available as AgentEntry[]) : [];
+        handlers.onAgents(current, available);
       }
     });
 
@@ -105,6 +117,12 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
   return {
     setMode(modeId: string | null): void {
       const body = JSON.stringify({ type: 'set-mode', payload: { modeId } });
+      for (const ws of sockets.values()) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(body);
+      }
+    },
+    switchAgent(agentId: string): void {
+      const body = JSON.stringify({ type: 'switch-agent', payload: { agentId } });
       for (const ws of sockets.values()) {
         if (ws.readyState === WebSocket.OPEN) ws.send(body);
       }

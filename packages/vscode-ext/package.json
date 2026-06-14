@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -55,6 +55,22 @@
         "title": "Start Engine",
         "category": "Hover",
         "icon": "$(server-process)"
+      },
+      {
+        "command": "hover.switchAgent",
+        "title": "Switch Agent",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.newSession",
+        "title": "New Session",
+        "category": "Hover",
+        "icon": "$(add)"
+      },
+      {
+        "command": "hover.openRepo",
+        "title": "Star on GitHub",
+        "category": "Hover"
       },
       {
         "command": "hover.refreshSpecs",
@@ -144,9 +160,14 @@
           "group": "navigation@3"
         },
         {
+          "command": "hover.newSession",
+          "when": "view == hover.sessions",
+          "group": "navigation@1"
+        },
+        {
           "command": "hover.refreshSessions",
           "when": "view == hover.sessions",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "hover.newProbeSeed",
@@ -179,7 +200,7 @@
       },
       {
         "view": "hover.sessions",
-        "contents": "No Hover runs recorded yet.\n\nEach agent run (model, cost, outcome) is logged under .hover/sessions/ and listed here."
+        "contents": "No Hover runs recorded yet.\n\nStart a chat to drive your app — each run (model, cost, outcome) is logged here.\n\n[New Session](command:hover.newSession)"
       },
       {
         "view": "hover.seeds",

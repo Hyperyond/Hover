@@ -1,18 +1,16 @@
 /**
- * The Hover chat panel — a webview view in the sidebar.
+ * The Hover chat panel — a webview view.
  *
- * Visual design faithfully mirrors the marketed in-page widget (the official
- * promo UI): the dark mint palette, the "Default ▾ click to switch" mode bar,
- * the "claude ▾" agent pill + book/star icons + "● ready" status, green
- * checkmark step rows, the PASS result card with "Save as ▾", and the prompt
- * box with a green send button. Palette + structure lifted from
- * `@hover-dev/widget-bootstrap`'s style.css / template.html so the extension
- * reads as the same product as the widget.
+ * Brand identity (mint/dark, lifted from @hover-dev/widget-bootstrap) with the
+ * input box refined to mirror Claude Code's: a single rounded container with a
+ * toolbar row inside it (model selector left; voice + send right), send arrow
+ * pointing UP. No Record/Fix. Header carries the agent/model pill (click to
+ * switch), saved-sessions, GitHub star, and new-session. Empty state mirrors
+ * the product mock ("Describe what you want to verify…").
  *
- * This is the UI shell + message bus. Wiring `send` to the engine
- * (`@hover-dev/core`'s runSession, hosted by the extension or spawned via the
- * CLI) is the next slice — `onSend` is where that lands; the step / result
- * renderers below already match how the engine will stream.
+ * UI shell + message bus. Header buttons post `{type:'command', id}` which the
+ * extension executes; the engine wiring of `send` (run a prompt → stream steps
+ * → crystallize) is the next slice — see onSend.
  */
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
@@ -32,9 +30,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage((msg: Inbound) => {
       if (msg.type === 'send') void this.onSend(msg.text);
-      else if (msg.type === 'command' && typeof msg.id === 'string') {
-        void vscode.commands.executeCommand(msg.id);
-      }
+      else if (msg.type === 'command' && typeof msg.id === 'string') void vscode.commands.executeCommand(msg.id);
     });
   }
 
@@ -42,33 +38,42 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     void this.view?.webview.postMessage(message);
   }
 
-  /** Recolor the chat header to the active mode (null = Default/mint). */
+  /** Reveal + focus the chat (used by New Session). */
+  async reveal(): Promise<void> {
+    await vscode.commands.executeCommand('hover.chat.focus');
+  }
+
+  /** Clear the transcript for a new session. */
+  newSession(): void {
+    this.post({ type: 'reset' });
+  }
+
   updateMode(id: string | null, label: string | null): void {
     this.post({ type: 'mode', id, label: label ?? 'Default' });
   }
-
-  /** Reflect service connection in the header status line. */
   updateStatus(text: string): void {
     this.post({ type: 'status', text });
+  }
+  updateAgent(label: string): void {
+    this.post({ type: 'agent', label });
   }
 
   private async onSend(text: string): Promise<void> {
     const prompt = text.trim();
     if (!prompt) return;
     this.post({ type: 'user', text: prompt });
-    // TODO(engine): hand `prompt` to the engine — launch/attach a debug Chrome,
-    // run @hover-dev/core's runSession with cwd = workspace root, stream step
-    // events as { type:'step', label, status } and finish with
+    // TODO(engine): run @hover-dev/core's session for `prompt` against the
+    // workspace, stream { type:'step', label } events here, finish with
     // { type:'result', verdict, summary, steps }, then offer Save-as-spec.
     this.post({
       type: 'system',
-      text: 'Engine not wired yet — this is the chat shell. Next: run the Hover engine here (drive Chrome, stream these steps, crystallize a spec).',
+      text: 'Engine wiring is next — this is the chat shell. Soon: Hover drives the browser for this prompt, streams each step here, and crystallizes a spec.',
     });
   }
 
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(16).toString('base64');
-    const csp = [`default-src 'none'`, `style-src 'unsafe-inline'`, `script-src 'nonce-${nonce}'`].join('; ');
+    const csp = [`default-src 'none'`, `style-src 'unsafe-inline'`, `script-src 'nonce-${nonce}'`, `media-src 'self'`].join('; ');
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,7 +85,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     --bg: #1a1a1a; --bg-2: #222224; --bg-3: #141414; --line: #2a2a2c;
     --text: #e5e7eb; --text-mute: #9ca3af; --text-dim: #6b7280;
     --accent: #7CFFA8; --accent-dim: rgba(124,255,168,0.16); --accent-ink: #0c2417;
-    --radius: 12px;
   }
   body.mode-security { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
   body.mode-pentest  { --accent: #f87171; --accent-dim: rgba(248,113,113,0.16); --accent-ink: #2a0d0d; }
@@ -93,153 +97,157 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 
-  .modebar {
-    display: flex; align-items: center; gap: 7px; width: 100%;
-    padding: 9px 12px; background: var(--bg); border: none; border-bottom: 1px solid var(--line);
-    color: var(--text); cursor: pointer; font: inherit; text-align: left;
-  }
-  .modebar:hover { background: var(--bg-2); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
-  .modebar .caret { color: var(--text-dim); }
-  .modebar .hint { margin-left: auto; color: var(--text-dim); font-size: 12px; }
-
-  header { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
-  .pill {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 4px 9px; border: 1px solid var(--line); border-radius: 7px;
-    background: var(--bg-2); color: var(--text); cursor: pointer; font: inherit;
-  }
+  header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text); cursor: pointer; font: inherit; }
   .pill:hover { border-color: var(--accent); }
-  .pill .caret { color: var(--text-dim); }
-  .iconbtn { display: inline-flex; padding: 4px; border: none; background: none; color: var(--text-mute); cursor: pointer; border-radius: 6px; }
+  .caret { color: var(--text-dim); }
+  .iconbtn { display: inline-flex; padding: 5px; border: none; background: none; color: var(--text-mute); cursor: pointer; border-radius: 6px; }
   .iconbtn:hover { color: var(--text); background: var(--bg-2); }
-  .status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-mute); font-size: 12px; }
+  .spacer { flex: 1; }
+  .status { display: inline-flex; align-items: center; gap: 6px; color: var(--text-mute); font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
 
-  #log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .empty { margin: auto; text-align: center; color: var(--text-dim); padding: 0 20px; line-height: 1.5; }
+  #log { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .empty { margin: auto; text-align: center; color: var(--text-dim); padding: 0 26px; line-height: 1.55; }
   .empty em { color: var(--text-mute); font-style: normal; }
-
   .msg { padding: 8px 11px; border-radius: 10px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
   .msg.user { align-self: flex-end; max-width: 88%; background: var(--accent); color: var(--accent-ink); font-weight: 500; }
   .msg.system { align-self: stretch; font-size: 12px; color: var(--text-mute); background: var(--bg-2); border: 1px solid var(--line); }
-
   .step { display: flex; align-items: center; gap: 9px; padding: 9px 11px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; }
-  .step .check { color: var(--accent); flex: none; font-weight: 700; }
-  .step .running { color: var(--text-dim); }
-  .step .label { flex: 1; color: var(--text); }
-  .step .caret { color: var(--text-dim); }
-
-  .result { border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent-dim); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .result .head { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--accent); }
-  .result .body { color: var(--text); line-height: 1.45; }
-  .result code { background: var(--bg-3); padding: 1px 5px; border-radius: 4px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
-  .saveas { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border: 1px solid var(--accent); border-radius: 7px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
+  .step .check { color: var(--accent); font-weight: 700; }
+  .step .label { flex: 1; }
+  .result { border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-dim); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .result .head { font-weight: 700; color: var(--accent); }
+  .saveas { align-self: flex-start; padding: 6px 11px; border: 1px solid var(--accent); border-radius: 7px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
   .saveas:hover { background: var(--accent); color: var(--accent-ink); }
 
-  #bar { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--bg); }
+  /* Claude-Code-style input box: one rounded container, toolbar row inside. */
+  #composer { padding: 10px 12px 12px; }
+  #box {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--bg-3);
+    padding: 8px 10px 8px; display: flex; flex-direction: column; gap: 6px;
+    transition: border-color .12s ease;
+  }
+  #box:focus-within { border-color: var(--accent); }
   #input {
-    flex: 1; resize: none; min-height: 38px; max-height: 150px; padding: 9px 11px;
-    color: var(--text); background: var(--bg-3); border: 1px solid var(--line); border-radius: 9px;
-    font: inherit;
+    width: 100%; resize: none; min-height: 22px; max-height: 160px;
+    border: none; outline: none; background: transparent; color: var(--text);
+    font: inherit; line-height: 1.45; padding: 2px 0;
   }
   #input::placeholder { color: var(--text-dim); }
-  #input:focus { outline: none; border-color: var(--accent); }
+  #toolbar { display: flex; align-items: center; gap: 6px; }
+  #toolbar .left { display: flex; align-items: center; gap: 6px; }
+  #toolbar .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .modelpill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text-mute); cursor: pointer; font: inherit; font-size: 12px; }
+  .modelpill:hover { border-color: var(--accent); color: var(--text); }
+  #mic { display: inline-flex; padding: 6px; border: none; background: none; color: var(--text-mute); cursor: pointer; border-radius: 7px; }
+  #mic:hover { color: var(--text); background: var(--bg-2); }
+  #mic.recording { color: var(--accent); }
   #send {
-    flex: none; width: 38px; height: 38px; border: none; border-radius: 9px; cursor: pointer;
-    background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+    display: inline-flex; align-items: center; justify-content: center;
   }
   #send:hover { filter: brightness(1.08); }
+  #send:disabled { opacity: .45; cursor: default; }
 </style>
 </head>
 <body>
-  <button class="modebar" id="modebar" type="button" title="Switch mode (Testing / Security / Pentest)">
-    <span class="dot"></span><span id="mode-label">Default</span><span class="caret">▾</span>
-    <span class="hint">click to switch</span>
-  </button>
   <header>
-    <button class="pill" id="agent" type="button" title="Current coding agent">
-      <span id="agent-label">claude</span><span class="caret">▾</span>
+    <button class="pill" id="agent" type="button" title="Switch coding agent / model">
+      <span id="agent-label">Claude</span><span class="caret">▾</span>
     </button>
-    <button class="iconbtn" id="sessions" type="button" title="Sessions">
+    <button class="iconbtn" id="sessions" type="button" title="Saved sessions">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a1 1 0 0 1 1 1v7H3a1 1 0 0 1-1-1V4Z"/><path d="M9 5a1 1 0 0 1 1-1h4v8H10a1 1 0 0 0-1 1V5Z"/></svg>
     </button>
     <button class="iconbtn" id="star" type="button" title="Star Hover on GitHub">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2l1.85 3.75 4.15.6-3 2.92.71 4.13L8 11.65l-3.71 1.95.71-4.13-3-2.92 4.15-.6L8 2.2Z"/></svg>
     </button>
+    <button class="iconbtn" id="new" type="button" title="New session">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+    </button>
+    <span class="spacer"></span>
     <span class="status"><span class="dot"></span><span id="status-label">ready</span></span>
   </header>
-  <div id="log"><div class="empty">Tell Hover what to do — e.g. <em>"log in, then add a todo"</em>.<br/>It drives a real browser and saves the verified flow as a Playwright spec.</div></div>
-  <div id="bar">
-    <textarea id="input" rows="1" placeholder="Type a flow to test…"></textarea>
-    <button id="send" type="button" title="Send">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-    </button>
+
+  <div id="log"><div class="empty">Describe what you want to verify, e.g. <em>"test the login flow"</em>.</div></div>
+
+  <div id="composer">
+    <div id="box">
+      <textarea id="input" rows="1" placeholder="e.g. test the login flow"></textarea>
+      <div id="toolbar">
+        <div class="left">
+          <button class="modelpill" id="model" type="button" title="Switch agent / model"><span id="model-label">Claude</span><span class="caret">▾</span></button>
+        </div>
+        <div class="right">
+          <button id="mic" type="button" title="Voice input">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="4" height="8" rx="2"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2"/></svg>
+          </button>
+          <button id="send" type="button" title="Send (Enter)" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 <script nonce="${nonce}">
   var vscode = acquireVsCodeApi();
   var log = document.getElementById('log');
   var input = document.getElementById('input');
+  var sendBtn = document.getElementById('send');
   var cleared = false;
 
   function fresh() { if (!cleared) { log.innerHTML = ''; cleared = true; } }
   function scroll() { log.scrollTop = log.scrollHeight; }
+  function addMessage(role, text) { fresh(); var el = document.createElement('div'); el.className = 'msg ' + role; el.textContent = text; log.appendChild(el); scroll(); }
+  function addStep(label) { fresh(); var el = document.createElement('div'); el.className = 'step'; var c = document.createElement('span'); c.className = 'check'; c.textContent = '✓'; var l = document.createElement('span'); l.className = 'label'; l.textContent = label; el.appendChild(c); el.appendChild(l); log.appendChild(el); scroll(); }
+  function addResult(verdict, summary, steps) { fresh(); var card = document.createElement('div'); card.className = 'result'; var h = document.createElement('div'); h.className = 'head'; h.textContent = '✓ ' + (verdict || 'PASS') + (steps ? ' — done in ' + steps + ' steps' : ''); var b = document.createElement('div'); b.textContent = summary || ''; var s = document.createElement('button'); s.className = 'saveas'; s.textContent = 'Save as spec'; s.addEventListener('click', function(){ vscode.postMessage({ type:'command', id:'hover.refreshSpecs' }); }); card.appendChild(h); card.appendChild(b); card.appendChild(s); log.appendChild(card); scroll(); }
 
-  function addMessage(role, text) {
-    fresh();
-    var el = document.createElement('div');
-    el.className = 'msg ' + role;
-    el.textContent = text;
-    log.appendChild(el); scroll();
-  }
-  function addStep(label, status) {
-    fresh();
-    var el = document.createElement('div');
-    el.className = 'step';
-    var mark = document.createElement('span');
-    if (status === 'running') { mark.className = 'running'; mark.textContent = '○'; }
-    else { mark.className = 'check'; mark.textContent = '✓'; }
-    var lab = document.createElement('span'); lab.className = 'label'; lab.textContent = label;
-    var car = document.createElement('span'); car.className = 'caret'; car.textContent = '▾';
-    el.appendChild(mark); el.appendChild(lab); el.appendChild(car);
-    log.appendChild(el); scroll();
-  }
-  function addResult(verdict, summary, steps) {
-    fresh();
-    var card = document.createElement('div'); card.className = 'result';
-    var head = document.createElement('div'); head.className = 'head';
-    head.textContent = '✓ ' + (verdict || 'PASS') + (steps ? ' — done in ' + steps + ' steps' : '');
-    var body = document.createElement('div'); body.className = 'body'; body.textContent = summary || '';
-    var save = document.createElement('button'); save.className = 'saveas'; save.textContent = '\\uD83D\\uDCBE Save as ▾';
-    save.addEventListener('click', function () { vscode.postMessage({ type: 'command', id: 'hover.refreshSpecs' }); });
-    card.appendChild(head); card.appendChild(body); card.appendChild(save);
-    log.appendChild(card); scroll();
-  }
+  function syncSend() { sendBtn.disabled = input.value.trim().length === 0; }
+  function submit() { var t = input.value.trim(); if (!t) return; vscode.postMessage({ type:'send', text:t }); input.value=''; input.style.height='auto'; syncSend(); }
+  sendBtn.addEventListener('click', submit);
+  input.addEventListener('keydown', function(e){ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
+  input.addEventListener('input', function(){ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,160)+'px'; syncSend(); });
 
-  function submit() {
-    var text = input.value.trim();
-    if (!text) return;
-    vscode.postMessage({ type: 'send', text: text });
-    input.value = ''; input.style.height = 'auto';
-  }
-  document.getElementById('send').addEventListener('click', submit);
-  input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
-  input.addEventListener('input', function () { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 150) + 'px'; });
+  function cmd(id){ return function(){ vscode.postMessage({ type:'command', id:id }); }; }
+  document.getElementById('agent').addEventListener('click', cmd('hover.switchAgent'));
+  document.getElementById('model').addEventListener('click', cmd('hover.switchAgent'));
+  document.getElementById('sessions').addEventListener('click', cmd('hover.specs.focus'));
+  document.getElementById('star').addEventListener('click', cmd('hover.openRepo'));
+  document.getElementById('new').addEventListener('click', cmd('hover.newSession'));
 
-  document.getElementById('modebar').addEventListener('click', function () { vscode.postMessage({ type: 'command', id: 'hover.switchMode' }); });
-  document.getElementById('sessions').addEventListener('click', function () { vscode.postMessage({ type: 'command', id: 'hover.specs.focus' }); });
-
-  window.addEventListener('message', function (e) {
-    var m = e.data; if (!m) return;
-    if (m.type === 'user' || m.type === 'system' || m.type === 'assistant') addMessage(m.type, m.text);
-    else if (m.type === 'step') addStep(m.label, m.status);
-    else if (m.type === 'result') addResult(m.verdict, m.summary, m.steps);
-    else if (m.type === 'mode') {
-      document.getElementById('mode-label').textContent = m.label || 'Default';
-      document.body.className = m.id ? 'mode-' + m.id : '';
-    }
-    else if (m.type === 'status') { document.getElementById('status-label').textContent = m.text || 'ready'; }
+  // Voice input (best-effort; webview may lack mic permission — degrade quietly).
+  var mic = document.getElementById('mic');
+  var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var rec = null, recording = false;
+  if (!Rec) { mic.title = 'Voice input not available here'; }
+  mic.addEventListener('click', function(){
+    if (!Rec) { addMessage('system', 'Voice input is not available in this webview.'); return; }
+    if (recording) { try { rec && rec.stop(); } catch(e){} return; }
+    try {
+      rec = new Rec(); rec.lang = 'en-US'; rec.interimResults = true;
+      rec.onstart = function(){ recording = true; mic.classList.add('recording'); };
+      rec.onend = function(){ recording = false; mic.classList.remove('recording'); };
+      rec.onerror = function(){ recording = false; mic.classList.remove('recording'); };
+      rec.onresult = function(e){ var t=''; for (var i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; input.value=t; syncSend(); };
+      rec.start();
+    } catch(e) { addMessage('system', 'Could not start voice input.'); }
   });
-  vscode.postMessage({ type: 'ready' });
+
+  window.addEventListener('message', function(e){
+    var m = e.data; if (!m) return;
+    if (m.type==='user'||m.type==='system'||m.type==='assistant') addMessage(m.type, m.text);
+    else if (m.type==='step') addStep(m.label);
+    else if (m.type==='result') addResult(m.verdict, m.summary, m.steps);
+    else if (m.type==='reset') { log.innerHTML=''; cleared=false; log.appendChild(emptyEl()); input.value=''; syncSend(); }
+    else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; }
+    else if (m.type==='agent') { var a=m.label||'Claude'; document.getElementById('agent-label').textContent=a; document.getElementById('model-label').textContent=a; }
+    else if (m.type==='status') { document.getElementById('status-label').textContent = m.text || 'ready'; }
+  });
+  function emptyEl(){ var d=document.createElement('div'); d.className='empty'; d.innerHTML='Describe what you want to verify, e.g. <em>"test the login flow"</em>.'; return d; }
+
+  syncSend();
+  vscode.postMessage({ type:'ready' });
 </script>
 </body>
 </html>`;

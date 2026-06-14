@@ -15,7 +15,7 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { connectServicePool, type ModeEntry, type ServiceClientPool } from './serviceClient.js';
+import { connectServicePool, type AgentEntry, type ModeEntry, type ServiceClientPool } from './serviceClient.js';
 import { SpecLensProvider } from './specLens.js';
 import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
@@ -54,6 +54,24 @@ function modeLabel(id: string): string {
   return allModes().find((m) => m.id === id)?.label ?? id;
 }
 
+let currentAgent: string | null = null;
+let availableAgents: AgentEntry[] = [];
+
+/** Agents the extension offers even before a service reports its registry. */
+const BUILTIN_AGENTS: AgentEntry[] = [{ id: 'claude' }, { id: 'codex' }];
+
+function allAgents(): AgentEntry[] {
+  const byId = new Map<string, AgentEntry>();
+  for (const a of BUILTIN_AGENTS) byId.set(a.id, a);
+  for (const a of availableAgents) byId.set(a.id, a);
+  return [...byId.values()];
+}
+
+function agentLabel(id: string | null): string {
+  if (!id) return 'Claude';
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('hover.reviewOptimizationCandidate', (arg?: vscode.TreeItem | vscode.Uri) =>
@@ -63,6 +81,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.newProbeSeed', () => newProbeSeed()),
     vscode.commands.registerCommand('hover.runSpec', (item?: vscode.TreeItem | vscode.Uri) => runSpec(item)),
     vscode.commands.registerCommand('hover.switchMode', () => switchMode()),
+    vscode.commands.registerCommand('hover.switchAgent', () => switchAgent()),
+    vscode.commands.registerCommand('hover.newSession', () => newSession()),
+    vscode.commands.registerCommand('hover.openRepo', () =>
+      vscode.env.openExternal(vscode.Uri.parse('https://github.com/Hyperyond/Hover')),
+    ),
     vscode.commands.registerCommand('hover.startEngine', () => bootEngine(context, true)),
     vscode.commands.registerCommand('hover.specs.focus', () =>
       vscode.commands.executeCommand('workbench.view.extension.hover'),
@@ -99,6 +122,11 @@ export function activate(context: vscode.ExtensionContext): void {
       availableModes = available;
       renderModeStatus();
       chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
+    },
+    onAgents: (current, available) => {
+      currentAgent = current;
+      availableAgents = available;
+      chatProvider?.updateAgent(agentLabel(currentAgent));
     },
   });
   context.subscriptions.push({ dispose: () => pool?.dispose() });
@@ -177,6 +205,26 @@ async function switchMode(): Promise<void> {
       'Hover: mode set locally — it applies when the engine runs (no live service connected).',
       4000,
     );
+}
+
+async function switchAgent(): Promise<void> {
+  type Pick = vscode.QuickPickItem & { agentId: string };
+  const items: Pick[] = allAgents().map((a) => ({
+    label: `${a.id === currentAgent ? '$(check) ' : ''}${agentLabel(a.id)}`,
+    description: a.installed === false ? 'not installed' : a.id,
+    agentId: a.id,
+  }));
+  const picked = await vscode.window.showQuickPick(items, { title: 'Hover: switch agent', placeHolder: 'Select a coding agent' });
+  if (!picked) return;
+  currentAgent = picked.agentId;
+  chatProvider?.updateAgent(agentLabel(currentAgent));
+  if (connectedServices > 0) pool?.switchAgent(picked.agentId);
+  else vscode.window.setStatusBarMessage('Hover: agent set locally — applies when the engine runs.', 4000);
+}
+
+async function newSession(): Promise<void> {
+  await chatProvider?.reveal();
+  chatProvider?.newSession();
 }
 
 /**
