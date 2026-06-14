@@ -16,18 +16,7 @@ Turn on `codeContext` and that changes. Hover gives the agent read-only access t
 
 Two tools land next to Playwright MCP: `read_source` and `list_source`. The agent lists a directory, opens the files it needs, and stops. There is no write tool and no exec tool. It reads.
 
-Enable it on the plugin:
-
-```ts
-// vite.config.ts
-import { hover } from 'vite-plugin-hover';
-
-export default defineConfig({
-  plugins: [hover({ codeContext: true })],
-});
-```
-
-The default is `false`. Off, the agent stays browser-only, which is the safest posture and the right one when you are pointing it at a third-party origin. On, it can read your tree.
+Enable `codeContext` in the Hover extension's Settings. The default is `false`. Off, the agent stays browser-only, which is the safest posture and the right one when you are pointing it at a third-party origin. On, it can read your tree.
 
 ## The fence is the feature
 

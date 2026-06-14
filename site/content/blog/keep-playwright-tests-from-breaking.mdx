@@ -48,7 +48,7 @@ Now if the button drifts into a closed drawer, `toBeVisible()` fails in about fi
 
 Someone renames "Sign in" to "Log in." The selector breaks, and it should. The test was asserting a contract that changed. This is the suite working, not failing.
 
-You have two ways to fix it. Edit the file by hand; it's plain Playwright, so it's a one-line change. Or click **⟳ Re-record** in the widget: the agent reads the test's original prompt, runs it against the current app, and rewrites the file. About 30 seconds, about ten cents, and you read the `git diff` before you commit. You do this when you decide something changed, not as an automatic model call on every green run.
+You have two ways to fix it. Edit the file by hand; it's plain Playwright, so it's a one-line change. Or click **⟳ Re-record** in the Hover extension: the agent reads the test's original prompt, runs it against the current app, and rewrites the file. About 30 seconds, about ten cents, and you read the `git diff` before you commit. You do this when you decide something changed, not as an automatic model call on every green run.
 
 ## 4. Re-record what's red, not everything
 

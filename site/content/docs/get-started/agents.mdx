@@ -7,13 +7,13 @@ Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on y
 | Agent | Sandbox | Notes |
 |---|---|---|
 | **Claude Code** (`claude`) | Hard — explicit allow/deny list, MCP-only tool surface, `--max-budget-usd` ceiling | **Recommended default.** Tightest blast radius. |
-| **OpenAI Codex** (`codex`) | Soft — no built-in-tool deny list at CLI level; uses `--sandbox read-only` + strict `developer_instructions` | Marked with a ⚠ badge in the widget so you know the surface is broader. |
-| **Cursor Agent** (`cursor-agent`) | Soft | Added in v0.9; ⚠ badge in widget dropdown |
+| **OpenAI Codex** (`codex`) | Soft — no built-in-tool deny list at CLI level; uses `--sandbox read-only` + strict `developer_instructions` | Marked with a ⚠ badge in the agent dropdown so you know the surface is broader. |
+| **Cursor Agent** (`cursor-agent`) | Soft | Added in v0.9; ⚠ badge in the agent dropdown |
 | **Aider** (`aider`) | Soft | Added in v0.10; ⚠ badge |
 | **Gemini CLI** (`gemini-cli`) | Soft | Added in v0.10; ⚠ badge |
 | **Qwen Code** (`qwen-code`) | Soft | Added in v0.10; ⚠ badge |
 
-The widget shows the active agent as a pill (`claude ▾`) in the header. Click it for a dropdown of every agent in the registry — installed ones in white, missing ones grey with copy-pasteable install hints.
+The chat shows the active agent as a pill (`claude ▾`) in the header. Click it for a dropdown of every agent in the registry — installed ones in white, missing ones grey with copy-pasteable install hints.
 
 ## How sandboxing works
 
@@ -35,11 +35,11 @@ For **soft-sandbox** agents (Codex), there is no equivalent flag to disable buil
 --ask-for-approval never
 ```
 
-…and injects a strict `developer_instructions` system prompt telling the agent to use only `mcp__playwright__*`. A determined or hallucinating agent *could* still try a built-in shell call — hence the ⚠ badge in the widget header.
+…and injects a strict `developer_instructions` system prompt telling the agent to use only `mcp__playwright__*`. A determined or hallucinating agent *could* still try a built-in shell call — hence the ⚠ badge in the agent dropdown.
 
 ## Switching agents on the fly
 
-Click the agent pill. Pick the new one. No restart required — the next prompt routes to it. State (sessionId, history) is per-agent.
+Click the agent pill (or pick one in **Settings**). No restart required — the next prompt routes to it. State (sessionId, history) is per-agent.
 
 ## Adding your own agent
 

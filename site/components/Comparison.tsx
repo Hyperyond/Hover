@@ -137,7 +137,7 @@ const ROWS: Row[] = [
   },
   {
     dim: 'Drives your real local dev server',
-    hover: yes('Injects into your dev server, drives your debug Chrome over CDP'),
+    hover: yes('A VS Code extension drives your existing dev server over CDP — nothing added to your app'),
     cols: [
       partial('CLI runs locally / in CI, but tied to the hosted account'),
       no('Runs the suite on QA Wolf’s own cloud infra'),

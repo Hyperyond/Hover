@@ -28,11 +28,13 @@ One boundary matters here. The Chrome that Hover drives is not the browser you l
 
 Why not attach to your main browser? Because that would force you to relaunch your daily Chrome with a remote-debugging port, and it would hand the agent every tab, cookie, and extension on your main session. Hover makes the trade in the open: you log into your app once inside the debug Chrome, and from then on that profile keeps your session across commands and dev-server restarts, without ever putting your primary profile within reach.
 
-## What the widget tells you
+## What Hover tells you
 
-The widget knows the page it sits in, from `window.location.href`. The service knows which Chrome it can reach over CDP, from `/json/list`. Compare the two and Hover answers a question you'd otherwise have to puzzle out: is this widget in the debug Chrome at all?
+(The original surface that surfaced this was an in-page widget injected via bundler plugins — now the frozen path. The current way to use Hover is the VS Code extension, which does the same CDP detection from the editor.)
 
-Three answers, three states. Same window means the origins match and the agent can drive this tab; you see the normal blue widget. Wrong window means a debug Chrome exists but you're not in it; one click brings the right tab forward. No debug Chrome means none is running; one click launches it on your dev URL. You never reason about ports or protocols. The widget walks you to a working state.
+Hover knows your dev-server origin, and the service knows which Chrome it can reach over CDP, from `/json/list`. Compare the two and Hover answers a question you'd otherwise have to puzzle out: is a debug Chrome actually up and on your app?
+
+Three answers, three states. Same window means the origins match and the agent can drive that tab. Wrong window means a debug Chrome exists but isn't on your app; one click brings the right tab forward. No debug Chrome means none is running; one click launches it on your dev URL. You never reason about ports or protocols. Hover walks you to a working state.
 
 ## The principle underneath
 

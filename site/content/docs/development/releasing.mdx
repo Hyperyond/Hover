@@ -1,8 +1,10 @@
 # Releasing
 
-Pushing a `v*` tag triggers `.github/workflows/publish.yml`, which publishes all nine packages to npm and creates a matching GitHub Release.
+Pushing a `v*` tag triggers `.github/workflows/publish.yml`, which publishes the npm packages and creates a matching GitHub Release.
 
-## What ships per release
+The **VS Code extension** (`hover-dev`) is the going-forward distribution; it is built, engine-staged, and packaged separately with `pnpm --filter hover-dev package` (→ a `.vsix`) and published to the Marketplace under the `hyperyond` publisher — not part of the npm tag-push workflow below.
+
+## What ships per release (npm)
 
 | Package | npm |
 |---|---|

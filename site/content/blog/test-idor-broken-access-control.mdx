@@ -16,23 +16,11 @@ An IDOR (insecure direct object reference) is simple: the server trusts an ID in
 
 ## Replay your own requests, mutated
 
-Switch the Hover widget into Security mode and the orange bar comes on. A local MITM proxy (built on [mockttp](https://github.com/httptoolkit/mockttp), no Python and no system CA install) starts recording every HTTPS call your dev page makes. Now you have the real requests, carrying real session cookies, sitting in a panel.
+Switch the Hover VS Code extension into 🟠 Security mode and the orange bar comes on. A local MITM proxy (built on [mockttp](https://github.com/httptoolkit/mockttp), no Python and no system CA install) starts recording every HTTPS call your dev page makes. Now you have the real requests, carrying real session cookies, sitting in a panel.
 
 From there you point the agent at them: re-issue `GET /api/invoices/1043` with the next ID, drop the auth header, swap a tenant parameter. It checks whether the response leaks data it shouldn't, the probe a happy-path test never runs.
 
-```bash
-pnpm add -D @hover-dev/security
-```
-
-```ts
-// vite.config.ts (Astro / Nuxt / Next / Webpack mirror the pattern)
-import { hover } from 'vite-plugin-hover';
-import securityMode from '@hover-dev/security';
-
-export default defineConfig({
-  plugins: [hover({}, securityMode())],
-});
-```
+It's a switch in the editor chat — no bundler plugin and no config; the extension drives whatever dev server you point it at over CDP.
 
 ## A finding becomes a regression test
 

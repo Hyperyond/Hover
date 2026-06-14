@@ -11,8 +11,9 @@ export function DocsOverview() {
       </h1>
       <p className="mb-10 max-w-2xl text-[16px] leading-relaxed text-text-mute">
         Everything you need to author end-to-end tests with Hover — from a
-        60-second install to the plugin API. Hover drives your real Chrome from
-        a chat widget, then crystallises the verified session into plain{' '}
+        one-click install to the engine internals. Hover drives your real Chrome
+        from a chat in your editor, then crystallises the verified session into
+        plain{' '}
         <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[14px] text-mint">
           @playwright/test
         </code>{' '}

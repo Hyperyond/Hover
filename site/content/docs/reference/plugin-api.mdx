@@ -1,6 +1,12 @@
 # Plugin API
 
-Hover's plugin API lets third-party packages contribute **modes** that show up in the widget's mode picker — each mode can register an extra MCP server, supply its own Chrome launch flags, append paragraphs to the agent's system prompt, and broadcast custom events to the widget.
+<Callout type="note" title="Engine API; widget-host parts are frozen">
+
+The server-side plugin API (modes, MCP servers, Chrome flags, system-prompt additions, `saveHandlers`, hooks) is part of `@hover-dev/core` — **not frozen**; it's how `@hover-dev/security` / `@hover-dev/pentest` plug into the engine. The **widget host API** sections below (`widgetEntry`, `WidgetPluginSpec`, `window.__HOVER_WIDGET__`) belong to the original in-page widget and are part of the [frozen bundler-plugin path](/docs/get-started/install#frozen-bundler-plugin-path).
+
+</Callout>
+
+Hover's plugin API lets packages contribute **modes** — each mode can register an extra MCP server, supply its own Chrome launch flags, append paragraphs to the agent's system prompt, and broadcast custom events.
 
 `@hover-dev/security` is the first plugin built on this API. The shape below is everything you need to write your own.
 

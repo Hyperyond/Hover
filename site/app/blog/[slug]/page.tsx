@@ -122,12 +122,17 @@ export default async function BlogPost(
           Try Hover on your own app.
         </p>
         <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-text-mute">
-          One command adds the widget to your dev server. Author tests with AI,
-          ship plain Playwright.
+          Install the VS Code extension. Author tests with AI, ship plain
+          Playwright.
         </p>
-        <code className="mt-5 inline-block rounded-md border border-[rgba(124,255,168,0.5)] bg-bg px-5 py-2.5 font-mono text-[14px] text-mint">
-          npx @hover-dev/cli setup
-        </code>
+        <a
+          href="https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-5 inline-block rounded-md border border-[rgba(124,255,168,0.5)] bg-mint px-5 py-2.5 font-mono text-[14px] font-semibold text-bg transition-all hover:bg-[#5cf094]"
+        >
+          Install on VS Code Marketplace →
+        </a>
       </div>
     </article>
   );

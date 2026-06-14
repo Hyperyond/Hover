@@ -1,6 +1,6 @@
 # Running examples
 
-Each example app under `examples/*` is both a smoke target and a real app you can interact with via the widget. Run any of them after `pnpm install`:
+Each example app under `examples/*` is a testing-surface target the extension (or `pnpm smoke` / `hover run`) drives over CDP. Run any of them after `pnpm install`:
 
 ```bash
 pnpm dev:example:basic-app           # http://localhost:5173 — login + counter + todos
@@ -8,28 +8,11 @@ pnpm dev:example:e-commerce          # http://localhost:5174 — Amazon-style st
 pnpm dev:example:stock-registration  # http://localhost:5175 — brokerage account form
 pnpm dev:example:canvas-paint        # http://localhost:5176 — canvas + DOM toolbar
 pnpm dev:example:payment-provider    # http://localhost:5177 — third-party popup target
-pnpm dev:example:astro-app           # http://localhost:5178 — Astro 5
-pnpm dev:example:nuxt-app            # http://localhost:5179 — Nuxt 4
-pnpm dev:example:webpack-app         # http://localhost:5180 — vanilla webpack 5
-pnpm dev:example:rn-web-app          # http://localhost:5181 — React Native Web
-pnpm dev:example:next-app            # http://localhost:5182 — Next 16 App Router
 ```
 
-Each example sets `autoLaunchChrome: true` so a debug Chrome opens on `:9222` pointed at the dev URL on first run. The profile dir under `<tmpdir>/hover-chrome` reuses session state across runs.
+The bundler-dogfood examples (`astro-app` / `nuxt-app` / `next-app` / `webpack-app` / `rn-web-app`) and `turbo-monorepo` were removed when the bundler-plugin path was frozen.
 
-## Manual-validation example: `turbo-monorepo`
-
-`examples/turbo-monorepo/` is a minimal turbo + pnpm-workspace monorepo with two Next.js 15 apps (`apps/web`, `apps/game`). It exists to reproduce the shape real users have when they run `npx @hover-dev/cli setup` on a turbo project — and to surface bugs that hide in the single-package examples above. Not part of `pnpm dev:example:*` because the install step requires real-network npm to bring in `next` / `react`. Validate by hand from the example's own root:
-
-```bash
-cd examples/turbo-monorepo
-npx @hover-dev/cli@latest add                 # interactive picker (apps/web vs apps/game)
-npx @hover-dev/cli@latest add --cwd apps/web  # or skip the picker
-pnpm install                                   # bring in the per-app next/react deps
-pnpm dev                                       # turbo run dev — apps/web on :5183
-```
-
-See [`examples/turbo-monorepo/README.md`](https://github.com/Hyperyond/Hover/tree/main/examples/turbo-monorepo) for the specific install-path edge cases this example was built to verify.
+The widget-bearing examples set `autoLaunchChrome: true` so a debug Chrome opens on `:9222` pointed at the dev URL on first run; the profile dir under `<tmpdir>/hover-chrome` reuses session state across runs. With the VS Code extension you don't need the in-page widget at all — the extension drives any dev server over CDP regardless. `payment-provider` has no widget by design.
 
 ## Auxiliary commands
 
@@ -37,7 +20,6 @@ See [`examples/turbo-monorepo/README.md`](https://github.com/Hyperyond/Hover/tre
 pnpm smoke:chrome     # launch debug Chrome without an example dev server
 pnpm smoke            # end-to-end: detect agents → CDP preflight → invoke claude
 pnpm detect           # list installed coding-agent CLIs
-pnpm verify-widget    # confirm the widget bundle reports data-hover="true"
 pnpm ws-smoke         # exercise the @hover-dev/core WebSocket bridge in isolation
 pnpm bench-ttfb       # time the LLM-driven loop's first tool_use latency
 ```

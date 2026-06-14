@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { Sparkle } from '@/components/Sparkle';
 import { WidgetDemo } from '@/components/WidgetDemo';
 import { TerminalDemo } from '@/components/TerminalDemo';
-import { CopyCommand } from '@/components/CopyCommand';
+import { InstallButton, MARKETPLACE_URL } from '@/components/InstallButton';
 import { Waitlist } from '@/components/Waitlist';
 import { Nav } from '@/components/Nav';
 import { VideoSection } from '@/components/VideoSection';
@@ -23,22 +23,22 @@ const GITHUB = 'https://github.com/Hyperyond/Hover';
 const DOCS = '/docs/';
 
 /** SoftwareApplication structured data — helps search + LLM engines describe
- *  Hover accurately (open-source DeveloperApplication, free, Playwright-based). */
+ *  Hover accurately (open-source VS Code extension, free, Playwright-based). */
 const JSON_LD = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   name: 'Hover',
   applicationCategory: 'DeveloperApplication',
-  operatingSystem: 'Web (Chrome via CDP)',
+  operatingSystem: 'Visual Studio Code',
   description:
-    'Open-source tool that lets AI drive your real browser from a chat widget to author end-to-end tests, then crystallises the session into a plain @playwright/test spec that runs in CI with no AI and no API key.',
+    'Open-source VS Code extension that lets AI drive your real Chrome from a chat in your editor to author end-to-end tests, then crystallises the session into a plain @playwright/test spec that runs in CI with no AI and no API key.',
   url: 'https://gethover.dev',
-  downloadUrl: 'https://www.npmjs.com/package/@hover-dev/cli',
+  downloadUrl: MARKETPLACE_URL,
   license: 'https://github.com/Hyperyond/Hover/blob/main/LICENSE',
   isAccessibleForFree: true,
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   author: { '@type': 'Organization', name: 'Hyperyond', url: 'https://github.com/Hyperyond' },
-  sameAs: ['https://github.com/Hyperyond/Hover', 'https://www.npmjs.com/package/@hover-dev/cli'],
+  sameAs: [GITHUB, MARKETPLACE_URL],
 };
 
 export default function Home() {
@@ -61,7 +61,7 @@ export default function Home() {
       <VideoSection src={DEMO_MP4} poster={DEMO_POSTER} />
       <Coverage />
       <Pillars />
-      <Outputs />
+      <Accounts />
       <Security />
       <Comparison />
       <Roadmap />
@@ -110,11 +110,13 @@ function Hero() {
         {/* Left — copy */}
         <div className="min-w-0">
           <a
-            href={GITHUB}
+            href={MARKETPLACE_URL}
+            target="_blank"
+            rel="noreferrer"
             className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3.5 py-1.5 text-[12px] text-text-mute transition-colors hover:border-[rgba(124,255,168,0.4)] hover:text-text"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-mint" />
-            v0.16 · latest release
+            Now on the VS Code Marketplace
           </a>
 
           <h1 className="font-mono text-[38px] font-semibold leading-[1.08] tracking-tight md:text-[52px]">
@@ -124,10 +126,10 @@ function Hero() {
           </h1>
 
           <p className="mt-7 max-w-xl text-[16px] leading-relaxed text-text-mute md:text-[18px]">
-            Describe a flow in plain English; AI drives your{' '}
-            <em className="not-italic text-text">real</em> Chrome once to
-            explore it. When the run&rsquo;s clean, Hover crystallises it into a
-            standard{' '}
+            Chat to a test in your editor. Describe a flow in plain English; AI
+            drives your <em className="not-italic text-text">real</em> Chrome
+            once to explore it. When the run&rsquo;s clean, Hover crystallises it
+            into a standard{' '}
             <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[14px] text-mint">
               @playwright/test
             </code>{' '}
@@ -135,7 +137,7 @@ function Hero() {
           </p>
 
           <div id="install" className="mt-9 flex flex-wrap items-center gap-3">
-            <CopyCommand />
+            <InstallButton />
             <a
               href={DOCS}
               className="rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
@@ -154,7 +156,7 @@ function Hero() {
 
           <p className="mt-3 text-[13px] text-text-dim">
             Not a flat dump — page objects, <span className="text-text-mute">test.step</span>{' '}
-            stages, a community seed library, and an optional AI polish pass you
+            stages, a built-in seed library, and an optional AI polish pass you
             accept via diff.{' '}
             <a
               href="#roadmap"
@@ -183,11 +185,10 @@ function Hero() {
 
 /* ── The triad: one widget, three AI jobs ───────────────────────────────
  * The page's organizing thesis. The three things the agent does for you —
- * author, optimize, secure — over ONE widget, with the crystallize moat as the
- * shared through-line: whatever the AI does, the artifact that lands in your
- * repo is plain @playwright/test that runs in CI with no AI. The "secure" card
- * is orange to match the @hover-dev/security plugin's mode. (A red "pentest"
- * card joins once @hover-dev/pentest ships to npm.) */
+ * author, optimize, secure — over ONE chat in your editor, with the crystallize
+ * moat as the shared through-line: whatever the AI does, the artifact that lands
+ * in your repo is plain @playwright/test that runs in CI with no AI. The
+ * "secure" card is orange to match the 🟠 Security mode; red is 🔴 Pentest. */
 const TRIAD = [
   {
     k: 'author',
@@ -207,15 +208,15 @@ const TRIAD = [
     k: 'secure',
     tag: 'Secure',
     accent: '#fb923c',
-    title: 'Flip the same widget to a security mode',
-    body: 'Add a plugin and the panel grows two security modes: orange replays captured API calls with mutations to probe IDOR / authz and crystallizes findings into .security.spec.ts CI gates; red goes offensive — SQLi / XSS / SSTI / SSRF on your own dev app — and writes a findings report.',
+    title: 'Flip the same chat into a security mode',
+    body: 'Switch the chat to orange and it replays captured API calls with mutations to probe IDOR / authz, crystallizing findings into .security.spec.ts CI gates; flip to red and it goes offensive — SQLi / XSS / SSTI / SSRF on your own dev app — and writes a findings report.',
   },
 ];
 
 function Triad() {
   return (
     <section className="relative z-10 mx-auto max-w-6xl px-6 pb-8 pt-4 md:pt-8">
-      <SectionLabel>One widget, three jobs</SectionLabel>
+      <SectionLabel>One chat, three jobs</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[26px] font-semibold leading-tight tracking-tight md:text-[34px]">
         AI <span className="text-mint">authors</span>,{' '}
         <span className="text-mint">optimizes</span>, and{' '}
@@ -223,9 +224,9 @@ function Triad() {
         runs plain Playwright.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        One floating widget in your dev page, with modes that grow as you need
-        them. The through-line never changes: whatever the AI does, the artifact
-        that checks into git is plain{' '}
+        One chat in your editor, with modes that grow as you need them. The
+        through-line never changes: whatever the AI does, the artifact that
+        checks into git is plain{' '}
         <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">
           @playwright/test
         </code>{' '}
@@ -272,12 +273,12 @@ const PILLARS = [
   {
     k: 'byo',
     title: 'BYO-CLI — your subscription or your API key',
-    body: 'Hover bundles no AI runtime. It spawns whatever coding-agent CLI is on your PATH — claude, codex, cursor-agent, aider — on the Pro / Max / ChatGPT plan you already pay for, or your own model API key dropped into the widget (kept in your browser, injected into the CLI env, never uploaded).',
+    body: 'Hover bundles no AI runtime. It spawns whatever coding-agent CLI is on your PATH — claude, codex — on the Pro / Max / ChatGPT plan you already pay for, or your own model API key in the extension settings (kept on your machine, injected into the CLI env, never uploaded).',
   },
   {
     k: 'coverage',
-    title: 'Five bundlers, two artifacts',
-    body: 'Vite, Astro, Nuxt, Next.js (Turbopack), webpack 5 — plus React Native Web. Every verified session crystallises two ways: a Playwright spec for CI and a Jira-importable test case.',
+    title: 'Lives in your editor, drives any dev server',
+    body: 'Install once from the VS Code Marketplace — no bundler plugin, no config in your app. The extension drives your real dev server over CDP whatever you build with: Vite, Next.js, Nuxt, Astro, webpack. Define test accounts per environment and just say @account in chat — the agent logs in for you.',
   },
 ];
 
@@ -314,59 +315,51 @@ function Pillars() {
   );
 }
 
-/* ── Three outputs table ────────────────────────────────────────────── */
-const OUTPUTS = [
-  {
-    file: '.spec.ts',
-    name: 'Playwright spec',
-    reader: 'Node + Playwright (CI)',
-    audience: 'CI · devs writing code',
-    accent: 'text-mint',
-  },
-  {
-    file: '.case.csv',
-    name: 'Jira test case',
-    reader: 'Xray · Zephyr · Jira',
-    audience: 'QA reviewing · PM tracking',
-    accent: 'text-warn',
-  },
+/* ── Multi-environment accounts (@account) ───────────────────────────────
+ * The extension's standout authoring feature: define test accounts per
+ * environment once, then just mention @account in chat and the agent logs in.
+ * Credentials are parameterised into process.env refs — never written into the
+ * spec, JSDoc, or sidecar — and the same names export to CI secrets in a click.
+ * Replaces the old widget-era "two artifacts (spec + Jira CSV)" section; the
+ * extension only emits the Playwright spec. */
+const ENV_TARGETS = [
+  { name: 'Local', detail: 'localhost dev server', accent: 'text-mint' },
+  { name: 'Staging', detail: 'shared preview URL', accent: 'text-link' },
+  { name: 'Production', detail: 'read-only smoke', accent: 'text-warn' },
 ];
 
-function Outputs() {
+function Accounts() {
   return (
-    <section id="outputs" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>One exploration, two audiences</SectionLabel>
+    <section id="accounts" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
+      <SectionLabel>Multi-environment, by name</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        A single <span className="text-mint">Save as ▾</span> menu, two files
-        that check into git.
+        Say <span className="text-mint">@account</span> in chat — the agent logs
+        in for you.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Nothing lives in a vendor database. A spec written on a laptop on Monday
-        is reviewed by QA on Tuesday and runs in CI from Wednesday — same file,
-        no export step.
+        Define test accounts per environment once in the Environments view.
+        Mention <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">@account</code>{' '}
+        and Hover signs in before it explores. Credentials are parameterised into{' '}
+        <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-text">process.env</code>{' '}
+        references — never written into the spec, the JSDoc, or the sidecar — and
+        the same names export to your CI secrets in one click, so the same file
+        runs against local, staging, or a PR preview.
       </p>
-      <div className="mt-12 grid gap-5 md:grid-cols-2">
-        {OUTPUTS.map((o) => (
+      <div className="mt-12 grid gap-5 md:grid-cols-3">
+        {ENV_TARGETS.map((e) => (
           <article
-            key={o.file}
+            key={e.name}
             className="rounded-lg border border-line bg-bg-2 p-6 transition-colors hover:border-line-2"
           >
-            <code
-              className={`font-mono text-[13px] ${o.accent}`}
-            >{`<slug>${o.file}`}</code>
-            <h3 className="mt-3 text-[17px] font-semibold tracking-tight">
-              {o.name}
-            </h3>
-            <dl className="mt-5 space-y-3 text-[13px]">
-              <div className="flex justify-between gap-4">
-                <dt className="text-text-dim">Read by</dt>
-                <dd className="text-right text-text-mute">{o.reader}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-text-dim">Audience</dt>
-                <dd className="text-right text-text-mute">{o.audience}</dd>
-              </div>
-            </dl>
+            <div className="flex items-center gap-2.5">
+              <span className={`font-mono text-[15px] font-semibold ${e.accent}`}>
+                {e.name}
+              </span>
+            </div>
+            <p className="mt-2 text-[13px] text-text-dim">{e.detail}</p>
+            <code className="mt-5 block break-all font-mono text-[12px] text-text-mute">
+              HOVER_{e.name.toUpperCase()}_PASSWORD
+            </code>
           </article>
         ))}
       </div>
@@ -428,10 +421,10 @@ function Security() {
         <span style={{ color: '#dc2626' }}>red</span> security mode.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Add a plugin and the panel grows a security mode — one for the
-        defensive, business-logic side and one for the offensive. Zero external
-        deps (no mitmproxy, no Python, no system CA); both run on your own dev
-        server, authorized testing only. Flip on the opt-in{' '}
+        Flip the same chat into a security mode — one for the defensive,
+        business-logic side and one for the offensive. Zero external deps (no
+        mitmproxy, no Python, no system CA); both run on your own dev server,
+        authorized testing only. Flip on the opt-in{' '}
         <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-text">
           codeContext
         </code>{' '}
@@ -490,9 +483,10 @@ function Security() {
 
 /* ── Structured output — shipped + what's next ──────────────────────────
  * The structured spec-output suite (page objects, test.step, popup pairing, a
- * conventions file, a community seed library, the optional AI optimization
- * pass) has landed on `main`. Chrome extension + Hover Cloud remain planned.
- * Each card carries a `status` so shipped vs planned renders distinctly. */
+ * conventions file, a built-in seed library, the optional AI optimization
+ * pass) has landed on `main`, and the VS Code extension is live on the
+ * Marketplace. Hover Cloud remains planned. Each card carries a `status` so
+ * shipped vs planned renders distinctly. */
 const ROADMAP = [
   {
     status: 'shipped',
@@ -530,9 +524,9 @@ const ROADMAP = [
     body: 'An opt-in, read-only, fenced source reader (read_source MCP — secrets / .env / .git / build excluded) turns the red pentest mode white-box: the agent confirms a finding against the real query / authz check and points the report at the exact file:line, and authors smarter selectors from your actual code. Default off — the agent stays browser-only.',
   },
   {
-    status: 'planned',
-    title: 'Chrome extension',
-    body: 'Drop the bundler-plugin dependency so Hover can drive any tab — staging URLs, third-party sites, multi-origin flows. Likely a separate repo; loses source attribution, gains universal page coverage.',
+    status: 'shipped',
+    title: 'VS Code extension',
+    body: 'Hover now ships as a VS Code extension — chat, Specs / Sessions / Environments views, the in-extension engine, security + pentest modes, and the @account credential vault. No bundler plugin, no config in your app.',
   },
   {
     status: 'planned',
@@ -552,11 +546,10 @@ function Roadmap() {
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
         Hover saves a clean, portable spec, then grows it into an architecture:
         page objects and fixtures lifted from flows repeated across specs, named
-        test.step stages, popup / new-tab pairing, a community-extensible seed
-        library, and an optional AI pass that polishes a spec while always
-        keeping the deterministic original. All shipped, all still plain
-        Playwright with no agent in CI. Next: a Chrome extension and Hover
-        Cloud. Follow along on{' '}
+        test.step stages, popup / new-tab pairing, a built-in seed library, and
+        an optional AI pass that polishes a spec while always keeping the
+        deterministic original. All shipped, all still plain Playwright with no
+        agent in CI. Next: Hover Cloud. Follow along on{' '}
         <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
           GitHub
         </a>
@@ -616,11 +609,11 @@ function CTA() {
             Stop hand-writing the tests AI could explore for you.
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-text-mute">
-            Add Hover to your dev server in one command. Keep the deterministic
-            Playwright files forever.
+            Install the extension from the VS Code Marketplace. Keep the
+            deterministic Playwright files forever.
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-            <CopyCommand />
+            <InstallButton />
             <a
               href={GITHUB}
               className="flex items-center gap-2 rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
@@ -652,10 +645,12 @@ function Footer() {
             GitHub
           </a>
           <a
-            href="https://www.npmjs.com/package/@hover-dev/cli"
+            href={MARKETPLACE_URL}
+            target="_blank"
+            rel="noreferrer"
             className="transition-colors hover:text-text"
           >
-            npm
+            Marketplace
           </a>
         </div>
       </div>

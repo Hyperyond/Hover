@@ -28,7 +28,7 @@ None of that is a worst case. It's what keeping inference on the hot path means.
 
 ## Authoring-time AI spends the model once
 
-Hover puts a chat widget in your dev server. You type a flow in plain English, "log in, then add a todo named verify hover," and the agent drives your real Chrome through it over CDP while you watch. When the run looks right, you click **Save as spec**, and Hover writes a standard `@playwright/test` file:
+Hover puts a chat in your editor (a VS Code extension). You type a flow in plain English, "log in, then add a todo named verify hover," and the agent drives your real Chrome through it over CDP while you watch. When the run looks right, you click **Save as spec**, and Hover writes a standard `@playwright/test` file:
 
 ```ts
 import { test, expect } from '@playwright/test';

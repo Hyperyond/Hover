@@ -20,7 +20,7 @@ When you ask Hover to drive your browser, it shells out to a binary on your `PAT
 - `codex` (OpenAI Codex CLI)
 - `cursor-agent`, `aider`, `gemini-cli`, `qwen-code`
 
-That CLI talks to its own provider on your existing plan: the Claude Pro or Max or ChatGPT subscription you already pay for. Hover reads whatever the CLI streams back, normalises it into one event stream, and shows it in the widget. It never touches your key, because it never makes the call. The service detects which agents you have installed, picks one, shows it as a pill in the widget header, and lets you switch from a dropdown without editing an environment variable.
+That CLI talks to its own provider on your existing plan: the Claude Pro or Max or ChatGPT subscription you already pay for. Hover reads whatever the CLI streams back, normalises it into one event stream, and shows it in the editor chat. It never touches your key, because it never makes the call. The service detects which agents you have installed, picks one, shows it as the current agent, and lets you switch without editing an environment variable.
 
 ## Why build it this way
 

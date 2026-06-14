@@ -34,13 +34,12 @@ Re-record uses that line. The agent receives the natural-language prompt verbati
 
 ## Two ways to trigger
 
-### 1. From the widget
+### 1. From the extension
 
-1. Click the **📜 Saved sessions** button in the widget header.
-2. Switch to the **Specs** tab.
-3. Click **⟳ Re-record** next to the spec you want to refresh.
+1. Open the **Specs** view in the `hover` container.
+2. Click **⟳ Re-record** next to the spec you want to refresh.
 
-The widget closes the overlay, the agent starts driving, and the result lands as a normal run. When the agent finishes successfully, the file is overwritten and the **Specs** list refreshes (open the overlay again to verify the new "saved … ago" timestamp).
+The agent starts driving, and the result lands as a normal run. When the agent finishes successfully, the file is overwritten and the **Specs** list refreshes.
 
 ### 2. From the terminal
 
@@ -93,7 +92,7 @@ The CLI picks up the same env vars `pnpm smoke` honours:
 
 ## Caveats
 
-- **Re-record needs the `Original prompt:` header.** Hand-authored specs that never went through Hover's Save flow don't carry it; the widget shows an inert Re-record button with a tooltip explaining why. Add an `* Original prompt: …` line to the JSDoc and it will work.
+- **Re-record needs the `Original prompt:` header.** Hand-authored specs that never went through Hover's Save flow don't carry it; Re-record is inert for those with an explanation of why. Add an `* Original prompt: …` line to the JSDoc and it will work.
 - **A debug Chrome is required.** Re-record drives a real browser — `pnpm smoke:chrome` if one isn't running.
 - **The agent is non-deterministic at the *step* level.** Even if the UI hasn't changed, the regenerated spec may use a slightly different sequence of tool calls. Diff before committing.
 - **One spec per command.** v0.11 doesn't ship `re-record --all` or `--failed` — both rejected on purpose ([see FAQ](/docs/faq#why-no-re-record-all-or-failed)). For now: re-record specs one at a time.
