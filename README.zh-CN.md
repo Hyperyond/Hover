@@ -61,7 +61,7 @@ npx playwright test __vibe_tests__
 
 ## 示例
 
-[`examples/`](./examples/) 下有可运行的应用,覆盖不同测试场景 —— 登录 / 计数器 / 待办、约 50 个字段的表单、带跨标签支付弹窗的电商购物车,以及一个 canvas 应用 —— 外加 Astro、Nuxt、Next.js、webpack 和 React Native **Web** 的 dogfood 场地(原生 iOS / Android 不在范围,用 Maestro / Detox / Appium)。
+[`examples/`](./examples/) 下有可运行的应用,覆盖不同测试场景 —— `basic-app`(登录 / 计数器 / 待办)、`stock-registration`(约 50 个字段的表单)、`e-commerce`(带跨标签支付弹窗的购物车 / 结账)、`canvas-paint`(canvas 中的 DOM 控件),以及 `payment-provider`(未集成的第三方弹窗目标)。它们都是普通 Vite + React 应用 —— 扩展通过 CDP 驱动它们,应用里什么都不用装。
 
 ## FAQ
 

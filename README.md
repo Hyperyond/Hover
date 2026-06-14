@@ -61,7 +61,7 @@ Prefer the terminal or your own dev page? `hover run "<prompt>"` authors a spec 
 
 ## Examples
 
-Runnable apps under [`examples/`](./examples/) stress different testing surfaces — login / counter / todos, a ~50-field form, an e-commerce cart/checkout with a cross-tab payment popup, and a canvas app — plus dogfood grounds for Astro, Nuxt, Next.js, webpack, and React Native **Web** (native iOS / Android is out of scope — use Maestro / Detox / Appium).
+Runnable apps under [`examples/`](./examples/) stress different testing surfaces — `basic-app` (login / counter / todos), `stock-registration` (~50-field form), `e-commerce` (cart / checkout with a cross-tab payment popup), `canvas-paint` (DOM controls amid a canvas), and `payment-provider` (the unintegrated third-party popup target). They're plain Vite + React apps — the extension drives them over CDP, nothing to install in the app.
 
 ## FAQ
 
