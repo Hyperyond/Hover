@@ -154,14 +154,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <header>
-    <button class="pill" id="agent" type="button" title="Switch coding agent / model">
-      <span id="agent-label">Claude</span><span class="caret">▾</span>
-    </button>
-    <button class="iconbtn" id="sessions" type="button" title="Saved sessions">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a1 1 0 0 1 1 1v7H3a1 1 0 0 1-1-1V4Z"/><path d="M9 5a1 1 0 0 1 1-1h4v8H10a1 1 0 0 0-1 1V5Z"/></svg>
-    </button>
-    <button class="iconbtn" id="star" type="button" title="Star Hover on GitHub">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2l1.85 3.75 4.15.6-3 2.92.71 4.13L8 11.65l-3.71 1.95.71-4.13-3-2.92 4.15-.6L8 2.2Z"/></svg>
+    <button class="iconbtn" id="history" type="button" title="Session history">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg>
     </button>
     <button class="iconbtn" id="new" type="button" title="New session">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
@@ -210,10 +204,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   input.addEventListener('input', function(){ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,160)+'px'; syncSend(); });
 
   function cmd(id){ return function(){ vscode.postMessage({ type:'command', id:id }); }; }
-  document.getElementById('agent').addEventListener('click', cmd('hover.switchAgent'));
   document.getElementById('model').addEventListener('click', cmd('hover.switchAgent'));
-  document.getElementById('sessions').addEventListener('click', cmd('hover.specs.focus'));
-  document.getElementById('star').addEventListener('click', cmd('hover.openRepo'));
+  document.getElementById('history').addEventListener('click', cmd('hover.sessions.focus'));
   document.getElementById('new').addEventListener('click', cmd('hover.newSession'));
 
   // Voice input (best-effort; webview may lack mic permission — degrade quietly).
@@ -241,7 +233,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='result') addResult(m.verdict, m.summary, m.steps);
     else if (m.type==='reset') { log.innerHTML=''; cleared=false; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; }
-    else if (m.type==='agent') { var a=m.label||'Claude'; document.getElementById('agent-label').textContent=a; document.getElementById('model-label').textContent=a; }
+    else if (m.type==='agent') { document.getElementById('model-label').textContent = m.label || 'Claude'; }
     else if (m.type==='status') { document.getElementById('status-label').textContent = m.text || 'ready'; }
   });
   function emptyEl(){ var d=document.createElement('div'); d.className='empty'; d.innerHTML='Describe what you want to verify, e.g. <em>"test the login flow"</em>.'; return d; }
