@@ -69,6 +69,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   pushStep(step: { label: string; tool?: string; detail?: string; cost?: number }): void {
     this.post({ type: 'step', ...step });
   }
+  /** AI narration → the next step group's title. */
+  pushNarration(text: string): void {
+    this.post({ type: 'narration', text });
+  }
   pushAssistant(text: string): void {
     this.post({ type: 'assistant', text });
   }
@@ -104,7 +108,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     --bg: #1a1a1a; --bg-2: #222224; --bg-3: #141414; --line: #2a2a2c;
     --text: #e5e7eb; --text-mute: #9ca3af; --text-dim: #6b7280;
     --accent: #7CFFA8; --accent-dim: rgba(124,255,168,0.16); --accent-ink: #0c2417;
-    --warn: #fb923c;
+    --warn: #fb923c; --err: #f87171;
   }
   body.mode-security { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
   body.mode-pentest  { --accent: #f87171; --accent-dim: rgba(248,113,113,0.16); --accent-ink: #2a0d0d; }
@@ -170,7 +174,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .step .label { flex: 1; }
   .step-meta { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
   .step-caret { color: var(--text-dim); font-size: 11px; }
-  .step-detail { margin: 8px 0 0; padding: 8px; background: var(--bg-3); border-radius: 6px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 11px; white-space: pre-wrap; overflow: auto; max-height: 240px; }
+  .step-detail { margin: 6px 0 0; padding: 8px; background: var(--bg-3); border-radius: 6px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 11px; white-space: pre-wrap; overflow: auto; max-height: 240px; }
+  /* grouped run: narration title + nested tool lines (widget-style) */
+  .group { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; }
+  .group-head { display: flex; align-items: center; gap: 9px; }
+  .group-title { flex: 1; }
+  .group-steps { margin: 8px 0 0 5px; padding-left: 9px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+  .tool-line { display: flex; align-items: flex-start; gap: 7px; color: var(--text-mute); font-size: 12px; }
+  .tool-dot { color: var(--accent); flex: none; font-size: 10px; line-height: 1.5; }
+  .tool-line.err .tool-dot { color: var(--err); }
+  .tool-label { flex: 1; }
   .result { border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-dim); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   .result .head { font-weight: 700; color: var(--accent); }
   .md { line-height: 1.5; }
@@ -277,40 +290,67 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   function fresh() { if (!cleared) { log.innerHTML = ''; cleared = true; } }
   function scroll() { if (typeof workingEl !== 'undefined' && workingEl && running && workingEl.parentNode) log.appendChild(workingEl); log.scrollTop = log.scrollHeight; }
   function addMessage(role, text) { fresh(); var el = document.createElement('div'); el.className = 'msg ' + role; el.textContent = text; log.appendChild(el); if (role === 'assistant') speak(text); scroll(); }
-  var curStep = null; // { el, start, snapshot }
-  function finalizeStep(nextSnapshot) {
-    if (!curStep) return;
-    var icon = curStep.el.querySelector('.step-icon'); icon.className = 'step-icon check'; icon.textContent = '✓';
-    var parts = [((Date.now() - curStep.start) / 1000).toFixed(1) + 's'];
-    if (typeof nextSnapshot === 'number' && typeof curStep.snapshot === 'number') { var d = nextSnapshot - curStep.snapshot; if (d > 0.00005) parts.push('$' + d.toFixed(4)); }
-    curStep.el.querySelector('.step-meta').textContent = parts.join(' · ');
-    curStep = null;
+  // ── Grouped run rendering (mirrors the widget): tool steps fold under an
+  //    AI-narration title; boundary tools / >6 steps split into a new group. ──
+  var BOUNDARY = { browser_navigate: 1, browser_navigate_back: 1, browser_fill_form: 1, TaskCreate: 1 };
+  var MAX_GROUP = 6;
+  var pendingTitle = null;   // last AI narration, promoted to the next group's title
+  var curGroup = null;       // { iconEl, metaEl, stepsEl, count, start, snapStart, snapEnd }
+
+  function finalizeGroup(endSnapshot) {
+    if (!curGroup) return;
+    curGroup.iconEl.className = 'step-icon check'; curGroup.iconEl.textContent = '✓';
+    setGroupMeta(curGroup, endSnapshot, false);
+    curGroup = null;
+    updateWorking();
   }
-  function addStep(m) {
+  function setGroupMeta(g, endSnapshot, live) {
+    var parts = [((Date.now() - g.start) / 1000).toFixed(1) + 's'];
+    var endC = (typeof endSnapshot === 'number') ? endSnapshot : g.snapEnd;
+    if (typeof endC === 'number' && typeof g.snapStart === 'number') { var d = endC - g.snapStart; if (d > 0.00005) parts.push('$' + d.toFixed(4)); }
+    if (g.count) parts.push(g.count + (g.count > 1 ? ' steps' : ' step'));
+    g.metaEl.textContent = parts.join(' · ') + (live ? '…' : '');
+  }
+  function openGroup(title, snapshot) {
     fresh();
-    finalizeStep(typeof m.cost === 'number' ? m.cost : undefined);
-    var el = document.createElement('div'); el.className = 'step';
-    var head = document.createElement('div'); head.className = 'step-head';
+    var el = document.createElement('div'); el.className = 'group';
+    var head = document.createElement('div'); head.className = 'group-head';
     var icon = document.createElement('span'); icon.className = 'step-icon spin';
-    var lab = document.createElement('span'); lab.className = 'label'; lab.textContent = m.label;
+    var t = document.createElement('span'); t.className = 'group-title'; t.textContent = title;
     var meta = document.createElement('span'); meta.className = 'step-meta';
-    var car = document.createElement('span'); car.className = 'step-caret';
-    head.appendChild(icon); head.appendChild(lab); head.appendChild(meta); head.appendChild(car);
-    el.appendChild(head);
-    if (m.detail) {
-      car.textContent = '▸';
-      var det = document.createElement('pre'); det.className = 'step-detail'; det.textContent = m.detail; det.style.display = 'none';
-      el.appendChild(det); head.style.cursor = 'pointer';
-      head.addEventListener('click', function () { var open = det.style.display !== 'none'; det.style.display = open ? 'none' : 'block'; car.textContent = open ? '▸' : '▾'; });
-    }
+    var car = document.createElement('span'); car.className = 'step-caret'; car.textContent = '▸';
+    head.appendChild(icon); head.appendChild(t); head.appendChild(meta); head.appendChild(car);
+    var steps = document.createElement('div'); steps.className = 'group-steps'; steps.style.display = 'none';
+    head.style.cursor = 'pointer';
+    head.addEventListener('click', function () { var open = steps.style.display !== 'none'; steps.style.display = open ? 'none' : 'block'; car.textContent = open ? '▸' : '▾'; });
+    el.appendChild(head); el.appendChild(steps);
     log.appendChild(el);
-    curStep = { el: el, start: Date.now(), snapshot: typeof m.cost === 'number' ? m.cost : undefined };
+    curGroup = { iconEl: icon, metaEl: meta, stepsEl: steps, count: 0, start: Date.now(), snapStart: (typeof snapshot === 'number' ? snapshot : undefined), snapEnd: undefined };
+    updateWorking();
+  }
+  function addNarration(text) { if (text && text.trim()) pendingTitle = text.trim(); }
+  function addStep(m) {
+    if (curGroup && (BOUNDARY[m.tool] || curGroup.count >= MAX_GROUP)) finalizeGroup(typeof m.cost === 'number' ? m.cost : undefined);
+    if (!curGroup) { openGroup(pendingTitle || m.label, typeof m.cost === 'number' ? m.cost : undefined); pendingTitle = null; }
+    var line = document.createElement('div'); line.className = 'tool-line' + (m.isError ? ' err' : '');
+    var dot = document.createElement('span'); dot.className = 'tool-dot'; dot.textContent = m.isError ? '✕' : '✓';
+    var lab = document.createElement('span'); lab.className = 'tool-label'; lab.textContent = m.label;
+    line.appendChild(dot); line.appendChild(lab);
+    if (m.detail) {
+      var det = document.createElement('pre'); det.className = 'step-detail'; det.textContent = m.detail; det.style.display = 'none';
+      line.appendChild(det); lab.style.cursor = 'pointer';
+      lab.addEventListener('click', function () { det.style.display = det.style.display === 'none' ? 'block' : 'none'; });
+    }
+    curGroup.stepsEl.appendChild(line);
+    curGroup.count++;
+    if (typeof m.cost === 'number') curGroup.snapEnd = m.cost;
+    setGroupMeta(curGroup, undefined, true);
     speak(m.label);
     scroll();
   }
   function addResult(m) {
     fresh();
-    finalizeStep(typeof m.cost === 'number' ? m.cost : undefined);
+    finalizeGroup(typeof m.cost === 'number' ? m.cost : undefined);
     var parsed = splitFindings(m.summary || '');
     var card = document.createElement('div'); card.className = 'result';
     var h = document.createElement('div'); h.className = 'head';
@@ -402,6 +442,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (on) { fresh(); if (!workingEl) { workingEl = document.createElement('div'); workingEl.className='working'; workingEl.innerHTML='<span class="pulse"></span><span>Working…</span>'; } log.appendChild(workingEl); scroll(); }
     else if (workingEl && workingEl.parentNode) { workingEl.parentNode.removeChild(workingEl); }
   }
+  // "Working…" only shows when running and no group is currently open (the open
+  // group's own spinner covers the in-group activity).
+  function updateWorking(){ setWorking(running && !curGroup); }
 
   // Voice input (best-effort; webview may lack mic permission — degrade quietly).
   var mic = document.getElementById('mic');
@@ -424,16 +467,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   window.addEventListener('message', function(e){
     var m = e.data; if (!m) return;
     if (m.type==='user'||m.type==='system'||m.type==='assistant') addMessage(m.type, m.text);
+    else if (m.type==='narration') addNarration(m.text);
     else if (m.type==='step') addStep(m);
     else if (m.type==='result') addResult(m);
-    else if (m.type==='reset') { log.innerHTML=''; cleared=false; log.appendChild(emptyEl()); input.value=''; syncSend(); }
+    else if (m.type==='reset') { log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal'; }
     else if (m.type==='appstatus') {
       var dot=document.getElementById('app-dot'); var lab=document.getElementById('app-label');
       if (m.url) { var short=String(m.url).replace(/^https?:\\/\\//,'').replace(/\\/$/,''); lab.textContent = m.online ? short : short+' (offline)'; dot.className = m.online ? 'dot' : 'dot offline'; }
       else { lab.textContent='Set app URL'; dot.className='dot offline'; }
     }
-    else if (m.type==='running') { running = !!m.running; setWorking(running); applyBorder(); syncSend(); }
+    else if (m.type==='running') { running = !!m.running; if (running) { curGroup = null; pendingTitle = null; } updateWorking(); applyBorder(); syncSend(); }
     else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Silent' : 'Visible'; applyBorder(); }
   });
   function emptyEl(){

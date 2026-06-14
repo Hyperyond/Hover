@@ -213,7 +213,10 @@ function handleServerMessage(msg: ServerMessage): void {
       if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
       break;
     case 'text':
-      if (typeof ev.text === 'string' && ev.text.trim()) transcript.push({ kind: 'ai', text: ev.text });
+      if (typeof ev.text === 'string' && ev.text.trim()) {
+        transcript.push({ kind: 'ai', text: ev.text });
+        chatProvider?.pushNarration(ev.text);
+      }
       break;
     case 'session_end':
       transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
