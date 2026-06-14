@@ -325,6 +325,10 @@ const COMMON_DEV_URLS = [
   'http://localhost:5000', 'http://localhost:8000', 'http://localhost:1420',
 ];
 let appStatusTimer: ReturnType<typeof setInterval> | undefined;
+/** Re-entrancy guard: a full local probe sweep can take ~13s (9 × 1.5s) when
+ *  nothing responds, longer than the 5s interval — without this, sweeps stack
+ *  and race on detectedUrl / the pill. */
+let appStatusPolling = false;
 
 async function probeUrl(url: string, timeoutMs = 1500): Promise<boolean> {
   try {
@@ -339,28 +343,34 @@ async function probeUrl(url: string, timeoutMs = 1500): Promise<boolean> {
 }
 
 async function pollAppStatus(): Promise<void> {
-  const active = await envStore?.getActive();
-  const isLocal = !active || active.id === LOCAL_ENV_ID;
-  let online = false;
-  let target: string | null = null;
-  let label: string | null = null;
+  if (appStatusPolling) return; // a previous sweep is still in flight
+  appStatusPolling = true;
+  try {
+    const active = await envStore?.getActive();
+    const isLocal = !active || active.id === LOCAL_ENV_ID;
+    let online = false;
+    let target: string | null = null;
+    let label: string | null = null;
 
-  if (isLocal) {
-    const configured = vscode.workspace.getConfiguration('hover').get<string>('appUrl');
-    const candidates = configured ? [configured] : COMMON_DEV_URLS;
-    for (const u of candidates) {
-      if (await probeUrl(u)) { target = u; break; }
+    if (isLocal) {
+      const configured = vscode.workspace.getConfiguration('hover').get<string>('appUrl');
+      const candidates = configured ? [configured] : COMMON_DEV_URLS;
+      for (const u of candidates) {
+        if (await probeUrl(u)) { target = u; break; }
+      }
+      online = Boolean(target);
+      detectedUrl = target ?? (configured || null);
+      target = target ?? configured ?? null;
+      label = target ? target.replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
+    } else {
+      target = active.url;
+      online = await probeUrl(active.url);
+      label = active.name;
     }
-    online = Boolean(target);
-    detectedUrl = target ?? (configured || null);
-    target = target ?? configured ?? null;
-    label = target ? target.replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
-  } else {
-    target = active.url;
-    online = await probeUrl(active.url);
-    label = active.name;
+    chatProvider?.updateApp(online, label, target ?? undefined);
+  } finally {
+    appStatusPolling = false;
   }
-  chatProvider?.updateApp(online, label, target ?? undefined);
 }
 
 /** Top-right pill click: switch the active environment, or start / set local. */

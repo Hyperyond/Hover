@@ -47,19 +47,30 @@ async function loadPlugins() {
   return out;
 }
 
-const plugins = await loadPlugins();
-
-const handle = await startService({
-  port,
-  devRoot,
-  autoLaunchChrome: false,
-  codeContext: true,
-  plugins,
-});
+let handle;
+try {
+  const plugins = await loadPlugins();
+  handle = await startService({
+    port,
+    devRoot,
+    autoLaunchChrome: false,
+    codeContext: true,
+    plugins,
+  });
+} catch (err) {
+  // Surface a structured line the parent (engine.ts) can show, instead of a
+  // bare unhandled-rejection stack, then exit so the parent's `exit` handler
+  // reports it cleanly.
+  process.stdout.write(`HOVER_ENGINE_ERROR=${(err instanceof Error ? err.message : String(err)).replace(/\s+/g, ' ')}\n`);
+  process.exit(1);
+}
 
 process.stdout.write(`HOVER_ENGINE_PORT=${handle.port}\n`);
 
+let shuttingDown = false;
 const shutdown = async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   try {
     await handle.close();
   } catch {
@@ -69,3 +80,11 @@ const shutdown = async () => {
 };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+// Parent-death watchdog: the extension host spawns us over a stdio pipe. If it
+// dies UNCLEANLY (crash / force-kill), `deactivate` → stopEngine never runs and
+// we'd orphan this engine + any debug Chrome it launched, holding port 51789.
+// The parent's end of our stdin closes when it dies, so self-exit on that.
+process.stdin.on('close', shutdown);
+process.stdin.on('end', shutdown);
+process.stdin.resume();

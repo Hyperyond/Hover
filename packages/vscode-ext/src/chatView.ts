@@ -608,7 +608,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='narration') addNarration(m.text);
     else if (m.type==='step') addStep(m);
     else if (m.type==='result') addResult(m);
-    else if (m.type==='reset') { log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
+    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } workingEl=null; running=false; log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') {
       currentModeId = m.id || null;
       document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal';
@@ -624,7 +624,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     else if (m.type==='accounts') { accounts = Array.isArray(m.accounts) ? m.accounts : []; }
     else if (m.type==='busy') { setBusy(m.done ? null : (m.text||'Working…')); }
-    else if (m.type==='running') { running = !!m.running; if (running) { curGroup = null; pendingTitle = null; } updateWorking(); applyBorder(); syncSend(); }
+    else if (m.type==='running') { running = !!m.running; if (running) { curGroup = null; pendingTitle = null; } else if (curGroup) { finalizeGroup(); } updateWorking(); applyBorder(); syncSend(); }
     else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Silent' : 'Visible'; applyBorder(); }
   });
   function emptyEl(){

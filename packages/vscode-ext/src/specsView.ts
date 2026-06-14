@@ -128,9 +128,11 @@ export function registerSpecsView(): vscode.Disposable[] {
   const refresh = vscode.commands.registerCommand('hover.refreshSpecs', () => provider.refresh());
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/__vibe_tests__/**/*.spec.ts');
+  // Create/delete change the tree; a content edit doesn't change the row
+  // (filename + stamped prompt), so we skip onDidChange to avoid re-opening +
+  // re-parsing every spec on each save. Manual refresh covers prompt edits.
   watcher.onDidCreate(() => provider.refresh());
   watcher.onDidDelete(() => provider.refresh());
-  watcher.onDidChange(() => provider.refresh());
 
   return [view, refresh, watcher];
 }

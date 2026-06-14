@@ -64,13 +64,21 @@ class CloudPlaceholderItem extends vscode.TreeItem {
 export class EnvironmentsTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
+  private refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly store: EnvironmentStore) {
-    store.onDidChange(() => this.changed.fire());
+    store.onDidChange(() => this.refresh());
   }
 
+  /** Coalesce bursts — a single save() fires both store.onDidChange AND the
+   *  .hover/environments.json file watcher, and each rebuild does per-account
+   *  SecretStorage reads. Debounce so they collapse into one rebuild. */
   refresh(): void {
-    this.changed.fire();
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = undefined;
+      this.changed.fire();
+    }, 60);
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

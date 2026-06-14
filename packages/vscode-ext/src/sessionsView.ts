@@ -89,8 +89,10 @@ export function registerSessionsView(): vscode.Disposable[] {
   const view = vscode.window.createTreeView('hover.sessions', { treeDataProvider: provider });
   const refresh = vscode.commands.registerCommand('hover.refreshSessions', () => provider.refresh());
   const watcher = vscode.workspace.createFileSystemWatcher('**/.hover/sessions/*.json');
+  // Session summaries are written once (append-only) — a later content edit
+  // won't change the row, so skip onDidChange to avoid re-reading + re-parsing
+  // every session file on each write.
   watcher.onDidCreate(() => provider.refresh());
-  watcher.onDidChange(() => provider.refresh());
   watcher.onDidDelete(() => provider.refresh());
   return [view, refresh, watcher];
 }
