@@ -4,10 +4,16 @@
  *
  * Why not esbuild-bundle @hover-dev/core into the extension? Because
  * playwright-core does dynamic `require('chromium-bidi/…')` that esbuild can't
- * resolve. So instead we `npm pack` core and `npm install` the tarball into
- * `engine/`, which gives a normal flat node_modules where playwright-core's
- * runtime requires work. The extension spawns `engine/host.mjs` under plain
- * node, which resolves @hover-dev/core from that node_modules.
+ * resolve. So instead we `pnpm pack` core (+ the mode plugins) and `npm install`
+ * the tarballs into `engine/`, which gives a normal flat node_modules where
+ * playwright-core's runtime requires work. The extension spawns
+ * `engine/host.mjs` under plain node, which resolves these from node_modules.
+ *
+ * We also stage @hover-dev/security so the 🟠 security mode actually works in
+ * the extension (host.mjs loads it and passes it to startService). It's
+ * self-contained — its deps are public npm packages. (@hover-dev/pentest is a
+ * findings-report renderer, not a mode plugin, so it isn't staged; the 🔴
+ * pentest mode plugin isn't built yet.)
  *
  * Run: `pnpm --filter hover-dev stage:engine` (or via the package flow).
  */
@@ -18,28 +24,51 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const extRoot = join(here, '..');
-const coreDir = join(extRoot, '..', 'core');
+const repoRoot = join(extRoot, '..', '..');
 const engineDir = join(extRoot, 'engine');
+const pkgDir = (name) => join(extRoot, '..', name); // packages/<name>
 
 const run = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, stdio: 'inherit' });
 
-// Clean prior staged deps + any leftover tarball.
+// Clean prior staged deps + any leftover tarballs.
 rmSync(join(engineDir, 'node_modules'), { recursive: true, force: true });
 for (const f of readdirSync(engineDir)) if (f.endsWith('.tgz')) rmSync(join(engineDir, f));
 
-// `npm pack` runs core's prepack (clean + build), producing a fresh tarball in engine/.
-console.log('[stage-engine] packing @hover-dev/core …');
-run('npm', ['pack', '--pack-destination', engineDir], coreDir);
-const tgz = readdirSync(engineDir).find((f) => f.endsWith('.tgz'));
-if (!tgz) throw new Error('[stage-engine] npm pack produced no tarball');
+// Build engine packages first, in dependency order, so the packed dists exist.
+console.log('[stage-engine] building core + security …');
+run('pnpm', ['--filter', '@hover-dev/core', '--filter', '@hover-dev/security', 'build'], repoRoot);
 
-// Flat, prod-only install into engine/node_modules. --no-save leaves engine/package.json untouched.
-console.log('[stage-engine] installing engine into engine/node_modules …');
-run('npm', ['install', join(engineDir, tgz), '--no-save', '--omit=dev', '--no-audit', '--no-fund'], engineDir);
-
-rmSync(join(engineDir, tgz));
-
-if (!existsSync(join(engineDir, 'node_modules', '@hover-dev', 'core', 'dist', 'service.js'))) {
-  throw new Error('[stage-engine] staged engine is missing @hover-dev/core/dist/service.js');
+/** pnpm-pack a package into engineDir and return the new tarball's path. */
+function packInto(dir) {
+  const before = new Set(readdirSync(engineDir).filter((f) => f.endsWith('.tgz')));
+  run('pnpm', ['pack', '--pack-destination', engineDir], dir);
+  const added = readdirSync(engineDir).filter((f) => f.endsWith('.tgz')).find((f) => !before.has(f));
+  if (!added) throw new Error(`[stage-engine] pnpm pack produced no tarball for ${dir}`);
+  return join(engineDir, added);
 }
-console.log('[stage-engine] done →', join(engineDir, 'node_modules'));
+
+console.log('[stage-engine] packing core + security …');
+const coreTgz = packInto(pkgDir('core'));
+const securityTgz = packInto(pkgDir('security'));
+
+const npmFlags = ['--no-save', '--omit=dev', '--no-audit', '--no-fund'];
+
+// security is self-contained (its deps are public npm packages), so this
+// resolves cleanly alongside core.
+console.log('[stage-engine] installing core + security into engine/node_modules …');
+run('npm', ['install', coreTgz, securityTgz, ...npmFlags], engineDir);
+
+// Drop the tarballs (they're .vscodeignore'd anyway, but keep engine/ tidy).
+for (const t of [coreTgz, securityTgz]) rmSync(t, { force: true });
+
+// Verify the required dists landed (security is part of the value prop now).
+const must = [
+  ['@hover-dev/core', 'dist/service.js'],
+  ['@hover-dev/security', 'dist/index.js'],
+];
+for (const [pkg, rel] of must) {
+  if (!existsSync(join(engineDir, 'node_modules', ...pkg.split('/'), ...rel.split('/')))) {
+    throw new Error(`[stage-engine] staged engine is missing ${pkg}/${rel}`);
+  }
+}
+console.log(`[stage-engine] done → ${join(engineDir, 'node_modules')}`);

@@ -44,7 +44,7 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*
 
 The full loop is shipped and verified: a sandboxed coding-agent CLI drives the user's Chrome over CDP and crystallizes the run into a plain Playwright spec. The **`hover-dev` VS Code extension is live on the Marketplace** and is the active surface (chat + Specs/Sessions/Environments + the in-extension engine; security/pentest modes, the `@account` credential vault, and PR-CI workflow generation). Active work lives on the `feat/security-direction` branch. The bundler-plugin / in-page-widget path is frozen (see Direction).
 
-Known gap: security/pentest modes are wired in the extension UI but the staged engine (`host.mjs` → `startService`) does not yet load the `@hover-dev/security` / `@hover-dev/pentest` plugins, so those modes are not functional in the extension yet — staging them in is a TODO.
+Mode status in the extension: **🟠 security is wired** — `scripts/stage-engine.mjs` packs `@hover-dev/security` into `engine/node_modules` and `host.mjs` loads its `defineHoverPlugin` manifest into `startService({ plugins })` (mode `security` + MITM + the `list_flows`/`replay_flow` MCP). **🔴 pentest is NOT a mode plugin** — `@hover-dev/pentest` is a findings-report renderer (`renderFindingsReport` / `writeFindingsReport`), not a `defineHoverPlugin`, so the red mode shown in the UI has no engine backing yet. Building a real pentest mode plugin (reuse security's MITM/MCP + an offensive prompt + the report output) is a TODO.
 
 # Architecture
 
