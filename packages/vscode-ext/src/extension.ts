@@ -90,6 +90,7 @@ interface SpecMsg {
 let transcript: SpecMsg[] = [];
 let runSessionId: string | undefined;
 let stepCount = 0;
+let runCost = 0;
 /** Most recent reachable dev URL (configured or auto-detected). */
 let detectedUrl: string | null = null;
 /** Resolver for an in-flight ensureBrowser() handshake. */
@@ -123,6 +124,7 @@ async function runPrompt(prompt: string): Promise<void> {
   }
   transcript.push({ kind: 'user', text: prompt });
   stepCount = 0;
+  runCost = 0;
   chatProvider?.setRunning(true);
 
   const url = vscode.workspace.getConfiguration('hover').get<string>('appUrl') || detectedUrl;
@@ -167,16 +169,33 @@ function handleServerMessage(msg: ServerMessage): void {
       if (typeof ev.sessionId === 'string') runSessionId = ev.sessionId;
       chatProvider?.setRunning(true);
       break;
-    case 'tool_use':
+    case 'tool_use': {
       transcript.push({ kind: 'step', tool: ev.tool, input: ev.input });
       stepCount++;
-      chatProvider?.pushStep(humanizeTool(String(ev.tool ?? ''), ev.input));
+      if (typeof ev.costUsdSnapshot === 'number') runCost = ev.costUsdSnapshot;
+      let detail = '';
+      try {
+        detail = ev.input == null ? '' : JSON.stringify(ev.input, null, 2);
+      } catch {
+        detail = String(ev.input);
+      }
+      chatProvider?.pushStep({
+        label: humanizeTool(String(ev.tool ?? ''), ev.input),
+        tool: String(ev.tool ?? ''),
+        detail,
+        cost: typeof ev.costUsdSnapshot === 'number' ? ev.costUsdSnapshot : undefined,
+      });
+      break;
+    }
+    case 'usage':
+      if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
       break;
     case 'text':
       if (typeof ev.text === 'string' && ev.text.trim()) transcript.push({ kind: 'ai', text: ev.text });
       break;
     case 'session_end':
       transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
+      if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
       chatProvider?.setRunning(false);
       if (ev.cancelled) {
         chatProvider?.pushSystem('Run cancelled.');
@@ -191,7 +210,7 @@ function handleServerMessage(msg: ServerMessage): void {
         // Don't fake a PASS; show it as a plain reply.
         chatProvider?.pushAssistant(String(ev.summary ?? 'Done.'));
       } else {
-        chatProvider?.pushResult('PASS', String(ev.summary ?? 'Done.'), stepCount);
+        chatProvider?.pushResult('PASS', String(ev.summary ?? 'Done.'), stepCount, runCost);
       }
       break;
   }

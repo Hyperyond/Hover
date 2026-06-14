@@ -65,8 +65,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   // Streamed run rendering (called by the extension as engine events arrive).
-  pushStep(label: string): void {
-    this.post({ type: 'step', label });
+  pushStep(step: { label: string; tool?: string; detail?: string; cost?: number }): void {
+    this.post({ type: 'step', ...step });
   }
   pushAssistant(text: string): void {
     this.post({ type: 'assistant', text });
@@ -74,8 +74,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   pushSystem(text: string): void {
     this.post({ type: 'system', text });
   }
-  pushResult(verdict: string, summary: string, steps?: number): void {
-    this.post({ type: 'result', verdict, summary, steps });
+  pushResult(verdict: string, summary: string, steps?: number, cost?: number): void {
+    this.post({ type: 'result', verdict, summary, steps, cost });
   }
   setRunning(running: boolean): void {
     this.post({ type: 'running', running });
@@ -103,6 +103,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     --bg: #1a1a1a; --bg-2: #222224; --bg-3: #141414; --line: #2a2a2c;
     --text: #e5e7eb; --text-mute: #9ca3af; --text-dim: #6b7280;
     --accent: #7CFFA8; --accent-dim: rgba(124,255,168,0.16); --accent-ink: #0c2417;
+    --warn: #fb923c;
   }
   body.mode-security { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
   body.mode-pentest  { --accent: #f87171; --accent-dim: rgba(248,113,113,0.16); --accent-ink: #2a0d0d; }
@@ -139,13 +140,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .msg.user { align-self: flex-end; max-width: 88%; background: var(--accent); color: var(--accent-ink); font-weight: 500; }
   .msg.assistant { align-self: flex-start; max-width: 88%; background: var(--bg-2); border: 1px solid var(--line); }
   .msg.system { align-self: stretch; font-size: 12px; color: var(--text-mute); background: var(--bg-2); border: 1px solid var(--line); }
-  .step { display: flex; align-items: center; gap: 9px; padding: 9px 11px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; }
-  .step .check { color: var(--accent); font-weight: 700; }
+  .step { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; }
+  .step-head { display: flex; align-items: center; gap: 9px; }
+  .step-icon { width: 14px; height: 14px; flex: none; text-align: center; }
+  .step-icon.check { color: var(--accent); font-weight: 700; }
+  .step-icon.spin { border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: hoverspin .7s linear infinite; box-sizing: border-box; }
+  @keyframes hoverspin { to { transform: rotate(360deg); } }
   .step .label { flex: 1; }
+  .step-meta { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+  .step-caret { color: var(--text-dim); font-size: 11px; }
+  .step-detail { margin: 8px 0 0; padding: 8px; background: var(--bg-3); border-radius: 6px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 11px; white-space: pre-wrap; overflow: auto; max-height: 240px; }
   .result { border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-dim); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   .result .head { font-weight: 700; color: var(--accent); }
+  .md { line-height: 1.5; }
+  .md h4 { font-size: 1em; margin: 8px 0 4px; }
+  .md div { margin: 2px 0; }
+  .md code { background: var(--bg-3); padding: 1px 4px; border-radius: 4px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
+  .md table { border-collapse: collapse; margin: 6px 0; font-size: 12px; }
+  .md th, .md td { border: 1px solid var(--line); padding: 3px 7px; text-align: left; }
+  .md ul { margin: 4px 0; padding-left: 18px; }
   .saveas { align-self: flex-start; padding: 6px 11px; border: 1px solid var(--accent); border-radius: 7px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
   .saveas:hover { background: var(--accent); color: var(--accent-ink); }
+  .findings { border: 1px solid var(--warn); border-radius: 12px; background: rgba(251,146,60,0.10); padding: 12px; display: flex; flex-direction: column; gap: 7px; }
+  .findings .fhead { font-weight: 700; color: var(--warn); }
+  .finding { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; }
+  .badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; flex: none; text-transform: uppercase; letter-spacing: .03em; }
+  .badge.bug { background: #f87171; color: #240808; }
+  .badge.minor { background: var(--warn); color: #241805; }
+  .badge.info { background: var(--line); color: var(--text); }
 
   /* Claude-Code-style input box: one rounded container, toolbar row inside. */
   #composer { padding: 10px 12px 12px; }
@@ -231,8 +253,94 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   function fresh() { if (!cleared) { log.innerHTML = ''; cleared = true; } }
   function scroll() { if (typeof workingEl !== 'undefined' && workingEl && running && workingEl.parentNode) log.appendChild(workingEl); log.scrollTop = log.scrollHeight; }
   function addMessage(role, text) { fresh(); var el = document.createElement('div'); el.className = 'msg ' + role; el.textContent = text; log.appendChild(el); scroll(); }
-  function addStep(label) { fresh(); var el = document.createElement('div'); el.className = 'step'; var c = document.createElement('span'); c.className = 'check'; c.textContent = '✓'; var l = document.createElement('span'); l.className = 'label'; l.textContent = label; el.appendChild(c); el.appendChild(l); log.appendChild(el); scroll(); }
-  function addResult(verdict, summary, steps) { fresh(); var card = document.createElement('div'); card.className = 'result'; var h = document.createElement('div'); h.className = 'head'; h.textContent = '✓ ' + (verdict || 'PASS') + (steps ? ' — done in ' + steps + ' steps' : ''); var b = document.createElement('div'); b.textContent = summary || ''; var s = document.createElement('button'); s.className = 'saveas'; s.textContent = 'Save as spec'; s.addEventListener('click', function(){ vscode.postMessage({ type:'command', id:'hover.saveSpec' }); }); card.appendChild(h); card.appendChild(b); card.appendChild(s); log.appendChild(card); scroll(); }
+  var curStep = null; // { el, start, snapshot }
+  function finalizeStep(nextSnapshot) {
+    if (!curStep) return;
+    var icon = curStep.el.querySelector('.step-icon'); icon.className = 'step-icon check'; icon.textContent = '✓';
+    var parts = [((Date.now() - curStep.start) / 1000).toFixed(1) + 's'];
+    if (typeof nextSnapshot === 'number' && typeof curStep.snapshot === 'number') { var d = nextSnapshot - curStep.snapshot; if (d > 0.00005) parts.push('$' + d.toFixed(4)); }
+    curStep.el.querySelector('.step-meta').textContent = parts.join(' · ');
+    curStep = null;
+  }
+  function addStep(m) {
+    fresh();
+    finalizeStep(typeof m.cost === 'number' ? m.cost : undefined);
+    var el = document.createElement('div'); el.className = 'step';
+    var head = document.createElement('div'); head.className = 'step-head';
+    var icon = document.createElement('span'); icon.className = 'step-icon spin';
+    var lab = document.createElement('span'); lab.className = 'label'; lab.textContent = m.label;
+    var meta = document.createElement('span'); meta.className = 'step-meta';
+    var car = document.createElement('span'); car.className = 'step-caret';
+    head.appendChild(icon); head.appendChild(lab); head.appendChild(meta); head.appendChild(car);
+    el.appendChild(head);
+    if (m.detail) {
+      car.textContent = '▸';
+      var det = document.createElement('pre'); det.className = 'step-detail'; det.textContent = m.detail; det.style.display = 'none';
+      el.appendChild(det); head.style.cursor = 'pointer';
+      head.addEventListener('click', function () { var open = det.style.display !== 'none'; det.style.display = open ? 'none' : 'block'; car.textContent = open ? '▸' : '▾'; });
+    }
+    log.appendChild(el);
+    curStep = { el: el, start: Date.now(), snapshot: typeof m.cost === 'number' ? m.cost : undefined };
+    scroll();
+  }
+  function addResult(m) {
+    fresh();
+    finalizeStep(typeof m.cost === 'number' ? m.cost : undefined);
+    var parsed = splitFindings(m.summary || '');
+    var card = document.createElement('div'); card.className = 'result';
+    var h = document.createElement('div'); h.className = 'head';
+    h.textContent = '✓ ' + (m.verdict || 'PASS') + (m.steps ? ' — done in ' + m.steps + ' steps' : '') + (typeof m.cost === 'number' && m.cost > 0 ? ' · $' + m.cost.toFixed(4) : '');
+    var body = document.createElement('div'); body.className = 'md'; body.innerHTML = mdToHtml(parsed.main);
+    var save = document.createElement('button'); save.className = 'saveas'; save.textContent = 'Save as spec'; save.addEventListener('click', function () { vscode.postMessage({ type: 'command', id: 'hover.saveSpec' }); });
+    card.appendChild(h); card.appendChild(body); card.appendChild(save);
+    log.appendChild(card);
+    if (parsed.findings) renderFindings(parsed.findings);
+    scroll();
+  }
+  function renderFindings(text) {
+    var card = document.createElement('div'); card.className = 'findings';
+    var h = document.createElement('div'); h.className = 'fhead'; h.textContent = '⚠ Findings'; card.appendChild(h);
+    text.split('\\n').forEach(function (line) {
+      var t = line.replace(/^[-*\\s]+/, '').trim(); if (!t) return;
+      var sev = (t.match(/\\b(bug|major|high|minor|medium|low|info)\\b/i) || [])[1];
+      var row = document.createElement('div'); row.className = 'finding';
+      if (sev) { var b = document.createElement('span'); var s = sev.toLowerCase(); b.className = 'badge ' + (s === 'bug' || s === 'major' || s === 'high' ? 'bug' : (s === 'info' ? 'info' : 'minor')); b.textContent = sev; row.appendChild(b); }
+      var span = document.createElement('span'); span.innerHTML = mdToHtml(t); row.appendChild(span);
+      card.appendChild(row);
+    });
+    log.appendChild(card);
+  }
+  // Split an agent summary into the main body + an optional Findings section.
+  function splitFindings(s) {
+    var m = s.match(/(^|\\n)#{1,6}\\s*Findings\\b/i) || s.match(/(^|\\n)\\s*Findings\\s*:/i);
+    if (!m) return { main: s, findings: null };
+    var idx = m.index + (m[1] ? m[1].length : 0);
+    var after = s.slice(idx).replace(/^#{1,6}\\s*Findings\\b[:：]?/i, '').replace(/^\\s*Findings\\s*:/i, '');
+    return { main: s.slice(0, idx).trim(), findings: after.trim() };
+  }
+  // Minimal, safe markdown → HTML (escape first, then a few constructs).
+  function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function inline(t) { return esc(t).replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>').replace(/\`([^\`]+)\`/g, '<code>$1</code>'); }
+  function mdToHtml(md) {
+    if (!md) return '';
+    var lines = md.split('\\n'); var out = []; var i = 0;
+    while (i < lines.length) {
+      var line = lines[i];
+      if (/^\\s*\\|.*\\|\\s*$/.test(line)) { // table block
+        var rows = []; while (i < lines.length && /^\\s*\\|.*\\|\\s*$/.test(lines[i])) { rows.push(lines[i]); i++; }
+        var cells = rows.map(function (r) { return r.trim().replace(/^\\||\\|$/g, '').split('|').map(function (c) { return c.trim(); }); });
+        var html = '<table>'; var start = 0;
+        if (cells[1] && cells[1].every(function (c) { return /^:?-{2,}:?$/.test(c); })) { html += '<tr>' + cells[0].map(function (c) { return '<th>' + inline(c) + '</th>'; }).join('') + '</tr>'; start = 2; }
+        for (var r = start; r < cells.length; r++) html += '<tr>' + cells[r].map(function (c) { return '<td>' + inline(c) + '</td>'; }).join('') + '</tr>';
+        out.push(html + '</table>'); continue;
+      }
+      var hm = line.match(/^(#{1,6})\\s+(.*)$/); if (hm) { out.push('<h4>' + inline(hm[2]) + '</h4>'); i++; continue; }
+      if (/^\\s*[-*]\\s+/.test(line)) { var items = []; while (i < lines.length && /^\\s*[-*]\\s+/.test(lines[i])) { items.push('<li>' + inline(lines[i].replace(/^\\s*[-*]\\s+/, '')) + '</li>'); i++; } out.push('<ul>' + items.join('') + '</ul>'); continue; }
+      if (line.trim() === '') { out.push(''); i++; continue; }
+      out.push('<div>' + inline(line) + '</div>'); i++;
+    }
+    return out.join('');
+  }
 
   var running = false;
   var iconSend = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
@@ -286,8 +394,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   window.addEventListener('message', function(e){
     var m = e.data; if (!m) return;
     if (m.type==='user'||m.type==='system'||m.type==='assistant') addMessage(m.type, m.text);
-    else if (m.type==='step') addStep(m.label);
-    else if (m.type==='result') addResult(m.verdict, m.summary, m.steps);
+    else if (m.type==='step') addStep(m);
+    else if (m.type==='result') addResult(m);
     else if (m.type==='reset') { log.innerHTML=''; cleared=false; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal'; }
     else if (m.type==='agent') { document.getElementById('model-label').textContent = m.label || 'Claude'; }
