@@ -1,89 +1,22 @@
-# Hover (`hover-dev`)
+# Hover — AI E2E Testing & Security
 
-Hover's VSCode extension — the **primary surface** over Hover's agent-agnostic
-engine (`@hover-dev/cli` / `@hover-dev/core`). One extension for **AI test
-authoring + application-security (authz / BOLA) testing**: explore your app,
-crystallize verified flows into plain `@playwright/test` specs that run in CI
-with no AI. It is a thin GUI face — it never re-implements the engine.
+**Test your web app at the speed of conversation.** Describe a flow in plain English, watch AI drive your real browser, and save it as a Playwright spec that runs in CI forever — no agent, no model, no keys.
 
-(npm package name `hover-dev`; Marketplace id will be `hyperyond.hover-dev`.
-Display name stays "Hover".)
+Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex), drives your real Chrome via Playwright, and crystallizes the verified run into plain `@playwright/test` code. The AI's job ends at "save" — CI stays pure Playwright, with zero tokens.
 
-Design: `docs/superpowers/specs/2026-06-14-security-direction-design.md` (§3.2,
-why-primary) and `docs/superpowers/specs/2026-06-06-vscode-extension-design.md`
-(feature ranking F1–F7).
+- **Chat to a test file** — Describe what you want to verify; Hover drives your real app and saves the verified run as a plain `@playwright/test` spec. No recording by hand, no brittle selectors.
+- **Multi-environment accounts, handled** — Define test accounts per environment (local / staging / prod) once, then just mention `@account` in chat — the agent logs in for you. Credentials are parameterized into `process.env` references: never written into the spec, and the same names export to your CI secrets in one click.
+- **Uses your local AI — nothing to configure** — Runs on the Claude Code / Codex CLI already on your machine, on the subscription you already pay for. No model keys to wire, no SDK, nothing leaves your computer.
+- **Security & pentest in the same chat** — Flip into 🟠 Security (IDOR / broken authorization / business-logic) or 🔴 Pentest (offensive, white-box) against your **own** app — confirmed findings become `.security.spec.ts` CI gates or a report.
+- **Self-healing tests (coming)** — When a spec breaks in CI, Hover Cloud will repair the UI drift with AI and surface it on a dashboard. Authoring always stays local and free.
 
-## Status
+## Requirements
 
-Native UI (no webview; matches VSCode's look). One extension for **testing +
-application security** — the split is a mode switch, not two extensions.
+- **VS Code 1.85** or higher
+- **One coding-agent CLI** on your `PATH` — [Claude Code](https://claude.com/claude-code) (`npm i -g @anthropic-ai/claude-code`) or [OpenAI Codex](https://github.com/openai/codex) (`npm i -g @openai/codex`), signed in with your subscription or your own API key.
 
-**Activity Bar → Hover** has four views:
+## New to Hover?
 
-- **Chat** — a webview panel: describe a flow in natural language and (once the
-  engine is wired in) Hover drives a browser and crystallizes the verified flow
-  into a spec. Styled with VSCode theme tokens. *(UI shell today; engine wiring
-  is the next slice.)*
+Visit [gethover.dev](https://www.gethover.dev/) to get started, or read the [docs](https://www.gethover.dev/docs).
 
-- **Specs** — crystallized `*.spec.ts` / `*.security.spec.ts`, grouped into
-  **Tests** and **Security**, with the stamped prompt as the row description.
-  Inline ▶ Run (terminal Playwright) and ⇄ Review-candidate actions. Auto-refresh.
-- **Sessions** — the agent-run ledger from `.hover/sessions/` (model · cost ·
-  outcome), newest first; click to open the JSON.
-- **Probe Seeds** — project probe seeds under `.hover/rules/`, grouped
-  authz / vuln; click to open; "+" scaffolds a new one.
-
-**Status bar** — `✨ Hover: <mode>` shows the current mode and tints
-orange (security) / red (pentest); click to **switch mode** (Testing / Security
-/ Pentest), and reflects whether a dev service is connected.
-
-Commands & editor integrations:
-
-- **F1** *Review Optimization Candidate* (command + editor-title button) — opens a native `vscode.diff` between
-  the active spec and its candidate at
-  `<workspaceRoot>/.hover/cache/optimized/<spec>.draft`. Invoke from the editor
-  title bar on a `*.spec.ts` file or via the palette.
-- **F2** *element → source* — Alt+click any host element in the in-page widget
-  and the editor jumps to its `data-hover-source` location
-  (`<rel-path>:<line>:<col>`, stamped by `@hover-dev/transform-source`). The
-  transport reuses the core WebSocket: the widget sends `reveal-source`, the
-  service relays it, and this extension's WS client (`serviceClient.ts`, ports
-  51789–51798) opens the file via `hover.openSource`. The command also accepts a
-  value directly / prompts. End-to-end needs a running example + the extension
-  loaded in a VSCode dev host (manual smoke).
-
-- **F3 (slice)** *spec-lifecycle CodeLens* — on `*.spec.ts` / `*.security.spec.ts`
-  shows the stamped `Original prompt:` provenance and, when a candidate draft
-  exists, a "✨ Review optimization candidate" lens (runs F1). It deliberately
-  does not add a Run/Debug lens — the official Playwright extension owns that.
-
-- **F4 (slice)** *seed authoring* — probe seeds under `.hover/rules/security/*.json`
-  get JSON-schema validation + autocomplete; *Hover: New Probe Seed* scaffolds a
-  template seed file. Lowers the bar to add an authz/vuln probe to a project.
-
-Planned next (see the feature-assessment doc): F3 Re-record action, mode switch
-(testing / security-orange / pentest-red in one extension).
-
-## Develop
-
-```bash
-pnpm --filter hover-dev typecheck
-pnpm --filter hover-dev build    # tsup → dist/extension.cjs (ws bundled, vscode external)
-pnpm --filter hover-dev watch    # rebuild on change; Reload Window in the dev host
-```
-
-Press <kbd>F5</kbd> from this folder (uses `.vscode/launch.json`) to run an
-Extension Development Host with `examples/basic-app` open.
-
-## Install as a real extension (sideload)
-
-```bash
-pnpm --filter hover-dev build
-cd packages/vscode-ext && pnpm dlx @vscode/vsce package --no-dependencies
-# → hover-dev-0.0.0.vsix
-```
-
-Install the `.vsix`: VSCode **Extensions** view → **⋯** → **Install from
-VSIX…** (or `code --install-extension hover-dev-0.0.0.vsix` if the `code` shell
-command is installed; Cursor/Windsurf use the same VSIX). This is local
-sideloading — **not** a Marketplace publish.
+Open source (Apache-2.0) — [github.com/Hyperyond/Hover](https://github.com/Hyperyond/Hover).
