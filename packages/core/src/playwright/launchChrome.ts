@@ -36,6 +36,11 @@ export interface LaunchOptions {
     /** Base64 SHA-256 of the MITM CA's SubjectPublicKeyInfo. */
     spki: string;
   };
+  /** Launch Chrome headless (`--headless=new`) — no visible window. Still
+   *  CDP-drivable and still uses the persistent profile, so login state set in
+   *  a prior headed launch carries over. Used by the VSCode extension's silent
+   *  mode. Default false (visible window). */
+  headless?: boolean;
 }
 
 export type LaunchResult =
@@ -153,6 +158,7 @@ export async function launchDebugChrome(opts: LaunchOptions = {}): Promise<Launc
     '--no-first-run',
     '--no-default-browser-check',
   ];
+  if (opts.headless) args.push('--headless=new');
   if (opts.proxy) {
     args.push(
       `--proxy-server=127.0.0.1:${opts.proxy.port}`,

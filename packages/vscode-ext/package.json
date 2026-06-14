@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -78,6 +78,23 @@
         "category": "Hover"
       },
       {
+        "command": "hover.startApp",
+        "title": "Start App (dev server + browser)",
+        "category": "Hover",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "hover.toggleBrowser",
+        "title": "Toggle Browser (Silent / Visible)",
+        "category": "Hover",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "hover.appStatus",
+        "title": "App: Set URL or Start",
+        "category": "Hover"
+      },
+      {
         "command": "hover.openRepo",
         "title": "Star on GitHub",
         "category": "Hover"
@@ -145,6 +162,26 @@
           "contextualTitle": "Hover"
         }
       ]
+    },
+    "configuration": {
+      "title": "Hover",
+      "properties": {
+        "hover.appUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Your dev server URL (e.g. http://localhost:5173). Leave empty to auto-detect common dev ports."
+        },
+        "hover.browser": {
+          "type": "string",
+          "enum": ["silent", "visible"],
+          "enumDescriptions": [
+            "Headless — no browser window; runs stream into the chat",
+            "Visible — show the debug Chrome window"
+          ],
+          "default": "silent",
+          "description": "How Hover runs the browser. Silent = headless (default); Visible = a shown Chrome window you can watch."
+        }
+      }
     },
     "jsonValidation": [
       {

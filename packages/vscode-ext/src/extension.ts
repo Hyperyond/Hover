@@ -15,6 +15,7 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   connectServicePool,
   type AgentEntry,
@@ -135,9 +136,17 @@ function handleServerMessage(msg: ServerMessage): void {
     case 'session_end':
       transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
       chatProvider?.setRunning(false);
-      if (ev.cancelled) chatProvider?.pushSystem('Run cancelled.');
-      else if (ev.isError) chatProvider?.pushSystem(`Run ended with an error: ${String(ev.summary ?? '')}`);
-      else chatProvider?.pushResult('PASS', String(ev.summary ?? 'Done.'), stepCount);
+      if (ev.cancelled) {
+        chatProvider?.pushSystem('Run cancelled.');
+      } else if (ev.isError) {
+        const summary = String(ev.summary ?? '');
+        chatProvider?.pushSystem(`Run ended with an error: ${summary}`);
+        if (/cdp|chrome|debug|9222|connect|browser/i.test(summary)) {
+          chatProvider?.pushSystem('No app browser detected — click "▶ Start App" (in the chat) to start your dev server + browser.');
+        }
+      } else {
+        chatProvider?.pushResult('PASS', String(ev.summary ?? 'Done.'), stepCount);
+      }
       break;
   }
 }
@@ -158,6 +167,152 @@ function humanizeTool(tool: string, input: unknown): string {
     case 'browser_wait_for': return 'Wait';
     case 'browser_navigate_back': return 'Go back';
     default: return tool.replace(/^mcp__[a-z0-9_]+__/, '').replace(/^browser_/, '').replace(/_/g, ' ') || tool;
+  }
+}
+
+// ── App / dev-server status ───────────────────────────────────────────────
+// The top-right pill reflects whether the project's dev server is reachable.
+// With no configured URL we auto-probe common dev ports and show the first
+// that responds; a configured URL is probed directly.
+const COMMON_DEV_URLS = [
+  'http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174',
+  'http://localhost:4321', 'http://localhost:8080', 'http://localhost:4200',
+  'http://localhost:5000', 'http://localhost:8000', 'http://localhost:1420',
+];
+let appStatusTimer: ReturnType<typeof setInterval> | undefined;
+
+async function probeUrl(url: string, timeoutMs = 1500): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pollAppStatus(): Promise<void> {
+  const configured = vscode.workspace.getConfiguration('hover').get<string>('appUrl');
+  const candidates = configured ? [configured] : COMMON_DEV_URLS;
+  let online: string | null = null;
+  for (const u of candidates) {
+    if (await probeUrl(u)) { online = u; break; }
+  }
+  chatProvider?.updateApp(Boolean(online), online ?? configured ?? null);
+}
+
+/** Top-right pill click: set the URL or start the app. */
+async function appStatus(): Promise<void> {
+  const pick = await vscode.window.showQuickPick(
+    [
+      { label: '$(play) Start App', description: 'dev server + browser', action: 'start' },
+      { label: '$(link) Set app URL…', description: 'manually set the dev server URL', action: 'set' },
+    ],
+    { title: 'Hover — app' },
+  );
+  if (pick?.action === 'start') await startApp();
+  else if (pick?.action === 'set') {
+    const cfg = vscode.workspace.getConfiguration('hover');
+    const url = await vscode.window.showInputBox({
+      title: 'Hover: app URL',
+      prompt: 'Your dev server URL',
+      value: cfg.get<string>('appUrl') || 'http://localhost:5173',
+    });
+    if (url !== undefined) {
+      await cfg.update('appUrl', url, vscode.ConfigurationTarget.Workspace);
+      void pollAppStatus();
+    }
+  }
+}
+
+// ── Start App: dev server + debug browser ─────────────────────────────────
+let devTerminal: vscode.Terminal | undefined;
+
+/** Silent (headless) vs visible (headed) browser — the user's toggle. */
+function isSilent(): boolean {
+  return vscode.workspace.getConfiguration('hover').get<string>('browser', 'silent') !== 'visible';
+}
+
+function detectPackageManager(root: string): string {
+  if (existsSync(path.join(root, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(path.join(root, 'yarn.lock'))) return 'yarn';
+  if (existsSync(path.join(root, 'bun.lockb'))) return 'bun';
+  return 'npm';
+}
+
+async function pickDevScript(root: string): Promise<string | undefined> {
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')) as { scripts?: Record<string, string> };
+    const scripts = pkg.scripts ?? {};
+    for (const s of ['dev', 'start', 'serve']) if (scripts[s]) return s;
+    const names = Object.keys(scripts);
+    if (names.length === 0) return undefined;
+    return vscode.window.showQuickPick(names, { title: 'Hover: which script starts your dev server?' });
+  } catch {
+    return undefined;
+  }
+}
+
+async function getAppUrl(): Promise<string | undefined> {
+  const cfg = vscode.workspace.getConfiguration('hover');
+  let url = cfg.get<string>('appUrl');
+  if (!url) {
+    url = await vscode.window.showInputBox({
+      title: 'Hover: app URL',
+      prompt: 'Your dev server URL (saved for next time)',
+      value: 'http://localhost:5173',
+    });
+    if (url) await cfg.update('appUrl', url, vscode.ConfigurationTarget.Workspace);
+  }
+  return url || undefined;
+}
+
+/** Start the project's dev server (if not already) + launch the debug browser. */
+async function startApp(): Promise<void> {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!root) {
+    void vscode.window.showWarningMessage('Hover: open a project folder first.');
+    return;
+  }
+  const url = await getAppUrl();
+  if (!url) return;
+
+  let startedServer = false;
+  if (!devTerminal) {
+    const script = await pickDevScript(root);
+    if (script) {
+      const pm = detectPackageManager(root);
+      devTerminal = vscode.window.createTerminal({ name: 'Hover Dev Server', cwd: root });
+      devTerminal.show(true);
+      devTerminal.sendText(`${pm} run ${script}`);
+      startedServer = true;
+      chatProvider?.pushSystem(`Starting dev server (${pm} run ${script})…`);
+    }
+  }
+  // Give a freshly-started server a moment before pointing Chrome at it.
+  if (startedServer) await new Promise((r) => setTimeout(r, 3500));
+
+  const silent = isSilent();
+  if (pool?.launchChrome(url, silent)) {
+    chatProvider?.pushSystem(`Browser ${silent ? 'running silently (headless)' : 'opened'} at ${url}.`);
+  } else {
+    chatProvider?.pushSystem('Could not launch the browser — the engine may still be starting.');
+  }
+}
+
+/** Flip silent ↔ visible and relaunch the browser to match. */
+async function toggleBrowser(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration('hover');
+  const next = isSilent() ? 'visible' : 'silent';
+  await cfg.update('browser', next, vscode.ConfigurationTarget.Workspace);
+  chatProvider?.updateStatus(next === 'silent' ? 'ready' : 'visible');
+  const url = cfg.get<string>('appUrl');
+  if (url && pool?.launchChrome(url, next === 'silent')) {
+    chatProvider?.pushSystem(`Browser mode: ${next === 'silent' ? 'silent (headless)' : 'visible'} — relaunched at ${url}.`);
+  } else {
+    void vscode.window.showInformationMessage(`Hover browser mode: ${next}. Takes effect on the next launch.`);
   }
 }
 
@@ -187,6 +342,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.newSession', () => newSession()),
     vscode.commands.registerCommand('hover.saveSpec', () => saveSpec()),
     vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel()),
+    vscode.commands.registerCommand('hover.startApp', () => startApp()),
+    vscode.commands.registerCommand('hover.toggleBrowser', () => toggleBrowser()),
+    vscode.commands.registerCommand('hover.appStatus', () => appStatus()),
+    vscode.window.onDidCloseTerminal((t) => {
+      if (t === devTerminal) devTerminal = undefined;
+    }),
     vscode.commands.registerCommand('hover.openRepo', () =>
       vscode.env.openExternal(vscode.Uri.parse('https://github.com/Hyperyond/Hover')),
     ),
@@ -220,7 +381,6 @@ export function activate(context: vscode.ExtensionContext): void {
     onStatus: (connected) => {
       connectedServices = connected;
       renderModeStatus();
-      chatProvider?.updateStatus(connected > 0 ? 'ready' : 'no engine');
     },
     onModes: (current, available) => {
       currentMode = current;
@@ -242,6 +402,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // connects when it's up. A missing staged engine (e.g. dev build before
   // `stage:engine`) just leaves the extension in connect-when-available mode.
   void bootEngine(context, false);
+
+  // Poll the dev-server status for the top-right pill (auto-probe common ports
+  // when no URL is configured).
+  void pollAppStatus();
+  appStatusTimer = setInterval(() => void pollAppStatus(), 5000);
+  context.subscriptions.push({ dispose: () => { if (appStatusTimer) clearInterval(appStatusTimer); } });
 
   // One-time nudge: VSCode can't default a view to the Secondary Side Bar, so
   // guide the user to dock Chat on the right for a code-center / chat-right

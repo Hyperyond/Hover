@@ -42,6 +42,8 @@ export interface ClientMessage {
     /** set-api-key only — the model API key to inject into the spawned CLI's
      *  env (or empty/missing to clear it). Held in memory only, never logged. */
     key?: string;
+    /** launch-chrome only — launch the debug Chrome headless (silent mode). */
+    headless?: boolean;
     /** reveal-source only — a `data-hover-source` value (`<rel-path>:<line>:<col>`)
      *  an in-page client (widget) captured from a clicked element. The service
      *  relays it to every OTHER connected client; the VSCode extension listens

@@ -59,6 +59,9 @@ export interface ServiceClientPool {
   cancel(): void;
   /** Crystallize the accumulated steps into a spec. */
   saveSpec(name: string, steps: unknown[]): boolean;
+  /** Ask the engine to launch the isolated debug Chrome at `pageUrl`
+   *  (headless = silent, no window). */
+  launchChrome(pageUrl: string, headless: boolean): boolean;
   dispose(): void;
 }
 
@@ -167,6 +170,12 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       const ws = firstOpen();
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps } }));
+      return true;
+    },
+    launchChrome(pageUrl: string, headless: boolean): boolean {
+      const ws = firstOpen();
+      if (!ws) return false;
+      ws.send(JSON.stringify({ type: 'launch-chrome', payload: { pageUrl, headless } }));
       return true;
     },
     dispose(): void {
