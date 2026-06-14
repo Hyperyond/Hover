@@ -197,7 +197,7 @@ function handleServerMessage(msg: ServerMessage): void {
       if (typeof ev.costUsdSnapshot === 'number') runCost = ev.costUsdSnapshot;
       let detail = '';
       try {
-        detail = ev.input == null ? '' : JSON.stringify(ev.input, null, 2);
+        detail = ev.input == null ? '{}' : JSON.stringify(ev.input);
       } catch {
         detail = String(ev.input);
       }

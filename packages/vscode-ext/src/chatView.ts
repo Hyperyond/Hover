@@ -108,7 +108,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     --bg: #1a1a1a; --bg-2: #222224; --bg-3: #141414; --line: #2a2a2c;
     --text: #e5e7eb; --text-mute: #9ca3af; --text-dim: #6b7280;
     --accent: #7CFFA8; --accent-dim: rgba(124,255,168,0.16); --accent-ink: #0c2417;
-    --warn: #fb923c; --err: #f87171;
+    --warn: #fb923c; --err: #f87171; --link: #7dd3fc;
   }
   body.mode-security { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
   body.mode-pentest  { --accent: #f87171; --accent-dim: rgba(248,113,113,0.16); --accent-ink: #2a0d0d; }
@@ -175,15 +175,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .step-meta { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
   .step-caret { color: var(--text-dim); font-size: 11px; }
   .step-detail { margin: 6px 0 0; padding: 8px; background: var(--bg-3); border-radius: 6px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 11px; white-space: pre-wrap; overflow: auto; max-height: 240px; }
-  /* grouped run: narration title + nested tool lines (widget-style) */
-  .group { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; }
-  .group-head { display: flex; align-items: center; gap: 9px; }
-  .group-title { flex: 1; }
-  .group-steps { margin: 8px 0 0 5px; padding-left: 9px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
-  .tool-line { display: flex; align-items: flex-start; gap: 7px; color: var(--text-mute); font-size: 12px; }
-  .tool-dot { color: var(--accent); flex: none; font-size: 10px; line-height: 1.5; }
-  .tool-line.err .tool-dot { color: var(--err); }
-  .tool-label { flex: 1; }
+  /* grouped run rendering — ported from the widget (style.css .group*). */
+  .group { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; }
+  .group-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; cursor: pointer; user-select: none; }
+  .gr-chevron { width: 12px; flex-shrink: 0; color: var(--text-dim); font-size: 9px; text-align: center; transition: transform .12s ease, color .12s ease; }
+  .group.open .gr-chevron { transform: rotate(90deg); color: var(--text-mute); }
+  .gr-icon { width: 16px; height: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; border-radius: 50%; font-weight: 700; }
+  .group.ok .gr-icon { color: var(--accent); background: rgba(124,255,168,0.12); }
+  .group.error .gr-icon { color: var(--err); background: rgba(248,113,113,0.14); }
+  .group.running .gr-icon { color: var(--accent); background: transparent; }
+  .gr-icon.gr-ring { width: 12px; height: 12px; border: 1.5px solid var(--accent); border-top-color: transparent; border-radius: 50%; background: transparent; animation: hov-grspin .9s linear infinite; font-size: 0; }
+  @keyframes hov-grspin { to { transform: rotate(360deg); } }
+  .gr-title { flex: 1; min-width: 0; font-size: 13px; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .group.running .gr-title { color: var(--accent); }
+  .group.error .gr-title { color: var(--err); }
+  .gr-meta { flex-shrink: 0; font-size: 10.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
+  .gr-meta .gr-cost { color: var(--accent); }
+  .group.error .gr-meta .gr-cost { color: var(--err); }
+  .group-tools { display: none; padding: 0 10px 8px 36px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 11px; color: var(--text-mute); }
+  .group.open .group-tools { display: block; }
+  .group-tool { display: flex; gap: 6px; padding: 2px 0; align-items: flex-start; }
+  .gt-dot { color: var(--text-dim); flex-shrink: 0; }
+  .gt-name { color: var(--link); flex-shrink: 0; white-space: nowrap; }
+  .group-tool.error .gt-name { color: var(--err); }
+  .gt-args { color: var(--text-dim); min-width: 0; word-break: break-all; overflow-wrap: anywhere; }
   .result { border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-dim); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   .result .head { font-weight: 700; color: var(--accent); }
   .md { line-height: 1.5; }
@@ -297,51 +312,53 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   var pendingTitle = null;   // last AI narration, promoted to the next group's title
   var curGroup = null;       // { iconEl, metaEl, stepsEl, count, start, snapStart, snapEnd }
 
-  function finalizeGroup(endSnapshot) {
-    if (!curGroup) return;
-    curGroup.iconEl.className = 'step-icon check'; curGroup.iconEl.textContent = '✓';
-    setGroupMeta(curGroup, endSnapshot, false);
-    curGroup = null;
-    updateWorking();
+  function shortJson(s) { if (!s) return ''; return s.length > 90 ? s.slice(0, 87) + '…' : s; }
+  function setGroupStatus(g, status) {
+    var open = g.root.classList.contains('open');
+    g.root.className = 'group ' + status + (open ? ' open' : '');
+    if (status === 'running') { g.icon.className = 'gr-icon gr-ring'; g.icon.textContent = ''; }
+    else { g.icon.className = 'gr-icon'; g.icon.textContent = status === 'error' ? '✗' : '✓'; }
   }
   function setGroupMeta(g, endSnapshot, live) {
     var parts = [((Date.now() - g.start) / 1000).toFixed(1) + 's'];
     var endC = (typeof endSnapshot === 'number') ? endSnapshot : g.snapEnd;
-    if (typeof endC === 'number' && typeof g.snapStart === 'number') { var d = endC - g.snapStart; if (d > 0.00005) parts.push('$' + d.toFixed(4)); }
+    if (typeof endC === 'number' && typeof g.snapStart === 'number') { var d = endC - g.snapStart; if (d > 0.00005) parts.push('<span class="gr-cost">$' + d.toFixed(4) + '</span>'); }
     if (g.count) parts.push(g.count + (g.count > 1 ? ' steps' : ' step'));
-    g.metaEl.textContent = parts.join(' · ') + (live ? '…' : '');
+    g.meta.innerHTML = parts.join(' · ') + (live ? '…' : '');
   }
-  function openGroup(title, snapshot) {
+  function finalizeGroup(endSnapshot) {
+    if (!curGroup) return;
+    setGroupStatus(curGroup, 'ok');
+    setGroupMeta(curGroup, endSnapshot, false);
+    curGroup = null;
+    updateWorking();
+  }
+  function openGroup(titleText, snapshot) {
     fresh();
-    var el = document.createElement('div'); el.className = 'group';
-    var head = document.createElement('div'); head.className = 'group-head';
-    var icon = document.createElement('span'); icon.className = 'step-icon spin';
-    var t = document.createElement('span'); t.className = 'group-title'; t.textContent = title;
-    var meta = document.createElement('span'); meta.className = 'step-meta';
-    var car = document.createElement('span'); car.className = 'step-caret'; car.textContent = '▸';
-    head.appendChild(icon); head.appendChild(t); head.appendChild(meta); head.appendChild(car);
-    var steps = document.createElement('div'); steps.className = 'group-steps'; steps.style.display = 'none';
-    head.style.cursor = 'pointer';
-    head.addEventListener('click', function () { var open = steps.style.display !== 'none'; steps.style.display = open ? 'none' : 'block'; car.textContent = open ? '▸' : '▾'; });
-    el.appendChild(head); el.appendChild(steps);
-    log.appendChild(el);
-    curGroup = { iconEl: icon, metaEl: meta, stepsEl: steps, count: 0, start: Date.now(), snapStart: (typeof snapshot === 'number' ? snapshot : undefined), snapEnd: undefined };
+    var root = document.createElement('div'); root.className = 'group running';
+    var row = document.createElement('div'); row.className = 'group-row';
+    var chev = document.createElement('span'); chev.className = 'gr-chevron'; chev.textContent = '▶';
+    var icon = document.createElement('span'); icon.className = 'gr-icon gr-ring';
+    var t = document.createElement('span'); t.className = 'gr-title'; t.textContent = titleText;
+    var meta = document.createElement('span'); meta.className = 'gr-meta';
+    row.appendChild(chev); row.appendChild(icon); row.appendChild(t); row.appendChild(meta);
+    var tools = document.createElement('div'); tools.className = 'group-tools';
+    row.addEventListener('click', function () { root.classList.toggle('open'); });
+    root.appendChild(row); root.appendChild(tools);
+    log.appendChild(root);
+    curGroup = { root: root, icon: icon, meta: meta, tools: tools, count: 0, start: Date.now(), snapStart: (typeof snapshot === 'number' ? snapshot : undefined), snapEnd: undefined };
     updateWorking();
   }
   function addNarration(text) { if (text && text.trim()) pendingTitle = text.trim(); }
   function addStep(m) {
     if (curGroup && (BOUNDARY[m.tool] || curGroup.count >= MAX_GROUP)) finalizeGroup(typeof m.cost === 'number' ? m.cost : undefined);
     if (!curGroup) { openGroup(pendingTitle || m.label, typeof m.cost === 'number' ? m.cost : undefined); pendingTitle = null; }
-    var line = document.createElement('div'); line.className = 'tool-line' + (m.isError ? ' err' : '');
-    var dot = document.createElement('span'); dot.className = 'tool-dot'; dot.textContent = m.isError ? '✕' : '✓';
-    var lab = document.createElement('span'); lab.className = 'tool-label'; lab.textContent = m.label;
-    line.appendChild(dot); line.appendChild(lab);
-    if (m.detail) {
-      var det = document.createElement('pre'); det.className = 'step-detail'; det.textContent = m.detail; det.style.display = 'none';
-      line.appendChild(det); lab.style.cursor = 'pointer';
-      lab.addEventListener('click', function () { det.style.display = det.style.display === 'none' ? 'block' : 'none'; });
-    }
-    curGroup.stepsEl.appendChild(line);
+    var line = document.createElement('div'); line.className = 'group-tool' + (m.isError ? ' error' : '');
+    var dot = document.createElement('span'); dot.className = 'gt-dot'; dot.textContent = '·';
+    var name = document.createElement('span'); name.className = 'gt-name'; name.textContent = m.tool || m.label;
+    var args = document.createElement('span'); args.className = 'gt-args'; args.textContent = ' ' + shortJson(m.detail);
+    line.appendChild(dot); line.appendChild(name); line.appendChild(args);
+    curGroup.tools.appendChild(line);
     curGroup.count++;
     if (typeof m.cost === 'number') curGroup.snapEnd = m.cost;
     setGroupMeta(curGroup, undefined, true);
