@@ -87,6 +87,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   setRunning(running: boolean): void {
     this.post({ type: 'running', running });
   }
+  /** Show a live spinner row with an elapsed timer for an out-of-band job
+   *  (e.g. spec optimization, which streams no step events). */
+  pushBusy(text: string): void {
+    this.post({ type: 'busy', text });
+  }
+  /** Clear the spinner row started by pushBusy(). */
+  clearBusy(): void {
+    this.post({ type: 'busy', done: true });
+  }
 
   private onSend(text: string): void {
     const prompt = text.trim();
@@ -172,6 +181,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .startapp:hover { background: var(--accent); color: var(--accent-ink); }
   .working { display: flex; align-items: center; gap: 9px; padding: 8px 11px; color: var(--text-mute); font-size: 12px; }
   .working .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: hoverpulse 1s ease-in-out infinite; }
+  .working .busy-time { opacity: .6; font-variant-numeric: tabular-nums; }
   @keyframes hoverpulse { 0%,100% { opacity: .3; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.12); } }
   .msg { padding: 8px 11px; border-radius: 10px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
   .msg.user { align-self: flex-end; max-width: 88%; background: var(--accent); color: var(--accent-ink); font-weight: 500; }
@@ -489,6 +499,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (on) { fresh(); if (!workingEl) { workingEl = document.createElement('div'); workingEl.className='working'; workingEl.innerHTML='<span class="pulse"></span><span>Working…</span>'; } log.appendChild(workingEl); scroll(); }
     else if (workingEl && workingEl.parentNode) { workingEl.parentNode.removeChild(workingEl); }
   }
+
+  // A standalone spinner row with a live elapsed timer, for jobs that emit no
+  // step events (optimization). setBusy(null) clears it.
+  var busyEl = null, busyTimer = null, busyStart = 0;
+  function setBusy(text){
+    if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
+    if (busyEl && busyEl.parentNode) busyEl.parentNode.removeChild(busyEl);
+    busyEl = null;
+    if (!text) return;
+    fresh();
+    busyEl = document.createElement('div');
+    busyEl.className = 'working';
+    busyEl.innerHTML = '<span class="pulse"></span><span class="busy-text"></span><span class="busy-time"></span>';
+    busyEl.querySelector('.busy-text').textContent = text;
+    log.appendChild(busyEl);
+    busyStart = Date.now();
+    var t = busyEl.querySelector('.busy-time');
+    function tick(){ var s = Math.floor((Date.now()-busyStart)/1000); t.textContent = '  ' + Math.floor(s/60) + ':' + ('0'+(s%60)).slice(-2); }
+    tick(); busyTimer = setInterval(tick, 1000);
+    scroll();
+  }
   // "Working…" only shows when running and no group is currently open (the open
   // group's own spinner covers the in-group activity).
   function updateWorking(){ setWorking(running && !curGroup); }
@@ -531,6 +562,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (m.label) { lab.textContent = m.online ? String(m.label) : String(m.label)+' (offline)'; dot.className = m.online ? 'dot' : 'dot offline'; if(btn&&m.title) btn.title = String(m.title); }
       else { lab.textContent='Set target'; dot.className='dot offline'; }
     }
+    else if (m.type==='busy') { setBusy(m.done ? null : (m.text||'Working…')); }
     else if (m.type==='running') { running = !!m.running; if (running) { curGroup = null; pendingTitle = null; } updateWorking(); applyBorder(); syncSend(); }
     else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Silent' : 'Visible'; applyBorder(); }
   });

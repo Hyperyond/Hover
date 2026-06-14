@@ -132,6 +132,14 @@ async function resolveTargetUrl(): Promise<string | null> {
 let pendingBrowser: ((ok: boolean) => void) | undefined;
 /** Spec being optimized, so we can auto-open the diff when the candidate lands. */
 let pendingOptimizeUri: vscode.Uri | undefined;
+/** Watchdog so a hung optimize doesn't leave the spinner spinning forever. */
+let optimizeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Stop the optimize spinner + watchdog (on result, failure, or timeout). */
+function endOptimize(): void {
+  if (optimizeTimer) { clearTimeout(optimizeTimer); optimizeTimer = undefined; }
+  chatProvider?.clearBusy();
+}
 
 /** Ensure a debug browser is up before a run (self-heal). Idempotent on the
  *  engine side (launchDebugChrome no-ops if Chrome is already on the CDP port),
@@ -200,6 +208,7 @@ function handleServerMessage(msg: ServerMessage): void {
     return;
   }
   if (msg.type === 'optimize-result') {
+    endOptimize();
     const slug = String(msg.payload?.slug ?? '');
     chatProvider?.pushSystem(`Optimized "${slug}" — opening the diff to review.`);
     const uri = pendingOptimizeUri;
@@ -208,6 +217,7 @@ function handleServerMessage(msg: ServerMessage): void {
     return;
   }
   if (msg.type === 'optimize-failed') {
+    endOptimize();
     pendingOptimizeUri = undefined;
     chatProvider?.pushSystem(`Optimize failed for "${String(msg.payload?.slug ?? '')}": ${String(msg.payload?.reason ?? 'unknown error')}`);
     return;
@@ -802,7 +812,16 @@ async function optimizeSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   if (pool.optimizeSpec(slug)) {
     pendingOptimizeUri = uri;
     await chatProvider?.reveal();
-    chatProvider?.pushSystem(`Optimizing "${slug}"… the diff opens automatically when it's ready.`);
+    chatProvider?.pushBusy(`Optimizing "${slug}" — an LLM is adding assertions (no browser). The diff opens automatically when it's ready.`);
+    // Watchdog: codegen runs without step events, so if the engine never
+    // replies (crash / lost socket) the spinner would spin forever.
+    if (optimizeTimer) clearTimeout(optimizeTimer);
+    optimizeTimer = setTimeout(() => {
+      optimizeTimer = undefined;
+      pendingOptimizeUri = undefined;
+      chatProvider?.clearBusy();
+      chatProvider?.pushSystem(`Optimize for "${slug}" is taking unusually long — it may have failed. Check the engine, or try again.`);
+    }, 150_000);
   }
 }
 
