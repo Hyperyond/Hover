@@ -8,3 +8,4 @@ dist/**/*.map
 tsconfig.json
 tsup.config.ts
 .gitignore
+resources/icon-source.png
