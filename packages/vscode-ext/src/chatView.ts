@@ -609,13 +609,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // group's own spinner covers the in-group activity).
   function updateWorking(){ setWorking(running && !curGroup); }
 
-  // Voice input (best-effort; webview may lack mic permission — degrade quietly).
+  // Voice input. The browser Web Speech API works in the in-page widget (real
+  // Chrome) but NOT in a VS Code webview (Electron has no speech backend, and
+  // VS Code blocks getUserMedia + doesn't expose its speech API to third-party
+  // extensions). So in the extension we route users to OS-native dictation,
+  // which types into any field — including this box.
   var mic = document.getElementById('mic');
   var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
   var rec = null, recording = false;
-  if (!Rec) { mic.title = 'Voice input not available here'; }
+  var isMac = /Mac/i.test(navigator.platform || navigator.userAgent || '');
+  var dictateHint = isMac
+    ? 'Press Fn twice (or ⌘+Control+Space) to dictate, then speak into the box.'
+    : 'Press Win+H to dictate, then speak into the box.';
+  if (!Rec) { mic.title = 'Voice — ' + dictateHint; }
   mic.addEventListener('click', function(){
-    if (!Rec) { addMessage('system', 'Voice input is not available in this webview.'); return; }
+    if (!Rec) { input.focus(); addMessage('system', 'Voice input uses your OS dictation here (VS Code blocks in-app mic). ' + dictateHint); return; }
     if (recording) { try { rec && rec.stop(); } catch(e){} return; }
     try {
       rec = new Rec(); rec.lang = 'en-US'; rec.interimResults = true;
