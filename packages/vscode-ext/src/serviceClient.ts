@@ -129,7 +129,9 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'error' ||
         msg.type === 'spec-saved' ||
         msg.type === 'run-active' ||
-        msg.type === 'cdp-status'
+        msg.type === 'cdp-status' ||
+        msg.type === 'optimize-result' ||
+        msg.type === 'optimize-failed'
       ) {
         handlers.onServerMessage?.(msg as ServerMessage);
       }

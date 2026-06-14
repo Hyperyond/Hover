@@ -117,6 +117,8 @@ let runCost = 0;
 let detectedUrl: string | null = null;
 /** Resolver for an in-flight ensureBrowser() handshake. */
 let pendingBrowser: ((ok: boolean) => void) | undefined;
+/** Spec being optimized, so we can auto-open the diff when the candidate lands. */
+let pendingOptimizeUri: vscode.Uri | undefined;
 
 /** Ensure a debug browser is up before a run (self-heal). Idempotent on the
  *  engine side (launchDebugChrome no-ops if Chrome is already on the CDP port),
@@ -182,6 +184,19 @@ function handleServerMessage(msg: ServerMessage): void {
   if (msg.type === 'cdp-status') {
     const p = (msg.payload ?? {}) as { state?: string; launching?: boolean };
     if (!p.launching && pendingBrowser) pendingBrowser(p.state === 'same-window' || p.state === 'wrong-window');
+    return;
+  }
+  if (msg.type === 'optimize-result') {
+    const slug = String(msg.payload?.slug ?? '');
+    chatProvider?.pushSystem(`Optimized "${slug}" — opening the diff to review.`);
+    const uri = pendingOptimizeUri;
+    pendingOptimizeUri = undefined;
+    if (uri) void openOptimizeDiff(uri, { silentIfMissing: false });
+    return;
+  }
+  if (msg.type === 'optimize-failed') {
+    pendingOptimizeUri = undefined;
+    chatProvider?.pushSystem(`Optimize failed for "${String(msg.payload?.slug ?? '')}": ${String(msg.payload?.reason ?? 'unknown error')}`);
     return;
   }
   if (msg.type !== 'event') return;
@@ -660,9 +675,16 @@ async function reviewOptimizationCandidate(arg?: vscode.TreeItem | vscode.Uri): 
     void vscode.window.showWarningMessage('Hover: open a spec file to review its optimization candidate.');
     return;
   }
+  await openOptimizeDiff(specUri, { silentIfMissing: false });
+}
+
+/** Open `vscode.diff` between a spec and its on-disk optimization candidate.
+ *  Used by both the manual "Review Optimization Candidate" command and the
+ *  auto-open after an Optimize run finishes. */
+async function openOptimizeDiff(specUri: vscode.Uri, opts: { silentIfMissing: boolean }): Promise<void> {
   const folder = vscode.workspace.getWorkspaceFolder(specUri);
   if (!folder) {
-    void vscode.window.showWarningMessage('Hover: the spec is not inside an open workspace folder.');
+    if (!opts.silentIfMissing) void vscode.window.showWarningMessage('Hover: the spec is not inside an open workspace folder.');
     return;
   }
   const fileName = path.basename(specUri.fsPath);
@@ -670,9 +692,11 @@ async function reviewOptimizationCandidate(arg?: vscode.TreeItem | vscode.Uri): 
   try {
     await vscode.workspace.fs.stat(candidate);
   } catch {
-    void vscode.window.showInformationMessage(
-      `Hover: no optimization candidate for ${fileName}. Run \`hover optimize\` first.`,
-    );
+    if (!opts.silentIfMissing) {
+      void vscode.window.showInformationMessage(
+        `Hover: no optimization candidate for ${fileName} yet — run "Optimize" (✨) on this spec first.`,
+      );
+    }
     return;
   }
   await vscode.commands.executeCommand(
@@ -722,8 +746,9 @@ async function optimizeSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   }
   const slug = specSlug(uri);
   if (pool.optimizeSpec(slug)) {
+    pendingOptimizeUri = uri;
     await chatProvider?.reveal();
-    chatProvider?.pushSystem(`Optimizing "${slug}"… when it finishes, run "Review Optimization Candidate" on the spec to see the diff.`);
+    chatProvider?.pushSystem(`Optimizing "${slug}"… the diff opens automatically when it's ready.`);
   }
 }
 
