@@ -192,12 +192,6 @@ function candidatePathFor(devRoot: string, slug: string): string {
   return join(devRoot, '.hover', 'cache', 'optimized', `${slug}.spec.ts.draft`);
 }
 
-/** Pre-relocation candidate path (`__vibe_tests__/.hover/optimized/`) — only
- *  consulted as a read/delete fallback for drafts written before the move. */
-function legacyCandidatePathFor(devRoot: string, slug: string): string {
-  return join(devRoot, '__vibe_tests__', '.hover', 'optimized', `${slug}.spec.ts.draft`);
-}
-
 /** Promote an optimization candidate to the real spec (overwriting it) and
  *  remove the candidate. Returns the written spec path. The human's "Use
  *  optimized" / `mv` action. */
@@ -207,15 +201,10 @@ export async function promoteOptimized(devRoot: string, slug: string): Promise<s
   try {
     code = await readFile(candidatePathFor(devRoot, slug), 'utf-8');
   } catch {
-    try {
-      code = await readFile(legacyCandidatePathFor(devRoot, slug), 'utf-8');
-    } catch {
-      throw new OptimizeError(`no optimization candidate to promote for "${slug}"`);
-    }
+    throw new OptimizeError(`no optimization candidate to promote for "${slug}"`);
   }
   await writeFile(specPath, code, 'utf-8');
   await rm(candidatePathFor(devRoot, slug), { force: true });
-  await rm(legacyCandidatePathFor(devRoot, slug), { force: true });
   return specPath;
 }
 
@@ -223,5 +212,4 @@ export async function promoteOptimized(devRoot: string, slug: string): Promise<s
  *  human's "Keep original". */
 export async function discardOptimized(devRoot: string, slug: string): Promise<void> {
   await rm(candidatePathFor(devRoot, slug), { force: true });
-  await rm(legacyCandidatePathFor(devRoot, slug), { force: true });
 }

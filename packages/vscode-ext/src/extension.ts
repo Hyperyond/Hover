@@ -21,10 +21,8 @@ import * as path from 'node:path';
  * authoritative path is `@hover-dev/core`'s `optimizeSpec.ts`:
  * `.hover/cache/optimized/<spec>.draft` (the candidate keeps the full
  * `<slug>.spec.ts` name plus a `.draft` suffix, never overwriting the original).
- * A legacy pre-relocation path is still read as a fallback.
  */
 const OPTIMIZED_DIR = ['.hover', 'cache', 'optimized'];
-const LEGACY_OPTIMIZED_DIR = ['__vibe_tests__', '.hover', 'optimized'];
 const DRAFT_SUFFIX = '.draft';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -63,13 +61,11 @@ async function reviewOptimizationCandidate(uri?: vscode.Uri): Promise<void> {
   }
 
   const fileName = path.basename(specUri.fsPath);
-  const draftName = fileName + DRAFT_SUFFIX;
-  const candidate = await firstExisting([
-    vscode.Uri.joinPath(folder.uri, ...OPTIMIZED_DIR, draftName),
-    vscode.Uri.joinPath(folder.uri, ...LEGACY_OPTIMIZED_DIR, draftName),
-  ]);
+  const candidate = vscode.Uri.joinPath(folder.uri, ...OPTIMIZED_DIR, fileName + DRAFT_SUFFIX);
 
-  if (!candidate) {
+  try {
+    await vscode.workspace.fs.stat(candidate);
+  } catch {
     void vscode.window.showInformationMessage(
       `Hover: no optimization candidate for ${fileName}. Run \`hover optimize\` first.`,
     );
