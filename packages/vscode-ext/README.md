@@ -17,14 +17,17 @@ Scaffold. Two commands so far:
   the active spec and its candidate at
   `<workspaceRoot>/.hover/cache/optimized/<spec>.draft`. Invoke from the editor
   title bar on a `*.spec.ts` file or via the palette.
-- **F2 (editor-side half)** *Open Source from Element* — takes a
-  `data-hover-source` value (`<rel-path>:<line>:<col>`, stamped by
-  `@hover-dev/transform-source`) and jumps the editor to that location. The
-  page→editor transport (a click in the running app surfacing the attribute) is
-  the follow-on; today the command accepts the value directly or prompts.
+- **F2** *element → source* — Alt+click any host element in the in-page widget
+  and the editor jumps to its `data-hover-source` location
+  (`<rel-path>:<line>:<col>`, stamped by `@hover-dev/transform-source`). The
+  transport reuses the core WebSocket: the widget sends `reveal-source`, the
+  service relays it, and this extension's WS client (`serviceClient.ts`, ports
+  51789–51798) opens the file via `hover.openSource`. The command also accepts a
+  value directly / prompts. End-to-end needs a running example + the extension
+  loaded in a VSCode dev host (manual smoke).
 
-Planned next (see the feature-assessment doc): F2 page→editor transport,
-F3 spec-lifecycle CodeLens, F4 seed-library authoring.
+Planned next (see the feature-assessment doc): F3 spec-lifecycle CodeLens,
+F4 seed-library authoring.
 
 ## Develop
 
