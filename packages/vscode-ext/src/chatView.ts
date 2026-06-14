@@ -135,12 +135,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     font: inherit; line-height: 1.45; padding: 2px 0;
   }
   #input::placeholder { color: var(--text-dim); }
+  /* Text row: textarea + mic top-right (Claude-Code-style). */
+  .inputrow { display: flex; align-items: flex-start; gap: 6px; }
+  .inputrow #input { flex: 1; }
   #toolbar { display: flex; align-items: center; gap: 6px; }
   #toolbar .left { display: flex; align-items: center; gap: 6px; }
-  #toolbar .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
-  .modelpill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text-mute); cursor: pointer; font: inherit; font-size: 12px; }
-  .modelpill:hover { border-color: var(--accent); color: var(--text); }
-  #mic { display: inline-flex; padding: 6px; border: none; background: none; color: var(--text-mute); cursor: pointer; border-radius: 7px; }
+  #toolbar .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .modelpill, .modepill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text-mute); cursor: pointer; font: inherit; font-size: 12px; }
+  .modelpill:hover, .modepill:hover { border-color: var(--accent); color: var(--text); }
+  /* Mode pill tints to the active mode (mirrors the body mode class). */
+  .modepill .bolt { color: var(--accent); }
+  body.mode-security .modepill, body.mode-pentest .modepill { border-color: var(--accent); color: var(--accent); }
+  #mic { display: inline-flex; padding: 5px; border: none; background: none; color: var(--text-mute); cursor: pointer; border-radius: 7px; margin-top: 1px; }
   #mic:hover { color: var(--text); background: var(--bg-2); }
   #mic.recording { color: var(--accent); }
   #send {
@@ -168,15 +174,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   <div id="composer">
     <div id="box">
-      <textarea id="input" rows="1" placeholder="e.g. test the login flow"></textarea>
+      <div class="inputrow">
+        <textarea id="input" rows="1" placeholder="e.g. test the login flow"></textarea>
+        <button id="mic" type="button" title="Voice input">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="4" height="8" rx="2"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2"/></svg>
+        </button>
+      </div>
       <div id="toolbar">
         <div class="left">
           <button class="modelpill" id="model" type="button" title="Switch agent / model"><span id="model-label">Claude</span><span class="caret">▾</span></button>
         </div>
         <div class="right">
-          <button id="mic" type="button" title="Voice input">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="4" height="8" rx="2"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2"/></svg>
-          </button>
+          <button class="modepill" id="mode" type="button" title="Switch mode (Testing / Security / Pentest)"><span class="bolt">⚡</span><span id="mode-label">Normal</span><span class="caret">▾</span></button>
           <button id="send" type="button" title="Send (Enter)" disabled>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
           </button>
@@ -205,6 +214,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   function cmd(id){ return function(){ vscode.postMessage({ type:'command', id:id }); }; }
   document.getElementById('model').addEventListener('click', cmd('hover.switchAgent'));
+  document.getElementById('mode').addEventListener('click', cmd('hover.switchMode'));
   document.getElementById('history').addEventListener('click', cmd('hover.sessions.focus'));
   document.getElementById('new').addEventListener('click', cmd('hover.newSession'));
 
@@ -232,7 +242,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='step') addStep(m.label);
     else if (m.type==='result') addResult(m.verdict, m.summary, m.steps);
     else if (m.type==='reset') { log.innerHTML=''; cleared=false; log.appendChild(emptyEl()); input.value=''; syncSend(); }
-    else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; }
+    else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal'; }
     else if (m.type==='agent') { document.getElementById('model-label').textContent = m.label || 'Claude'; }
     else if (m.type==='status') { document.getElementById('status-label').textContent = m.text || 'ready'; }
   });
