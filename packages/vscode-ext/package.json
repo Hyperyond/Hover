@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -158,6 +158,12 @@
         "icon": "$(person-add)"
       },
       {
+        "command": "hover.env.setPassword",
+        "title": "Set / Update Password",
+        "category": "Hover",
+        "icon": "$(key)"
+      },
+      {
         "command": "hover.env.removeAccount",
         "title": "Remove Test Account",
         "category": "Hover",
@@ -309,9 +315,14 @@
           "group": "1_env@3"
         },
         {
-          "command": "hover.env.removeAccount",
+          "command": "hover.env.setPassword",
           "when": "view == hover.environments && viewItem == hoverAccount",
           "group": "inline@1"
+        },
+        {
+          "command": "hover.env.removeAccount",
+          "when": "view == hover.environments && viewItem == hoverAccount",
+          "group": "inline@2"
         },
         {
           "command": "hover.runSpec",

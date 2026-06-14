@@ -35,10 +35,15 @@ class EnvironmentItem extends vscode.TreeItem {
 
 /** A test account under an environment. */
 class AccountItem extends vscode.TreeItem {
-  constructor(readonly envId: string, readonly account: HoverAccount) {
+  constructor(readonly envId: string, readonly account: HoverAccount, readonly hasPassword: boolean) {
     super(account.label, vscode.TreeItemCollapsibleState.None);
-    this.description = [account.role, account.username].filter(Boolean).join(' · ');
-    this.tooltip = `Account "${account.label}"${account.username ? ` (${account.username})` : ''}\nPassword stored in SecretStorage — never written to a spec.`;
+    const base = [account.role, account.username].filter(Boolean).join(' · ');
+    this.description = (base ? base + '  ' : '') + (hasPassword ? '🔑' : '⚠ no password');
+    this.tooltip = `Account "${account.label}"${account.username ? ` (${account.username})` : ''}\n${
+      hasPassword
+        ? 'Password stored in SecretStorage — never written to a spec.'
+        : 'No password stored. Use "Set / Update Password" so the agent can log in.'
+    }`;
     this.iconPath = new vscode.ThemeIcon('account');
     this.contextValue = 'hoverAccount';
   }
@@ -74,7 +79,11 @@ export class EnvironmentsTreeProvider implements vscode.TreeDataProvider<vscode.
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
     if (element instanceof EnvironmentItem) {
-      return element.env.accounts.map((a) => new AccountItem(element.env.id, a));
+      return Promise.all(
+        element.env.accounts.map(async (a) =>
+          new AccountItem(element.env.id, a, await this.store.hasPassword(element.env.id, a.label)),
+        ),
+      );
     }
     if (element) return [];
 
@@ -168,6 +177,18 @@ export function registerEnvironmentsView(
       const username = await vscode.window.showInputBox({ title: 'Hover: username / email (optional)', prompt: 'Login identifier' });
       const password = await vscode.window.showInputBox({ title: 'Hover: password (optional)', prompt: 'Stored in SecretStorage — never written to a spec', password: true });
       await store.addAccount(envId, { label, role: role || undefined, username: username || undefined }, password || undefined);
+    }),
+
+    vscode.commands.registerCommand('hover.env.setPassword', async (item?: AccountItem) => {
+      if (!(item instanceof AccountItem)) return;
+      const password = await vscode.window.showInputBox({
+        title: `Hover: password for "${item.account.label}"`,
+        prompt: 'Stored in SecretStorage — never written to a spec. Blank to cancel.',
+        password: true,
+      });
+      if (!password) return;
+      await store.updatePassword(item.envId, item.account.label, password);
+      void vscode.window.showInformationMessage(`Hover: password set for "${item.account.label}".`);
     }),
 
     vscode.commands.registerCommand('hover.env.removeAccount', async (item?: AccountItem) => {

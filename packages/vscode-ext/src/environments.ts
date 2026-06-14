@@ -165,6 +165,15 @@ export class EnvironmentStore {
   async getPassword(envId: string, label: string): Promise<string | undefined> {
     return (await this.context.secrets.get(this.secretKey(envId, label))) ?? undefined;
   }
+  async hasPassword(envId: string, label: string): Promise<boolean> {
+    return Boolean(await this.context.secrets.get(this.secretKey(envId, label)));
+  }
+  /** Set/update an existing account's password (fires onDidChange so the tree
+   *  refreshes its 🔑 indicator). */
+  async updatePassword(envId: string, label: string, password: string): Promise<void> {
+    await this.setPassword(envId, label, password);
+    this.changed.fire();
+  }
   deletePassword(envId: string, label: string): Thenable<void> {
     return this.context.secrets.delete(this.secretKey(envId, label));
   }
