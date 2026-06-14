@@ -419,7 +419,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     var h = document.createElement('div'); h.className = 'head';
     h.textContent = '✓ ' + (m.verdict || 'PASS') + (m.steps ? ' — done in ' + m.steps + ' steps' : '') + (typeof m.cost === 'number' && m.cost > 0 ? ' · $' + m.cost.toFixed(4) : '');
     var body = document.createElement('div'); body.className = 'md'; body.innerHTML = mdToHtml(parsed.main);
-    var save = document.createElement('button'); save.className = 'saveas'; save.textContent = 'Save as spec'; save.addEventListener('click', function () { vscode.postMessage({ type: 'command', id: 'hover.saveSpec' }); });
+    // Pentest (🔴) crystallizes a findings REPORT, never a Playwright spec —
+    // a regression spec of an attack run is the wrong artifact. Other modes
+    // save a spec.
+    var isPentest = currentModeId === 'pentest';
+    var save = document.createElement('button'); save.className = 'saveas';
+    save.textContent = isPentest ? 'Save findings report' : 'Save as spec';
+    save.addEventListener('click', function () { vscode.postMessage({ type: 'command', id: isPentest ? 'hover.saveFindingsReport' : 'hover.saveSpec' }); });
     card.appendChild(h); card.appendChild(body); card.appendChild(save);
     log.appendChild(card);
     if (parsed.findings) renderFindings(parsed.findings);

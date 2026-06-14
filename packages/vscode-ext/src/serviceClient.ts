@@ -80,6 +80,9 @@ export interface ServiceClientPool {
   /** Crystallize the accumulated steps into a spec. `redactions` parameterize
    *  credential fill values into process.env refs so secrets stay out of the spec. */
   saveSpec(name: string, steps: unknown[], redactions?: Redaction[]): boolean;
+  /** Invoke a plugin-contributed save handler (e.g. `save:pentest:report`,
+   *  `save:security:spec`). The engine replies with `<type>:saved` or `error`. */
+  pluginSave(type: string, payload: Record<string, unknown>): boolean;
   /** Ask the engine to launch the isolated debug Chrome at `pageUrl`
    *  (headless = silent, no window). */
   launchChrome(pageUrl: string, headless: boolean): boolean;
@@ -150,7 +153,8 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'run-active' ||
         msg.type === 'cdp-status' ||
         msg.type === 'optimize-result' ||
-        msg.type === 'optimize-failed'
+        msg.type === 'optimize-failed' ||
+        (typeof msg.type === 'string' && msg.type.endsWith(':saved'))
       ) {
         handlers.onServerMessage?.(msg as ServerMessage);
       }
@@ -205,6 +209,12 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       const ws = firstOpen();
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions } }));
+      return true;
+    },
+    pluginSave(type: string, payload: Record<string, unknown>): boolean {
+      const ws = firstOpen();
+      if (!ws) return false;
+      ws.send(JSON.stringify({ type, payload }));
       return true;
     },
     launchChrome(pageUrl: string, headless: boolean): boolean {

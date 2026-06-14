@@ -215,6 +215,15 @@ function handleServerMessage(msg: ServerMessage): void {
     chatProvider?.pushSystem(`Saved spec: ${String(msg.payload?.name ?? '')}`);
     return;
   }
+  // Plugin save handlers (save:pentest:report / save:security:spec) reply with
+  // `<type>:saved`. Confirm + open the written artifact.
+  if (typeof msg.type === 'string' && msg.type.endsWith(':saved')) {
+    const path = typeof msg.payload?.path === 'string' ? msg.payload.path : undefined;
+    const isReport = msg.type.includes('report');
+    chatProvider?.pushSystem(`Saved ${isReport ? 'findings report' : 'spec'}: ${String(msg.payload?.name ?? path ?? '')}`);
+    if (path) void vscode.window.showTextDocument(vscode.Uri.file(path));
+    return;
+  }
   if (msg.type === 'run-active') {
     chatProvider?.setRunning(true);
     return;
@@ -534,6 +543,21 @@ async function saveSpec(): Promise<void> {
   if (!pool?.saveSpec(name, steps, redactions)) void vscode.window.showWarningMessage('Hover: engine not connected.');
 }
 
+/** 🔴 pentest mode: crystallize the session's recorded probes into a Markdown
+ *  findings report via the pentest plugin's save handler — NOT a Playwright
+ *  spec (an attack run is not a regression artifact). */
+async function saveFindingsReport(): Promise<void> {
+  if (!pool || connectedServices === 0) {
+    void vscode.window.showWarningMessage('Hover: engine not connected.');
+    return;
+  }
+  const name = await vscode.window.showInputBox({ title: 'Save findings report', prompt: 'Report name', placeHolder: 'scan' });
+  if (!name) return;
+  if (!pool.pluginSave('save:pentest:report', { name })) {
+    void vscode.window.showWarningMessage('Hover: engine not connected.');
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   extContext = context;
   context.subscriptions.push(
@@ -546,6 +570,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.switchAgent', () => switchAgent()),
     vscode.commands.registerCommand('hover.newSession', () => newSession()),
     vscode.commands.registerCommand('hover.saveSpec', () => saveSpec()),
+    vscode.commands.registerCommand('hover.saveFindingsReport', () => saveFindingsReport()),
     vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel()),
     vscode.commands.registerCommand('hover.optimizeSpec', (a?: vscode.TreeItem | vscode.Uri) => optimizeSpec(a)),
     vscode.commands.registerCommand('hover.reRecordSpec', (a?: vscode.TreeItem | vscode.Uri) => reRecordSpec(a)),
