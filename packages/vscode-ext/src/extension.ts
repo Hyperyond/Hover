@@ -1,112 +1,139 @@
 /**
- * `@hover-dev/vscode-ext` — Hover's VSCode extension entry.
+ * `hover-dev` — Hover's VSCode extension entry.
  *
- * Per the security-direction design (`2026-06-14-security-direction-design.md`,
- * §3.2) this is Hover's **primary surface**: a thin GUI face over the
- * agent-agnostic engine in `@hover-dev/cli` / `@hover-dev/core`. It must stay a
- * *surface* — it never re-implements the engine, and saved artifacts stay plain
- * `@playwright/test`.
+ * Per the security-direction design (§3.2) this is Hover's **primary surface**:
+ * a native GUI face (no webview) over the agent-agnostic engine in
+ * `@hover-dev/cli` / `@hover-dev/core`. ONE extension for both AI test authoring
+ * and application-security testing — the split is a mode switch (normal /
+ * security-orange / pentest-red), reusing the engine's `set-mode` protocol.
  *
- * This scaffold registers the highest-leverage feature first — F1 from the
- * VSCode feature assessment (`2026-06-06-vscode-extension-design.md`): a native
- * side-by-side review of an optimization candidate against the live spec. The
- * engine writes candidates to `<workspaceRoot>/.hover/cache/optimized/`; this
- * command opens VSCode's built-in diff editor over the pair.
+ * Surfaces:
+ *   • Activity Bar "Hover" → Specs (Tests/Security), Sessions, Seeds tree views
+ *   • Status bar → current mode + service connection; click to switch mode
+ *   • F1 review optimization candidate · F2 element→source · F3 spec CodeLens ·
+ *     F4 probe-seed authoring · run a spec in the terminal
  */
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { connectServicePool } from './serviceClient.js';
+import { connectServicePool, type ModeEntry, type ServiceClientPool } from './serviceClient.js';
 import { SpecLensProvider } from './specLens.js';
 import { registerSpecsView } from './specsView.js';
+import { registerSessionsView } from './sessionsView.js';
+import { registerSeedsView } from './seedsView.js';
 
-/**
- * Where the optimizer writes its candidate, relative to the workspace root. The
- * authoritative path is `@hover-dev/core`'s `optimizeSpec.ts`:
- * `.hover/cache/optimized/<spec>.draft` (the candidate keeps the full
- * `<slug>.spec.ts` name plus a `.draft` suffix, never overwriting the original).
- */
+/** Where the optimizer writes its candidate, relative to the workspace root:
+ *  `.hover/cache/optimized/<spec>.draft`. */
 const OPTIMIZED_DIR = ['.hover', 'cache', 'optimized'];
 const DRAFT_SUFFIX = '.draft';
 
+let pool: ServiceClientPool | undefined;
+let currentMode: string | null = null;
+let availableModes: ModeEntry[] = [];
+let connectedServices = 0;
+let modeStatus: vscode.StatusBarItem;
+
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'hover.reviewOptimizationCandidate',
-      (uri?: vscode.Uri) => reviewOptimizationCandidate(uri),
+    vscode.commands.registerCommand('hover.reviewOptimizationCandidate', (arg?: vscode.TreeItem | vscode.Uri) =>
+      reviewOptimizationCandidate(arg),
     ),
-    vscode.commands.registerCommand(
-      'hover.openSource',
-      (source?: string) => openSource(source),
-    ),
+    vscode.commands.registerCommand('hover.openSource', (source?: string) => openSource(source)),
     vscode.commands.registerCommand('hover.newProbeSeed', () => newProbeSeed()),
-    // F3 — spec-lifecycle CodeLens on crystallized specs (both *.spec.ts and
-    // *.security.spec.ts match this glob).
+    vscode.commands.registerCommand('hover.runSpec', (item?: vscode.TreeItem | vscode.Uri) => runSpec(item)),
+    vscode.commands.registerCommand('hover.switchMode', () => switchMode()),
+    vscode.commands.registerCommand('hover.specs.focus', () =>
+      vscode.commands.executeCommand('workbench.view.extension.hover'),
+    ),
     vscode.languages.registerCodeLensProvider(
       { language: 'typescript', scheme: 'file', pattern: '**/*.spec.ts' },
       new SpecLensProvider(),
     ),
   );
 
-  // Native sidebar: the Hover Activity Bar view listing crystallized specs.
-  context.subscriptions.push(...registerSpecsView());
+  // Native sidebar: three views under the Hover Activity Bar container.
+  context.subscriptions.push(...registerSpecsView(), ...registerSessionsView(), ...registerSeedsView());
 
-  // Status bar: surfaces whether a Hover dev service is reachable, and gives a
-  // visible, always-on entry point to the sidebar.
-  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  status.command = 'hover.specs.focus';
-  const setStatus = (connected: number): void => {
-    status.text = connected > 0 ? '$(sparkle) Hover' : '$(sparkle) Hover $(circle-slash)';
-    status.tooltip =
-      connected > 0
-        ? `Hover — connected to ${connected} dev service${connected > 1 ? 's' : ''}`
-        : 'Hover — no dev service detected (run a Hover-enabled dev server)';
-  };
-  setStatus(0);
-  status.show();
-  context.subscriptions.push(status);
-  context.subscriptions.push(
-    vscode.commands.registerCommand('hover.specs.focus', () =>
-      vscode.commands.executeCommand('workbench.view.extension.hover'),
-    ),
-  );
+  // Status bar: current mode + service connection, click to switch mode.
+  modeStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  modeStatus.command = 'hover.switchMode';
+  renderModeStatus();
+  modeStatus.show();
+  context.subscriptions.push(modeStatus);
 
-  // F2 transport: listen for `reveal-source` relayed by any running Hover
-  // service and jump the editor there. The pool reconnects across HMR; its
-  // connection count drives the status-bar indicator.
-  const pool = connectServicePool(
-    (source) => {
-      void openSource(source);
+  // Connect to the running Hover service(s): F2 relays, status, mode state.
+  pool = connectServicePool({
+    onRevealSource: (source) => void openSource(source),
+    onStatus: (connected) => {
+      connectedServices = connected;
+      renderModeStatus();
     },
-    (connected) => setStatus(connected),
-  );
-  context.subscriptions.push({ dispose: () => pool.dispose() });
+    onModes: (current, available) => {
+      currentMode = current;
+      availableModes = available;
+      renderModeStatus();
+    },
+  });
+  context.subscriptions.push({ dispose: () => pool?.dispose() });
 }
 
 export function deactivate(): void {
-  /* nothing to tear down yet */
+  pool?.dispose();
+}
+
+function renderModeStatus(): void {
+  if (!modeStatus) return;
+  const label = currentMode ? availableModes.find((m) => m.id === currentMode)?.label ?? currentMode : null;
+  const disconnected = connectedServices === 0;
+  modeStatus.text = `$(sparkle) Hover${label ? `: ${label}` : ''}${disconnected ? ' $(circle-slash)' : ''}`;
+  modeStatus.backgroundColor =
+    currentMode === 'pentest'
+      ? new vscode.ThemeColor('statusBarItem.errorBackground')
+      : currentMode === 'security'
+        ? new vscode.ThemeColor('statusBarItem.warningBackground')
+        : undefined;
+  modeStatus.tooltip = disconnected
+    ? 'Hover — no dev service detected. Start a Hover-enabled dev server, then click to switch mode.'
+    : `Hover — ${connectedServices} service${connectedServices > 1 ? 's' : ''} connected${
+        label ? `, mode: ${label}` : ', normal mode'
+      }. Click to switch mode.`;
+}
+
+async function switchMode(): Promise<void> {
+  if (connectedServices === 0) {
+    void vscode.window.showWarningMessage('Hover: no dev service connected. Start a Hover-enabled dev server first.');
+    return;
+  }
+  type Pick = vscode.QuickPickItem & { modeId: string | null };
+  const items: Pick[] = [
+    { label: '$(circle-outline) Normal', description: 'testing (no security mode)', modeId: null },
+    ...availableModes.map((m) => ({
+      label: `${m.id === 'pentest' ? '$(flame)' : '$(shield)'} ${m.label}`,
+      description: m.description ?? m.id,
+      modeId: m.id,
+    })),
+  ];
+  for (const it of items) if (it.modeId === currentMode) it.label = `$(check) ${it.label}`;
+  const picked = await vscode.window.showQuickPick(items, { title: 'Hover: switch mode', placeHolder: 'Select a mode' });
+  if (picked) pool?.setMode(picked.modeId);
 }
 
 /**
- * F1 — open `vscode.diff` between a spec and its optimization candidate. Falls
- * back to the active editor's document when invoked without an explicit URI
- * (command palette), so it works both from the editor title bar and the palette.
+ * F1 — open `vscode.diff` between a spec and its optimization candidate.
  */
-async function reviewOptimizationCandidate(uri?: vscode.Uri): Promise<void> {
-  const specUri = uri ?? vscode.window.activeTextEditor?.document.uri;
+async function reviewOptimizationCandidate(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const specUri =
+    arg instanceof vscode.Uri ? arg : (arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri);
   if (!specUri || specUri.scheme !== 'file') {
     void vscode.window.showWarningMessage('Hover: open a spec file to review its optimization candidate.');
     return;
   }
-
   const folder = vscode.workspace.getWorkspaceFolder(specUri);
   if (!folder) {
     void vscode.window.showWarningMessage('Hover: the spec is not inside an open workspace folder.');
     return;
   }
-
   const fileName = path.basename(specUri.fsPath);
   const candidate = vscode.Uri.joinPath(folder.uri, ...OPTIMIZED_DIR, fileName + DRAFT_SUFFIX);
-
   try {
     await vscode.workspace.fs.stat(candidate);
   } catch {
@@ -115,7 +142,6 @@ async function reviewOptimizationCandidate(uri?: vscode.Uri): Promise<void> {
     );
     return;
   }
-
   await vscode.commands.executeCommand(
     'vscode.diff',
     specUri,
@@ -125,15 +151,27 @@ async function reviewOptimizationCandidate(uri?: vscode.Uri): Promise<void> {
   );
 }
 
+/** Run one spec in a terminal via Playwright. We delegate to the user's
+ *  Playwright runner rather than reimplementing a test explorer (the official
+ *  Playwright extension owns that, design non-goal N1) — this is just a
+ *  one-click `playwright test <file>` convenience. */
+async function runSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const uri =
+    arg instanceof vscode.Uri ? arg : (arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri);
+  if (!uri || uri.scheme !== 'file') {
+    void vscode.window.showWarningMessage('Hover: open or select a spec to run.');
+    return;
+  }
+  const folder = vscode.workspace.getWorkspaceFolder(uri);
+  const cwd = folder?.uri.fsPath;
+  const rel = folder ? path.relative(folder.uri.fsPath, uri.fsPath) : uri.fsPath;
+  const terminal = vscode.window.createTerminal({ name: 'Hover · Playwright', cwd });
+  terminal.show();
+  terminal.sendText(`npx playwright test ${JSON.stringify(rel)}`);
+}
+
 /**
- * F2 (editor-side half) — reveal the source location behind a page element.
- *
- * `@hover-dev/transform-source` stamps every host element with
- * `data-hover-source="<rel-path>:<line>:<col>"`. This command takes that value
- * and jumps the editor to the exact line/col. The page→editor transport (a
- * click in the running app surfacing the attribute to the extension) is the
- * follow-on; for now the command accepts the value directly (from a future
- * message) or prompts for it, so the editor capability is testable standalone.
+ * F2 (editor-side) — reveal the source location behind a page element.
  */
 async function openSource(source?: string): Promise<void> {
   let value = source;
@@ -149,32 +187,24 @@ async function openSource(source?: string): Promise<void> {
     if (value) void vscode.window.showWarningMessage(`Hover: "${value}" is not a valid path:line:col source.`);
     return;
   }
-
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
     void vscode.window.showWarningMessage('Hover: open a workspace folder to resolve the source path.');
     return;
   }
-
-  // The attribute is a workspace-relative POSIX path; try each folder root.
-  const target = await firstExisting(folders.map(f => vscode.Uri.joinPath(f.uri, parsed.path)));
+  const target = await firstExisting(folders.map((f) => vscode.Uri.joinPath(f.uri, parsed.path)));
   if (!target) {
     void vscode.window.showWarningMessage(`Hover: could not find ${parsed.path} in the open workspace.`);
     return;
   }
-
   const doc = await vscode.workspace.openTextDocument(target);
   const editor = await vscode.window.showTextDocument(doc);
-  // data-hover-source is 1-indexed (line + column); VSCode Position is 0-indexed.
   const pos = new vscode.Position(Math.max(0, parsed.line - 1), Math.max(0, parsed.col - 1));
   editor.selection = new vscode.Selection(pos, pos);
   editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
 }
 
-/** Parse a `data-hover-source` value `<rel-path>:<line>:<col>` (1-indexed).
- *  The path may itself contain colons only on Windows-absolute paths, which the
- *  attribute never carries (it's a workspace-relative POSIX path), so anchoring
- *  the two trailing `:<num>` groups is unambiguous. */
+/** Parse a `data-hover-source` value `<rel-path>:<line>:<col>` (1-indexed). */
 export function parseHoverSource(value: string): { path: string; line: number; col: number } | null {
   const m = /^(.+):(\d+):(\d+)$/.exec(value.trim());
   if (!m) return null;
@@ -182,9 +212,7 @@ export function parseHoverSource(value: string): { path: string; line: number; c
 }
 
 /**
- * F4 — scaffold a new security probe seed under `.hover/rules/security/`. The
- * file is schema-validated as you edit it (see contributes.jsonValidation), so
- * authoring a probe is fill-in-the-blanks rather than reading the engine source.
+ * F4 — scaffold a new security probe seed under `.hover/rules/security/`.
  */
 async function newProbeSeed(): Promise<void> {
   const folders = vscode.workspace.workspaceFolders;
@@ -196,18 +224,17 @@ async function newProbeSeed(): Promise<void> {
     title: 'Hover: new probe seed',
     prompt: 'Seed name (kebab-case)',
     placeHolder: 'idor-numeric-id',
-    validateInput: (v) => (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(v.trim()) ? null : 'Use kebab-case: lower-case letters, digits, hyphens.'),
+    validateInput: (v) =>
+      /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v.trim()) ? null : 'Use kebab-case: lower-case letters, digits, hyphens.',
   });
   if (!name) return;
   const slug = name.trim();
-
   const target = vscode.Uri.joinPath(folders[0].uri, '.hover', 'rules', 'security', `${slug}.json`);
   if (await firstExisting([target])) {
     void vscode.window.showWarningMessage(`Hover: a seed named "${slug}" already exists.`);
     await vscode.window.showTextDocument(target);
     return;
   }
-
   const template = {
     name: slug,
     class: 'idor',
@@ -220,8 +247,7 @@ async function newProbeSeed(): Promise<void> {
       secondIdentity: true,
     },
   };
-  const body = JSON.stringify(template, null, 2) + '\n';
-  await vscode.workspace.fs.writeFile(target, Buffer.from(body, 'utf-8'));
+  await vscode.workspace.fs.writeFile(target, Buffer.from(JSON.stringify(template, null, 2) + '\n', 'utf-8'));
   await vscode.window.showTextDocument(target);
 }
 

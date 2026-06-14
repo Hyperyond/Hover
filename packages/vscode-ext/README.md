@@ -15,13 +15,22 @@ why-primary) and `docs/superpowers/specs/2026-06-06-vscode-extension-design.md`
 
 ## Status
 
-Scaffold — native UI (no webview; matches VSCode's look):
+Native UI (no webview; matches VSCode's look). One extension for **testing +
+application security** — the split is a mode switch, not two extensions.
 
-- **Activity Bar → Hover** — a *Specs* tree listing crystallized
-  `*.spec.ts` / `*.security.spec.ts` (with the stamped prompt as the row
-  description; click to open). Auto-refreshes as specs change.
-- **Status bar** — `✨ Hover` reflects whether a Hover dev service is reachable;
-  click to focus the sidebar.
+**Activity Bar → Hover** has three views:
+
+- **Specs** — crystallized `*.spec.ts` / `*.security.spec.ts`, grouped into
+  **Tests** and **Security**, with the stamped prompt as the row description.
+  Inline ▶ Run (terminal Playwright) and ⇄ Review-candidate actions. Auto-refresh.
+- **Sessions** — the agent-run ledger from `.hover/sessions/` (model · cost ·
+  outcome), newest first; click to open the JSON.
+- **Probe Seeds** — project probe seeds under `.hover/rules/`, grouped
+  authz / vuln; click to open; "+" scaffolds a new one.
+
+**Status bar** — `✨ Hover: <mode>` shows the current mode and tints
+orange (security) / red (pentest); click to **switch mode** (Testing / Security
+/ Pentest), and reflects whether a dev service is connected.
 
 Commands & editor integrations:
 

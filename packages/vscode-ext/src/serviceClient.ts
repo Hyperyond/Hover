@@ -1,17 +1,17 @@
 /**
- * F2 page→editor transport (editor side).
+ * Editor-side client to the Hover core WebSocket service(s).
  *
- * The Hover core service runs a WebSocket server bound to 127.0.0.1, starting
- * at port 51789 and auto-bumping up to 51798 when several examples run at once
- * (see `@hover-dev/core`'s service). The in-page widget connects to its own
- * service and, when the user clicks an element carrying `data-hover-source`,
- * sends `{ type: 'reveal-source', payload: { source } }`. The service relays
- * that to every OTHER connected client — so this extension connects as a client
- * and, on `reveal-source`, jumps the editor to the location.
+ * The core service binds 127.0.0.1 starting at 51789, auto-bumping to 51798
+ * when several examples run at once. We don't know which port the user's dev
+ * server bound, so we keep a socket to every port in the range and reconnect on
+ * drop (Vite HMR tears connections down constantly). `ws` is bundled into the
+ * extension by tsup.
  *
- * We don't know which port the user's dev server bound, so we keep a socket to
- * every port in the range and reconnect on drop (Vite HMR tears connections
- * down constantly). `ws` is bundled into the extension by tsup.
+ * It carries three things for the extension UI:
+ *   • `reveal-source` relays (F2 page→editor: Alt+click in the widget),
+ *   • connection status (for the status-bar indicator),
+ *   • mode state (`modes` broadcast) + `set-mode` (the testing / security /
+ *     pentest switch — one extension, the engine's existing mode protocol).
  */
 import WebSocket from 'ws';
 
@@ -20,28 +20,36 @@ const PORT_START = 51789;
 const PORT_END = 51798;
 const RECONNECT_MS = 4000;
 
+export interface ModeEntry {
+  id: string;
+  label: string;
+  description?: string;
+  accent?: string;
+  pluginName?: string;
+}
+
+export interface PoolHandlers {
+  onRevealSource?: (source: string) => void;
+  onStatus?: (connectedCount: number) => void;
+  onModes?: (current: string | null, available: ModeEntry[]) => void;
+}
+
 export interface ServiceClientPool {
+  /** Switch the active mode on every connected service (null = normal). */
+  setMode(modeId: string | null): void;
   dispose(): void;
 }
 
-/**
- * Connect to every Hover service port in the range and invoke `onRevealSource`
- * whenever any of them relays a `reveal-source` message. Returns a handle that
- * tears every socket down.
- */
-export function connectServicePool(
-  onRevealSource: (source: string) => void,
-  onStatus?: (connectedCount: number) => void,
-): ServiceClientPool {
+export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
   const sockets = new Map<number, WebSocket>();
   const timers = new Map<number, ReturnType<typeof setTimeout>>();
   let disposed = false;
 
   const reportStatus = (): void => {
-    if (disposed || !onStatus) return;
+    if (disposed || !handlers.onStatus) return;
     let open = 0;
     for (const s of sockets.values()) if (s.readyState === WebSocket.OPEN) open++;
-    onStatus(open);
+    handlers.onStatus(open);
   };
 
   const connect = (port: number): void => {
@@ -58,14 +66,18 @@ export function connectServicePool(
     ws.on('open', () => reportStatus());
 
     ws.on('message', (data: WebSocket.RawData) => {
-      let msg: { type?: unknown; payload?: { source?: unknown } };
+      let msg: { type?: unknown; payload?: { source?: unknown; current?: unknown; available?: unknown } };
       try {
         msg = JSON.parse(data.toString()) as typeof msg;
       } catch {
         return;
       }
       if (msg.type === 'reveal-source' && typeof msg.payload?.source === 'string' && msg.payload.source) {
-        onRevealSource(msg.payload.source);
+        handlers.onRevealSource?.(msg.payload.source);
+      } else if (msg.type === 'modes' && handlers.onModes) {
+        const current = typeof msg.payload?.current === 'string' ? msg.payload.current : null;
+        const available = Array.isArray(msg.payload?.available) ? (msg.payload!.available as ModeEntry[]) : [];
+        handlers.onModes(current, available);
       }
     });
 
@@ -91,6 +103,12 @@ export function connectServicePool(
   for (let port = PORT_START; port <= PORT_END; port++) connect(port);
 
   return {
+    setMode(modeId: string | null): void {
+      const body = JSON.stringify({ type: 'set-mode', payload: { modeId } });
+      for (const ws of sockets.values()) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(body);
+      }
+    },
     dispose(): void {
       disposed = true;
       for (const t of timers.values()) clearTimeout(t);

@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "displayName": "Hover",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "license": "Apache-2.0",
@@ -23,7 +23,8 @@
       {
         "command": "hover.reviewOptimizationCandidate",
         "title": "Review Optimization Candidate",
-        "category": "Hover"
+        "category": "Hover",
+        "icon": "$(diff)"
       },
       {
         "command": "hover.openSource",
@@ -37,8 +38,32 @@
         "icon": "$(add)"
       },
       {
+        "command": "hover.runSpec",
+        "title": "Run Spec",
+        "category": "Hover",
+        "icon": "$(play)"
+      },
+      {
+        "command": "hover.switchMode",
+        "title": "Switch Mode (Testing / Security / Pentest)",
+        "category": "Hover",
+        "icon": "$(arrow-swap)"
+      },
+      {
         "command": "hover.refreshSpecs",
         "title": "Refresh Specs",
+        "category": "Hover",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hover.refreshSessions",
+        "title": "Refresh Sessions",
+        "category": "Hover",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hover.refreshSeeds",
+        "title": "Refresh Seeds",
         "category": "Hover",
         "icon": "$(refresh)"
       }
@@ -59,6 +84,18 @@
           "name": "Specs",
           "icon": "$(beaker)",
           "contextualTitle": "Hover"
+        },
+        {
+          "id": "hover.sessions",
+          "name": "Sessions",
+          "icon": "$(history)",
+          "contextualTitle": "Hover"
+        },
+        {
+          "id": "hover.seeds",
+          "name": "Probe Seeds",
+          "icon": "$(law)",
+          "contextualTitle": "Hover"
         }
       ]
     },
@@ -78,14 +115,46 @@
       ],
       "view/title": [
         {
-          "command": "hover.newProbeSeed",
+          "command": "hover.switchMode",
           "when": "view == hover.specs",
           "group": "navigation@1"
         },
         {
-          "command": "hover.refreshSpecs",
+          "command": "hover.newProbeSeed",
           "when": "view == hover.specs",
           "group": "navigation@2"
+        },
+        {
+          "command": "hover.refreshSpecs",
+          "when": "view == hover.specs",
+          "group": "navigation@3"
+        },
+        {
+          "command": "hover.refreshSessions",
+          "when": "view == hover.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "hover.newProbeSeed",
+          "when": "view == hover.seeds",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hover.refreshSeeds",
+          "when": "view == hover.seeds",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "hover.runSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "inline@1"
+        },
+        {
+          "command": "hover.reviewOptimizationCandidate",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "inline@2"
         }
       ]
     },
@@ -93,6 +162,14 @@
       {
         "view": "hover.specs",
         "contents": "No specs yet.\n\nDrive your app with Hover to crystallize a test or security check into a Playwright spec, then it shows up here.\n\n[New Probe Seed](command:hover.newProbeSeed)"
+      },
+      {
+        "view": "hover.sessions",
+        "contents": "No Hover runs recorded yet.\n\nEach agent run (model, cost, outcome) is logged under .hover/sessions/ and listed here."
+      },
+      {
+        "view": "hover.seeds",
+        "contents": "No project probe seeds yet.\n\nProbe seeds under .hover/rules/security/ teach Hover what to test for (IDOR/BOLA, injection, …).\n\n[New Probe Seed](command:hover.newProbeSeed)"
       }
     ]
   },
