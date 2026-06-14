@@ -564,7 +564,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Sidebar under the Hover Activity Bar container: chat (webview) + three
   // native tree views.
-  const chat = registerChatView();
+  const chat = registerChatView(context.extensionUri);
   chatProvider = chat.provider;
   chatProvider.runHandler = (prompt) => void runPrompt(prompt);
   // Re-sync state whenever the chat webview (re)loads — otherwise the initial

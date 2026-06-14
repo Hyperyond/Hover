@@ -1,9 +1,21 @@
 {
   "name": "hover-dev",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
-  "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
+  "keywords": [
+    "ai",
+    "testing",
+    "e2e",
+    "end-to-end",
+    "playwright",
+    "security",
+    "appsec",
+    "authz",
+    "bola",
+    "idor",
+    "test-automation"
+  ],
   "license": "Apache-2.0",
   "author": "Hyperyond",
   "publisher": "hyperyond",
@@ -19,11 +31,20 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Testing", "Other"],
+  "categories": [
+    "Testing",
+    "AI",
+    "Chat",
+    "Other"
+  ],
   "icon": "resources/icon.png",
   "main": "./dist/extension.cjs",
-  "activationEvents": ["onStartupFinished"],
-  "extensionKind": ["workspace"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
   "contributes": {
     "commands": [
       {
@@ -249,7 +270,10 @@
         },
         "hover.browser": {
           "type": "string",
-          "enum": ["silent", "visible"],
+          "enum": [
+            "silent",
+            "visible"
+          ],
           "enumDescriptions": [
             "Headless — no browser window; runs stream into the chat",
             "Visible — show the debug Chrome window"
@@ -264,7 +288,11 @@
         },
         "hover.model": {
           "type": "string",
-          "enum": ["sonnet", "opus", "haiku"],
+          "enum": [
+            "sonnet",
+            "opus",
+            "haiku"
+          ],
           "default": "sonnet",
           "description": "Model for runs. Sonnet is cheapest; Opus for harder flows; Haiku for speed."
         }

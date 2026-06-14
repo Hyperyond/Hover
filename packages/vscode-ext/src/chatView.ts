@@ -29,9 +29,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    *  status, which would otherwise be lost if it resolves after activate. */
   onReady?: () => void;
 
+  constructor(private readonly extensionUri: vscode.Uri) {}
+
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    view.webview.options = { enableScripts: true };
+    view.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'resources')],
+    };
     view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage((msg: Inbound) => {
       if (msg.type === 'send') void this.onSend(msg.text);
@@ -115,7 +120,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(16).toString('base64');
-    const csp = [`default-src 'none'`, `style-src 'unsafe-inline'`, `script-src 'nonce-${nonce}'`, `media-src 'self'`].join('; ');
+    const csp = [`default-src 'none'`, `style-src 'unsafe-inline'`, `script-src 'nonce-${nonce}'`, `media-src 'self'`, `img-src ${webview.cspSource}`].join('; ');
+    const iconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'resources', 'icon.png'));
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -179,7 +185,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /* Branded launch splash (Codex-style): mark + wordmark + tagline + site link. */
   .splash { display: flex; flex-direction: column; align-items: center; height: 100%; padding: 24px 20px 8px; }
   .splash-hero { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
-  .splash-mark { width: 64px; height: 64px; color: var(--accent); opacity: .9; }
+  .splash-mark { width: 76px; height: 76px; border-radius: 18px; }
   .splash-name { font-size: 30px; font-weight: 700; letter-spacing: .08em; color: var(--text); }
   .splash-tag { color: var(--text-dim); line-height: 1.55; max-width: 320px; }
   .splash-tag em { color: var(--text-mute); font-style: normal; }
@@ -650,7 +656,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     var d=document.createElement('div'); d.className='splash';
     d.innerHTML =
       '<div class="splash-hero">' +
-        '<svg class="splash-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.2l2.05 6.7 6.7 2.05a1 1 0 0 1 0 1.9l-6.7 2.05L12 21.8a1 1 0 0 1-1.9 0l-2.05-6.9-6.7-2.05a1 1 0 0 1 0-1.9l6.7-2.05L10.1 2.2a1 1 0 0 1 1.9 0z"/></svg>' +
+        '<img class="splash-mark" src="${iconUri}" alt="Hover" />' +
         '<div class="splash-name">Hover</div>' +
         '<div class="splash-tag">Describe what you want to verify, e.g. <em>"test the login flow"</em>.</div>' +
         '<button class="startapp" id="startapp">▶ Start App</button>' +
@@ -668,8 +674,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-export function registerChatView(): { provider: ChatViewProvider; disposable: vscode.Disposable } {
-  const provider = new ChatViewProvider();
+export function registerChatView(extensionUri: vscode.Uri): { provider: ChatViewProvider; disposable: vscode.Disposable } {
+  const provider = new ChatViewProvider(extensionUri);
   const disposable = vscode.window.registerWebviewViewProvider(ChatViewProvider.viewId, provider, {
     webviewOptions: { retainContextWhenHidden: true },
   });
