@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "displayName": "Hover",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "license": "Apache-2.0",
@@ -33,7 +33,8 @@
       {
         "command": "hover.newProbeSeed",
         "title": "New Probe Seed",
-        "category": "Hover"
+        "category": "Hover",
+        "icon": "$(add)"
       },
       {
         "command": "hover.refreshSpecs",
@@ -77,12 +78,23 @@
       ],
       "view/title": [
         {
+          "command": "hover.newProbeSeed",
+          "when": "view == hover.specs",
+          "group": "navigation@1"
+        },
+        {
           "command": "hover.refreshSpecs",
           "when": "view == hover.specs",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ]
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "hover.specs",
+        "contents": "No specs yet.\n\nDrive your app with Hover to crystallize a test or security check into a Playwright spec, then it shows up here.\n\n[New Probe Seed](command:hover.newProbeSeed)"
+      }
+    ]
   },
   "scripts": {
     "build": "tsup",
