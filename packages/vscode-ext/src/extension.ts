@@ -20,7 +20,7 @@ import { SpecLensProvider } from './specLens.js';
 import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
 import { registerSeedsView } from './seedsView.js';
-import { registerChatView } from './chatView.js';
+import { ChatViewProvider, registerChatView } from './chatView.js';
 
 /** Where the optimizer writes its candidate, relative to the workspace root:
  *  `.hover/cache/optimized/<spec>.draft`. */
@@ -32,6 +32,26 @@ let currentMode: string | null = null;
 let availableModes: ModeEntry[] = [];
 let connectedServices = 0;
 let modeStatus: vscode.StatusBarItem;
+let chatProvider: ChatViewProvider | undefined;
+
+/** The modes the one extension offers, independent of any running service —
+ *  mode is the extension's own state (the engine, once hosted here, reads it).
+ *  A connected service's reported modes are merged on top. */
+const BUILTIN_MODES: ModeEntry[] = [
+  { id: 'security', label: 'Security testing', description: 'business / authorization — orange' },
+  { id: 'pentest', label: 'Pentest', description: 'offensive vuln hunting — red' },
+];
+
+function allModes(): ModeEntry[] {
+  const byId = new Map<string, ModeEntry>();
+  for (const m of BUILTIN_MODES) byId.set(m.id, m);
+  for (const m of availableModes) byId.set(m.id, m);
+  return [...byId.values()];
+}
+
+function modeLabel(id: string): string {
+  return allModes().find((m) => m.id === id)?.label ?? id;
+}
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
@@ -53,12 +73,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Sidebar under the Hover Activity Bar container: chat (webview) + three
   // native tree views.
-  context.subscriptions.push(
-    registerChatView(),
-    ...registerSpecsView(),
-    ...registerSessionsView(),
-    ...registerSeedsView(),
-  );
+  const chat = registerChatView();
+  chatProvider = chat.provider;
+  context.subscriptions.push(chat.disposable, ...registerSpecsView(), ...registerSessionsView(), ...registerSeedsView());
 
   // Status bar: current mode + service connection, click to switch mode.
   modeStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -73,11 +90,13 @@ export function activate(context: vscode.ExtensionContext): void {
     onStatus: (connected) => {
       connectedServices = connected;
       renderModeStatus();
+      chatProvider?.updateStatus(connected > 0 ? 'ready' : 'no engine');
     },
     onModes: (current, available) => {
       currentMode = current;
       availableModes = available;
       renderModeStatus();
+      chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
     },
   });
   context.subscriptions.push({ dispose: () => pool?.dispose() });
@@ -89,7 +108,7 @@ export function deactivate(): void {
 
 function renderModeStatus(): void {
   if (!modeStatus) return;
-  const label = currentMode ? availableModes.find((m) => m.id === currentMode)?.label ?? currentMode : null;
+  const label = currentMode ? modeLabel(currentMode) : null;
   const disconnected = connectedServices === 0;
   modeStatus.text = `$(sparkle) Hover${label ? `: ${label}` : ''}${disconnected ? ' $(circle-slash)' : ''}`;
   modeStatus.backgroundColor =
@@ -106,14 +125,13 @@ function renderModeStatus(): void {
 }
 
 async function switchMode(): Promise<void> {
-  if (connectedServices === 0) {
-    void vscode.window.showWarningMessage('Hover: no dev service connected. Start a Hover-enabled dev server first.');
-    return;
-  }
+  // Mode is the extension's own state, so this always works — no running
+  // service required. When a service IS connected, we also push the change to
+  // it; otherwise it applies locally and takes effect on the next run.
   type Pick = vscode.QuickPickItem & { modeId: string | null };
   const items: Pick[] = [
-    { label: '$(circle-outline) Normal', description: 'testing (no security mode)', modeId: null },
-    ...availableModes.map((m) => ({
+    { label: '$(circle-outline) Normal', description: 'testing — no security mode', modeId: null },
+    ...allModes().map((m) => ({
       label: `${m.id === 'pentest' ? '$(flame)' : '$(shield)'} ${m.label}`,
       description: m.description ?? m.id,
       modeId: m.id,
@@ -121,7 +139,16 @@ async function switchMode(): Promise<void> {
   ];
   for (const it of items) if (it.modeId === currentMode) it.label = `$(check) ${it.label}`;
   const picked = await vscode.window.showQuickPick(items, { title: 'Hover: switch mode', placeHolder: 'Select a mode' });
-  if (picked) pool?.setMode(picked.modeId);
+  if (!picked) return;
+  currentMode = picked.modeId;
+  renderModeStatus();
+  chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
+  if (connectedServices > 0) pool?.setMode(picked.modeId);
+  else
+    vscode.window.setStatusBarMessage(
+      'Hover: mode set locally — it applies when the engine runs (no live service connected).',
+      4000,
+    );
 }
 
 /**

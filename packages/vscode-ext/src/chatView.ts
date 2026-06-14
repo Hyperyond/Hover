@@ -42,6 +42,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     void this.view?.webview.postMessage(message);
   }
 
+  /** Recolor the chat header to the active mode (null = Default/mint). */
+  updateMode(id: string | null, label: string | null): void {
+    this.post({ type: 'mode', id, label: label ?? 'Default' });
+  }
+
+  /** Reflect service connection in the header status line. */
+  updateStatus(text: string): void {
+    this.post({ type: 'status', text });
+  }
+
   private async onSend(text: string): Promise<void> {
     const prompt = text.trim();
     if (!prompt) return;
@@ -236,8 +246,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-export function registerChatView(): vscode.Disposable {
-  return vscode.window.registerWebviewViewProvider(ChatViewProvider.viewId, new ChatViewProvider(), {
+export function registerChatView(): { provider: ChatViewProvider; disposable: vscode.Disposable } {
+  const provider = new ChatViewProvider();
+  const disposable = vscode.window.registerWebviewViewProvider(ChatViewProvider.viewId, provider, {
     webviewOptions: { retainContextWhenHidden: true },
   });
+  return { provider, disposable };
 }
