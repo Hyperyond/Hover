@@ -15,7 +15,13 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { connectServicePool, type AgentEntry, type ModeEntry, type ServiceClientPool } from './serviceClient.js';
+import {
+  connectServicePool,
+  type AgentEntry,
+  type ModeEntry,
+  type ServerMessage,
+  type ServiceClientPool,
+} from './serviceClient.js';
 import { SpecLensProvider } from './specLens.js';
 import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
@@ -72,6 +78,102 @@ function agentLabel(id: string | null): string {
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
+// ── Run orchestration ─────────────────────────────────────────────────────
+// The chat sends a prompt → the engine runs it → streams events back. We
+// accumulate the same message shape the widget sends on save (user / step* /
+// ai / done), so "Save as spec" can crystallize the run.
+interface SpecMsg {
+  kind: string;
+  [k: string]: unknown;
+}
+let transcript: SpecMsg[] = [];
+let runSessionId: string | undefined;
+let stepCount = 0;
+
+/** Hand a chat prompt to the engine. */
+function runPrompt(prompt: string): void {
+  if (connectedServices === 0 || !pool) {
+    chatProvider?.pushSystem('Engine not connected yet — give it a moment after opening the project, or run "Hover: Start Engine".');
+    return;
+  }
+  transcript.push({ kind: 'user', text: prompt });
+  stepCount = 0;
+  chatProvider?.setRunning(true);
+  if (!pool.run(prompt, runSessionId)) chatProvider?.pushSystem('Could not reach the engine.');
+}
+
+/** Translate a streamed engine event into chat updates + transcript. */
+function handleServerMessage(msg: ServerMessage): void {
+  if (msg.type === 'error') {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem(String(msg.payload?.message ?? 'error'));
+    return;
+  }
+  if (msg.type === 'spec-saved') {
+    chatProvider?.pushSystem(`Saved spec: ${String(msg.payload?.name ?? '')}`);
+    return;
+  }
+  if (msg.type === 'run-active') {
+    chatProvider?.setRunning(true);
+    return;
+  }
+  if (msg.type !== 'event') return;
+  const ev = msg.payload as { kind?: string; [k: string]: unknown } | undefined;
+  switch (ev?.kind) {
+    case 'session_start':
+      if (typeof ev.sessionId === 'string') runSessionId = ev.sessionId;
+      chatProvider?.setRunning(true);
+      break;
+    case 'tool_use':
+      transcript.push({ kind: 'step', tool: ev.tool, input: ev.input });
+      stepCount++;
+      chatProvider?.pushStep(humanizeTool(String(ev.tool ?? ''), ev.input));
+      break;
+    case 'text':
+      if (typeof ev.text === 'string' && ev.text.trim()) transcript.push({ kind: 'ai', text: ev.text });
+      break;
+    case 'session_end':
+      transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
+      chatProvider?.setRunning(false);
+      if (ev.cancelled) chatProvider?.pushSystem('Run cancelled.');
+      else if (ev.isError) chatProvider?.pushSystem(`Run ended with an error: ${String(ev.summary ?? '')}`);
+      else chatProvider?.pushResult('PASS', String(ev.summary ?? 'Done.'), stepCount);
+      break;
+  }
+}
+
+/** Short, human label for a browser/MCP tool call. */
+function humanizeTool(tool: string, input: unknown): string {
+  const i = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const s = (v: unknown): string => (typeof v === 'string' ? v : '');
+  switch (tool) {
+    case 'browser_navigate': return `Navigate to ${s(i.url)}`;
+    case 'browser_click': return `Click ${s(i.element) || s(i.ref) || s(i.selector)}`.trim();
+    case 'browser_type': return `Type "${s(i.text)}"${i.element ? ` into ${s(i.element)}` : ''}`;
+    case 'browser_fill_form': return 'Fill form';
+    case 'browser_select_option': return `Select option ${s(i.element)}`.trim();
+    case 'browser_press_key': return `Press ${s(i.key)}`;
+    case 'browser_snapshot': return 'Snapshot page';
+    case 'browser_take_screenshot': return 'Screenshot';
+    case 'browser_wait_for': return 'Wait';
+    case 'browser_navigate_back': return 'Go back';
+    default: return tool.replace(/^mcp__[a-z0-9_]+__/, '').replace(/^browser_/, '').replace(/_/g, ' ') || tool;
+  }
+}
+
+async function saveSpec(): Promise<void> {
+  let idx = -1;
+  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'user') { idx = i; break; }
+  const steps = idx === -1 ? transcript.slice() : transcript.slice(idx);
+  if (!steps.some((m) => m.kind === 'step')) {
+    void vscode.window.showWarningMessage('Hover: nothing to save — no steps in the last run.');
+    return;
+  }
+  const name = await vscode.window.showInputBox({ title: 'Save as Playwright spec', prompt: 'Spec name', placeHolder: 'login-flow' });
+  if (!name) return;
+  if (!pool?.saveSpec(name, steps)) void vscode.window.showWarningMessage('Hover: engine not connected.');
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('hover.reviewOptimizationCandidate', (arg?: vscode.TreeItem | vscode.Uri) =>
@@ -83,6 +185,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.switchMode', () => switchMode()),
     vscode.commands.registerCommand('hover.switchAgent', () => switchAgent()),
     vscode.commands.registerCommand('hover.newSession', () => newSession()),
+    vscode.commands.registerCommand('hover.saveSpec', () => saveSpec()),
+    vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel()),
     vscode.commands.registerCommand('hover.openRepo', () =>
       vscode.env.openExternal(vscode.Uri.parse('https://github.com/Hyperyond/Hover')),
     ),
@@ -100,6 +204,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // native tree views.
   const chat = registerChatView();
   chatProvider = chat.provider;
+  chatProvider.runHandler = (prompt) => runPrompt(prompt);
   context.subscriptions.push(chat.disposable, ...registerSpecsView(), ...registerSessionsView(), ...registerSeedsView());
 
   // Status bar: current mode + service connection, click to switch mode.
@@ -128,6 +233,7 @@ export function activate(context: vscode.ExtensionContext): void {
       availableAgents = available;
       chatProvider?.updateAgent(agentLabel(currentAgent));
     },
+    onServerMessage: (msg) => handleServerMessage(msg),
   });
   context.subscriptions.push({ dispose: () => pool?.dispose() });
 
@@ -223,6 +329,9 @@ async function switchAgent(): Promise<void> {
 }
 
 async function newSession(): Promise<void> {
+  transcript = [];
+  runSessionId = undefined;
+  stepCount = 0;
   await chatProvider?.reveal();
   chatProvider?.newSession();
 }

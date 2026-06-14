@@ -23,6 +23,8 @@ type Inbound =
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewId = 'hover.chat';
   private view?: vscode.WebviewView;
+  /** Set by the extension: hand a prompt to the engine. */
+  runHandler?: (prompt: string) => void;
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
@@ -58,17 +60,29 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.post({ type: 'agent', label });
   }
 
-  private async onSend(text: string): Promise<void> {
+  // Streamed run rendering (called by the extension as engine events arrive).
+  pushStep(label: string): void {
+    this.post({ type: 'step', label });
+  }
+  pushAssistant(text: string): void {
+    this.post({ type: 'assistant', text });
+  }
+  pushSystem(text: string): void {
+    this.post({ type: 'system', text });
+  }
+  pushResult(verdict: string, summary: string, steps?: number): void {
+    this.post({ type: 'result', verdict, summary, steps });
+  }
+  setRunning(running: boolean): void {
+    this.post({ type: 'running', running });
+  }
+
+  private onSend(text: string): void {
     const prompt = text.trim();
     if (!prompt) return;
     this.post({ type: 'user', text: prompt });
-    // TODO(engine): run @hover-dev/core's session for `prompt` against the
-    // workspace, stream { type:'step', label } events here, finish with
-    // { type:'result', verdict, summary, steps }, then offer Save-as-spec.
-    this.post({
-      type: 'system',
-      text: 'Engine wiring is next — this is the chat shell. Soon: Hover drives the browser for this prompt, streams each step here, and crystallizes a spec.',
-    });
+    if (this.runHandler) this.runHandler(prompt);
+    else this.post({ type: 'system', text: 'Engine not available.' });
   }
 
   private html(webview: vscode.Webview): string {
@@ -204,10 +218,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   function scroll() { log.scrollTop = log.scrollHeight; }
   function addMessage(role, text) { fresh(); var el = document.createElement('div'); el.className = 'msg ' + role; el.textContent = text; log.appendChild(el); scroll(); }
   function addStep(label) { fresh(); var el = document.createElement('div'); el.className = 'step'; var c = document.createElement('span'); c.className = 'check'; c.textContent = '✓'; var l = document.createElement('span'); l.className = 'label'; l.textContent = label; el.appendChild(c); el.appendChild(l); log.appendChild(el); scroll(); }
-  function addResult(verdict, summary, steps) { fresh(); var card = document.createElement('div'); card.className = 'result'; var h = document.createElement('div'); h.className = 'head'; h.textContent = '✓ ' + (verdict || 'PASS') + (steps ? ' — done in ' + steps + ' steps' : ''); var b = document.createElement('div'); b.textContent = summary || ''; var s = document.createElement('button'); s.className = 'saveas'; s.textContent = 'Save as spec'; s.addEventListener('click', function(){ vscode.postMessage({ type:'command', id:'hover.refreshSpecs' }); }); card.appendChild(h); card.appendChild(b); card.appendChild(s); log.appendChild(card); scroll(); }
+  function addResult(verdict, summary, steps) { fresh(); var card = document.createElement('div'); card.className = 'result'; var h = document.createElement('div'); h.className = 'head'; h.textContent = '✓ ' + (verdict || 'PASS') + (steps ? ' — done in ' + steps + ' steps' : ''); var b = document.createElement('div'); b.textContent = summary || ''; var s = document.createElement('button'); s.className = 'saveas'; s.textContent = 'Save as spec'; s.addEventListener('click', function(){ vscode.postMessage({ type:'command', id:'hover.saveSpec' }); }); card.appendChild(h); card.appendChild(b); card.appendChild(s); log.appendChild(card); scroll(); }
 
-  function syncSend() { sendBtn.disabled = input.value.trim().length === 0; }
-  function submit() { var t = input.value.trim(); if (!t) return; vscode.postMessage({ type:'send', text:t }); input.value=''; input.style.height='auto'; syncSend(); }
+  var running = false;
+  var iconSend = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
+  var iconStop = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+  function syncSend() {
+    if (running) { sendBtn.disabled = false; sendBtn.innerHTML = iconStop; sendBtn.title = 'Stop'; }
+    else { sendBtn.disabled = input.value.trim().length === 0; sendBtn.innerHTML = iconSend; sendBtn.title = 'Send (Enter)'; }
+  }
+  function submit() {
+    if (running) { vscode.postMessage({ type:'command', id:'hover.cancelRun' }); return; }
+    var t = input.value.trim(); if (!t) return;
+    vscode.postMessage({ type:'send', text:t }); input.value=''; input.style.height='auto'; syncSend();
+  }
   sendBtn.addEventListener('click', submit);
   input.addEventListener('keydown', function(e){ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
   input.addEventListener('input', function(){ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,160)+'px'; syncSend(); });
@@ -245,6 +269,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal'; }
     else if (m.type==='agent') { document.getElementById('model-label').textContent = m.label || 'Claude'; }
     else if (m.type==='status') { document.getElementById('status-label').textContent = m.text || 'ready'; }
+    else if (m.type==='running') { running = !!m.running; document.getElementById('status-label').textContent = running ? 'running…' : 'ready'; syncSend(); }
   });
   function emptyEl(){ var d=document.createElement('div'); d.className='empty'; d.innerHTML='Describe what you want to verify, e.g. <em>"test the login flow"</em>.'; return d; }
 

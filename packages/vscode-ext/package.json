@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -66,6 +66,16 @@
         "title": "New Session",
         "category": "Hover",
         "icon": "$(add)"
+      },
+      {
+        "command": "hover.saveSpec",
+        "title": "Save Last Run as Spec",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.cancelRun",
+        "title": "Cancel Run",
+        "category": "Hover"
       },
       {
         "command": "hover.openRepo",

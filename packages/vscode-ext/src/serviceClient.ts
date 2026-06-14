@@ -33,11 +33,19 @@ export interface AgentEntry {
   installed?: boolean;
 }
 
+/** A server→client message during/after a run ({type:'event'|'error'|'spec-saved'|'run-active'}). */
+export interface ServerMessage {
+  type: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface PoolHandlers {
   onRevealSource?: (source: string) => void;
   onStatus?: (connectedCount: number) => void;
   onModes?: (current: string | null, available: ModeEntry[]) => void;
   onAgents?: (current: string | null, available: AgentEntry[]) => void;
+  /** Run lifecycle: streamed `event` payloads, plus `error` / `spec-saved`. */
+  onServerMessage?: (msg: ServerMessage) => void;
 }
 
 export interface ServiceClientPool {
@@ -45,6 +53,12 @@ export interface ServiceClientPool {
   setMode(modeId: string | null): void;
   /** Switch the coding agent on every connected service. */
   switchAgent(agentId: string): void;
+  /** Start a run (prompt) on the engine. Returns false if nothing is connected. */
+  run(text: string, sessionId?: string): boolean;
+  /** Cancel the active run. */
+  cancel(): void;
+  /** Crystallize the accumulated steps into a spec. */
+  saveSpec(name: string, steps: unknown[]): boolean;
   dispose(): void;
 }
 
@@ -58,6 +72,15 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
     let open = 0;
     for (const s of sockets.values()) if (s.readyState === WebSocket.OPEN) open++;
     handlers.onStatus(open);
+  };
+
+  // The engine is a single service; the lowest-numbered open socket is it.
+  const firstOpen = (): WebSocket | undefined => {
+    for (const p of [...sockets.keys()].sort((a, b) => a - b)) {
+      const s = sockets.get(p);
+      if (s && s.readyState === WebSocket.OPEN) return s;
+    }
+    return undefined;
   };
 
   const connect = (port: number): void => {
@@ -90,6 +113,8 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         const current = typeof msg.payload?.current === 'string' ? msg.payload.current : null;
         const available = Array.isArray(msg.payload?.available) ? (msg.payload!.available as AgentEntry[]) : [];
         handlers.onAgents(current, available);
+      } else if (msg.type === 'event' || msg.type === 'error' || msg.type === 'spec-saved' || msg.type === 'run-active') {
+        handlers.onServerMessage?.(msg as ServerMessage);
       }
     });
 
@@ -126,6 +151,23 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       for (const ws of sockets.values()) {
         if (ws.readyState === WebSocket.OPEN) ws.send(body);
       }
+    },
+    run(text: string, sessionId?: string): boolean {
+      const ws = firstOpen();
+      if (!ws) return false;
+      ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId } }));
+      return true;
+    },
+    cancel(): void {
+      for (const ws of sockets.values()) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel' }));
+      }
+    },
+    saveSpec(name: string, steps: unknown[]): boolean {
+      const ws = firstOpen();
+      if (!ws) return false;
+      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps } }));
+      return true;
     },
     dispose(): void {
       disposed = true;
