@@ -419,6 +419,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.openRepo', () =>
       vscode.env.openExternal(vscode.Uri.parse('https://github.com/Hyperyond/Hover')),
     ),
+    vscode.commands.registerCommand('hover.openSite', () =>
+      vscode.env.openExternal(vscode.Uri.parse('https://www.gethover.dev/')),
+    ),
     vscode.commands.registerCommand('hover.startEngine', () => bootEngine(context, true)),
     vscode.commands.registerCommand('hover.specs.focus', () =>
       vscode.commands.executeCommand('workbench.view.extension.hover'),

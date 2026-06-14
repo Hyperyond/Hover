@@ -131,7 +131,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   #log { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; }
   .empty { margin: auto; text-align: center; color: var(--text-dim); padding: 0 26px; line-height: 1.55; }
   .empty em { color: var(--text-mute); font-style: normal; }
-  .startapp { margin-top: 16px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 1px solid var(--accent); border-radius: 8px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
+  /* Branded launch splash (Codex-style): mark + wordmark + tagline + site link. */
+  .splash { display: flex; flex-direction: column; align-items: center; height: 100%; padding: 24px 20px 8px; }
+  .splash-hero { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+  .splash-mark { width: 64px; height: 64px; color: var(--accent); opacity: .9; }
+  .splash-name { font-size: 30px; font-weight: 700; letter-spacing: .08em; color: var(--text); }
+  .splash-tag { color: var(--text-dim); line-height: 1.55; max-width: 320px; }
+  .splash-tag em { color: var(--text-mute); font-style: normal; }
+  .splash-link { margin-top: auto; padding-top: 14px; color: var(--text-mute); font-size: 12px; cursor: pointer; text-decoration: none; }
+  .splash-link:hover { color: var(--accent); }
+  .startapp { margin-top: 4px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 1px solid var(--accent); border-radius: 8px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
   .startapp:hover { background: var(--accent); color: var(--accent-ink); }
   .working { display: flex; align-items: center; gap: 9px; padding: 8px 11px; color: var(--text-mute); font-size: 12px; }
   .working .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: hoverpulse 1s ease-in-out infinite; }
@@ -220,7 +229,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     </button>
   </header>
 
-  <div id="log"><div class="empty">Describe what you want to verify, e.g. <em>"test the login flow"</em>.<br/><button class="startapp" id="startapp">▶ Start App</button></div></div>
+  <div id="log"></div>
 
   <div id="composer">
     <div id="box">
@@ -364,8 +373,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   document.getElementById('history').addEventListener('click', cmd('hover.sessions.focus'));
   document.getElementById('new').addEventListener('click', cmd('hover.newSession'));
   document.getElementById('appstatus').addEventListener('click', cmd('hover.appStatus'));
-  // Delegated: the ▶ Start App button lives inside the (re-rendered) empty state.
-  log.addEventListener('click', function(e){ if (e.target && e.target.closest && e.target.closest('#startapp')) vscode.postMessage({ type:'command', id:'hover.startApp' }); });
+  // Delegated: the splash buttons live inside the (re-rendered) empty state.
+  log.addEventListener('click', function(e){
+    if (!e.target || !e.target.closest) return;
+    if (e.target.closest('#startapp')) vscode.postMessage({ type:'command', id:'hover.startApp' });
+    else if (e.target.closest('#site')) vscode.postMessage({ type:'command', id:'hover.openSite' });
+  });
 
   var workingEl = null;
   function setWorking(on){
@@ -406,8 +419,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     else if (m.type==='running') { running = !!m.running; setWorking(running); syncSend(); }
   });
-  function emptyEl(){ var d=document.createElement('div'); d.className='empty'; d.innerHTML='Describe what you want to verify, e.g. <em>"test the login flow"</em>.<br/><button class="startapp" id="startapp">▶ Start App</button>'; return d; }
+  function emptyEl(){
+    var d=document.createElement('div'); d.className='splash';
+    d.innerHTML =
+      '<div class="splash-hero">' +
+        '<svg class="splash-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.2l2.05 6.7 6.7 2.05a1 1 0 0 1 0 1.9l-6.7 2.05L12 21.8a1 1 0 0 1-1.9 0l-2.05-6.9-6.7-2.05a1 1 0 0 1 0-1.9l6.7-2.05L10.1 2.2a1 1 0 0 1 1.9 0z"/></svg>' +
+        '<div class="splash-name">Hover</div>' +
+        '<div class="splash-tag">Describe what you want to verify, e.g. <em>"test the login flow"</em>.</div>' +
+        '<button class="startapp" id="startapp">▶ Start App</button>' +
+      '</div>' +
+      '<a class="splash-link" id="site">Visit gethover.dev ↗</a>';
+    return d;
+  }
 
+  log.appendChild(emptyEl());
   syncSend();
   vscode.postMessage({ type:'ready' });
 </script>
