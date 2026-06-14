@@ -37,6 +37,7 @@ export function activate(context: vscode.ExtensionContext): void {
       'hover.openSource',
       (source?: string) => openSource(source),
     ),
+    vscode.commands.registerCommand('hover.newProbeSeed', () => newProbeSeed()),
     // F3 — spec-lifecycle CodeLens on crystallized specs (both *.spec.ts and
     // *.security.spec.ts match this glob).
     vscode.languages.registerCodeLensProvider(
@@ -150,6 +151,50 @@ export function parseHoverSource(value: string): { path: string; line: number; c
   const m = /^(.+):(\d+):(\d+)$/.exec(value.trim());
   if (!m) return null;
   return { path: m[1], line: Number(m[2]), col: Number(m[3]) };
+}
+
+/**
+ * F4 — scaffold a new security probe seed under `.hover/rules/security/`. The
+ * file is schema-validated as you edit it (see contributes.jsonValidation), so
+ * authoring a probe is fill-in-the-blanks rather than reading the engine source.
+ */
+async function newProbeSeed(): Promise<void> {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    void vscode.window.showWarningMessage('Hover: open a workspace folder to create a seed.');
+    return;
+  }
+  const name = await vscode.window.showInputBox({
+    title: 'Hover: new probe seed',
+    prompt: 'Seed name (kebab-case)',
+    placeHolder: 'idor-numeric-id',
+    validateInput: (v) => (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(v.trim()) ? null : 'Use kebab-case: lower-case letters, digits, hyphens.'),
+  });
+  if (!name) return;
+  const slug = name.trim();
+
+  const target = vscode.Uri.joinPath(folders[0].uri, '.hover', 'rules', 'security', `${slug}.json`);
+  if (await firstExisting([target])) {
+    void vscode.window.showWarningMessage(`Hover: a seed named "${slug}" already exists.`);
+    await vscode.window.showTextDocument(target);
+    return;
+  }
+
+  const template = {
+    name: slug,
+    class: 'idor',
+    category: 'authz',
+    note: '',
+    match: { method: ['GET'], urlParam: '/REPLACE/\\d+', needsAuth: true },
+    probe: {
+      strategy: "swap the id for another user's id and replay",
+      signal: "200 OK returning the other user's record",
+      secondIdentity: true,
+    },
+  };
+  const body = JSON.stringify(template, null, 2) + '\n';
+  await vscode.workspace.fs.writeFile(target, Buffer.from(body, 'utf-8'));
+  await vscode.window.showTextDocument(target);
 }
 
 /** Return the first URI that exists on disk, or undefined if none do. */

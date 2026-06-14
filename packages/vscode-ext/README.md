@@ -35,8 +35,12 @@ Scaffold. Two commands so far:
   exists, a "✨ Review optimization candidate" lens (runs F1). It deliberately
   does not add a Run/Debug lens — the official Playwright extension owns that.
 
+- **F4 (slice)** *seed authoring* — probe seeds under `.hover/rules/security/*.json`
+  get JSON-schema validation + autocomplete; *Hover: New Probe Seed* scaffolds a
+  template seed file. Lowers the bar to add an authz/vuln probe to a project.
+
 Planned next (see the feature-assessment doc): F3 Re-record action, mode switch
-(testing / security-orange / pentest-red in one extension), F4 seed authoring.
+(testing / security-orange / pentest-red in one extension).
 
 ## Develop
 

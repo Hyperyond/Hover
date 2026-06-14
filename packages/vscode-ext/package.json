@@ -29,6 +29,17 @@
         "command": "hover.openSource",
         "title": "Open Source from Element",
         "category": "Hover"
+      },
+      {
+        "command": "hover.newProbeSeed",
+        "title": "New Probe Seed",
+        "category": "Hover"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": ["**/.hover/rules/security/*.json", "**/.hover/rules/security/**/*.json"],
+        "url": "./schemas/hover-security-seed.schema.json"
       }
     ],
     "menus": {
