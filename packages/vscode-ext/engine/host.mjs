@@ -26,10 +26,11 @@ const port = Number(process.env.HOVER_PORT || 51789);
 // degrades to "mode unavailable" — it must NEVER stop the engine from booting.
 async function loadPlugins() {
   const out = [];
-  // Only @hover-dev/security is a mode plugin today. @hover-dev/pentest is a
-  // findings-report renderer, not a defineHoverPlugin manifest — the 🔴 pentest
-  // *mode* plugin isn't built yet, so it's not loaded here.
-  for (const spec of ['@hover-dev/security']) {
+  // 🟠 security (default export of @hover-dev/security) and 🔴 pentest (the
+  // `/plugin` subpath of @hover-dev/pentest — its main entry is a report lib,
+  // not a manifest). pentest reaches the shared MITM via security's
+  // startSecurityRuntime; the two modes are mutually exclusive (conflictsWith).
+  for (const spec of ['@hover-dev/security', '@hover-dev/pentest/plugin']) {
     try {
       const mod = await import(spec);
       const factory = mod.default;

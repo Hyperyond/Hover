@@ -9,11 +9,14 @@
  * playwright-core's runtime requires work. The extension spawns
  * `engine/host.mjs` under plain node, which resolves these from node_modules.
  *
- * We also stage @hover-dev/security so the 🟠 security mode actually works in
- * the extension (host.mjs loads it and passes it to startService). It's
- * self-contained — its deps are public npm packages. (@hover-dev/pentest is a
- * findings-report renderer, not a mode plugin, so it isn't staged; the 🔴
- * pentest mode plugin isn't built yet.)
+ * We also stage both mode plugins so 🟠 security + 🔴 pentest work in the
+ * extension (host.mjs loads them into startService({ plugins })):
+ *   - @hover-dev/security — the orange mode; self-contained (public npm deps).
+ *   - @hover-dev/pentest  — the red mode lives at its `./plugin` subpath and
+ *     reaches the shared MITM via security's startSecurityRuntime. It depends
+ *     on @hover-dev/security, so it's installed AFTER it (the already-present
+ *     security satisfies the dep — no registry hit). `pnpm pack` rewrites
+ *     pentest's `workspace:*` security dep to a concrete version.
  *
  * Run: `pnpm --filter hover-dev stage:engine` (or via the package flow).
  */
@@ -35,8 +38,8 @@ rmSync(join(engineDir, 'node_modules'), { recursive: true, force: true });
 for (const f of readdirSync(engineDir)) if (f.endsWith('.tgz')) rmSync(join(engineDir, f));
 
 // Build engine packages first, in dependency order, so the packed dists exist.
-console.log('[stage-engine] building core + security …');
-run('pnpm', ['--filter', '@hover-dev/core', '--filter', '@hover-dev/security', 'build'], repoRoot);
+console.log('[stage-engine] building core + security + pentest …');
+run('pnpm', ['--filter', '@hover-dev/core', '--filter', '@hover-dev/security', '--filter', '@hover-dev/pentest', 'build'], repoRoot);
 
 /** pnpm-pack a package into engineDir and return the new tarball's path. */
 function packInto(dir) {
@@ -47,21 +50,31 @@ function packInto(dir) {
   return join(engineDir, added);
 }
 
-console.log('[stage-engine] packing core + security …');
+console.log('[stage-engine] packing core + security + pentest …');
 const coreTgz = packInto(pkgDir('core'));
 const securityTgz = packInto(pkgDir('security'));
+const pentestTgz = packInto(pkgDir('pentest'));
 
 const npmFlags = ['--no-save', '--omit=dev', '--no-audit', '--no-fund'];
 
-// security is self-contained (its deps are public npm packages), so this
-// resolves cleanly alongside core.
+// security is self-contained (its deps are public npm packages), so core +
+// security resolve cleanly together.
 console.log('[stage-engine] installing core + security into engine/node_modules …');
 run('npm', ['install', coreTgz, securityTgz, ...npmFlags], engineDir);
 
-// Drop the tarballs (they're .vscodeignore'd anyway, but keep engine/ tidy).
-for (const t of [coreTgz, securityTgz]) rmSync(t, { force: true });
+// pentest depends on @hover-dev/security, now present at the same version →
+// satisfied without a registry hit. Best-effort: never block the .vsix on it.
+console.log('[stage-engine] installing pentest …');
+try {
+  run('npm', ['install', pentestTgz, ...npmFlags], engineDir);
+} catch (err) {
+  console.warn(`[stage-engine] pentest install failed — 🔴 mode will be unavailable: ${err?.message ?? err}`);
+}
 
-// Verify the required dists landed (security is part of the value prop now).
+// Drop the tarballs (they're .vscodeignore'd anyway, but keep engine/ tidy).
+for (const t of [coreTgz, securityTgz, pentestTgz]) rmSync(t, { force: true });
+
+// Verify the required dists landed.
 const must = [
   ['@hover-dev/core', 'dist/service.js'],
   ['@hover-dev/security', 'dist/index.js'],
@@ -71,4 +84,5 @@ for (const [pkg, rel] of must) {
     throw new Error(`[stage-engine] staged engine is missing ${pkg}/${rel}`);
   }
 }
-console.log(`[stage-engine] done → ${join(engineDir, 'node_modules')}`);
+const hasPentest = existsSync(join(engineDir, 'node_modules', '@hover-dev', 'pentest', 'dist', 'plugin.js'));
+console.log(`[stage-engine] done → ${join(engineDir, 'node_modules')} (pentest: ${hasPentest ? 'staged' : 'MISSING'})`);
