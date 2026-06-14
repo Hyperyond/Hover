@@ -276,7 +276,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     font: inherit; line-height: 1.45; padding: 2px 0;
   }
   #input::placeholder { color: var(--text-dim); }
-  /* Text row: textarea + mic top-right (Claude-Code-style). */
   .inputrow { display: flex; align-items: flex-start; gap: 6px; }
   .inputrow #input { flex: 1; }
   #toolbar { display: flex; align-items: center; gap: 6px; }
@@ -287,9 +286,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /* Mode pill tints to the active mode (mirrors the body mode class). */
   .modepill .bolt { color: var(--accent); }
   body.mode-security .modepill, body.mode-pentest .modepill { border-color: var(--accent); color: var(--accent); }
-  #mic { display: inline-flex; padding: 5px; border: none; background: none; color: var(--text-mute); cursor: pointer; border-radius: 7px; margin-top: 1px; }
-  #mic:hover { color: var(--text); background: var(--bg-2); }
-  #mic.recording { color: var(--accent); }
   #send {
     width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
     background: var(--accent); color: var(--accent-ink);
@@ -320,9 +316,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     <div id="box">
       <div class="inputrow">
         <textarea id="input" rows="1" placeholder="e.g. test the login flow  ·  @account to log in"></textarea>
-        <button id="mic" type="button" title="Voice input">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="4" height="8" rx="2"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2"/></svg>
-        </button>
       </div>
       <div id="toolbar">
         <div class="left">
@@ -608,32 +601,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // "Working…" only shows when running and no group is currently open (the open
   // group's own spinner covers the in-group activity).
   function updateWorking(){ setWorking(running && !curGroup); }
-
-  // Voice input. The browser Web Speech API works in the in-page widget (real
-  // Chrome) but NOT in a VS Code webview (Electron has no speech backend, and
-  // VS Code blocks getUserMedia + doesn't expose its speech API to third-party
-  // extensions). So in the extension we route users to OS-native dictation,
-  // which types into any field — including this box.
-  var mic = document.getElementById('mic');
-  var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  var rec = null, recording = false;
-  var isMac = /Mac/i.test(navigator.platform || navigator.userAgent || '');
-  var dictateHint = isMac
-    ? 'Press Fn twice (or ⌘+Control+Space) to dictate, then speak into the box.'
-    : 'Press Win+H to dictate, then speak into the box.';
-  if (!Rec) { mic.title = 'Voice — ' + dictateHint; }
-  mic.addEventListener('click', function(){
-    if (!Rec) { input.focus(); addMessage('system', 'Voice input uses your OS dictation here (VS Code blocks in-app mic). ' + dictateHint); return; }
-    if (recording) { try { rec && rec.stop(); } catch(e){} return; }
-    try {
-      rec = new Rec(); rec.lang = 'en-US'; rec.interimResults = true;
-      rec.onstart = function(){ recording = true; mic.classList.add('recording'); };
-      rec.onend = function(){ recording = false; mic.classList.remove('recording'); };
-      rec.onerror = function(){ recording = false; mic.classList.remove('recording'); };
-      rec.onresult = function(e){ var t=''; for (var i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; input.value=t; syncSend(); };
-      rec.start();
-    } catch(e) { addMessage('system', 'Could not start voice input.'); }
-  });
 
   window.addEventListener('message', function(e){
     var m = e.data; if (!m) return;
