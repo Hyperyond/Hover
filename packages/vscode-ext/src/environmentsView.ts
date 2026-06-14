@@ -168,6 +168,30 @@ export function registerEnvironmentsView(
       onActiveChange();
     }),
 
+    vscode.commands.registerCommand('hover.env.exportEnv', async (item?: EnvironmentItem) => {
+      if (!(item instanceof EnvironmentItem)) return;
+      const block = await buildEnvBlock(store, item.env);
+      if (!block) {
+        void vscode.window.showInformationMessage(
+          `Hover: ${item.env.name} has no accounts with credentials to export. Add an account + password first.`,
+        );
+        return;
+      }
+      const pick = await vscode.window.showQuickPick(
+        [
+          { label: '$(clipboard) Copy to clipboard', detail: 'For pasting into CI secrets or a shell', action: 'copy' },
+          { label: '$(file) Write to .hover/.env', detail: 'Local dotenv — gitignored; plaintext on disk', action: 'write' },
+        ],
+        { title: `Hover: export ${item.env.name} env vars` },
+      );
+      if (pick?.action === 'copy') {
+        await vscode.env.clipboard.writeText(block + '\n');
+        void vscode.window.showInformationMessage(`Hover: copied ${item.env.name} env vars to the clipboard.`);
+      } else if (pick?.action === 'write') {
+        await writeEnvFile(block);
+      }
+    }),
+
     vscode.commands.registerCommand('hover.env.addAccount', async (item?: EnvironmentItem) => {
       const envId = item instanceof EnvironmentItem ? item.env.id : await pickEnvId(store);
       if (!envId) return;
@@ -225,4 +249,64 @@ async function pickEnvId(store: EnvironmentStore): Promise<string | undefined> {
     { title: 'Hover: which environment?' },
   );
   return pick?.id;
+}
+
+/** A dotenv block for an environment: BASE_URL + each account's USER/PASS.
+ *  Returns null if there's nothing with credentials to export. */
+async function buildEnvBlock(store: EnvironmentStore, env: HoverEnvironment): Promise<string | null> {
+  const entries = await store.accountEnvEntries(env);
+  if (!entries.length) return null;
+  const lines = [
+    `# Hover — ${env.name} test credentials. Plaintext secrets: keep gitignored, never commit.`,
+    `BASE_URL=${env.url}`,
+    ...entries.map((e) => `${e.name}=${e.value}`),
+  ];
+  return lines.join('\n');
+}
+
+/** Upsert the block's keys into <workspace>/.hover/.env, preserving other keys,
+ *  and make sure .hover/.gitignore keeps .env out of git. */
+async function writeEnvFile(block: string): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showWarningMessage('Hover: open a project folder first.');
+    return;
+  }
+  const dir = vscode.Uri.joinPath(folder.uri, '.hover');
+  const envUri = vscode.Uri.joinPath(dir, '.env');
+  await vscode.workspace.fs.createDirectory(dir);
+
+  // Parse existing key=value lines, drop comments/blanks, then upsert ours.
+  const merged = new Map<string, string>();
+  try {
+    const existing = Buffer.from(await vscode.workspace.fs.readFile(envUri)).toString('utf8');
+    for (const line of existing.split('\n')) {
+      const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line.trim());
+      if (m) merged.set(m[1], m[2]);
+    }
+  } catch {
+    /* no existing file */
+  }
+  let header = '';
+  for (const line of block.split('\n')) {
+    if (line.startsWith('#')) { header = line; continue; }
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (m) merged.set(m[1], m[2]);
+  }
+  const body = [header, ...[...merged].map(([k, v]) => `${k}=${v}`)].filter(Boolean).join('\n') + '\n';
+  await vscode.workspace.fs.writeFile(envUri, Buffer.from(body, 'utf8'));
+
+  // Safety: ensure .env can't be committed regardless of the project's root
+  // gitignore policy (in user projects .hover/ is only partly ignored).
+  const giUri = vscode.Uri.joinPath(dir, '.gitignore');
+  let gi = '';
+  try {
+    gi = Buffer.from(await vscode.workspace.fs.readFile(giUri)).toString('utf8');
+  } catch {
+    /* none yet */
+  }
+  if (!/^\.env\s*$/m.test(gi)) {
+    await vscode.workspace.fs.writeFile(giUri, Buffer.from((gi ? gi.replace(/\n*$/, '\n') : '') + '.env\n', 'utf8'));
+  }
+  void vscode.window.showInformationMessage('Hover: wrote credentials to .hover/.env (gitignored — plaintext, do not commit).');
 }

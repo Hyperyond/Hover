@@ -168,6 +168,19 @@ export class EnvironmentStore {
   async hasPassword(envId: string, label: string): Promise<boolean> {
     return Boolean(await this.context.secrets.get(this.secretKey(envId, label)));
   }
+
+  /** The `NAME=value` env entries for an environment's accounts (passwords read
+   *  from SecretStorage). Drives the "export env vars" actions; the values are
+   *  exactly what a crystallized spec reads via process.env. */
+  async accountEnvEntries(env: HoverEnvironment): Promise<{ name: string; value: string }[]> {
+    const out: { name: string; value: string }[] = [];
+    for (const a of env.accounts) {
+      if (a.username) out.push({ name: accountEnvVar(a.label, 'USER'), value: a.username });
+      const pw = await this.getPassword(env.id, a.label);
+      if (pw) out.push({ name: accountEnvVar(a.label, 'PASS'), value: pw });
+    }
+    return out;
+  }
   /** Set/update an existing account's password (fires onDidChange so the tree
    *  refreshes its 🔑 indicator). */
   async updatePassword(envId: string, label: string, password: string): Promise<void> {
@@ -181,4 +194,12 @@ export class EnvironmentStore {
 
 function slugify(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/** The env-var name a crystallized spec reads for an account credential —
+ *  `HOVER_<LABEL>_USER` / `HOVER_<LABEL>_PASS`. The same convention the spec
+ *  generator uses, so the extension's "export env vars" matches what specs read. */
+export function accountEnvVar(label: string, kind: 'USER' | 'PASS'): string {
+  const slug = label.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return `HOVER_${slug}_${kind}`;
 }
