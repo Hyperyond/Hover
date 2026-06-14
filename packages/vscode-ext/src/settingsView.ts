@@ -12,7 +12,9 @@ import { randomBytes } from 'node:crypto';
 export interface SettingsHandlers {
   /** apiKey is read from / written to SecretStorage by the extension. */
   getApiKey(): Promise<string>;
-  onChange(change: { speech?: boolean; browser?: string; model?: string; apiKey?: string }): void | Promise<void>;
+  /** Coding agents the user can pick + the current one. */
+  getAgents(): { current: string; list: string[] };
+  onChange(change: { agent?: string; speech?: boolean; browser?: string; model?: string; apiKey?: string }): void | Promise<void>;
 }
 
 export class SettingsViewProvider implements vscode.WebviewViewProvider {
@@ -33,8 +35,11 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
 
   private async pushState(): Promise<void> {
     const cfg = vscode.workspace.getConfiguration('hover');
+    const agents = this.handlers.getAgents();
     void this.view?.webview.postMessage({
       type: 'state',
+      agent: agents.current,
+      agents: agents.list,
       speech: cfg.get<boolean>('speech', false),
       browser: cfg.get<string>('browser', 'silent'),
       model: cfg.get<string>('model', 'sonnet'),
@@ -76,6 +81,10 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
 </style>
 </head><body>
   <div class="row">
+    <div class="label">Agent<span class="sub">The coding agent that drives the browser</span></div>
+    <select id="agent"></select>
+  </div>
+  <div class="row">
     <div class="label">Speech narration<span class="sub">Speak tool calls + the summary aloud</span></div>
     <label class="switch"><input type="checkbox" id="speech" /><span class="slider"></span></label>
   </div>
@@ -93,13 +102,18 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   </div>
 <script nonce="${nonce}">
   var vscode = acquireVsCodeApi();
-  var speech=document.getElementById('speech'), browser=document.getElementById('browser'), model=document.getElementById('model'), apiKey=document.getElementById('apiKey');
+  var agent=document.getElementById('agent'), speech=document.getElementById('speech'), browser=document.getElementById('browser'), model=document.getElementById('model'), apiKey=document.getElementById('apiKey');
+  function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
   function change(patch){ vscode.postMessage(Object.assign({type:'change'}, patch)); }
+  agent.addEventListener('change', function(){ change({agent: agent.value}); });
   speech.addEventListener('change', function(){ change({speech: speech.checked}); });
   browser.addEventListener('change', function(){ change({browser: browser.value}); });
   model.addEventListener('change', function(){ change({model: model.value}); });
   var keyTimer; apiKey.addEventListener('input', function(){ clearTimeout(keyTimer); keyTimer=setTimeout(function(){ change({apiKey: apiKey.value}); }, 600); });
-  window.addEventListener('message', function(e){ var m=e.data; if(m && m.type==='state'){ speech.checked=!!m.speech; browser.value=m.browser||'silent'; model.value=m.model||'sonnet'; if(document.activeElement!==apiKey) apiKey.value=m.apiKey||''; } });
+  window.addEventListener('message', function(e){ var m=e.data; if(m && m.type==='state'){
+    var list=m.agents||['claude']; agent.innerHTML=''; list.forEach(function(id){ var o=document.createElement('option'); o.value=id; o.textContent=cap(id); agent.appendChild(o); }); agent.value=m.agent||'claude';
+    speech.checked=!!m.speech; browser.value=m.browser||'silent'; model.value=m.model||'sonnet'; if(document.activeElement!==apiKey) apiKey.value=m.apiKey||'';
+  } });
   vscode.postMessage({type:'ready'});
 </script>
 </body></html>`;

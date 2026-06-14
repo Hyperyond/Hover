@@ -55,7 +55,10 @@ function pushChatConfig(): void {
 /** When the engine (re)connects, hand it the persisted model + API key. */
 async function pushEngineConfig(): Promise<void> {
   if (!pool) return;
-  const model = vscode.workspace.getConfiguration('hover').get<string>('model', 'sonnet');
+  const cfg = vscode.workspace.getConfiguration('hover');
+  const agent = cfg.get<string>('agent', '');
+  if (agent) pool.switchAgent(agent);
+  const model = cfg.get<string>('model', 'sonnet');
   if (model) pool.setModel(model);
   const key = await extContext?.secrets.get('hover.apiKey');
   if (key) pool.setApiKey(key);
@@ -461,8 +464,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const settings = registerSettingsView({
     getApiKey: async () => (await context.secrets.get('hover.apiKey')) ?? '',
+    getAgents: () => ({ current: currentAgent ?? (vscode.workspace.getConfiguration('hover').get<string>('agent') || 'claude'), list: allAgents().map((a) => a.id) }),
     onChange: async (change) => {
       const cfg = vscode.workspace.getConfiguration('hover');
+      if (typeof change.agent === 'string') await setAgent(change.agent);
       if (typeof change.speech === 'boolean') await cfg.update('speech', change.speech, vscode.ConfigurationTarget.Global);
       if (typeof change.browser === 'string') await cfg.update('browser', change.browser, vscode.ConfigurationTarget.Workspace);
       if (typeof change.model === 'string') {
@@ -510,7 +515,7 @@ export function activate(context: vscode.ExtensionContext): void {
     onAgents: (current, available) => {
       currentAgent = current;
       availableAgents = available;
-      chatProvider?.updateAgent(agentLabel(currentAgent));
+      settingsProvider?.refresh();
     },
     onServerMessage: (msg) => handleServerMessage(msg),
   });
@@ -623,10 +628,15 @@ async function switchAgent(): Promise<void> {
   }));
   const picked = await vscode.window.showQuickPick(items, { title: 'Hover: switch agent', placeHolder: 'Select a coding agent' });
   if (!picked) return;
-  currentAgent = picked.agentId;
-  chatProvider?.updateAgent(agentLabel(currentAgent));
-  if (connectedServices > 0) pool?.switchAgent(picked.agentId);
-  else vscode.window.setStatusBarMessage('Hover: agent set locally — applies when the engine runs.', 4000);
+  await setAgent(picked.agentId);
+}
+
+/** Persist + apply the coding agent (used by the command + the Settings panel). */
+async function setAgent(agentId: string): Promise<void> {
+  currentAgent = agentId;
+  await vscode.workspace.getConfiguration('hover').update('agent', agentId, vscode.ConfigurationTarget.Workspace);
+  if (connectedServices > 0) pool?.switchAgent(agentId);
+  settingsProvider?.refresh();
 }
 
 async function newSession(): Promise<void> {

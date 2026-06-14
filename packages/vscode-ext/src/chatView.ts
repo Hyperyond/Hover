@@ -64,9 +64,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   updateConfig(speech: boolean, silent: boolean): void {
     this.post({ type: 'config', speech, silent });
   }
-  updateAgent(label: string): void {
-    this.post({ type: 'agent', label });
-  }
 
   // Streamed run rendering (called by the extension as engine events arrive).
   pushStep(step: { label: string; tool?: string; detail?: string; cost?: number }): void {
@@ -256,7 +253,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       </div>
       <div id="toolbar">
         <div class="left">
-          <button class="modelpill" id="model" type="button" title="Switch agent / model"><span id="model-label">Claude</span><span class="caret">▾</span></button>
+          <button class="modepill" id="browser-toggle" type="button" title="Browser: Silent (headless) / Visible — click to toggle"><span id="browser-label">Silent</span><span class="caret">▾</span></button>
         </div>
         <div class="right">
           <button class="modepill" id="mode" type="button" title="Switch mode (Testing / Security / Pentest)"><span class="bolt">⚡</span><span id="mode-label">Normal</span><span class="caret">▾</span></button>
@@ -388,8 +385,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   input.addEventListener('input', function(){ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,160)+'px'; syncSend(); });
 
   function cmd(id){ return function(){ vscode.postMessage({ type:'command', id:id }); }; }
-  document.getElementById('model').addEventListener('click', cmd('hover.switchAgent'));
   document.getElementById('mode').addEventListener('click', cmd('hover.switchMode'));
+  document.getElementById('browser-toggle').addEventListener('click', cmd('hover.toggleBrowser'));
   document.getElementById('history').addEventListener('click', cmd('hover.sessions.focus'));
   document.getElementById('new').addEventListener('click', cmd('hover.newSession'));
   document.getElementById('appstatus').addEventListener('click', cmd('hover.appStatus'));
@@ -431,14 +428,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='result') addResult(m);
     else if (m.type==='reset') { log.innerHTML=''; cleared=false; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal'; }
-    else if (m.type==='agent') { document.getElementById('model-label').textContent = m.label || 'Claude'; }
     else if (m.type==='appstatus') {
       var dot=document.getElementById('app-dot'); var lab=document.getElementById('app-label');
       if (m.url) { var short=String(m.url).replace(/^https?:\\/\\//,'').replace(/\\/$/,''); lab.textContent = m.online ? short : short+' (offline)'; dot.className = m.online ? 'dot' : 'dot offline'; }
       else { lab.textContent='Set app URL'; dot.className='dot offline'; }
     }
     else if (m.type==='running') { running = !!m.running; setWorking(running); applyBorder(); syncSend(); }
-    else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; applyBorder(); }
+    else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Silent' : 'Visible'; applyBorder(); }
   });
   function emptyEl(){
     var d=document.createElement('div'); d.className='splash';
