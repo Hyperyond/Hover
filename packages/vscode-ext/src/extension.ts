@@ -31,11 +31,7 @@ import { registerSettingsView, type SettingsViewProvider } from './settingsView.
 import { EnvironmentStore, LOCAL_ENV_ID } from './environments.js';
 import { registerEnvironmentsView } from './environmentsView.js';
 import { startEngine, stopEngine } from './engine.js';
-
-/** Where the optimizer writes its candidate, relative to the workspace root:
- *  `.hover/cache/optimized/<spec>.draft`. */
-const OPTIMIZED_DIR = ['.hover', 'cache', 'optimized'];
-const DRAFT_SUFFIX = '.draft';
+import { candidateUri, uriExists } from './optimized.js';
 
 let pool: ServiceClientPool | undefined;
 let currentMode: string | null = null;
@@ -746,16 +742,13 @@ async function reviewOptimizationCandidate(arg?: vscode.TreeItem | vscode.Uri): 
  *  Used by both the manual "Review Optimization Candidate" command and the
  *  auto-open after an Optimize run finishes. */
 async function openOptimizeDiff(specUri: vscode.Uri, opts: { silentIfMissing: boolean }): Promise<void> {
-  const folder = vscode.workspace.getWorkspaceFolder(specUri);
-  if (!folder) {
+  const candidate = candidateUri(specUri);
+  if (!candidate) {
     if (!opts.silentIfMissing) void vscode.window.showWarningMessage('Hover: the spec is not inside an open workspace folder.');
     return;
   }
   const fileName = path.basename(specUri.fsPath);
-  const candidate = vscode.Uri.joinPath(folder.uri, ...OPTIMIZED_DIR, fileName + DRAFT_SUFFIX);
-  try {
-    await vscode.workspace.fs.stat(candidate);
-  } catch {
+  if (!(await uriExists(candidate))) {
     if (!opts.silentIfMissing) {
       void vscode.window.showInformationMessage(
         `Hover: no optimization candidate for ${fileName} yet — run "Optimize" (✨) on this spec first.`,

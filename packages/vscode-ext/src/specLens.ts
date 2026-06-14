@@ -13,10 +13,8 @@
  *     lens so the spec's provenance is visible at a glance.
  */
 import * as vscode from 'vscode';
-import * as path from 'node:path';
+import { candidateUri, uriExists } from './optimized.js';
 
-const OPTIMIZED_DIR = ['.hover', 'cache', 'optimized'];
-const DRAFT_SUFFIX = '.draft';
 /** How many lines of the JSDoc header to scan for the stamped prompt. */
 const HEADER_SCAN_LINES = 40;
 
@@ -31,22 +29,15 @@ export class SpecLensProvider implements vscode.CodeLensProvider {
       lenses.push(new vscode.CodeLens(topRange, { title: `✨ Hover spec — "${prompt}"`, command: '' }));
     }
 
-    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
-    if (folder) {
-      const candidate = vscode.Uri.joinPath(
-        folder.uri,
-        ...OPTIMIZED_DIR,
-        path.basename(document.uri.fsPath) + DRAFT_SUFFIX,
+    const candidate = candidateUri(document.uri);
+    if (candidate && (await uriExists(candidate))) {
+      lenses.push(
+        new vscode.CodeLens(topRange, {
+          title: '✨ Review optimization candidate',
+          command: 'hover.reviewOptimizationCandidate',
+          arguments: [document.uri],
+        }),
       );
-      if (await exists(candidate)) {
-        lenses.push(
-          new vscode.CodeLens(topRange, {
-            title: '✨ Review optimization candidate',
-            command: 'hover.reviewOptimizationCandidate',
-            arguments: [document.uri],
-          }),
-        );
-      }
     }
 
     return lenses;
@@ -64,13 +55,4 @@ export function extractOriginalPrompt(document: vscode.TextDocument, scanLines: 
     }
   }
   return null;
-}
-
-async function exists(uri: vscode.Uri): Promise<boolean> {
-  try {
-    await vscode.workspace.fs.stat(uri);
-    return true;
-  } catch {
-    return false;
-  }
 }

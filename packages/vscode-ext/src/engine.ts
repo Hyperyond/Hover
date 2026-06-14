@@ -29,7 +29,9 @@ export function startEngine(ctx: vscode.ExtensionContext, devRoot: string): Prom
   const host = ctx.asAbsolutePath('engine/host.mjs');
   starting = new Promise<number>((resolve, reject) => {
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const fail = (err: Error): void => {
+      if (timer) { clearTimeout(timer); timer = undefined; }
       if (settled) return;
       settled = true;
       starting = undefined;
@@ -46,6 +48,7 @@ export function startEngine(ctx: vscode.ExtensionContext, devRoot: string): Prom
       const m = /HOVER_ENGINE_PORT=(\d+)/.exec(buf.toString());
       if (m && !settled) {
         settled = true;
+        if (timer) { clearTimeout(timer); timer = undefined; }
         port = Number(m[1]);
         resolve(port);
       }
@@ -55,11 +58,15 @@ export function startEngine(ctx: vscode.ExtensionContext, devRoot: string): Prom
     cp.on('exit', (code) => {
       child = undefined;
       port = undefined;
+      // Drop the cached promise so a crash (early OR after a clean start) lets
+      // the next startEngine() respawn instead of returning the dead port.
+      starting = undefined;
       fail(new Error(`engine exited (code ${code ?? 'null'})`));
     });
 
-    const timer = setTimeout(() => fail(new Error('engine start timed out')), START_TIMEOUT_MS);
-    cp.stdout?.once('data', () => clearTimeout(timer));
+    // Disarmed only when the port actually arrives (or on fail) — NOT on the
+    // first stdout chunk, which may be an unrelated engine log.
+    timer = setTimeout(() => fail(new Error('engine start timed out')), START_TIMEOUT_MS);
   });
   return starting;
 }
