@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.13.5",
+  "version": "0.13.6",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "Local-first AI testing for the web. Chat → plain @playwright/test specs that pass CI with zero AI, using your own Claude Code / Codex CLI. 🟠 security · 🔴 pentest.",
   "keywords": [

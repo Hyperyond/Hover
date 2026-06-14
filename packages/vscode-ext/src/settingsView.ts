@@ -98,27 +98,22 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
     <div class="label">Model<span class="sub">Sonnet is cheapest; Opus for hard flows</span></div>
     <select id="model"><option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku</option></select>
   </div>
-  <div class="field">
-    <div class="label">Model API key<span class="sub">Optional — drive on your own key. Stored locally (SecretStorage), never uploaded.</span></div>
-    <input type="password" id="apiKey" placeholder="sk-…  (blank = use your logged-in CLI)" />
-  </div>
   <div class="row cloud">
     <div class="label">Hover Cloud<span class="sub">Cross-machine sync, team-shared environments, run dashboards — coming soon.</span></div>
     <button class="cloudbtn" disabled title="Coming with Hover Cloud">☁ Sign in</button>
   </div>
 <script nonce="${nonce}">
   var vscode = acquireVsCodeApi();
-  var agent=document.getElementById('agent'), speech=document.getElementById('speech'), browser=document.getElementById('browser'), model=document.getElementById('model'), apiKey=document.getElementById('apiKey');
+  var agent=document.getElementById('agent'), speech=document.getElementById('speech'), browser=document.getElementById('browser'), model=document.getElementById('model');
   function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
   function change(patch){ vscode.postMessage(Object.assign({type:'change'}, patch)); }
   agent.addEventListener('change', function(){ change({agent: agent.value}); });
   speech.addEventListener('change', function(){ change({speech: speech.checked}); });
   browser.addEventListener('change', function(){ change({browser: browser.value}); });
   model.addEventListener('change', function(){ change({model: model.value}); });
-  var keyTimer; apiKey.addEventListener('input', function(){ clearTimeout(keyTimer); keyTimer=setTimeout(function(){ change({apiKey: apiKey.value}); }, 600); });
   window.addEventListener('message', function(e){ var m=e.data; if(m && m.type==='state'){
     var list=m.agents||['claude']; agent.innerHTML=''; list.forEach(function(id){ var o=document.createElement('option'); o.value=id; o.textContent=cap(id); agent.appendChild(o); }); agent.value=m.agent||'claude';
-    speech.checked=!!m.speech; browser.value=m.browser||'silent'; model.value=m.model||'sonnet'; if(document.activeElement!==apiKey) apiKey.value=m.apiKey||'';
+    speech.checked=!!m.speech; browser.value=m.browser||'silent'; model.value=m.model||'sonnet';
   } });
   vscode.postMessage({type:'ready'});
 </script>
