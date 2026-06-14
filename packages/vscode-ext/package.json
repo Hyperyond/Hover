@@ -7,11 +7,14 @@
   "license": "Apache-2.0",
   "author": "Hyperyond",
   "publisher": "hyperyond",
-  "homepage": "https://github.com/Hyperyond/Hover#readme",
+  "homepage": "https://www.gethover.dev/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Hyperyond/Hover.git",
     "directory": "packages/vscode-ext"
+  },
+  "bugs": {
+    "url": "https://github.com/Hyperyond/Hover/issues"
   },
   "engines": {
     "vscode": "^1.85.0"
