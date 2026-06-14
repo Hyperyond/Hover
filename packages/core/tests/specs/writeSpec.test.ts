@@ -489,3 +489,53 @@ describe('writeSpec — popup / new-tab pairing (F6)', () => {
     expect(src).not.toContain('Promise.all');
   });
 });
+
+describe('writeSpec — credential redaction', () => {
+  const loginSession: SkillStep[] = [
+    { kind: 'user', text: 'log in as the paid user' },
+    { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/' } },
+    {
+      kind: 'step',
+      tool: 'browser_fill_form',
+      input: {
+        fields: [
+          { name: 'email', type: 'textbox', value: 'paid@example.com' },
+          { name: 'password', type: 'textbox', value: 'hunter2-secret' },
+        ],
+      },
+    },
+    { kind: 'step', tool: 'browser_click', input: { element: 'Submit button' } },
+    { kind: 'done', turns: 3, costUsd: 0.01, summary: 'Logged in.' },
+  ];
+  const redactions = [
+    { value: 'paid@example.com', envVar: 'HOVER_AUSER_USER' },
+    { value: 'hunter2-secret', envVar: 'HOVER_AUSER_PASS' },
+  ];
+
+  it('parameterizes matched fill values into process.env and never writes the secret', async () => {
+    const r = await writeSpec({ devRoot, name: 'login paid', steps: loginSession, redactions });
+    const src = readFileSync(r.path, 'utf-8');
+    // Emitted as code, not a string literal.
+    expect(src).toContain("fill(process.env.HOVER_AUSER_PASS ?? '')");
+    expect(src).toContain("fill(process.env.HOVER_AUSER_USER ?? '')");
+    // The secret appears NOWHERE — not in code, not in the JSDoc header.
+    expect(src).not.toContain('hunter2-secret');
+    expect(src).not.toContain('paid@example.com');
+    // The prose masks it rather than quoting the value.
+    expect(src).toContain('$HOVER_AUSER_PASS');
+  });
+
+  it('keeps the secret out of the .hover sidecar too', async () => {
+    const r = await writeSpec({ devRoot, name: 'login paid', steps: loginSession, redactions });
+    const sidecar = readFileSync(join(devRoot, '.hover', 'sidecars', `${r.slug}.json`), 'utf-8');
+    expect(sidecar).not.toContain('hunter2-secret');
+    expect(sidecar).toContain('process.env.HOVER_AUSER_PASS');
+  });
+
+  it('is a no-op when no redactions are supplied', async () => {
+    const r = await writeSpec({ devRoot, name: 'login plain', steps: loginSession });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('hunter2-secret');
+    expect(src).not.toContain('process.env.HOVER_AUSER_PASS');
+  });
+});

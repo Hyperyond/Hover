@@ -2,9 +2,9 @@
 
 Speak your prompt; hear the agent's progress.
 
+Voice mode is a feature of the original in-page widget (the [frozen bundler-plugin path](/docs/get-started/install#frozen-bundler-plugin-path)). It is **not** part of the VS Code extension — the extension chat has no voice input or spoken narration today. The **[VS Code extension](/docs/get-started/install)** is the recommended way to use Hover; this page documents the widget feature for reference.
 
-
-**Shipped in v0.6.0.** Available in every Hover-enabled dev server today.
+Push-to-talk speech input and spoken step narration use the browser-native Web Speech engine described below — no API keys.
 
 
 
@@ -45,12 +45,10 @@ The user's prompt language wins over the agent's reply language — `claude` / `
 
 ## Settings
 
-Open the **⚙** button in the widget header. The settings overlay has a **Speech narration** toggle:
+Open Hover's **Settings**. The **Speech narration** toggle:
 
 - **On** (default) — agent step events get spoken aloud.
 - **Off** — silent. In-flight utterances are cancelled immediately on toggle.
-
-State persists in `localStorage` under a key (`hover:settings:v1`) that's independent of your chat history, so future settings additions won't bump the chat schema.
 
 ## Implementation notes (for the curious)
 

@@ -1,7 +1,0 @@
-{
-  "//": "Intentionally empty for the monorepo-wide `pnpm typecheck` — Next generates its own `.next/types/*` references and a real per-project tsconfig is bootstrapped by `next dev` / `next build`. To typecheck the Next app properly, run `pnpm --filter next-app exec tsc --noEmit` after a first `next dev` boot.",
-  "extends": "../../tsconfig.base.json",
-  "files": [],
-  "include": [],
-  "exclude": [".next", "node_modules", "dist"]
-}

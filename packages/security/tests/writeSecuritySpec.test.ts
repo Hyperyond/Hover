@@ -61,6 +61,25 @@ describe('writeSecuritySpec', () => {
     expect(src).toContain("test.describe('security: Orders IDOR'");
   });
 
+  test('authz oracle gate: a non-confirmed verdict is report-only, not a test', async () => {
+    const result = await writeSecuritySpec({
+      devRoot: tmp,
+      name: 'bola gate',
+      checks: [
+        buildCheck({ id: 1, intent: 'BOLA confirmed leak', authz: { verdict: 'confirmed', reasons: ['carries B marker'] } }),
+        buildCheck({ id: 2, intent: 'BOLA likely public data', authz: { verdict: 'likely', reasons: ['similar to A baseline'] } }),
+      ],
+    });
+    const src = readFileSync(result.path, 'utf-8');
+    // confirmed → emitted as a test
+    expect(src).toContain('BOLA confirmed leak');
+    expect(src).toMatch(/test\('01 — BOLA confirmed leak/);
+    // likely → report-only header line, never a test() body
+    expect(src).toContain('Report-only');
+    expect(src).toContain('[likely] BOLA likely public data');
+    expect(src).not.toMatch(/test\('0\d — BOLA likely/);
+  });
+
   test('throws SecuritySpecExistsError when overwrite=false and file exists', async () => {
     await writeSecuritySpec({ devRoot: tmp, name: 'flow', checks: [buildCheck()] });
     await expect(

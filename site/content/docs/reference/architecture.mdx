@@ -7,9 +7,9 @@ A condensed extract of the design constraints. For implementation depth, see [`C
 The full path of one command:
 
 ```
-page UI (widget Shadow DOM)
+chat UI (VS Code extension webview)   [or: frozen in-page widget Shadow DOM]
   ↕ WebSocket (127.0.0.1)
-@hover-dev/core (Node service)
+@hover-dev/core (Node engine)
   ↕ spawn child
 local CLI agent (claude -p / codex exec)
   ↕ MCP
@@ -27,10 +27,10 @@ Step events flow back the same path in reverse.
 These are load-bearing — several are non-obvious:
 
 - The **agent** never launches its own Chromium. It connects to whatever debug Chrome is on `chromeDebugPort` via `connectOverCDP` and picks the existing context/page whose URL matches the dev-server origin.
-- The **service** is allowed to spawn one specific Chrome: the isolated debug Chrome under `<tmpdir>/hover-chrome`. This happens either at dev-server startup (when `autoLaunchChrome: true`) or on widget demand. It is *not* the user's primary Chrome profile.
-- **Sandboxing is per-agent.** Hard-sandbox agents get an explicit `--allowedTools mcp__playwright --disallowedTools …` lockdown. Soft-sandbox agents get OS-level constraints (`--sandbox read-only`) plus a strict `developer_instructions` system prompt; a determined hallucinating agent could still try a built-in shell call, hence the ⚠ badge in the widget.
-- The injected UI lives in a **Shadow DOM** marked with `data-hover="true"` so Playwright tests can skip it. Tailwind's default scan does not work inside Shadow DOM — inline styles or CSS-in-JS only.
-- The local Node service binds to **`127.0.0.1` only**. Plugins are no-op in production builds.
+- The **service** is allowed to spawn one specific Chrome: the isolated debug Chrome under `<tmpdir>/hover-chrome`. The extension launches it on demand when you start a run from the chat (on the frozen bundler-plugin path it could also launch at dev-server startup with `autoLaunchChrome: true`). It is *not* the user's primary Chrome profile.
+- **Sandboxing is per-agent.** Hard-sandbox agents get an explicit `--allowedTools mcp__playwright --disallowedTools …` lockdown. Soft-sandbox agents get OS-level constraints (`--sandbox read-only`) plus a strict `developer_instructions` system prompt; a determined hallucinating agent could still try a built-in shell call, hence the ⚠ badge in the agent dropdown.
+- The frozen in-page widget lives in a **Shadow DOM** marked with `data-hover="true"` so Playwright tests can skip it. (The VS Code extension renders its chat in a webview, outside the page entirely, so there's nothing in the page for Playwright to filter.)
+- The engine binds to **`127.0.0.1` only**, with no telemetry and no upload path. The frozen bundler plugins are no-op in production builds.
 - Generated Playwright code prefers `page.getByRole / getByText` over CSS / XPath selectors.
 - Cookies / localStorage never transit the Node service; auth state stays inside the browser and is handled by Playwright in-process.
 

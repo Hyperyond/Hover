@@ -35,8 +35,10 @@
  *     { type: 'list-seeds' }                                            // ask for built-in + .hover/rules/ translation seeds (read-only)
  *     { type: 'list-agents' }                                          // ask for the full agent registry + install status
  *     { type: 'switch-agent',  payload: { agentId } }                  // set the service's current agent; broadcasts to all connections
+ *     { type: 'reveal-source', payload: { source } }                   // relay a data-hover-source value to other clients (F2 page→editor)
  *
  *   server → client (in addition to those documented in the file body):
+ *     { type: 'reveal-source', payload: { source } }                   // relayed to non-origin clients (the VSCode ext jumps the editor)
  *     { type: 'agents',        payload: { current: string, available: AgentAvailability[] } }
  *     { type: 'modes',         payload: { current: string|null, available: ModeEntry[] } }
  *     { type: '<plugin-namespaced>', payload: <plugin-specific> }
@@ -233,7 +235,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       `[hover] requested agent "${preferred}" is not installed; falling back to "${primary.descriptor.id}".\n`,
     );
   }
-  const model = opts.model ?? 'sonnet';
+  let model = opts.model ?? 'sonnet';
   // No default budget cap — long real-world flows (form filling, multi-step
   // checkouts) routinely run past the old $0.50 ceiling and got cut off
   // mid-run. The widget shows the running $ counter in the header instead,
@@ -632,6 +634,20 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         cancel();
         return;
       }
+      if (msg.type === 'reveal-source') {
+        // F2 page→editor transport: an in-page client (widget) captured a
+        // `data-hover-source` value off a clicked element. Relay it to every
+        // OTHER connected client — the VSCode extension listens and opens the
+        // file at <rel-path>:<line>:<col>. The originating page needs no echo.
+        const source = msg.payload?.source;
+        if (typeof source !== 'string' || !source) return;
+        for (const client of wss.clients) {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            send(client, { type: 'reveal-source', payload: { source } });
+          }
+        }
+        return;
+      }
       if (msg.type === 'list-modes') {
         broadcastModes(ws);
         return;
@@ -711,6 +727,23 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         currentAgentId = wanted;
         await broadcastAgents();
+        return;
+      }
+      if (msg.type === 'set-model') {
+        // Persist the model for subsequent runs (sonnet / opus / haiku / …).
+        // Refuse mid-run so an in-flight invocation keeps the model it started
+        // with. Applies from the next command.
+        const wanted = msg.payload?.model;
+        if (typeof wanted !== 'string' || !wanted) {
+          send(ws, { type: 'error', payload: { message: 'set-model: model is required' } });
+          return;
+        }
+        if (activeRun) {
+          send(ws, { type: 'error', payload: { message: 'set-model: a command is already running; stop it first' } });
+          return;
+        }
+        model = wanted;
+        send(ws, { type: 'hello', payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION, optimizeMode } });
         return;
       }
       if (msg.type === 'set-api-key') {
@@ -974,6 +1007,21 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           appendSystemPrompt = `${appendSystemPrompt}\n\nYou also have read-only access to this project's source via mcp__hover_source (read_source / list_source), fenced to the repo (secrets, keys, .env, .git, node_modules and build output are refused). Use it to read the actual component / route / API code — write tests against the real selectors and, when probing for security issues, confirm a finding against the server code (the query, the authz check) rather than guessing from the page alone.`;
         }
 
+        // Test accounts the prompt referenced via @label (resolved by the editor
+        // from its vault). Injected here, NOT in the user-visible transcript, so
+        // the agent can log in; the literal values it types are redacted out of
+        // the saved spec (writeSpec redactions). Never echoed to the user.
+        const runAccounts = Array.isArray(msg.payload?.accounts) ? msg.payload!.accounts : [];
+        if (runAccounts.length) {
+          const lines = runAccounts.map(a => {
+            const role = a.role ? ` (${a.role})` : '';
+            const user = a.username ? `username ${JSON.stringify(a.username)}` : 'username not on file';
+            const pass = a.password ? `, password ${JSON.stringify(a.password)}` : '';
+            return `- @${a.label}${role}: ${user}${pass}`;
+          }).join('\n');
+          appendSystemPrompt = `${appendSystemPrompt}\n\nTest accounts available for this run — when the task refers to an @label, log in using that account's credentials. Use them ONLY to fill authentication fields; never print or echo them in your replies or summaries.\n${lines}`;
+        }
+
         // Mirror the prompt's language in the agent's *prose* output — the
         // verification summary (Result card), the ## Findings block, and the
         // step narration — the same way Voice mode mirrors it in TTS. A
@@ -1072,6 +1120,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
                 name: reRecordSlug,
                 steps: runResult.steps,
                 overwrite: true,
+                // Same credential redaction as save-spec: if the re-record
+                // logged in via an @account, keep the creds out of the rewritten
+                // spec (parameterize into process.env refs).
+                redactions: msg.payload?.redactions,
               });
               emitToRun({
                 type: 'spec-saved',

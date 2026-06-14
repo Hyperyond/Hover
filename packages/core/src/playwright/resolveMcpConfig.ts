@@ -78,8 +78,21 @@ export function resolveMcpConfig(opts: {
   // and `@playwright/mcp` is always reachable from there because it's
   // a declared dependency of `@hover-dev/core`, which the user installed.
   // The caller may override with an explicit `cwd` (e.g. `hover run --cwd`).
-  const require = createRequire(resolve(opts.cwd ?? process.cwd(), 'package.json'));
-  const pkgJsonPath = require.resolve('@playwright/mcp/package.json');
+  //
+  // Fallback for the engine-in-extension model (`@hover-dev/vscode-ext`): there
+  // the project (devRoot) is the USER's repo, which does NOT have
+  // `@playwright/mcp` — the engine is shipped as a flat node_modules inside the
+  // .vsix, so `@playwright/mcp` lives next to `@hover-dev/core` itself. When the
+  // cwd-based resolution fails, fall back to resolving from this module's own
+  // location (which reaches the staged engine's node_modules).
+  let pkgJsonPath: string;
+  try {
+    pkgJsonPath = createRequire(resolve(opts.cwd ?? process.cwd(), 'package.json')).resolve(
+      '@playwright/mcp/package.json',
+    );
+  } catch {
+    pkgJsonPath = createRequire(import.meta.url).resolve('@playwright/mcp/package.json');
+  }
   const pkgRoot = dirname(pkgJsonPath);
   // The package's `bin` map declares "playwright-mcp": "cli.js" — we
   // pin to that file directly via Node so the user doesn't need the

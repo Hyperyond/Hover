@@ -3,9 +3,9 @@ import './globals.css';
 
 const TITLE = 'Hover — AI authors your tests, CI runs plain Playwright';
 const DESCRIPTION =
-  'Describe a flow in plain English; AI drives your real Chrome once to explore, then crystallises a standard @playwright/test spec that runs in CI with zero AI, zero tokens. Hover spawns the coding-agent CLI on your PATH — your subscription or your own API key.';
+  'A VS Code extension: chat to a test in your editor. AI drives your real Chrome once to explore a flow, then crystallises a standard @playwright/test spec that runs in CI with zero AI, zero tokens. Hover spawns the coding-agent CLI on your PATH — your subscription or your own API key.';
 const OG_DESCRIPTION =
-  'AI explores once, then hands off a deterministic Playwright spec. Zero AI at runtime, zero tokens in CI.';
+  'A VS Code extension — AI explores once, then hands off a deterministic Playwright spec. Zero AI at runtime, zero tokens in CI.';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gethover.dev'),
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     'Playwright spec',
     'browser testing',
     'CDP',
-    'Vite plugin',
+    'VS Code extension',
     'open source',
     'CI testing',
     'natural language tests',

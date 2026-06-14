@@ -40,13 +40,18 @@ export const DOCS_NAV: DocSection[] = [
     title: 'Reference',
     items: [
       { text: 'Overview', href: '/docs/reference' },
-      { text: 'Plugin options', href: '/docs/reference/plugin-options' },
-      { text: 'Plugin API', href: '/docs/reference/plugin-api' },
-      { text: 'CLI (npx @hover-dev/cli)', href: '/docs/reference/cli' },
+      { text: 'CLI (hover run)', href: '/docs/reference/cli' },
       { text: 'Agent registry', href: '/docs/reference/agent-registry' },
       { text: 'WebSocket protocol', href: '/docs/reference/websocket-protocol' },
       { text: 'Architecture', href: '/docs/reference/architecture' },
       { text: 'Roadmap', href: '/docs/reference/roadmap' },
+    ],
+  },
+  {
+    title: 'Bundler plugins (frozen)',
+    items: [
+      { text: 'Plugin options', href: '/docs/reference/plugin-options' },
+      { text: 'Plugin API', href: '/docs/reference/plugin-api' },
     ],
   },
   {

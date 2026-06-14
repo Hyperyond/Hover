@@ -55,29 +55,29 @@ const ITEMS: Item[] = [
     ),
   },
   {
-    q: 'Does the widget show up in production builds?',
-    a: 'No. Every bundler integration is dev-only — apply: "serve" for Vite, command === "dev" for Astro, nuxt.options.dev for Nuxt, and so on. Production builds are no-ops by design, and the Shadow-DOM widget is marked data-hover="true" so any Playwright run against production HTML can filter it out with one selector.',
+    q: 'Do I need to add a plugin or change my app?',
+    a: 'No. Hover is a VS Code extension — install it from the Marketplace and nothing changes in your app, your bundler config, or your dependencies. The extension spawns a local engine that drives your existing dev server over CDP in an isolated debug Chrome. Whatever you build with — Vite, Next.js, Nuxt, Astro, webpack — the extension drives it unchanged.',
     answer: (
       <>
-        No. Every bundler integration is dev-only — <Code>apply: &apos;serve&apos;</Code>{' '}
-        for Vite, <Code>command === &apos;dev&apos;</Code> for Astro,{' '}
-        <Code>nuxt.options.dev</Code> for Nuxt, and so on. Production builds are
-        no-ops by design, and the Shadow-DOM widget is marked{' '}
-        <Code>data-hover=&quot;true&quot;</Code> so any Playwright run against
-        production HTML filters it with one selector.
+        No. Hover is a VS Code extension — install it from the Marketplace and
+        nothing changes in your app, your bundler config, or your dependencies.
+        The extension spawns a local engine that drives your existing dev server
+        over CDP in an isolated debug Chrome. Whatever you build with — Vite,
+        Next.js, Nuxt, Astro, webpack — the extension drives it unchanged.
       </>
     ),
   },
   {
     q: 'Do I need an API key or a credit card?',
-    a: 'No — neither is required. Hover bundles no AI runtime and resells no tokens; it rides on the Claude Pro / Max or ChatGPT plan whose CLI is already on your PATH. No signup, no card. Prefer not to use a subscription? Drop your own model API key into the widget — optional, never required. CI runs plain Playwright with no AI at all.',
+    a: 'No — neither is required. Hover bundles no AI runtime and resells no tokens; it rides on the Claude Pro / Max or ChatGPT plan whose CLI is already on your PATH. No signup, no card. Prefer not to use a subscription? Drop your own model API key into the extension settings — optional, never required. CI runs plain Playwright with no AI at all.',
     answer: (
       <>
         No &mdash; neither is required. Hover bundles no AI runtime and resells
         no tokens; it rides on the Claude Pro / Max or ChatGPT plan whose CLI is
         already on your <Code>PATH</Code>. No signup, no card. Prefer not to use
-        a subscription? Drop your own model API key into the widget &mdash;
-        optional, never required. CI runs plain Playwright with no AI at all.
+        a subscription? Drop your own model API key into the extension settings
+        &mdash; optional, never required. CI runs plain Playwright with no AI at
+        all.
       </>
     ),
   },

@@ -4,7 +4,7 @@ Crystallise a verified Hover session into a standard `@playwright/test` file und
 
 ## What lands on disk
 
-Pick **Save as → Playwright spec** on the Result card. Hover writes `__vibe_tests__/<slug>.spec.ts` — plain `@playwright/test`, no Hover runtime imports, no AI in the loop at test time.
+Click **Save as Spec** on the Result card. Hover writes `__vibe_tests__/<slug>.spec.ts` — plain `@playwright/test`, no Hover runtime imports, no AI in the loop at test time.
 
 The generated file has two layers:
 
@@ -98,10 +98,10 @@ The [FAQ](/docs/faq#my-ui-changed-and-my-saved-spec-breaks-what-now) covers the 
 
 ## CI is plain Playwright
 
-The saved spec has no `import { hover }` line, no widget dependency, no agent dependency. Run it with:
+The saved spec has no `import { hover }` line, no Hover dependency, no agent dependency. Run it with:
 
 ```bash
-pnpm exec playwright test
+npx playwright test __vibe_tests__
 ```
 
 Hover's whole product is built around making this true. The agent only runs once — at the moment you click **Save as Spec**. After that, Playwright owns the file.

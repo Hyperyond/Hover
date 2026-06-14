@@ -21,21 +21,17 @@ the original behind your back.
 ## You always keep the original
 
 The pass writes a **candidate** to `.hover/optimized/<slug>.spec.ts.draft` — a
-path the Playwright runner never collects. You review the diff in the widget and
-either **promote** it (it replaces the spec; the prior version is in git) or
-**discard** it. The deterministic original is the fallback, always.
+path the Playwright runner never collects. You review the diff (the candidate
+opens automatically in a diff view) and either **promote** it (it replaces the
+spec; the prior version is in git) or **discard** it. The deterministic original
+is the fallback, always.
 
 ## When it runs
 
-The `optimize` [plugin option](/docs/reference/plugin-options) has three modes:
-
-- **`'off'`** — never nudge; run it on demand from the widget's Specs overlay or
-  `npx hover optimize <spec>`.
-- **`'suggest'`** (default) — a spec is flagged with a ✦ hint when it carries
-  optimizable markers or a relevant seed applies; you click Optimize to run.
-- **`'on'`** — auto-run the pass after every Save-as-spec. One LLM call per
-  save, so opt in deliberately — the original is always kept and the candidate
-  still waits for your diff review.
+The optimization pass is **off by default**. Trigger it from the **Specs** view's
+✨ **Optimize** action, or from the terminal with `npx hover optimize <spec>`.
+Either way it writes a diff-reviewed candidate; the original is always kept and
+never auto-promoted.
 
 ## Why it doesn't dent the moat
 

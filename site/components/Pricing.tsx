@@ -7,11 +7,11 @@
  * owns the email-capture modal. */
 
 const OSS_INCLUDES = [
-  'The full widget — explore any flow in plain English',
-  'Save as Playwright spec or Jira case',
-  'Five bundlers + React Native Web',
-  'Optional @hover-dev/security mode',
-  'BYO local CLI — claude / codex / cursor-agent / aider',
+  'The VS Code extension — chat, Specs, Sessions, Environments',
+  'Chat any flow in plain English → a Playwright spec',
+  '@account multi-environment credential vault',
+  '🟠 Security + 🔴 Pentest modes in the same chat',
+  'BYO local CLI — claude / codex, your plan or your key',
   'Self-hosted, Apache-2.0, no telemetry',
 ];
 
@@ -70,7 +70,7 @@ export function Pricing() {
               href="#install"
               className="mt-8 block rounded-md border border-[rgba(124,255,168,0.5)] bg-mint px-5 py-3 text-center text-[14px] font-semibold text-bg transition-all hover:bg-[#5cf094]"
             >
-              Get started in one command →
+              Install from the Marketplace →
             </a>
           </div>
         </article>

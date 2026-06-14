@@ -16,6 +16,8 @@
  *   v0.12 — security recording:
  *   GET    /checks             → { checks: SecurityCheckStep[] }
  *   DELETE /checks             → { cleared: N }
+ *   POST   /adjudicate         → { verdict, reasons, signals, attached }
+ *                                (BOLA three-way judgment oracle, §4.5)
  *
  * Auth: a process-random shared secret (HOVER_SECURITY_API_TOKEN) is
  * required as Bearer on every request. The MCP server reads the same
@@ -28,7 +30,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
 import type { Flow, FlowStore } from './mitm/flows.js';
 import { replayFlow, type MutateOptions } from './mitm/replay.js';
-import { suggestProbes, cookieHeaderFor, builtinSecuritySeeds, readDisabledSeeds, type StorageState, type SecurityCheckStep, type BrowserFinding, type SeedCategory } from '@hover-dev/probe-engine';
+import { suggestProbes, cookieHeaderFor, builtinSecuritySeeds, readDisabledSeeds, adjudicate, type StorageState, type SecurityCheckStep, type BrowserFinding, type SeedCategory, type OracleResponse } from '@hover-dev/probe-engine';
 
 const PORT_RETRIES = 10;
 const DEFAULT_PORT = 51850;
@@ -256,6 +258,71 @@ export async function startControlPlane(
         const n = checks.length;
         checks.length = 0;
         sendJson(res, 200, { cleared: n });
+        return;
+      }
+
+      // BOLA/authz adjudication — run the three-way judgment oracle (§4.5) over
+      // three already-captured flows: baseline R(A,objA), attack R(A,objB), and
+      // reference R(B,objB). The agent gathers the three (original + two
+      // replays) and POSTs their ids + B's identifying markers; we pull their
+      // responses from the store and adjudicate. When `attachToCheckId` names a
+      // recorded check, the verdict is attached to it — which gates whether that
+      // check crystallizes into a `.security.spec.ts` (only `confirmed` does).
+      if (req.method === 'POST' && path === '/adjudicate') {
+        const body = await readBody(req);
+        let p: {
+          baselineFlowId?: unknown;
+          attackFlowId?: unknown;
+          referenceFlowId?: unknown;
+          bMarkers?: unknown;
+          attachToCheckId?: unknown;
+        };
+        try {
+          p = JSON.parse(body || '{}') as typeof p;
+        } catch {
+          sendJson(res, 400, { error: 'invalid JSON body' });
+          return;
+        }
+        const baselineId = String(p.baselineFlowId ?? '');
+        const attackId = String(p.attackFlowId ?? '');
+        const referenceId = String(p.referenceFlowId ?? '');
+        if (!baselineId || !attackId || !referenceId) {
+          sendJson(res, 400, {
+            error: 'baselineFlowId, attackFlowId and referenceFlowId are all required',
+          });
+          return;
+        }
+        const responseFor = (id: string): OracleResponse | null => {
+          const f = store.get(id);
+          if (!f) return null;
+          return { status: f.response?.statusCode ?? 0, bodyText: f.response?.bodyText ?? null };
+        };
+        const baseline = responseFor(baselineId);
+        const attack = responseFor(attackId);
+        const reference = responseFor(referenceId);
+        const missing = [
+          baseline ? null : `baseline ${baselineId}`,
+          attack ? null : `attack ${attackId}`,
+          reference ? null : `reference ${referenceId}`,
+        ].filter((x): x is string => x !== null);
+        if (missing.length > 0 || !baseline || !attack || !reference) {
+          sendJson(res, 404, { error: `flow(s) not found: ${missing.join(', ')}` });
+          return;
+        }
+        const bMarkers = Array.isArray(p.bMarkers)
+          ? p.bMarkers.filter((m): m is string => typeof m === 'string')
+          : [];
+        const result = adjudicate({ baseline, attack, reference, bMarkers });
+        const authz = { verdict: result.verdict, reasons: result.reasons };
+        let attached = false;
+        if (typeof p.attachToCheckId === 'number') {
+          const target = checks.find(c => c.id === p.attachToCheckId);
+          if (target) {
+            target.authz = authz;
+            attached = true;
+          }
+        }
+        sendJson(res, 200, { verdict: result.verdict, reasons: result.reasons, signals: result.signals, attached });
         return;
       }
 

@@ -1,0 +1,11 @@
+.vscode/**
+src/**
+scripts/**
+/node_modules/**
+engine/*.tgz
+*.map
+dist/**/*.map
+tsconfig.json
+tsup.config.ts
+.gitignore
+resources/icon-source.png

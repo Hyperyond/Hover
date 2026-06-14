@@ -1,0 +1,41 @@
+---
+title: "Hover is now a VS Code extension — the chat moved into my editor"
+description: "Hover started life as a bundler plugin that injected a chat widget into your dev page. The going-forward surface is a VS Code extension: nothing added to your app, the chat lives in your editor, and it drives whatever dev server you already run."
+date: 2026-06-13
+author: "Hover"
+tags: [vscode, announcement, workflow]
+---
+
+# Hover is now a VS Code extension — the chat moved into my editor
+
+For most of its life, Hover shipped as a bundler plugin. You added `vite-plugin-hover` (or the Astro / Nuxt / Next / webpack equivalent) to your config, and at dev time a chat widget was injected into your page in a Shadow DOM. It worked — but it meant touching your app's build config, maintaining a per-framework integration for every bundler, and living with a floating panel on top of the UI you were trying to test.
+
+The going-forward surface is a **VS Code extension**, and it's live on the Marketplace. Same engine, same thesis — AI explores once, then crystallizes a plain Playwright spec — but the friction is gone.
+
+## What changed
+
+**Nothing goes into your app anymore.** You install the extension; you don't add a plugin, edit `vite.config.ts`, or take on a dependency. The extension spawns a local engine that connects to your *existing* dev server over the Chrome DevTools Protocol in an isolated debug Chrome. Whatever you build with — Vite, Next.js, Nuxt, Astro, webpack — it drives it unchanged, because it's not integrating with your bundler at all.
+
+**The chat lives in the editor.** It's a webview in its own Activity Bar container, next to native tree views for **Specs**, **Sessions**, and **Environments**. The flow that used to be a widget hovering over your page is now a panel beside your code, which is where I wanted it the whole time.
+
+## A first session
+
+1. Install **Hover — AI E2E Testing & Security** from the VS Code Marketplace.
+2. Make sure one coding-agent CLI is on your `PATH` — [Claude Code](https://claude.com/claude-code) or [OpenAI Codex](https://github.com/openai/codex) — signed in with the subscription you already pay for. That's the only thing to configure; Hover bundles no model SDK and no keys of its own.
+3. Start your dev server as usual.
+4. Open the Hover chat and describe a flow: *"log in, add a todo named 'verify hover', and confirm it persists after reload."*
+
+The agent drives your real Chrome, you watch the steps fold under the narration, and when the run is clean you hit **Save as Spec**. Out comes `__vibe_tests__/<slug>.spec.ts` — semantic `getByRole` / `getByLabel` selectors, every interaction guarded by a visibility check, plain `@playwright/test`. It runs in CI with no agent, no model, no token.
+
+## What you get beyond authoring
+
+- **Specs / Sessions / Environments** views — browse crystallized specs (with inline Run and ✨ Optimize), the agent-run ledger with model and cost, and your per-environment targets.
+- **`@account` credentials** — define test accounts per environment; mention `@account` in chat and the agent logs in, with secrets parameterized into `process.env` refs, never written into the spec.
+- **🟠 Security and 🔴 Pentest modes** — flip the same chat into authorization probing or offensive testing of your own dev app.
+- **Element → source** — Alt-click an element to jump to where it's defined; **CodeLens** on specs shows the stamped prompt and any optimization candidate.
+
+## What about the bundler plugins?
+
+They're **frozen**, not deleted. If you depend on the in-page widget today, it still installs and still works — but no new versions are planned, and the docs now point you at the extension first. The engine package, `@hover-dev/core`, is very much alive: it's what the extension ships inside itself.
+
+The thesis hasn't moved an inch. AI is an authoring-time aid; the artifact is deterministic Playwright you own. The extension just makes getting to that artifact feel like part of editing code, instead of a thing bolted onto your dev server.

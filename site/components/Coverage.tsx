@@ -45,8 +45,8 @@ export function Coverage() {
         <div className="px-8">
           <p className="text-[14px] text-text-mute">
             <span className="text-text">Works where you already build.</span>{' '}
-            One <code className="font-mono text-mint">npx @hover-dev/cli setup</code>{' '}
-            detects your bundler and wires it up — no config.
+            The extension drives your real dev server over CDP — no bundler
+            plugin, no config in your app.
           </p>
           <div className="mt-1.5 flex items-center gap-4 font-mono text-[11px] text-text-dim">
             <span className="flex items-center gap-1.5">

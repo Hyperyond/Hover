@@ -1,0 +1,457 @@
+{
+  "name": "hover-dev",
+  "version": "0.14.2",
+  "displayName": "Hover — AI E2E Testing & Security",
+  "description": "Local-first AI testing for the web. Chat → plain @playwright/test specs that pass CI with zero AI, using your own Claude Code / Codex CLI. 🟠 security · 🔴 pentest.",
+  "keywords": [
+    "ai",
+    "ai-testing",
+    "testing",
+    "e2e",
+    "end-to-end",
+    "playwright",
+    "playwright-test",
+    "test-automation",
+    "qa",
+    "web-testing",
+    "security",
+    "appsec",
+    "pentest",
+    "authz",
+    "idor",
+    "bola",
+    "claude",
+    "codex",
+    "agent",
+    "automation"
+  ],
+  "license": "Apache-2.0",
+  "author": "Hyperyond",
+  "publisher": "hyperyond",
+  "homepage": "https://www.gethover.dev/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hyperyond/Hover.git",
+    "directory": "packages/vscode-ext"
+  },
+  "bugs": {
+    "url": "https://github.com/Hyperyond/Hover/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "icon": "resources/icon.png",
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "hover.reviewOptimizationCandidate",
+        "title": "Review Optimization Candidate",
+        "category": "Hover",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "hover.openSource",
+        "title": "Open Source from Element",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.runSpec",
+        "title": "Run Spec",
+        "category": "Hover",
+        "icon": "$(play)"
+      },
+      {
+        "command": "hover.switchMode",
+        "title": "Switch Mode (Testing / Security / Pentest)",
+        "category": "Hover",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "hover.startEngine",
+        "title": "Start Engine",
+        "category": "Hover",
+        "icon": "$(server-process)"
+      },
+      {
+        "command": "hover.switchAgent",
+        "title": "Switch Agent",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.newSession",
+        "title": "New Session",
+        "category": "Hover",
+        "icon": "$(add)"
+      },
+      {
+        "command": "hover.saveSpec",
+        "title": "Save Last Run as Spec",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.cancelRun",
+        "title": "Cancel Run",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.optimizeSpec",
+        "title": "Optimize",
+        "category": "Hover",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "hover.reRecordSpec",
+        "title": "Re-record",
+        "category": "Hover",
+        "icon": "$(record)"
+      },
+      {
+        "command": "hover.startApp",
+        "title": "Start App (dev server + browser)",
+        "category": "Hover",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "hover.toggleBrowser",
+        "title": "Toggle Browser (Silent / Visible)",
+        "category": "Hover",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "hover.appStatus",
+        "title": "App: Set URL or Start",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.openRepo",
+        "title": "Star on GitHub",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.openSite",
+        "title": "Open gethover.dev",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.addCiWorkflow",
+        "title": "Add CI Workflow (run specs on PR)",
+        "category": "Hover",
+        "icon": "$(github-action)"
+      },
+      {
+        "command": "hover.refreshSpecs",
+        "title": "Refresh Specs",
+        "category": "Hover",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hover.refreshSessions",
+        "title": "Refresh Sessions",
+        "category": "Hover",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hover.refreshEnvironments",
+        "title": "Refresh Environments",
+        "category": "Hover",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hover.env.add",
+        "title": "Add Environment",
+        "category": "Hover",
+        "icon": "$(add)"
+      },
+      {
+        "command": "hover.env.editUrl",
+        "title": "Edit URL",
+        "category": "Hover",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "hover.env.remove",
+        "title": "Remove Environment",
+        "category": "Hover",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "hover.env.setActive",
+        "title": "Set Active Environment",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.env.exportEnv",
+        "title": "Export Env Vars (copy / .env)",
+        "category": "Hover",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "hover.env.addAccount",
+        "title": "Add Test Account",
+        "category": "Hover",
+        "icon": "$(person-add)"
+      },
+      {
+        "command": "hover.env.setPassword",
+        "title": "Set / Update Password",
+        "category": "Hover",
+        "icon": "$(key)"
+      },
+      {
+        "command": "hover.env.removeAccount",
+        "title": "Remove Test Account",
+        "category": "Hover",
+        "icon": "$(trash)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hover-chat",
+          "title": "Hover Chat",
+          "icon": "resources/hover-chat.svg"
+        },
+        {
+          "id": "hover",
+          "title": "Hover",
+          "icon": "resources/hover.svg"
+        }
+      ]
+    },
+    "views": {
+      "hover-chat": [
+        {
+          "id": "hover.chat",
+          "name": "Chat",
+          "type": "webview",
+          "icon": "resources/hover-chat.svg",
+          "contextualTitle": "Hover"
+        }
+      ],
+      "hover": [
+        {
+          "id": "hover.specs",
+          "name": "Specs",
+          "icon": "$(beaker)",
+          "contextualTitle": "Hover"
+        },
+        {
+          "id": "hover.sessions",
+          "name": "Sessions",
+          "icon": "$(history)",
+          "contextualTitle": "Hover"
+        },
+        {
+          "id": "hover.environments",
+          "name": "Environments",
+          "icon": "$(globe)",
+          "contextualTitle": "Hover"
+        },
+        {
+          "id": "hover.settings",
+          "name": "Settings",
+          "type": "webview",
+          "icon": "$(gear)",
+          "contextualTitle": "Hover"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Hover",
+      "properties": {
+        "hover.appUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Your dev server URL (e.g. http://localhost:5173). Leave empty to auto-detect common dev ports."
+        },
+        "hover.browser": {
+          "type": "string",
+          "enum": [
+            "silent",
+            "visible"
+          ],
+          "enumDescriptions": [
+            "Headless — no browser window; runs stream into the chat",
+            "Visible — show the debug Chrome window"
+          ],
+          "default": "silent",
+          "description": "How Hover runs the browser. Silent = headless (default); Visible = a shown Chrome window you can watch."
+        },
+        "hover.speech": {
+          "type": "boolean",
+          "default": false,
+          "description": "Speak the agent's steps and final summary aloud while it runs."
+        },
+        "hover.model": {
+          "type": "string",
+          "enum": [
+            "sonnet",
+            "opus",
+            "haiku"
+          ],
+          "default": "sonnet",
+          "description": "Model for runs. Sonnet is cheapest; Opus for harder flows; Haiku for speed."
+        }
+      }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "hover.reviewOptimizationCandidate",
+          "when": "resourceFilename =~ /\\.spec\\.ts$/",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "hover.switchMode",
+          "when": "view == hover.specs",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hover.addCiWorkflow",
+          "when": "view == hover.specs",
+          "group": "navigation@2"
+        },
+        {
+          "command": "hover.refreshSpecs",
+          "when": "view == hover.specs",
+          "group": "navigation@3"
+        },
+        {
+          "command": "hover.newSession",
+          "when": "view == hover.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hover.refreshSessions",
+          "when": "view == hover.sessions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "hover.env.add",
+          "when": "view == hover.environments",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hover.refreshEnvironments",
+          "when": "view == hover.environments",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "hover.env.addAccount",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "hover.env.exportEnv",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "hover.env.editUrl",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Unverified)?$/",
+          "group": "1_env@1"
+        },
+        {
+          "command": "hover.env.exportEnv",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
+          "group": "1_env@2"
+        },
+        {
+          "command": "hover.env.addAccount",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
+          "group": "1_env@2"
+        },
+        {
+          "command": "hover.env.remove",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Unverified)?$/",
+          "group": "1_env@3"
+        },
+        {
+          "command": "hover.env.setPassword",
+          "when": "view == hover.environments && viewItem == hoverAccount",
+          "group": "inline@1"
+        },
+        {
+          "command": "hover.env.removeAccount",
+          "when": "view == hover.environments && viewItem == hoverAccount",
+          "group": "inline@2"
+        },
+        {
+          "command": "hover.runSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "inline@1"
+        },
+        {
+          "command": "hover.optimizeSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "inline@2"
+        },
+        {
+          "command": "hover.optimizeSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "1_hover@1"
+        },
+        {
+          "command": "hover.reRecordSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "1_hover@2"
+        },
+        {
+          "command": "hover.reviewOptimizationCandidate",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "1_hover@3"
+        },
+        {
+          "command": "hover.runSpec",
+          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
+          "group": "1_hover@4"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "hover.specs",
+        "contents": "No specs yet.\n\nDrive your app with Hover to crystallize a test or security check into a Playwright spec, then it shows up here."
+      },
+      {
+        "view": "hover.sessions",
+        "contents": "No Hover runs recorded yet.\n\nStart a chat to drive your app — each run (model, cost, outcome) is logged here.\n\n[New Session](command:hover.newSession)"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "stage:engine": "node scripts/stage-engine.mjs",
+    "package": "pnpm run build && pnpm run stage:engine && pnpm dlx @vscode/vsce package --no-dependencies",
+    "publish": "pnpm run build && pnpm run stage:engine && pnpm dlx @vscode/vsce publish --no-dependencies",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "@types/ws": "^8.5.0",
+    "tsup": "^8.0.0"
+  }
+}

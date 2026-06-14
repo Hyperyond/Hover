@@ -6,6 +6,21 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+Theme: **Hover is now a VS Code extension.** The editor extension (`hover-dev`, on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)) is the going-forward surface — chat, the Specs / Sessions / Environments views, and the whole engine run inside the editor, nothing else to install. The npm bundler-plugin packages (`vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`) and the in-page widget are **frozen** — still installable, but no longer the primary path. `@hover-dev/core` keeps evolving as the extension's engine (consumed as local source, packed into the .vsix).
+
+### Added
+
+- **VS Code extension (`hover-dev`).** One extension for AI test authoring + application-security testing: a chat webview drives your real Chrome and crystallizes verified flows into plain `@playwright/test` specs; native Specs / Sessions / Environments tree views; a Settings panel. The engine ships inside the extension (spawned under VS Code's Node), so there's no bundler plugin to install.
+- **Test-account vault + `@account` mentions.** Define test accounts per environment; reference one as `@label` in chat and the agent logs in with it. Credentials are parameterized into `process.env.HOVER_<LABEL>_*` references on save / re-record — never written into the spec, the JSDoc header, or the `.hover/` sidecar. Account passwords live in SecretStorage; the roster (`.hover/environments.json`) is commit-worthy. One-click export of the env-var names + values to a `.env` or the clipboard for CI secrets.
+- **Environments view.** Local + configured remote targets; the active environment drives the run target URL (remote targets skip the dev-server spawn). DNS-verification + cloud sync are present as disabled placeholders for a future Hover Cloud.
+- **Security (🟠) / Pentest (🔴) modes** as a mode switch in the one extension, with a mode-colored running border.
+- **Add CI Workflow.** Generates a `.github/workflows/hover-e2e.yml` that runs the crystallized specs on every PR — deterministic, no AI — wiring the account secrets by the same `HOVER_<LABEL>_*` names.
+- **Optimize auto-opens the candidate diff**, with a live spinner + watchdog; folder-grouped Specs tree.
+
+### Changed
+
+- **Going-forward distribution is the VS Code extension.** The npm bundler-plugin packages + in-page widget are frozen (no new versions planned); `@hover-dev/core` is not frozen.
+
 ## [0.15.0] — 2026-06-07
 
 Theme: **structured spec output + CLI mode**. The deterministic translator now emits Page Objects, `test.step` stages, and `Promise.all`-paired popup/upload/download flows; an off-by-default AI pass can polish a spec further; and the whole workflow is drivable from the terminal — no widget required.

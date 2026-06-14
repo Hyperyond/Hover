@@ -36,7 +36,7 @@ To add a new agent: write a new descriptor file (e.g. `aider.ts`), import it in 
 - **`hard`** — the agent CLI accepts a deny / allow list that effectively removes built-in tools (shell, file edit, …) so the only callable surface is whatever MCP servers Hover configures. Example: Claude Code's `--strict-mcp-config --allowedTools mcp__playwright --disallowedTools "Bash Edit Write Read …"`.
 - **`soft`** — no equivalent flag exists. Hover constrains side-effects via OS-level sandbox flags (e.g. Codex's `--sandbox read-only`) and leans on a strict `developer_instructions` system prompt to nudge the agent toward MCP-only behavior. A determined / hallucinating agent *could* still try a built-in shell call.
 
-The widget marks soft-sandbox agents with a ⚠ badge.
+Hover marks soft-sandbox agents with a ⚠ badge in the agent dropdown.
 
 ## Adding a new agent
 

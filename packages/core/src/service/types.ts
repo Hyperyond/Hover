@@ -24,6 +24,13 @@ export interface ClientMessage {
     steps?: SkillStep[];
     assertions?: SpecAssertion[];
     overwrite?: boolean;
+    /** save-spec only — credentials to parameterize into process.env.<envVar>
+     *  references so secrets never land in the spec / sidecar. */
+    redactions?: { value: string; envVar: string }[];
+    /** command only — test accounts the prompt referenced via @label. Injected
+     *  into the agent's system prompt (ephemeral, not the saved transcript) so
+     *  it can log in; the recorded fill values get redacted on save. */
+    accounts?: { label: string; username?: string; password?: string; role?: string }[];
     /** save-case-csv only — passed through to writeCaseCsv as extra
      *  fields on the test case's Labels column. */
     jiraProjectKey?: string;
@@ -34,6 +41,8 @@ export interface ClientMessage {
     pageUrl?: string;
     /** switch-agent only — id of the agent to switch the service to. */
     agentId?: string;
+    /** set-model only — the model id to use for subsequent runs (e.g. opus). */
+    model?: string;
     /** set-mode only — id of the plugin-contributed mode to activate,
      *  or null to return to normal (unmoded) operation. */
     modeId?: string | null;
@@ -42,6 +51,13 @@ export interface ClientMessage {
     /** set-api-key only — the model API key to inject into the spawned CLI's
      *  env (or empty/missing to clear it). Held in memory only, never logged. */
     key?: string;
+    /** launch-chrome only — launch the debug Chrome headless (silent mode). */
+    headless?: boolean;
+    /** reveal-source only — a `data-hover-source` value (`<rel-path>:<line>:<col>`)
+     *  an in-page client (widget) captured from a clicked element. The service
+     *  relays it to every OTHER connected client; the VSCode extension listens
+     *  for it and jumps the editor to that location (F2 page→editor transport). */
+    source?: string;
   };
 }
 

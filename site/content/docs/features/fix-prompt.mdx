@@ -1,5 +1,11 @@
 # Fix prompt
 
+<Callout type="warning" title="Frozen — in-page widget only">
+
+The Fix prompt is a feature of the original in-page widget (the [frozen bundler-plugin path](/docs/get-started/install#frozen-bundler-plugin-path)). It relies on the widget's `data-hover-source` stamping and is **not** part of the VS Code extension chat. The **[VS Code extension](/docs/get-started/install)** is the recommended way to use Hover.
+
+</Callout>
+
 A separate **⌖ Fix** button next to Record. Click it, click any element on the page, type *what you'd like to change*, and Hover assembles a precise prompt onto your clipboard. Paste into Cursor / Claude Code / Windsurf and the agent has exact context.
 
 The widget knows the source location of every host element on your page — a Vite transform stamps `data-hover-source="file:line:col"` onto every `<button>` / `<div>` / `<input>` you authored in JSX.

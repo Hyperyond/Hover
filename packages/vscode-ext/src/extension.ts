@@ -1,0 +1,1034 @@
+/**
+ * `hover-dev` — Hover's VSCode extension entry.
+ *
+ * Per the security-direction design (§3.2) this is Hover's **primary surface**:
+ * a native GUI face (no webview) over the agent-agnostic engine in
+ * `@hover-dev/cli` / `@hover-dev/core`. ONE extension for both AI test authoring
+ * and application-security testing — the split is a mode switch (normal /
+ * security-orange / pentest-red), reusing the engine's `set-mode` protocol.
+ *
+ * Surfaces:
+ *   • Activity Bar "Hover" → Specs (folder-grouped), Sessions, Environments
+ *   • Status bar → current mode + service connection; click to switch mode
+ *   • F1 review optimization candidate · F2 element→source · F3 spec CodeLens ·
+ *     run a spec in the terminal
+ */
+import * as vscode from 'vscode';
+import * as path from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import {
+  connectServicePool,
+  type AgentEntry,
+  type ModeEntry,
+  type ServerMessage,
+  type ServiceClientPool,
+} from './serviceClient.js';
+import { SpecLensProvider } from './specLens.js';
+import { registerSpecsView } from './specsView.js';
+import { registerSessionsView } from './sessionsView.js';
+import { ChatViewProvider, registerChatView } from './chatView.js';
+import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
+import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar, type ResolvedAccount } from './environments.js';
+import { registerEnvironmentsView } from './environmentsView.js';
+import { buildWorkflowYaml } from './ciWorkflow.js';
+import { startEngine, stopEngine } from './engine.js';
+import { candidateUri, uriExists } from './optimized.js';
+
+let pool: ServiceClientPool | undefined;
+let currentMode: string | null = null;
+let availableModes: ModeEntry[] = [];
+let connectedServices = 0;
+let modeStatus: vscode.StatusBarItem;
+let chatProvider: ChatViewProvider | undefined;
+let settingsProvider: SettingsViewProvider | undefined;
+
+let extContext: vscode.ExtensionContext | undefined;
+
+/** Push the active environment's accounts (no passwords) to the chat for the
+ *  `@` autocomplete. */
+async function pushAccounts(): Promise<void> {
+  const active = await envStore?.getActive();
+  const list = (active?.accounts ?? []).map((a) => ({ label: a.label, role: a.role, username: a.username }));
+  chatProvider?.updateAccounts(list);
+}
+
+/** Push speech + silent flags to the chat (drives voice + the running border). */
+function pushChatConfig(): void {
+  const cfg = vscode.workspace.getConfiguration('hover');
+  chatProvider?.updateConfig(cfg.get<boolean>('speech', false), cfg.get<string>('browser', 'silent') !== 'visible');
+}
+
+/** When the engine (re)connects, hand it the persisted model + API key. */
+async function pushEngineConfig(): Promise<void> {
+  if (!pool) return;
+  const cfg = vscode.workspace.getConfiguration('hover');
+  const agent = cfg.get<string>('agent', '');
+  if (agent) pool.switchAgent(agent);
+  const model = cfg.get<string>('model', 'sonnet');
+  if (model) pool.setModel(model);
+  const key = await extContext?.secrets.get('hover.apiKey');
+  if (key) pool.setApiKey(key);
+}
+
+/** The modes the one extension offers, independent of any running service —
+ *  mode is the extension's own state (the engine, once hosted here, reads it).
+ *  A connected service's reported modes are merged on top. */
+const BUILTIN_MODES: ModeEntry[] = [
+  { id: 'security', label: 'Security testing', description: 'business / authorization — orange' },
+  { id: 'pentest', label: 'Pentest', description: 'offensive vuln hunting — red' },
+];
+
+function allModes(): ModeEntry[] {
+  const byId = new Map<string, ModeEntry>();
+  for (const m of BUILTIN_MODES) byId.set(m.id, m);
+  for (const m of availableModes) byId.set(m.id, m);
+  return [...byId.values()];
+}
+
+function modeLabel(id: string): string {
+  return allModes().find((m) => m.id === id)?.label ?? id;
+}
+
+let currentAgent: string | null = null;
+let availableAgents: AgentEntry[] = [];
+
+/** Agents the extension offers even before a service reports its registry. */
+const BUILTIN_AGENTS: AgentEntry[] = [{ id: 'claude' }, { id: 'codex' }];
+
+function allAgents(): AgentEntry[] {
+  const byId = new Map<string, AgentEntry>();
+  for (const a of BUILTIN_AGENTS) byId.set(a.id, a);
+  for (const a of availableAgents) byId.set(a.id, a);
+  return [...byId.values()];
+}
+
+function agentLabel(id: string | null): string {
+  if (!id) return 'Claude';
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+// ── Run orchestration ─────────────────────────────────────────────────────
+// The chat sends a prompt → the engine runs it → streams events back. We
+// accumulate the same message shape the widget sends on save (user / step* /
+// ai / done), so "Save as spec" can crystallize the run.
+interface SpecMsg {
+  kind: string;
+  [k: string]: unknown;
+}
+let transcript: SpecMsg[] = [];
+let runSessionId: string | undefined;
+let stepCount = 0;
+let runCost = 0;
+/** Accounts resolved from @-mentions in the current run's prompt — kept so
+ *  "Save as spec" can redact their credentials into process.env refs. */
+let lastRunAccounts: ResolvedAccount[] = [];
+/** Most recent reachable dev URL (configured or auto-detected). */
+let detectedUrl: string | null = null;
+/** Test-environment + account store (Local + configured domains). */
+let envStore: EnvironmentStore | undefined;
+
+/** The run target = the active environment's URL. For `local` we keep the
+ *  existing zero-config behaviour (configured appUrl, else auto-detected). */
+async function resolveTargetUrl(): Promise<string | null> {
+  const active = await envStore?.getActive();
+  if (!active || active.id === LOCAL_ENV_ID) {
+    return vscode.workspace.getConfiguration('hover').get<string>('appUrl') || detectedUrl;
+  }
+  return active.url;
+}
+/** Resolver for an in-flight ensureBrowser() handshake. */
+let pendingBrowser: ((ok: boolean) => void) | undefined;
+/** Spec being optimized, so we can auto-open the diff when the candidate lands. */
+let pendingOptimizeUri: vscode.Uri | undefined;
+/** Watchdog so a hung optimize doesn't leave the spinner spinning forever. */
+let optimizeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Stop the optimize spinner + watchdog (on result, failure, or timeout). */
+function endOptimize(): void {
+  if (optimizeTimer) { clearTimeout(optimizeTimer); optimizeTimer = undefined; }
+  chatProvider?.clearBusy();
+}
+
+/** Ensure a debug browser is up before a run (self-heal). Idempotent on the
+ *  engine side (launchDebugChrome no-ops if Chrome is already on the CDP port),
+ *  so this both first-launches and relaunches a browser that went away. */
+function ensureBrowser(url: string): Promise<boolean> {
+  if (!pool) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    pendingBrowser?.(false); // supersede any prior wait
+    let timer: ReturnType<typeof setTimeout>;
+    const done = (ok: boolean): void => {
+      if (pendingBrowser !== done) return;
+      clearTimeout(timer);
+      pendingBrowser = undefined;
+      resolve(ok);
+    };
+    pendingBrowser = done;
+    timer = setTimeout(() => done(false), 25_000);
+    pool?.launchChrome(url, isSilent());
+  });
+}
+
+/** Hand a chat prompt to the engine, ensuring the browser is up first. */
+async function runPrompt(prompt: string): Promise<void> {
+  if (connectedServices === 0 || !pool) {
+    chatProvider?.pushSystem('Engine not connected yet — give it a moment after opening the project, or run "Hover: Start Engine".');
+    return;
+  }
+  transcript.push({ kind: 'user', text: prompt });
+  stepCount = 0;
+  runCost = 0;
+  chatProvider?.setRunning(true);
+
+  // Resolve @account mentions → creds for the agent to log in with; remembered
+  // so "Save as spec" redacts those creds into process.env refs.
+  lastRunAccounts = (await envStore?.resolveMentions(prompt)) ?? [];
+  const accounts = lastRunAccounts.map((a) => ({ label: a.label, username: a.username, password: a.password, role: a.role }));
+  const missing = lastRunAccounts.filter((a) => !a.password).map((a) => a.label);
+  if (missing.length) {
+    chatProvider?.pushSystem(`Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the agent can log in.`);
+  }
+
+  const url = await resolveTargetUrl();
+  if (url) {
+    const ready = await ensureBrowser(url);
+    if (!ready) {
+      chatProvider?.setRunning(false);
+      chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Is the dev server running? Click "▶ Start App".`);
+      return;
+    }
+  }
+  if (!pool?.run(prompt, runSessionId, accounts)) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem('Could not reach the engine.');
+  }
+}
+
+/** Translate a streamed engine event into chat updates + transcript. */
+function handleServerMessage(msg: ServerMessage): void {
+  if (msg.type === 'error') {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem(String(msg.payload?.message ?? 'error'));
+    return;
+  }
+  if (msg.type === 'spec-saved') {
+    chatProvider?.pushSystem(`Saved spec: ${String(msg.payload?.name ?? '')}`);
+    return;
+  }
+  if (msg.type === 'run-active') {
+    chatProvider?.setRunning(true);
+    return;
+  }
+  if (msg.type === 'cdp-status') {
+    const p = (msg.payload ?? {}) as { state?: string; launching?: boolean };
+    if (!p.launching && pendingBrowser) pendingBrowser(p.state === 'same-window' || p.state === 'wrong-window');
+    return;
+  }
+  if (msg.type === 'optimize-result') {
+    endOptimize();
+    const slug = String(msg.payload?.slug ?? '');
+    chatProvider?.pushSystem(`Optimized "${slug}" — opening the diff to review.`);
+    const uri = pendingOptimizeUri;
+    pendingOptimizeUri = undefined;
+    if (uri) void openOptimizeDiff(uri, { silentIfMissing: false });
+    return;
+  }
+  if (msg.type === 'optimize-failed') {
+    endOptimize();
+    pendingOptimizeUri = undefined;
+    chatProvider?.pushSystem(`Optimize failed for "${String(msg.payload?.slug ?? '')}": ${String(msg.payload?.reason ?? 'unknown error')}`);
+    return;
+  }
+  if (msg.type !== 'event') return;
+  const ev = msg.payload as { kind?: string; [k: string]: unknown } | undefined;
+  switch (ev?.kind) {
+    case 'session_start':
+      if (typeof ev.sessionId === 'string') runSessionId = ev.sessionId;
+      chatProvider?.setRunning(true);
+      break;
+    case 'tool_use': {
+      transcript.push({ kind: 'step', tool: ev.tool, input: ev.input });
+      stepCount++;
+      if (typeof ev.costUsdSnapshot === 'number') runCost = ev.costUsdSnapshot;
+      let detail = '';
+      try {
+        detail = ev.input == null ? '{}' : JSON.stringify(ev.input);
+      } catch {
+        detail = String(ev.input);
+      }
+      chatProvider?.pushStep({
+        label: humanizeTool(String(ev.tool ?? ''), ev.input),
+        tool: String(ev.tool ?? ''),
+        detail,
+        cost: typeof ev.costUsdSnapshot === 'number' ? ev.costUsdSnapshot : undefined,
+      });
+      break;
+    }
+    case 'usage':
+      if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
+      break;
+    case 'text':
+      if (typeof ev.text === 'string' && ev.text.trim()) {
+        transcript.push({ kind: 'ai', text: ev.text });
+        chatProvider?.pushNarration(ev.text);
+      }
+      break;
+    case 'session_end':
+      transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
+      if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
+      chatProvider?.setRunning(false);
+      if (ev.cancelled) {
+        chatProvider?.pushSystem('Run cancelled.');
+      } else if (ev.isError) {
+        const summary = String(ev.summary ?? '');
+        chatProvider?.pushSystem(`Run ended with an error: ${summary}`);
+        if (/cdp|chrome|debug|9222|connect|browser/i.test(summary)) {
+          chatProvider?.pushSystem('No app browser detected — click "▶ Start App" (in the chat) to start your dev server + browser.');
+        }
+      } else if (stepCount === 0) {
+        // No browser actions — the agent just replied (e.g. a vague prompt).
+        // Don't fake a PASS; show it as a plain reply.
+        chatProvider?.pushAssistant(String(ev.summary ?? 'Done.'));
+      } else {
+        chatProvider?.pushResult('PASS', String(ev.summary ?? 'Done.'), stepCount, runCost);
+      }
+      break;
+  }
+}
+
+/** Short, human label for a browser/MCP tool call. */
+function humanizeTool(tool: string, input: unknown): string {
+  const i = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const s = (v: unknown): string => (typeof v === 'string' ? v : '');
+  switch (tool) {
+    case 'browser_navigate': return `Navigate to ${s(i.url)}`;
+    case 'browser_click': return `Click ${s(i.element) || s(i.ref) || s(i.selector)}`.trim();
+    case 'browser_type': return `Type "${s(i.text)}"${i.element ? ` into ${s(i.element)}` : ''}`;
+    case 'browser_fill_form': return 'Fill form';
+    case 'browser_select_option': return `Select option ${s(i.element)}`.trim();
+    case 'browser_press_key': return `Press ${s(i.key)}`;
+    case 'browser_snapshot': return 'Snapshot page';
+    case 'browser_take_screenshot': return 'Screenshot';
+    case 'browser_wait_for': return 'Wait';
+    case 'browser_navigate_back': return 'Go back';
+    default: return tool.replace(/^mcp__[a-z0-9_]+__/, '').replace(/^browser_/, '').replace(/_/g, ' ') || tool;
+  }
+}
+
+// ── App / dev-server status ───────────────────────────────────────────────
+// The top-right pill reflects whether the project's dev server is reachable.
+// With no configured URL we auto-probe common dev ports and show the first
+// that responds; a configured URL is probed directly.
+const COMMON_DEV_URLS = [
+  'http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174',
+  'http://localhost:4321', 'http://localhost:8080', 'http://localhost:4200',
+  'http://localhost:5000', 'http://localhost:8000', 'http://localhost:1420',
+];
+let appStatusTimer: ReturnType<typeof setInterval> | undefined;
+/** Re-entrancy guard: a full local probe sweep can take ~13s (9 × 1.5s) when
+ *  nothing responds, longer than the 5s interval — without this, sweeps stack
+ *  and race on detectedUrl / the pill. */
+let appStatusPolling = false;
+
+async function probeUrl(url: string, timeoutMs = 1500): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pollAppStatus(): Promise<void> {
+  if (appStatusPolling) return; // a previous sweep is still in flight
+  appStatusPolling = true;
+  try {
+    const active = await envStore?.getActive();
+    const isLocal = !active || active.id === LOCAL_ENV_ID;
+    let online = false;
+    let target: string | null = null;
+    let label: string | null = null;
+
+    if (isLocal) {
+      const configured = vscode.workspace.getConfiguration('hover').get<string>('appUrl');
+      const candidates = configured ? [configured] : COMMON_DEV_URLS;
+      for (const u of candidates) {
+        if (await probeUrl(u)) { target = u; break; }
+      }
+      online = Boolean(target);
+      detectedUrl = target ?? (configured || null);
+      target = target ?? configured ?? null;
+      label = target ? target.replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
+    } else {
+      target = active.url;
+      online = await probeUrl(active.url);
+      label = active.name;
+    }
+    chatProvider?.updateApp(online, label, target ?? undefined);
+  } finally {
+    appStatusPolling = false;
+  }
+}
+
+/** Top-right pill click: switch the active environment, or start / set local. */
+async function appStatus(): Promise<void> {
+  const envs = (await envStore?.load()) ?? [];
+  const activeId = envStore?.getActiveId();
+  type Item = vscode.QuickPickItem & { envId?: string; action?: string };
+  const items: Item[] = envs.map((e) => ({
+    label: `${e.id === activeId ? '$(circle-large-filled)' : '$(circle-large-outline)'} ${e.name}`,
+    description: e.url.replace(/^https?:\/\//, '').replace(/\/$/, '') + (e.id === LOCAL_ENV_ID ? '' : e.verified ? '  ✓' : '  ⚠ unverified'),
+    envId: e.id,
+  }));
+  items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+  items.push({ label: '$(rocket) Start App', description: 'dev server + browser', action: 'start' });
+  items.push({ label: '$(link) Set local URL…', description: 'manually set the dev server URL', action: 'set' });
+  items.push({ label: '$(gear) Manage environments…', action: 'manage' });
+
+  const pick = await vscode.window.showQuickPick(items, { title: 'Hover — target environment' });
+  if (!pick) return;
+  if (pick.action === 'start') await startApp();
+  else if (pick.action === 'manage') {
+    await vscode.commands.executeCommand('workbench.view.extension.hover');
+    await vscode.commands.executeCommand('hover.environments.focus');
+  } else if (pick.action === 'set') {
+    const cfg = vscode.workspace.getConfiguration('hover');
+    const url = await vscode.window.showInputBox({
+      title: 'Hover: local app URL',
+      prompt: 'Your dev server URL',
+      value: cfg.get<string>('appUrl') || 'http://localhost:5173',
+    });
+    if (url !== undefined) {
+      await cfg.update('appUrl', url, vscode.ConfigurationTarget.Workspace);
+      void pollAppStatus();
+    }
+  } else if (pick.envId) {
+    await envStore?.setActiveId(pick.envId);
+    void pollAppStatus();
+  }
+}
+
+// ── Start App: dev server + debug browser ─────────────────────────────────
+let devTerminal: vscode.Terminal | undefined;
+
+/** Silent (headless) vs visible (headed) browser — the user's toggle. */
+function isSilent(): boolean {
+  return vscode.workspace.getConfiguration('hover').get<string>('browser', 'silent') !== 'visible';
+}
+
+function detectPackageManager(root: string): string {
+  if (existsSync(path.join(root, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(path.join(root, 'yarn.lock'))) return 'yarn';
+  if (existsSync(path.join(root, 'bun.lockb'))) return 'bun';
+  return 'npm';
+}
+
+async function pickDevScript(root: string): Promise<string | undefined> {
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')) as { scripts?: Record<string, string> };
+    const scripts = pkg.scripts ?? {};
+    for (const s of ['dev', 'start', 'serve']) if (scripts[s]) return s;
+    const names = Object.keys(scripts);
+    if (names.length === 0) return undefined;
+    return vscode.window.showQuickPick(names, { title: 'Hover: which script starts your dev server?' });
+  } catch {
+    return undefined;
+  }
+}
+
+async function getAppUrl(): Promise<string | undefined> {
+  const cfg = vscode.workspace.getConfiguration('hover');
+  let url = cfg.get<string>('appUrl');
+  if (!url) {
+    url = await vscode.window.showInputBox({
+      title: 'Hover: app URL',
+      prompt: 'Your dev server URL (saved for next time)',
+      value: 'http://localhost:5173',
+    });
+    if (url) await cfg.update('appUrl', url, vscode.ConfigurationTarget.Workspace);
+  }
+  return url || undefined;
+}
+
+/** Start the project's dev server (if not already) + launch the debug browser. */
+async function startApp(): Promise<void> {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!root) {
+    void vscode.window.showWarningMessage('Hover: open a project folder first.');
+    return;
+  }
+  // A remote environment (staging/prod) has no local dev server to spawn — just
+  // point the browser at its URL.
+  const active = await envStore?.getActive();
+  if (active && active.id !== LOCAL_ENV_ID) {
+    const silent = isSilent();
+    if (pool?.launchChrome(active.url, silent)) {
+      chatProvider?.pushSystem(`Browser ${silent ? 'running silently (headless)' : 'opened'} at ${active.name} (${active.url}).`);
+    } else {
+      chatProvider?.pushSystem('Could not launch the browser — the engine may still be starting.');
+    }
+    return;
+  }
+
+  const url = await getAppUrl();
+  if (!url) return;
+
+  let startedServer = false;
+  if (!devTerminal) {
+    const script = await pickDevScript(root);
+    if (script) {
+      const pm = detectPackageManager(root);
+      devTerminal = vscode.window.createTerminal({ name: 'Hover Dev Server', cwd: root });
+      devTerminal.show(true);
+      devTerminal.sendText(`${pm} run ${script}`);
+      startedServer = true;
+      chatProvider?.pushSystem(`Starting dev server (${pm} run ${script})…`);
+    }
+  }
+  // Give a freshly-started server a moment before pointing Chrome at it.
+  if (startedServer) await new Promise((r) => setTimeout(r, 3500));
+
+  const silent = isSilent();
+  if (pool?.launchChrome(url, silent)) {
+    chatProvider?.pushSystem(`Browser ${silent ? 'running silently (headless)' : 'opened'} at ${url}.`);
+  } else {
+    chatProvider?.pushSystem('Could not launch the browser — the engine may still be starting.');
+  }
+}
+
+/** Flip silent ↔ visible and relaunch the browser to match. */
+async function toggleBrowser(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration('hover');
+  const next = isSilent() ? 'visible' : 'silent';
+  await cfg.update('browser', next, vscode.ConfigurationTarget.Workspace);
+  pushChatConfig();
+  settingsProvider?.refresh();
+  const url = await resolveTargetUrl();
+  if (url && pool?.launchChrome(url, next === 'silent')) {
+    chatProvider?.pushSystem(`Browser mode: ${next === 'silent' ? 'silent (headless)' : 'visible'} — relaunched at ${url}.`);
+  } else {
+    void vscode.window.showInformationMessage(`Hover browser mode: ${next}. Takes effect on the next launch.`);
+  }
+}
+
+async function saveSpec(): Promise<void> {
+  let idx = -1;
+  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'user') { idx = i; break; }
+  const steps = idx === -1 ? transcript.slice() : transcript.slice(idx);
+  if (!steps.some((m) => m.kind === 'step')) {
+    void vscode.window.showWarningMessage('Hover: nothing to save — no steps in the last run.');
+    return;
+  }
+  const name = await vscode.window.showInputBox({ title: 'Save as Playwright spec', prompt: 'Spec name', placeHolder: 'login-flow' });
+  if (!name) return;
+  // Parameterize any @-mentioned account credentials this run used into
+  // process.env refs so the saved spec never holds the literal secret.
+  const redactions: { value: string; envVar: string }[] = [];
+  for (const a of lastRunAccounts) {
+    if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
+    if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
+  }
+  if (!pool?.saveSpec(name, steps, redactions)) void vscode.window.showWarningMessage('Hover: engine not connected.');
+}
+
+export function activate(context: vscode.ExtensionContext): void {
+  extContext = context;
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hover.reviewOptimizationCandidate', (arg?: vscode.TreeItem | vscode.Uri) =>
+      reviewOptimizationCandidate(arg),
+    ),
+    vscode.commands.registerCommand('hover.openSource', (source?: string) => openSource(source)),
+    vscode.commands.registerCommand('hover.runSpec', (item?: vscode.TreeItem | vscode.Uri) => runSpec(item)),
+    vscode.commands.registerCommand('hover.switchMode', () => switchMode()),
+    vscode.commands.registerCommand('hover.switchAgent', () => switchAgent()),
+    vscode.commands.registerCommand('hover.newSession', () => newSession()),
+    vscode.commands.registerCommand('hover.saveSpec', () => saveSpec()),
+    vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel()),
+    vscode.commands.registerCommand('hover.optimizeSpec', (a?: vscode.TreeItem | vscode.Uri) => optimizeSpec(a)),
+    vscode.commands.registerCommand('hover.reRecordSpec', (a?: vscode.TreeItem | vscode.Uri) => reRecordSpec(a)),
+    vscode.commands.registerCommand('hover.addCiWorkflow', () => addCiWorkflow()),
+    vscode.commands.registerCommand('hover.startApp', () => startApp()),
+    vscode.commands.registerCommand('hover.toggleBrowser', () => toggleBrowser()),
+    vscode.commands.registerCommand('hover.appStatus', () => appStatus()),
+    vscode.window.onDidCloseTerminal((t) => {
+      if (t === devTerminal) devTerminal = undefined;
+    }),
+    vscode.commands.registerCommand('hover.openRepo', () =>
+      vscode.env.openExternal(vscode.Uri.parse('https://github.com/Hyperyond/Hover')),
+    ),
+    vscode.commands.registerCommand('hover.openSite', () =>
+      vscode.env.openExternal(vscode.Uri.parse('https://www.gethover.dev/')),
+    ),
+    vscode.commands.registerCommand('hover.startEngine', () => bootEngine(context, true)),
+    vscode.commands.registerCommand('hover.specs.focus', () =>
+      vscode.commands.executeCommand('workbench.view.extension.hover'),
+    ),
+    vscode.languages.registerCodeLensProvider(
+      { language: 'typescript', scheme: 'file', pattern: '**/*.spec.ts' },
+      new SpecLensProvider(),
+    ),
+  );
+
+  // Sidebar under the Hover Activity Bar container: chat (webview) + three
+  // native tree views.
+  const chat = registerChatView(context.extensionUri);
+  chatProvider = chat.provider;
+  chatProvider.runHandler = (prompt) => void runPrompt(prompt);
+  // Re-sync state whenever the chat webview (re)loads — otherwise the initial
+  // pushes race the view's first resolve and get dropped.
+  chatProvider.onReady = () => {
+    pushChatConfig();
+    void pushAccounts();
+    void pollAppStatus();
+    if (currentMode) chatProvider?.updateMode(currentMode, modeLabel(currentMode));
+  };
+
+  const settings = registerSettingsView({
+    getApiKey: async () => (await context.secrets.get('hover.apiKey')) ?? '',
+    getAgents: () => ({ current: currentAgent ?? (vscode.workspace.getConfiguration('hover').get<string>('agent') || 'claude'), list: allAgents().map((a) => a.id) }),
+    onChange: async (change) => {
+      const cfg = vscode.workspace.getConfiguration('hover');
+      if (typeof change.agent === 'string') await setAgent(change.agent);
+      if (typeof change.speech === 'boolean') await cfg.update('speech', change.speech, vscode.ConfigurationTarget.Global);
+      if (typeof change.browser === 'string') await cfg.update('browser', change.browser, vscode.ConfigurationTarget.Workspace);
+      if (typeof change.model === 'string') {
+        await cfg.update('model', change.model, vscode.ConfigurationTarget.Workspace);
+        pool?.setModel(change.model);
+      }
+      if (typeof change.apiKey === 'string') {
+        await context.secrets.store('hover.apiKey', change.apiKey);
+        pool?.setApiKey(change.apiKey);
+      }
+      pushChatConfig();
+    },
+  });
+  settingsProvider = settings.provider;
+  envStore = new EnvironmentStore(context);
+  envStore.onDidChange(() => void pushAccounts());
+  context.subscriptions.push(
+    chat.disposable,
+    settings.disposable,
+    ...registerSpecsView(),
+    ...registerSessionsView(),
+    ...registerEnvironmentsView(envStore, () => {
+      void pollAppStatus();
+      void pushAccounts();
+    }),
+  );
+
+  // Status bar: current mode + service connection, click to switch mode.
+  modeStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  modeStatus.command = 'hover.switchMode';
+  renderModeStatus();
+  modeStatus.show();
+  context.subscriptions.push(modeStatus);
+
+  // Connect to the running Hover service(s): F2 relays, status, mode state.
+  pool = connectServicePool({
+    onRevealSource: (source) => void openSource(source),
+    onStatus: (connected) => {
+      const was = connectedServices;
+      connectedServices = connected;
+      renderModeStatus();
+      if (was === 0 && connected > 0) void pushEngineConfig();
+    },
+    onModes: (current, available) => {
+      currentMode = current;
+      availableModes = available;
+      renderModeStatus();
+      chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
+    },
+    onAgents: (current, available) => {
+      currentAgent = current;
+      availableAgents = available;
+      settingsProvider?.refresh();
+    },
+    onServerMessage: (msg) => handleServerMessage(msg),
+  });
+  context.subscriptions.push({ dispose: () => pool?.dispose() });
+
+  // Self-contained (Path A): boot the engine in-extension so the WS pool
+  // connects with no bundler plugin / dev server. Fire-and-forget; the pool
+  // connects when it's up. A missing staged engine (e.g. dev build before
+  // `stage:engine`) just leaves the extension in connect-when-available mode.
+  void bootEngine(context, false);
+
+  // Poll the dev-server status for the top-right pill (auto-probe common ports
+  // when no URL is configured).
+  void pollAppStatus();
+  appStatusTimer = setInterval(() => void pollAppStatus(), 5000);
+  context.subscriptions.push({ dispose: () => { if (appStatusTimer) clearInterval(appStatusTimer); } });
+
+  // Initial config → chat (voice + silent-run border) + accounts for @-mentions.
+  pushChatConfig();
+  void pushAccounts();
+
+  // One-time nudge: VSCode can't default a view to the Secondary Side Bar, so
+  // guide the user to dock Chat on the right for a code-center / chat-right
+  // layout (the placement persists once they move it).
+  if (!context.globalState.get('hover.chatHintShown')) {
+    void context.globalState.update('hover.chatHintShown', true);
+    void vscode.window.showInformationMessage(
+      'Hover Chat opened as its own panel. Drag it to the right (Secondary Side Bar) for a chat-beside-code layout.',
+      'Open Chat',
+    ).then((pick) => {
+      if (pick === 'Open Chat') void vscode.commands.executeCommand('hover.chat.focus');
+    });
+  }
+}
+
+export function deactivate(): void {
+  if (optimizeTimer) { clearTimeout(optimizeTimer); optimizeTimer = undefined; }
+  pool?.dispose();
+  stopEngine();
+}
+
+/** Start the hosted engine for the first workspace folder. `announce` shows a
+ *  toast on success/failure (for the explicit Start Engine command). */
+async function bootEngine(ctx: vscode.ExtensionContext, announce: boolean): Promise<void> {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!root) {
+    if (announce) void vscode.window.showWarningMessage('Hover: open a project folder to start the engine.');
+    return;
+  }
+  try {
+    const enginePort = await startEngine(ctx, root);
+    if (announce) void vscode.window.showInformationMessage(`Hover engine running on 127.0.0.1:${enginePort}.`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // Quiet on auto-start (the staged engine may be absent in dev); loud on demand.
+    if (announce) void vscode.window.showErrorMessage(`Hover engine failed to start: ${msg}`);
+    else console.error('[hover] engine auto-start failed:', msg);
+  }
+}
+
+function renderModeStatus(): void {
+  if (!modeStatus) return;
+  const label = currentMode ? modeLabel(currentMode) : null;
+  const disconnected = connectedServices === 0;
+  modeStatus.text = `$(sparkle) Hover${label ? `: ${label}` : ''}${disconnected ? ' $(circle-slash)' : ''}`;
+  modeStatus.backgroundColor =
+    currentMode === 'pentest'
+      ? new vscode.ThemeColor('statusBarItem.errorBackground')
+      : currentMode === 'security'
+        ? new vscode.ThemeColor('statusBarItem.warningBackground')
+        : undefined;
+  modeStatus.tooltip = disconnected
+    ? 'Hover — no dev service detected. Start a Hover-enabled dev server, then click to switch mode.'
+    : `Hover — ${connectedServices} service${connectedServices > 1 ? 's' : ''} connected${
+        label ? `, mode: ${label}` : ', normal mode'
+      }. Click to switch mode.`;
+}
+
+async function switchMode(): Promise<void> {
+  // Mode is the extension's own state, so this always works — no running
+  // service required. When a service IS connected, we also push the change to
+  // it; otherwise it applies locally and takes effect on the next run.
+  type Pick = vscode.QuickPickItem & { modeId: string | null };
+  const items: Pick[] = [
+    { label: '$(circle-outline) Normal', description: 'testing — no security mode', modeId: null },
+    ...allModes().map((m) => ({
+      label: `${m.id === 'pentest' ? '$(flame)' : '$(shield)'} ${m.label}`,
+      description: m.description ?? m.id,
+      modeId: m.id,
+    })),
+  ];
+  for (const it of items) if (it.modeId === currentMode) it.label = `$(check) ${it.label}`;
+  const picked = await vscode.window.showQuickPick(items, { title: 'Hover: switch mode', placeHolder: 'Select a mode' });
+  if (!picked) return;
+  currentMode = picked.modeId;
+  renderModeStatus();
+  chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
+  if (connectedServices > 0) pool?.setMode(picked.modeId);
+  else
+    vscode.window.setStatusBarMessage(
+      'Hover: mode set locally — it applies when the engine runs (no live service connected).',
+      4000,
+    );
+}
+
+async function switchAgent(): Promise<void> {
+  type Pick = vscode.QuickPickItem & { agentId: string };
+  const items: Pick[] = allAgents().map((a) => ({
+    label: `${a.id === currentAgent ? '$(check) ' : ''}${agentLabel(a.id)}`,
+    description: a.installed === false ? 'not installed' : a.id,
+    agentId: a.id,
+  }));
+  const picked = await vscode.window.showQuickPick(items, { title: 'Hover: switch agent', placeHolder: 'Select a coding agent' });
+  if (!picked) return;
+  await setAgent(picked.agentId);
+}
+
+/** Persist + apply the coding agent (used by the command + the Settings panel). */
+async function setAgent(agentId: string): Promise<void> {
+  currentAgent = agentId;
+  await vscode.workspace.getConfiguration('hover').update('agent', agentId, vscode.ConfigurationTarget.Workspace);
+  if (connectedServices > 0) pool?.switchAgent(agentId);
+  settingsProvider?.refresh();
+}
+
+async function newSession(): Promise<void> {
+  transcript = [];
+  runSessionId = undefined;
+  stepCount = 0;
+  await chatProvider?.reveal();
+  chatProvider?.newSession();
+}
+
+/**
+ * F1 — open `vscode.diff` between a spec and its optimization candidate.
+ */
+async function reviewOptimizationCandidate(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const specUri =
+    arg instanceof vscode.Uri ? arg : (arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri);
+  if (!specUri || specUri.scheme !== 'file') {
+    void vscode.window.showWarningMessage('Hover: open a spec file to review its optimization candidate.');
+    return;
+  }
+  await openOptimizeDiff(specUri, { silentIfMissing: false });
+}
+
+/** Open `vscode.diff` between a spec and its on-disk optimization candidate.
+ *  Used by both the manual "Review Optimization Candidate" command and the
+ *  auto-open after an Optimize run finishes. */
+async function openOptimizeDiff(specUri: vscode.Uri, opts: { silentIfMissing: boolean }): Promise<void> {
+  const candidate = candidateUri(specUri);
+  if (!candidate) {
+    if (!opts.silentIfMissing) void vscode.window.showWarningMessage('Hover: the spec is not inside an open workspace folder.');
+    return;
+  }
+  const fileName = path.basename(specUri.fsPath);
+  if (!(await uriExists(candidate))) {
+    if (!opts.silentIfMissing) {
+      void vscode.window.showInformationMessage(
+        `Hover: no optimization candidate for ${fileName} yet — run "Optimize" (✨) on this spec first.`,
+      );
+    }
+    return;
+  }
+  await vscode.commands.executeCommand(
+    'vscode.diff',
+    specUri,
+    candidate,
+    `Hover · ${fileName} ↔ optimized`,
+    { preview: true } satisfies vscode.TextDocumentShowOptions,
+  );
+}
+
+/** Run one spec in a terminal via Playwright. We delegate to the user's
+ *  Playwright runner rather than reimplementing a test explorer (the official
+ *  Playwright extension owns that, design non-goal N1) — this is just a
+ *  one-click `playwright test <file>` convenience. */
+async function runSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const uri =
+    arg instanceof vscode.Uri ? arg : (arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri);
+  if (!uri || uri.scheme !== 'file') {
+    void vscode.window.showWarningMessage('Hover: open or select a spec to run.');
+    return;
+  }
+  const folder = vscode.workspace.getWorkspaceFolder(uri);
+  const cwd = folder?.uri.fsPath;
+  const rel = folder ? path.relative(folder.uri.fsPath, uri.fsPath) : uri.fsPath;
+  const terminal = vscode.window.createTerminal({ name: 'Hover · Playwright', cwd });
+  terminal.show();
+  terminal.sendText(`npx playwright test ${JSON.stringify(rel)}`);
+}
+
+/** Generate a GitHub Actions workflow that runs the crystallized specs on every
+ *  PR — deterministic, no AI. Wires test-account credentials as GitHub secrets
+ *  reusing the same HOVER_<LABEL>_* names the Environments export emits. */
+async function addCiWorkflow(): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showWarningMessage('Hover: open a project folder first.');
+    return;
+  }
+  const root = folder.uri.fsPath;
+  const packageManager = detectPackageManager(root);
+  const devScript = (await pickDevScript(root)) ?? 'dev';
+  const appUrl = (await resolveTargetUrl()) ?? 'http://localhost:5173';
+
+  const envs = (await envStore?.load()) ?? [];
+  const secretSet = new Set<string>();
+  for (const e of envs) {
+    for (const a of e.accounts) {
+      secretSet.add(accountEnvVar(a.label, 'USER'));
+      secretSet.add(accountEnvVar(a.label, 'PASS'));
+    }
+  }
+  const secretNames = [...secretSet];
+  const yaml = buildWorkflowYaml({ packageManager, devScript, appUrl, secretNames });
+
+  const fileUri = vscode.Uri.joinPath(folder.uri, '.github', 'workflows', 'hover-e2e.yml');
+  try {
+    await vscode.workspace.fs.stat(fileUri);
+    const ow = await vscode.window.showWarningMessage(
+      'Hover: .github/workflows/hover-e2e.yml already exists. Overwrite it?',
+      { modal: true },
+      'Overwrite',
+    );
+    if (ow !== 'Overwrite') return;
+  } catch {
+    /* doesn't exist yet */
+  }
+  await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(folder.uri, '.github', 'workflows'));
+  await vscode.workspace.fs.writeFile(fileUri, Buffer.from(yaml, 'utf8'));
+  await vscode.window.showTextDocument(fileUri);
+
+  if (secretNames.length) {
+    const pick = await vscode.window.showInformationMessage(
+      `Hover: wrote .github/workflows/hover-e2e.yml. Add these GitHub repo secrets so the specs can log in: ${secretNames.join(', ')}`,
+      'Copy secret names',
+    );
+    if (pick === 'Copy secret names') await vscode.env.clipboard.writeText(secretNames.join('\n'));
+  } else {
+    void vscode.window.showInformationMessage(
+      'Hover: wrote .github/workflows/hover-e2e.yml. Add test accounts in the Environments view if your specs need to log in.',
+    );
+  }
+}
+
+/** Spec slug from a `<slug>.spec.ts` / `<slug>.security.spec.ts` URI. */
+function specSlug(uri: vscode.Uri): string {
+  return path.basename(uri.fsPath).replace(/\.security\.spec\.ts$/, '').replace(/\.spec\.ts$/, '');
+}
+
+function resolveSpecUri(arg?: vscode.TreeItem | vscode.Uri): vscode.Uri | undefined {
+  if (arg instanceof vscode.Uri) return arg;
+  return arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri;
+}
+
+async function optimizeSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const uri = resolveSpecUri(arg);
+  if (!uri) return;
+  if (!pool || connectedServices === 0) {
+    void vscode.window.showWarningMessage('Hover: engine not connected.');
+    return;
+  }
+  const slug = specSlug(uri);
+  if (pool.optimizeSpec(slug)) {
+    pendingOptimizeUri = uri;
+    await chatProvider?.reveal();
+    chatProvider?.pushBusy(`Optimizing "${slug}" — an LLM is adding assertions (no browser). The diff opens automatically when it's ready.`);
+    // Watchdog: codegen runs without step events, so if the engine never
+    // replies (crash / lost socket) the spinner would spin forever.
+    if (optimizeTimer) clearTimeout(optimizeTimer);
+    optimizeTimer = setTimeout(() => {
+      optimizeTimer = undefined;
+      pendingOptimizeUri = undefined;
+      chatProvider?.clearBusy();
+      chatProvider?.pushSystem(`Optimize for "${slug}" is taking unusually long — it may have failed. Check the engine, or try again.`);
+    }, 150_000);
+  }
+}
+
+async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const uri = resolveSpecUri(arg);
+  if (!uri) return;
+  if (!pool || connectedServices === 0) {
+    void vscode.window.showWarningMessage('Hover: engine not connected.');
+    return;
+  }
+  let prompt: string | null = null;
+  try {
+    const txt = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+    prompt = (/Original prompt:\s*(.+)/.exec(txt) ?? [])[1]?.trim() ?? null;
+  } catch {
+    /* unreadable */
+  }
+  if (!prompt) {
+    void vscode.window.showWarningMessage('Hover: this spec has no "Original prompt:" header (hand-authored) — it can\'t be re-recorded.');
+    return;
+  }
+  const slug = specSlug(uri);
+  await chatProvider?.reveal();
+  chatProvider?.pushSystem(`Re-recording "${slug}" — ${prompt}`);
+  stepCount = 0;
+  runCost = 0;
+  chatProvider?.setRunning(true);
+
+  // Resolve @account mentions in the original prompt so the re-run can log in,
+  // and redact those creds out of the rewritten spec (engine-side writeSpec).
+  const resolved = (await envStore?.resolveMentions(prompt)) ?? [];
+  const accounts = resolved.map((a) => ({ label: a.label, username: a.username, password: a.password, role: a.role }));
+  const redactions: { value: string; envVar: string }[] = [];
+  for (const a of resolved) {
+    if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
+    if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
+  }
+  const missing = resolved.filter((a) => !a.password).map((a) => a.label);
+  if (missing.length) {
+    chatProvider?.pushSystem(`Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the re-record can log in.`);
+  }
+
+  const url = await resolveTargetUrl();
+  if (url) {
+    const ready = await ensureBrowser(url);
+    if (!ready) {
+      chatProvider?.setRunning(false);
+      chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Click "▶ Start App".`);
+      return;
+    }
+  }
+  if (!pool?.reRecord(prompt, slug, accounts, redactions)) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem('Could not reach the engine.');
+  }
+}
+
+/**
+ * F2 (editor-side) — reveal the source location behind a page element.
+ */
+async function openSource(source?: string): Promise<void> {
+  let value = source;
+  if (!value) {
+    value = await vscode.window.showInputBox({
+      title: 'Hover: open source',
+      prompt: 'Paste a data-hover-source value',
+      placeHolder: 'src/components/Login.tsx:42:5',
+    });
+  }
+  const parsed = value ? parseHoverSource(value) : null;
+  if (!parsed) {
+    if (value) void vscode.window.showWarningMessage(`Hover: "${value}" is not a valid path:line:col source.`);
+    return;
+  }
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) {
+    void vscode.window.showWarningMessage('Hover: open a workspace folder to resolve the source path.');
+    return;
+  }
+  const target = await firstExisting(folders.map((f) => vscode.Uri.joinPath(f.uri, parsed.path)));
+  if (!target) {
+    void vscode.window.showWarningMessage(`Hover: could not find ${parsed.path} in the open workspace.`);
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(target);
+  const editor = await vscode.window.showTextDocument(doc);
+  const pos = new vscode.Position(Math.max(0, parsed.line - 1), Math.max(0, parsed.col - 1));
+  editor.selection = new vscode.Selection(pos, pos);
+  editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+}
+
+/** Parse a `data-hover-source` value `<rel-path>:<line>:<col>` (1-indexed). */
+export function parseHoverSource(value: string): { path: string; line: number; col: number } | null {
+  const m = /^(.+):(\d+):(\d+)$/.exec(value.trim());
+  if (!m) return null;
+  return { path: m[1], line: Number(m[2]), col: Number(m[3]) };
+}
+
+/** Return the first URI that exists on disk, or undefined if none do. */
+async function firstExisting(uris: vscode.Uri[]): Promise<vscode.Uri | undefined> {
+  for (const uri of uris) {
+    try {
+      await vscode.workspace.fs.stat(uri);
+      return uri;
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return undefined;
+}

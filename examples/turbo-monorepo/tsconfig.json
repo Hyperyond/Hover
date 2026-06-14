@@ -1,7 +1,0 @@
-{
-  "//": "Intentionally empty for the monorepo-wide `pnpm typecheck`. Real per-app typechecking happens via tsconfig.json files under apps/* (which Next bootstraps on first dev/build).",
-  "extends": "../../tsconfig.base.json",
-  "files": [],
-  "include": [],
-  "exclude": ["apps", "node_modules", ".turbo"]
-}

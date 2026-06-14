@@ -64,6 +64,19 @@ export class SpecExistsError extends Error {
   }
 }
 
+/**
+ * A credential to keep out of the generated spec. The deterministic translator
+ * replaces any fill value that exactly equals `value` with a
+ * `process.env.<envVar>` reference — so the literal password/username never
+ * lands in the spec source, the JSDoc header, OR the `.hover/` sidecar. The
+ * value comes from the caller (the editor resolves an `@account` mention from
+ * its vault); core only uses it to match-and-replace, never to write.
+ */
+export interface Redaction {
+  value: string;
+  envVar: string;
+}
+
 export interface WriteSpecOptions {
   devRoot: string;
   name: string;
@@ -71,6 +84,48 @@ export interface WriteSpecOptions {
   steps: SpecStep[];
   assertions?: SpecAssertion[];
   overwrite?: boolean;
+  /** Credentials to parameterize into `process.env.<envVar>` references. */
+  redactions?: Redaction[];
+}
+
+/** Stored-step form of a redacted credential — a code expression, so it both
+ *  renders as `fill(process.env.X ?? '')` and survives JSON (the sidecar)
+ *  without ever holding the secret. */
+function envExpr(envVar: string): string {
+  return `process.env.${envVar} ?? ''`;
+}
+
+/** Replace credential fill values with `process.env.<envVar>` expressions,
+ *  ONCE, before both rendering and sidecar persistence. Pure — clones touched
+ *  steps, leaves the rest untouched. */
+function redactSteps(steps: SpecStep[], redactions: Redaction[]): SpecStep[] {
+  const map = new Map(redactions.filter(r => r.value).map(r => [r.value, r.envVar]));
+  if (map.size === 0) return steps;
+  return steps.map(s => {
+    if (s.kind !== 'step' || !s.input) return s;
+    const input = s.input as Record<string, unknown>;
+    if (s.tool === 'browser_type' && typeof input.text === 'string' && map.has(input.text)) {
+      return { ...s, input: { ...input, text: envExpr(map.get(input.text)!) } };
+    }
+    if (s.tool === 'browser_fill_form' && Array.isArray(input.fields)) {
+      let changed = false;
+      const fields = (input.fields as Array<Record<string, unknown>>).map(f => {
+        if (f && typeof f.value === 'string' && map.has(f.value)) {
+          changed = true;
+          return { ...f, value: envExpr(map.get(f.value as string)!) };
+        }
+        return f;
+      });
+      if (changed) return { ...s, input: { ...input, fields } };
+    }
+    return s;
+  });
+}
+
+/** Render a fill value: a redacted `process.env.…` expression emits as CODE;
+ *  anything else as a string literal. */
+function renderFillValue(value: string): string {
+  return /^process\.env\b/.test(value) ? value : JSON.stringify(value);
 }
 
 export interface WriteSpecResult { path: string; slug: string; }
@@ -90,12 +145,16 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   }
 
   await mkdir(dir, { recursive: true });
+  // Redact credentials ONCE, up front, so every downstream artifact (spec
+  // source, JSDoc header, sidecar) sees only `process.env.…` references — the
+  // literal password/username is never written anywhere.
+  const steps = redactSteps(opts.steps, opts.redactions ?? []);
   // Stage 3c: if a prior extraction left a Page Object whose flow prefixes
   // this spec, consume it (await loginPage.login(…)) instead of re-emitting
   // the steps inline. No manifest (extraction never ran) → plain spec.
   const manifest = await readPageObjectManifest(opts.devRoot);
-  const match = manifest ? matchPageObject(opts.steps, manifest) : null;
-  const source = renderSpec(slug, opts.name, opts.description ?? '', opts.steps, opts.assertions ?? [], match);
+  const match = manifest ? matchPageObject(steps, manifest) : null;
+  const source = renderSpec(slug, opts.name, opts.description ?? '', steps, opts.assertions ?? [], match);
   await writeFile(path, source, 'utf-8');
   // Persist the structured session next to the spec so cross-session
   // extraction (F4) and the optimization pass (F7) read real SpecStep[]
@@ -104,7 +163,7 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   await writeSidecar(opts.devRoot, {
     slug,
     name: opts.name,
-    steps: opts.steps,
+    steps,
     assertions: opts.assertions ?? [],
   });
   // Session-ledger patch, best-effort by contract: markSessionSaved swallows
@@ -394,7 +453,7 @@ function translateStep(tool: string, rawInput: unknown, pageVar = 'page'): strin
         // declarations don't collide inside the step's shared test.step closure.
         return blockScope(emitInteraction(
           selectorForFormField(target, f.type, pageVar),
-          `fill(${JSON.stringify(value)})`,
+          `fill(${renderFillValue(value)})`,
         ));
       });
     }
@@ -403,7 +462,7 @@ function translateStep(tool: string, rawInput: unknown, pageVar = 'page'): strin
       const target = String(input.element ?? '');
       return emitInteraction(
         selectorFromDescription(target, pageVar),
-        `fill(${JSON.stringify(text)})`,
+        `fill(${renderFillValue(text)})`,
       );
     }
     case 'browser_select_option': {

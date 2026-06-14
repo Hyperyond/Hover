@@ -1,24 +1,22 @@
 # CLI
 
-`@hover-dev/cli` is the zero-install Hover CLI. Exposed as the `hover` bin once installed.
+The `hover` bin (`@hover-dev/cli`) is a **living secondary surface** for authoring specs from the terminal — handy when you'd rather not (or can't) use the editor chat. The [VS Code extension](/docs/get-started/install) is the recommended way to use Hover; `hover run` complements it for terminal workflows.
 
 ```bash
-npx @hover-dev/cli setup
+hover run "test the login flow" --url http://localhost:5173 --save login
 ```
-
-`setup` reads your `package.json` to pick the right Hover integration (Vite / Astro / Nuxt / Next / Webpack), sniffs your lockfile to pick the package manager (pnpm / yarn / bun / npm), spawns the install command, then uses [magicast](https://github.com/unjs/magicast) to AST-mutate your bundler config.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `setup` | Install + wire the integration into your bundler (detailed below). |
-| `run "<prompt>"` | **Drive the debug Chrome from the terminal — no widget.** `--save <slug>` crystallizes a spec. See [CLI mode](#hover-run-cli-mode). |
+| `run "<prompt>"` | **Drive the debug Chrome from the terminal.** `--save <slug>` crystallizes a spec. See [hover run](#hover-run-cli-mode). |
 | `optimize <spec>` | The optional [AI optimization pass](/docs/features/optimization-pass) — propose an improved spec (candidate + diff, original kept). |
 | `extract` | Lift flows repeated across specs into shared Page Objects + fixtures. |
 | `re-record <spec>` | Regenerate a spec against the current UI (replays its `Original prompt:`). |
+| `setup` | **Frozen — bundler-plugin wirer.** Installs + wires the in-page widget into your bundler. See [`setup` (frozen)](#setup-frozen-bundler-plugin-wirer). |
 
-`run` is the CLI-only authoring path; the others post-process specs you've already saved — the same operations the widget's Save / Optimize / Re-record do.
+`run` is terminal-native authoring; `optimize` / `extract` / `re-record` post-process specs you've already saved — the same operations the extension's Optimize / Re-record do. `setup` belongs to the frozen bundler-plugin path.
 
 ## `hover run` (CLI mode)
 
@@ -42,7 +40,17 @@ npm i -D @hover-dev/core @hover-dev/cli
 
 What CLI mode does **not** cover (these need the in-page widget): Record mode, the Fix prompt, and voice.
 
-## `setup` flags
+## `setup` (frozen bundler-plugin wirer)
+
+<Callout type="warning" title="Frozen — bundler-plugin path">
+
+`hover setup` installs and wires the original in-page widget into your bundler config. It is part of the [frozen bundler-plugin path](/docs/get-started/install#frozen-bundler-plugin-path) — still works, but no longer the recommended way to use Hover. For the going-forward surface, install the [VS Code extension](/docs/get-started/install).
+
+</Callout>
+
+`setup` reads your `package.json` to pick the right Hover integration (Vite / Astro / Nuxt / Next / Webpack), sniffs your lockfile to pick the package manager (pnpm / yarn / bun / npm), spawns the install command, then uses [magicast](https://github.com/unjs/magicast) to AST-mutate your bundler config.
+
+### `setup` flags
 
 ```
 --vite              Force the Vite integration (vite-plugin-hover)

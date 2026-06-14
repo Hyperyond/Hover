@@ -1,23 +1,31 @@
 # Features
 
-Everything Hover does today.
+What Hover does today, in the VS Code extension and its living surfaces.
 
 ## Modes
 
-- **[Security testing](/docs/features/security)** — install `@hover-dev/security` to route the debug Chrome through a local HTTPS MITM. The agent can list / inspect / replay captured API calls with mutations, probing for IDOR / authz bypass / parameter tampering / missing security headers / PII leakage. Crystallises into Playwright specs that run in CI without the proxy.
+- **[Security testing](/docs/features/security)** — 🟠 **Security** mode routes the debug Chrome through a local HTTPS MITM; the agent lists / inspects / replays captured API calls with mutations, probing for IDOR / broken authorization / parameter tampering. 🔴 **Pentest** mode runs offensive checks (SQLi / XSS / SSTI / SSRF / open-redirect / IDOR) against your **own** dev app. Findings crystallize into `.security.spec.ts` CI gates or a report.
 
-## Input
+## Authoring
 
-- **[Voice mode](/docs/features/voice-mode)** — push-to-talk speech input + spoken step narration. 中文 / English autodetect, browser-native, no API keys.
-- **[Record mode](/docs/features/record-mode)** ✨ UPDATED (v0.13) — record your own clicks / fills / selects as Playwright steps, with built-in Exists / Says / Equals assertion sub-modes. v0.13 captures the starting URL as `page.goto` so saved Records replay from the right page, and adds an opt-in **Reload before recording** setting for users who want strict record/replay parity.
-- **[Fix prompt](/docs/features/fix-prompt)** — click any element on the page, type what to change, get a precise prompt (source line:col + ancestor chain + Playwright selector) on your clipboard.
+- **[@account multi-environment credentials](/docs/get-started/first-session#step-2-set-up-an-environment-optional)** — define test accounts per environment, mention `@account` in chat, and the agent logs in. Credentials are parameterized into `process.env` references — never written into the spec, the JSDoc, or the sidecar — and the same names export to your CI secrets in one click.
+- **white-box `codeContext`** — an opt-in, read-only source reader the agent can use to ground its testing in your code. Off by default; fenced to read-only.
 
 ## Output
 
-- **[Save as Spec](/docs/features/save-as-spec)** ✨ UPDATED (v0.13) — `__vibe_tests__/<slug>.spec.ts` using `getByRole / getByLabel / getByTestId`. Runs in CI without Hover. v0.13 wraps every interaction in a visibility prelude (`{ const el = …; await expect(el).toBeVisible(); await el.<action>; }`) so UI drift fails in ~3 s with `Locator expected to be visible` instead of a 30 s actionability timeout.
-- **[Save as Jira case](/docs/features/save-as-jira-case)** — `.case.csv`, imports straight into Jira / Xray / Zephyr.
-- **[Save as Security spec](/docs/features/security-spec)** — `__vibe_tests__/<slug>.security.spec.ts` using Playwright's `request` fixture. Crystallises authz / IDOR / parameter-tampering probes into CI-runnable regression specs. Requires `@hover-dev/security`.
+- **[Save as Spec](/docs/features/save-as-spec)** — `__vibe_tests__/<slug>.spec.ts` using `getByRole / getByLabel / getByTestId`. Runs in CI without Hover. Every interaction is wrapped in a visibility prelude so UI drift fails in ~3 s with `Locator expected to be visible` instead of a 30 s actionability timeout.
+- **[Save as Security spec](/docs/features/security-spec)** — `__vibe_tests__/<slug>.security.spec.ts` using Playwright's `request` fixture. Crystallises authz / IDOR / parameter-tampering probes into CI-runnable regression specs.
 - **[Findings cards](/docs/features/findings-cards)** — bugs and observations the agent flagged, severity-coloured. First-class output, not buried in narration.
-- **[Structured spec output](/docs/features/structured-output)** ✨ NEW — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, a `.hover/<slug>.json` sidecar, and Page Objects + fixtures lifted from flows repeated across specs (`npx hover extract`).
-- **[Optimize a spec](/docs/features/optimization-pass)** ✨ NEW — an optional, off-by-default AI pass polishes a deterministic draft into a diff-reviewed candidate: adds the assertions the run observed, flags buggy behaviour `// KNOWN BUG`, always keeps the original. `npx hover optimize <spec>`.
-- **[Seed library](/docs/features/seed-library)** ✨ NEW — teach the optimization pass new patterns by dropping a worked example in `.hover/rules/` — no fork, no plugin code.
+- **[Structured spec output](/docs/features/structured-output)** — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, a `.hover/<slug>.json` sidecar, and Page Objects + fixtures lifted from flows repeated across specs (`npx hover extract`).
+- **[Optimize a spec](/docs/features/optimization-pass)** — an optional, off-by-default AI pass polishes a deterministic draft into a diff-reviewed candidate: adds the assertions the run observed, flags buggy behaviour `// KNOWN BUG`, always keeps the original. From the Specs view's ✨ Optimize, or `npx hover optimize <spec>`.
+- **[Re-record](/docs/features/re-record)** — when a saved spec breaks because the UI changed, replay its original prompt against the current UI and overwrite the file.
+- **[Seed library](/docs/features/seed-library)** — teach the optimization pass new patterns by dropping a worked example in `.hover/rules/` — no fork, no plugin code.
+
+## Frozen — in-page widget only
+
+These were features of the original in-page widget (the [frozen bundler-plugin path](/docs/get-started/install#frozen-bundler-plugin-path)). They are **not** exposed by the VS Code extension chat:
+
+- **[Record mode](/docs/features/record-mode)** — record your own clicks / fills / selects as Playwright steps, with built-in Exists / Says / Equals assertion sub-modes.
+- **[Fix prompt](/docs/features/fix-prompt)** — click any element on the page, type what to change, get a precise prompt (source line:col + ancestor chain + Playwright selector) on your clipboard. Depends on the widget's `data-hover-source` stamping.
+- **[Save as Jira case](/docs/features/save-as-jira-case)** — `.case.csv`, imports straight into Jira / Xray / Zephyr. Still in `@hover-dev/core`, not surfaced by the extension.
+- **[Voice mode](/docs/features/voice-mode)** — push-to-talk speech input + spoken step narration. 中文 / English autodetect, browser-native, no API keys.

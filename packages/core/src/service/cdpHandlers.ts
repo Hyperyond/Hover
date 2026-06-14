@@ -76,6 +76,7 @@ export async function handleLaunchChrome(
     url: pageUrl,
     port,
     proxy: extras?.proxy,
+    headless: msg.payload?.headless === true,
   });
   if (!result.ok) {
     send(ws, { type: 'cdp-status', payload: { state: 'no-cdp', reason: result.reason } });
