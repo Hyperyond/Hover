@@ -16,6 +16,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { connectServicePool } from './serviceClient.js';
+import { SpecLensProvider } from './specLens.js';
 
 /**
  * Where the optimizer writes its candidate, relative to the workspace root. The
@@ -35,6 +36,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       'hover.openSource',
       (source?: string) => openSource(source),
+    ),
+    // F3 — spec-lifecycle CodeLens on crystallized specs (both *.spec.ts and
+    // *.security.spec.ts match this glob).
+    vscode.languages.registerCodeLensProvider(
+      { language: 'typescript', scheme: 'file', pattern: '**/*.spec.ts' },
+      new SpecLensProvider(),
     ),
   );
 

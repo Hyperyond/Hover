@@ -30,8 +30,13 @@ Scaffold. Two commands so far:
   value directly / prompts. End-to-end needs a running example + the extension
   loaded in a VSCode dev host (manual smoke).
 
-Planned next (see the feature-assessment doc): F3 spec-lifecycle CodeLens,
-F4 seed-library authoring.
+- **F3 (slice)** *spec-lifecycle CodeLens* — on `*.spec.ts` / `*.security.spec.ts`
+  shows the stamped `Original prompt:` provenance and, when a candidate draft
+  exists, a "✨ Review optimization candidate" lens (runs F1). It deliberately
+  does not add a Run/Debug lens — the official Playwright extension owns that.
+
+Planned next (see the feature-assessment doc): F3 Re-record action, mode switch
+(testing / security-orange / pentest-red in one extension), F4 seed authoring.
 
 ## Develop
 
