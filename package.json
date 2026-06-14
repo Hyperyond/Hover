@@ -10,7 +10,6 @@
     "smoke:scan": "tsx packages/cli/src/index.ts scan --url http://localhost:5173 --cwd examples/basic-app",
     "smoke:chrome": "pnpm --filter @hover-dev/core smoke:chrome",
     "detect": "pnpm --filter @hover-dev/core detect",
-    "verify-widget": "pnpm --filter @hover-dev/core verify-widget",
     "ws-smoke": "pnpm --filter @hover-dev/core ws-smoke",
     "bench-ttfb": "pnpm --filter @hover-dev/core bench-ttfb",
     "bench-multi-tab": "pnpm --filter @hover-dev/core bench-multi-tab",
@@ -28,12 +27,7 @@
     "dev:example:stock-registration": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter stock-registration dev",
     "dev:example:canvas-paint": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter canvas-paint dev",
     "dev:example:e-commerce": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter e-commerce dev",
-    "dev:example:payment-provider": "pnpm --filter payment-provider dev",
-    "dev:example:astro-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter astro-app dev",
-    "dev:example:nuxt-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter nuxt-app dev",
-    "dev:example:next-app": "pnpm --filter @hover-dev/core build && pnpm --filter @hover-dev/widget-bootstrap build && pnpm --filter @hover-dev/next build && concurrently -k -n core,widget,next -c blue,magenta,green \"pnpm --filter @hover-dev/core dev\" \"pnpm --filter @hover-dev/widget-bootstrap dev\" \"pnpm --filter next-app dev\"",
-    "dev:example:webpack-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter webpack-app dev",
-    "dev:example:rn-web-app": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter rn-web-app dev"
+    "dev:example:payment-provider": "pnpm --filter payment-provider dev"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.7.0",
