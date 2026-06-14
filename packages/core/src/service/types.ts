@@ -24,6 +24,9 @@ export interface ClientMessage {
     steps?: SkillStep[];
     assertions?: SpecAssertion[];
     overwrite?: boolean;
+    /** save-spec only — credentials to parameterize into process.env.<envVar>
+     *  references so secrets never land in the spec / sidecar. */
+    redactions?: { value: string; envVar: string }[];
     /** save-case-csv only — passed through to writeCaseCsv as extra
      *  fields on the test case's Labels column. */
     jiraProjectKey?: string;

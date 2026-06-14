@@ -107,7 +107,11 @@ function describe(raw: unknown): string {
   return s.length > 0 ? s : 'the target element';
 }
 
-/** Wrap in double-quotes for prose; escape internal quotes. */
+/** Wrap in double-quotes for prose; escape internal quotes. A redacted
+ *  credential (stored as a `process.env.X …` expression) shows as the masked
+ *  `$X` instead — the prose, like the code, never reveals the secret. */
 function quote(s: string): string {
+  const env = /^process\.env\.([A-Za-z0-9_]+)/.exec(s);
+  if (env) return `$${env[1]}`;
   return `"${s.replace(/"/g, '\\"')}"`;
 }

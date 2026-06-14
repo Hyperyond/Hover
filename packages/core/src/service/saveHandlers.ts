@@ -93,8 +93,8 @@ export const SPEC_CONFIG: SaveArtifactConfig<Awaited<ReturnType<typeof writeSpec
   savedType: 'spec-saved',
   existsType: 'spec-exists',
   ExistsError: SpecExistsError,
-  write: ({ devRoot, name, description, steps, assertions, overwrite }) =>
-    writeSpec({ devRoot, name, description, steps, assertions, overwrite }),
+  write: ({ devRoot, name, description, steps, assertions, payload, overwrite }) =>
+    writeSpec({ devRoot, name, description, steps, assertions, overwrite, redactions: payload.redactions }),
 };
 
 export const CASE_CSV_CONFIG: SaveArtifactConfig<Awaited<ReturnType<typeof writeCaseCsv>>> = {
