@@ -28,7 +28,7 @@ import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
 import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
-import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar } from './environments.js';
+import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar, type ResolvedAccount } from './environments.js';
 import { registerEnvironmentsView } from './environmentsView.js';
 import { buildWorkflowYaml } from './ciWorkflow.js';
 import { startEngine, stopEngine } from './engine.js';
@@ -43,6 +43,14 @@ let chatProvider: ChatViewProvider | undefined;
 let settingsProvider: SettingsViewProvider | undefined;
 
 let extContext: vscode.ExtensionContext | undefined;
+
+/** Push the active environment's accounts (no passwords) to the chat for the
+ *  `@` autocomplete. */
+async function pushAccounts(): Promise<void> {
+  const active = await envStore?.getActive();
+  const list = (active?.accounts ?? []).map((a) => ({ label: a.label, role: a.role, username: a.username }));
+  chatProvider?.updateAccounts(list);
+}
 
 /** Push speech + silent flags to the chat (drives voice + the running border). */
 function pushChatConfig(): void {
@@ -111,6 +119,9 @@ let transcript: SpecMsg[] = [];
 let runSessionId: string | undefined;
 let stepCount = 0;
 let runCost = 0;
+/** Accounts resolved from @-mentions in the current run's prompt — kept so
+ *  "Save as spec" can redact their credentials into process.env refs. */
+let lastRunAccounts: ResolvedAccount[] = [];
 /** Most recent reachable dev URL (configured or auto-detected). */
 let detectedUrl: string | null = null;
 /** Test-environment + account store (Local + configured domains). */
@@ -169,6 +180,15 @@ async function runPrompt(prompt: string): Promise<void> {
   runCost = 0;
   chatProvider?.setRunning(true);
 
+  // Resolve @account mentions → creds for the agent to log in with; remembered
+  // so "Save as spec" redacts those creds into process.env refs.
+  lastRunAccounts = (await envStore?.resolveMentions(prompt)) ?? [];
+  const accounts = lastRunAccounts.map((a) => ({ label: a.label, username: a.username, password: a.password, role: a.role }));
+  const missing = lastRunAccounts.filter((a) => !a.password).map((a) => a.label);
+  if (missing.length) {
+    chatProvider?.pushSystem(`Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the agent can log in.`);
+  }
+
   const url = await resolveTargetUrl();
   if (url) {
     const ready = await ensureBrowser(url);
@@ -178,7 +198,7 @@ async function runPrompt(prompt: string): Promise<void> {
       return;
     }
   }
-  if (!pool?.run(prompt, runSessionId)) {
+  if (!pool?.run(prompt, runSessionId, accounts)) {
     chatProvider?.setRunning(false);
     chatProvider?.pushSystem('Could not reach the engine.');
   }
@@ -494,7 +514,14 @@ async function saveSpec(): Promise<void> {
   }
   const name = await vscode.window.showInputBox({ title: 'Save as Playwright spec', prompt: 'Spec name', placeHolder: 'login-flow' });
   if (!name) return;
-  if (!pool?.saveSpec(name, steps)) void vscode.window.showWarningMessage('Hover: engine not connected.');
+  // Parameterize any @-mentioned account credentials this run used into
+  // process.env refs so the saved spec never holds the literal secret.
+  const redactions: { value: string; envVar: string }[] = [];
+  for (const a of lastRunAccounts) {
+    if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
+    if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
+  }
+  if (!pool?.saveSpec(name, steps, redactions)) void vscode.window.showWarningMessage('Hover: engine not connected.');
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -540,6 +567,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const chat = registerChatView();
   chatProvider = chat.provider;
   chatProvider.runHandler = (prompt) => void runPrompt(prompt);
+  // Re-sync state whenever the chat webview (re)loads — otherwise the initial
+  // pushes race the view's first resolve and get dropped.
+  chatProvider.onReady = () => {
+    pushChatConfig();
+    void pushAccounts();
+    void pollAppStatus();
+    if (currentMode) chatProvider?.updateMode(currentMode, modeLabel(currentMode));
+  };
 
   const settings = registerSettingsView({
     getApiKey: async () => (await context.secrets.get('hover.apiKey')) ?? '',
@@ -562,12 +597,16 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   settingsProvider = settings.provider;
   envStore = new EnvironmentStore(context);
+  envStore.onDidChange(() => void pushAccounts());
   context.subscriptions.push(
     chat.disposable,
     settings.disposable,
     ...registerSpecsView(),
     ...registerSessionsView(),
-    ...registerEnvironmentsView(envStore, () => void pollAppStatus()),
+    ...registerEnvironmentsView(envStore, () => {
+      void pollAppStatus();
+      void pushAccounts();
+    }),
   );
 
   // Status bar: current mode + service connection, click to switch mode.
@@ -613,8 +652,9 @@ export function activate(context: vscode.ExtensionContext): void {
   appStatusTimer = setInterval(() => void pollAppStatus(), 5000);
   context.subscriptions.push({ dispose: () => { if (appStatusTimer) clearInterval(appStatusTimer); } });
 
-  // Initial config → chat (voice + silent-run border).
+  // Initial config → chat (voice + silent-run border) + accounts for @-mentions.
   pushChatConfig();
+  void pushAccounts();
 
   // One-time nudge: VSCode can't default a view to the Secondary Side Bar, so
   // guide the user to dock Chat on the right for a code-center / chat-right

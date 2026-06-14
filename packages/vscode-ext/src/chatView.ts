@@ -25,6 +25,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   /** Set by the extension: hand a prompt to the engine. */
   runHandler?: (prompt: string) => void;
+  /** Set by the extension: the webview (re)loaded — re-push config / accounts /
+   *  status, which would otherwise be lost if it resolves after activate. */
+  onReady?: () => void;
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
@@ -33,6 +36,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     view.webview.onDidReceiveMessage((msg: Inbound) => {
       if (msg.type === 'send') void this.onSend(msg.text);
       else if (msg.type === 'command' && typeof msg.id === 'string') void vscode.commands.executeCommand(msg.id);
+      else if (msg.type === 'ready') this.onReady?.();
     });
   }
 
@@ -61,6 +65,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    *  host:port for Local. */
   updateApp(online: boolean, label: string | null, title?: string): void {
     this.post({ type: 'appstatus', online, label, title: title ?? label });
+  }
+  /** Active environment's test accounts for the `@` autocomplete (no passwords). */
+  updateAccounts(accounts: { label: string; role?: string; username?: string }[]): void {
+    this.post({ type: 'accounts', accounts });
   }
   /** Push live config to the webview (drives voice + the silent-run border). */
   updateConfig(speech: boolean, silent: boolean): void {
@@ -241,7 +249,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .badge.info { background: var(--line); color: var(--text); }
 
   /* Claude-Code-style input box: one rounded container, toolbar row inside. */
-  #composer { padding: 10px 12px 12px; }
+  #composer { padding: 10px 12px 12px; position: relative; }
+  .mentions { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 6px); z-index: 20;
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35); max-height: 220px; overflow-y: auto; }
+  .m-item { display: flex; align-items: baseline; gap: 8px; padding: 7px 11px; cursor: pointer; font-size: 12px; }
+  .m-item .m-label { color: var(--text); font-weight: 600; }
+  .m-item .m-sub { color: var(--text-mute); font-size: 11px; }
+  .m-item.sel, .m-item:hover { background: var(--bg-3); }
+  .m-empty { padding: 8px 11px; color: var(--text-mute); font-size: 11px; }
   #box {
     border: 1px solid var(--line); border-radius: 12px; background: var(--bg-3);
     padding: 8px 10px 8px; display: flex; flex-direction: column; gap: 6px;
@@ -294,9 +310,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   <div id="log"></div>
 
   <div id="composer">
+    <div id="mentions" class="mentions" hidden></div>
     <div id="box">
       <div class="inputrow">
-        <textarea id="input" rows="1" placeholder="e.g. test the login flow"></textarea>
+        <textarea id="input" rows="1" placeholder="e.g. test the login flow  ·  @account to log in"></textarea>
         <button id="mic" type="button" title="Voice input">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="4" height="8" rx="2"/><path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2"/></svg>
         </button>
@@ -477,9 +494,71 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     var t = input.value.trim(); if (!t) return;
     vscode.postMessage({ type:'send', text:t }); input.value=''; input.style.height='auto'; syncSend();
   }
+  // ── @account autocomplete ───────────────────────────────────────────────
+  var accounts = [];
+  var menuEl = document.getElementById('mentions');
+  var menuItems = [], menuSel = -1, menuToken = '';
+  function menuOpen() { return !menuEl.hidden; }
+  function closeMenu() { menuEl.hidden = true; menuItems = []; menuSel = -1; }
+  function caretToken() {
+    // The @word immediately left of the caret, if any.
+    var pos = input.selectionStart, before = input.value.slice(0, pos);
+    var m = /@([A-Za-z0-9_-]*)$/.exec(before);
+    return m ? m[1] : null;
+  }
+  function refreshMenu() {
+    var tok = caretToken();
+    if (tok === null || !accounts.length) { closeMenu(); return; }
+    menuToken = tok;
+    var low = tok.toLowerCase();
+    menuItems = accounts.filter(function(a){ return a.label.toLowerCase().indexOf(low) === 0; });
+    if (!menuItems.length) {
+      menuEl.innerHTML = '<div class="m-empty">No account matches @' + esc(tok) + ' — add one in Environments</div>';
+      menuEl.hidden = false; menuSel = -1; return;
+    }
+    menuSel = 0;
+    menuEl.innerHTML = menuItems.map(function(a, i){
+      var sub = [a.role, a.username].filter(Boolean).map(esc).join(' · ');
+      return '<div class="m-item' + (i===0?' sel':'') + '" data-i="' + i + '">'
+        + '<span class="m-label">@' + esc(a.label) + '</span>'
+        + (sub ? '<span class="m-sub">' + sub + '</span>' : '') + '</div>';
+    }).join('');
+    menuEl.hidden = false;
+  }
+  function pick(i) {
+    var a = menuItems[i]; if (!a) return;
+    var pos = input.selectionStart, before = input.value.slice(0, pos), after = input.value.slice(pos);
+    var start = before.replace(/@[A-Za-z0-9_-]*$/, '');
+    input.value = start + '@' + a.label + ' ' + after;
+    var caret = (start + '@' + a.label + ' ').length;
+    input.setSelectionRange(caret, caret);
+    closeMenu(); input.focus(); syncSend();
+  }
+  menuEl.addEventListener('mousedown', function(e){
+    var row = e.target && e.target.closest ? e.target.closest('.m-item') : null;
+    if (row) { e.preventDefault(); pick(Number(row.getAttribute('data-i'))); }
+  });
+  function moveSel(d) {
+    if (!menuItems.length) return;
+    menuSel = (menuSel + d + menuItems.length) % menuItems.length;
+    var rows = menuEl.querySelectorAll('.m-item');
+    rows.forEach(function(r, i){ r.className = 'm-item' + (i===menuSel?' sel':''); });
+    var sel = rows[menuSel]; if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+  }
+
   sendBtn.addEventListener('click', submit);
-  input.addEventListener('keydown', function(e){ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
-  input.addEventListener('input', function(){ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,160)+'px'; syncSend(); });
+  input.addEventListener('keydown', function(e){
+    if (menuOpen() && menuItems.length) {
+      if (e.key==='ArrowDown') { e.preventDefault(); moveSel(1); return; }
+      if (e.key==='ArrowUp') { e.preventDefault(); moveSel(-1); return; }
+      if (e.key==='Enter' || e.key==='Tab') { e.preventDefault(); pick(menuSel); return; }
+      if (e.key==='Escape') { e.preventDefault(); closeMenu(); return; }
+    }
+    if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+  input.addEventListener('input', function(){ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,160)+'px'; syncSend(); refreshMenu(); });
+  input.addEventListener('keyup', function(e){ if (e.key==='ArrowLeft'||e.key==='ArrowRight') refreshMenu(); });
+  input.addEventListener('blur', function(){ setTimeout(closeMenu, 120); });
 
   function cmd(id){ return function(){ vscode.postMessage({ type:'command', id:id }); }; }
   document.getElementById('mode').addEventListener('click', cmd('hover.switchMode'));
@@ -562,6 +641,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (m.label) { lab.textContent = m.online ? String(m.label) : String(m.label)+' (offline)'; dot.className = m.online ? 'dot' : 'dot offline'; if(btn&&m.title) btn.title = String(m.title); }
       else { lab.textContent='Set target'; dot.className='dot offline'; }
     }
+    else if (m.type==='accounts') { accounts = Array.isArray(m.accounts) ? m.accounts : []; }
     else if (m.type==='busy') { setBusy(m.done ? null : (m.text||'Working…')); }
     else if (m.type==='running') { running = !!m.running; if (running) { curGroup = null; pendingTitle = null; } updateWorking(); applyBorder(); syncSend(); }
     else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Silent' : 'Visible'; applyBorder(); }

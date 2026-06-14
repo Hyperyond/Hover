@@ -1007,6 +1007,21 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           appendSystemPrompt = `${appendSystemPrompt}\n\nYou also have read-only access to this project's source via mcp__hover_source (read_source / list_source), fenced to the repo (secrets, keys, .env, .git, node_modules and build output are refused). Use it to read the actual component / route / API code — write tests against the real selectors and, when probing for security issues, confirm a finding against the server code (the query, the authz check) rather than guessing from the page alone.`;
         }
 
+        // Test accounts the prompt referenced via @label (resolved by the editor
+        // from its vault). Injected here, NOT in the user-visible transcript, so
+        // the agent can log in; the literal values it types are redacted out of
+        // the saved spec (writeSpec redactions). Never echoed to the user.
+        const runAccounts = Array.isArray(msg.payload?.accounts) ? msg.payload!.accounts : [];
+        if (runAccounts.length) {
+          const lines = runAccounts.map(a => {
+            const role = a.role ? ` (${a.role})` : '';
+            const user = a.username ? `username ${JSON.stringify(a.username)}` : 'username not on file';
+            const pass = a.password ? `, password ${JSON.stringify(a.password)}` : '';
+            return `- @${a.label}${role}: ${user}${pass}`;
+          }).join('\n');
+          appendSystemPrompt = `${appendSystemPrompt}\n\nTest accounts available for this run — when the task refers to an @label, log in using that account's credentials. Use them ONLY to fill authentication fields; never print or echo them in your replies or summaries.\n${lines}`;
+        }
+
         // Mirror the prompt's language in the agent's *prose* output — the
         // verification summary (Result card), the ## Findings block, and the
         // step narration — the same way Voice mode mirrors it in TTS. A

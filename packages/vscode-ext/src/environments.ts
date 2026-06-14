@@ -44,6 +44,17 @@ interface EnvironmentsFile {
   environments: HoverEnvironment[];
 }
 
+/** An `@label` mention resolved to its credentials + the env-var names a saved
+ *  spec reads them from. */
+export interface ResolvedAccount {
+  label: string;
+  role?: string;
+  username?: string;
+  password?: string;
+  userEnvVar: string;
+  passEnvVar: string;
+}
+
 function defaultLocal(): HoverEnvironment {
   return { id: LOCAL_ENV_ID, name: 'Local', url: 'http://localhost:5173', verified: true, accounts: [] };
 }
@@ -167,6 +178,32 @@ export class EnvironmentStore {
   }
   async hasPassword(envId: string, label: string): Promise<boolean> {
     return Boolean(await this.context.secrets.get(this.secretKey(envId, label)));
+  }
+
+  /** Resolve `@label` mentions in a prompt against the active environment's
+   *  accounts. Returns the matched accounts WITH credentials (username from the
+   *  roster, password from SecretStorage) plus the env-var names a saved spec
+   *  will read. Used to (a) hand the agent creds to log in, and (b) build the
+   *  redactions that keep those creds out of the spec. */
+  async resolveMentions(text: string): Promise<ResolvedAccount[]> {
+    const active = await this.getActive();
+    if (!active || !active.accounts.length) return [];
+    const mentioned = new Set<string>();
+    for (const m of text.matchAll(/@([A-Za-z0-9_-]+)/g)) mentioned.add(m[1]);
+    if (!mentioned.size) return [];
+    const out: ResolvedAccount[] = [];
+    for (const a of active.accounts) {
+      if (!mentioned.has(a.label)) continue;
+      out.push({
+        label: a.label,
+        role: a.role,
+        username: a.username,
+        password: await this.getPassword(active.id, a.label),
+        userEnvVar: accountEnvVar(a.label, 'USER'),
+        passEnvVar: accountEnvVar(a.label, 'PASS'),
+      });
+    }
+    return out;
   }
 
   /** The `NAME=value` env entries for an environment's accounts (passwords read

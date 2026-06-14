@@ -33,6 +33,20 @@ export interface AgentEntry {
   installed?: boolean;
 }
 
+/** A test account passed to a run so the agent can log in with it. */
+export interface RunAccount {
+  label: string;
+  username?: string;
+  password?: string;
+  role?: string;
+}
+
+/** A credential to parameterize into a process.env reference on save. */
+export interface Redaction {
+  value: string;
+  envVar: string;
+}
+
 /** A server→client message during/after a run ({type:'event'|'error'|'spec-saved'|'run-active'}). */
 export interface ServerMessage {
   type: string;
@@ -57,12 +71,15 @@ export interface ServiceClientPool {
   setModel(model: string): void;
   /** Set (or clear) the model API key — held in memory by the service only. */
   setApiKey(key: string): void;
-  /** Start a run (prompt) on the engine. Returns false if nothing is connected. */
-  run(text: string, sessionId?: string): boolean;
+  /** Start a run (prompt) on the engine. `accounts` are the @-mentioned test
+   *  accounts (with creds) the agent may log in with. Returns false if nothing
+   *  is connected. */
+  run(text: string, sessionId?: string, accounts?: RunAccount[]): boolean;
   /** Cancel the active run. */
   cancel(): void;
-  /** Crystallize the accumulated steps into a spec. */
-  saveSpec(name: string, steps: unknown[]): boolean;
+  /** Crystallize the accumulated steps into a spec. `redactions` parameterize
+   *  credential fill values into process.env refs so secrets stay out of the spec. */
+  saveSpec(name: string, steps: unknown[], redactions?: Redaction[]): boolean;
   /** Ask the engine to launch the isolated debug Chrome at `pageUrl`
    *  (headless = silent, no window). */
   launchChrome(pageUrl: string, headless: boolean): boolean;
@@ -171,10 +188,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(body);
       }
     },
-    run(text: string, sessionId?: string): boolean {
+    run(text: string, sessionId?: string, accounts?: RunAccount[]): boolean {
       const ws = firstOpen();
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId } }));
+      ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId, accounts } }));
       return true;
     },
     cancel(): void {
@@ -182,10 +199,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel' }));
       }
     },
-    saveSpec(name: string, steps: unknown[]): boolean {
+    saveSpec(name: string, steps: unknown[], redactions?: Redaction[]): boolean {
       const ws = firstOpen();
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps } }));
+      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions } }));
       return true;
     },
     launchChrome(pageUrl: string, headless: boolean): boolean {

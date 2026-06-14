@@ -27,6 +27,10 @@ export interface ClientMessage {
     /** save-spec only — credentials to parameterize into process.env.<envVar>
      *  references so secrets never land in the spec / sidecar. */
     redactions?: { value: string; envVar: string }[];
+    /** command only — test accounts the prompt referenced via @label. Injected
+     *  into the agent's system prompt (ephemeral, not the saved transcript) so
+     *  it can log in; the recorded fill values get redacted on save. */
+    accounts?: { label: string; username?: string; password?: string; role?: string }[];
     /** save-case-csv only — passed through to writeCaseCsv as extra
      *  fields on the test case's Labels column. */
     jiraProjectKey?: string;
