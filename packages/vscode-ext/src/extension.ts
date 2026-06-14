@@ -8,10 +8,10 @@
  * security-orange / pentest-red), reusing the engine's `set-mode` protocol.
  *
  * Surfaces:
- *   • Activity Bar "Hover" → Specs (Tests/Security), Sessions, Seeds tree views
+ *   • Activity Bar "Hover" → Specs (folder-grouped), Sessions, Environments
  *   • Status bar → current mode + service connection; click to switch mode
  *   • F1 review optimization candidate · F2 element→source · F3 spec CodeLens ·
- *     F4 probe-seed authoring · run a spec in the terminal
+ *     run a spec in the terminal
  */
 import * as vscode from 'vscode';
 import * as path from 'node:path';
@@ -26,7 +26,6 @@ import {
 import { SpecLensProvider } from './specLens.js';
 import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
-import { registerSeedsView } from './seedsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
 import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
 import { EnvironmentStore, LOCAL_ENV_ID } from './environments.js';
@@ -355,8 +354,10 @@ async function appStatus(): Promise<void> {
   const pick = await vscode.window.showQuickPick(items, { title: 'Hover — target environment' });
   if (!pick) return;
   if (pick.action === 'start') await startApp();
-  else if (pick.action === 'manage') await vscode.commands.executeCommand('hover.environments.focus');
-  else if (pick.action === 'set') {
+  else if (pick.action === 'manage') {
+    await vscode.commands.executeCommand('workbench.view.extension.hover');
+    await vscode.commands.executeCommand('hover.environments.focus');
+  } else if (pick.action === 'set') {
     const cfg = vscode.workspace.getConfiguration('hover');
     const url = await vscode.window.showInputBox({
       title: 'Hover: local app URL',
@@ -496,7 +497,6 @@ export function activate(context: vscode.ExtensionContext): void {
       reviewOptimizationCandidate(arg),
     ),
     vscode.commands.registerCommand('hover.openSource', (source?: string) => openSource(source)),
-    vscode.commands.registerCommand('hover.newProbeSeed', () => newProbeSeed()),
     vscode.commands.registerCommand('hover.runSpec', (item?: vscode.TreeItem | vscode.Uri) => runSpec(item)),
     vscode.commands.registerCommand('hover.switchMode', () => switchMode()),
     vscode.commands.registerCommand('hover.switchAgent', () => switchAgent()),
@@ -559,7 +559,6 @@ export function activate(context: vscode.ExtensionContext): void {
     settings.disposable,
     ...registerSpecsView(),
     ...registerSessionsView(),
-    ...registerSeedsView(),
     ...registerEnvironmentsView(envStore, () => void pollAppStatus()),
   );
 
@@ -885,46 +884,6 @@ export function parseHoverSource(value: string): { path: string; line: number; c
   const m = /^(.+):(\d+):(\d+)$/.exec(value.trim());
   if (!m) return null;
   return { path: m[1], line: Number(m[2]), col: Number(m[3]) };
-}
-
-/**
- * F4 — scaffold a new security probe seed under `.hover/rules/security/`.
- */
-async function newProbeSeed(): Promise<void> {
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders || folders.length === 0) {
-    void vscode.window.showWarningMessage('Hover: open a workspace folder to create a seed.');
-    return;
-  }
-  const name = await vscode.window.showInputBox({
-    title: 'Hover: new probe seed',
-    prompt: 'Seed name (kebab-case)',
-    placeHolder: 'idor-numeric-id',
-    validateInput: (v) =>
-      /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v.trim()) ? null : 'Use kebab-case: lower-case letters, digits, hyphens.',
-  });
-  if (!name) return;
-  const slug = name.trim();
-  const target = vscode.Uri.joinPath(folders[0].uri, '.hover', 'rules', 'security', `${slug}.json`);
-  if (await firstExisting([target])) {
-    void vscode.window.showWarningMessage(`Hover: a seed named "${slug}" already exists.`);
-    await vscode.window.showTextDocument(target);
-    return;
-  }
-  const template = {
-    name: slug,
-    class: 'idor',
-    category: 'authz',
-    note: '',
-    match: { method: ['GET'], urlParam: '/REPLACE/\\d+', needsAuth: true },
-    probe: {
-      strategy: "swap the id for another user's id and replay",
-      signal: "200 OK returning the other user's record",
-      secondIdentity: true,
-    },
-  };
-  await vscode.workspace.fs.writeFile(target, Buffer.from(JSON.stringify(template, null, 2) + '\n', 'utf-8'));
-  await vscode.window.showTextDocument(target);
 }
 
 /** Return the first URI that exists on disk, or undefined if none do. */

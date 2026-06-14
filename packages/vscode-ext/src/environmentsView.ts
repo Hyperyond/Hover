@@ -1,7 +1,7 @@
 /**
  * The "Environments" sidebar view — a native TreeView listing the test
  * environments (Local + any verified domains the user configures) and the test
- * accounts under each. Sits alongside Specs / Sessions / Probe Seeds.
+ * accounts under each. Sits alongside Specs / Sessions.
  *
  * This is the local-only first cut: you add environments + accounts here, pick
  * the active one (drives the run target URL), and store account passwords in

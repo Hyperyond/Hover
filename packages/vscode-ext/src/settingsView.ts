@@ -79,7 +79,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   .switch input:checked + .slider { background:var(--accent); }
   .switch input:checked + .slider:before { transform:translateX(16px); }
   .cloud .label { opacity:.65; }
-  .cloudbtn { background:var(--bg-3); color:var(--mute); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font:inherit; opacity:.6; cursor:not-allowed; }
+  .cloudbtn { flex:none; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; background:var(--bg-3); color:var(--mute); border:1px solid var(--line); border-radius:6px; padding:6px 12px; font:inherit; font-size:12px; opacity:.6; cursor:not-allowed; }
 </style>
 </head><body>
   <div class="row">
