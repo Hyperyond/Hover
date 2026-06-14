@@ -363,26 +363,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     speak((m.verdict || 'Pass') + '. ' + parsed.main.replace(/[#*\`|>_-]+/g, ' '));
     scroll();
   }
+  function sevClass(s) { s = (s || '').toLowerCase(); return (s === 'bug' || s === 'major' || s === 'high' || s === 'critical') ? 'bug' : (s === 'info' || s === 'note' ? 'info' : 'minor'); }
   function renderFindings(text) {
     var card = document.createElement('div'); card.className = 'findings';
     var h = document.createElement('div'); h.className = 'fhead'; h.textContent = '⚠ Findings'; card.appendChild(h);
     text.split('\\n').forEach(function (line) {
-      var t = line.replace(/^[-*\\s]+/, '').trim(); if (!t) return;
-      var sev = (t.match(/\\b(bug|major|high|minor|medium|low|info)\\b/i) || [])[1];
+      // Match "- **Marker** — rest"  OR a plain "- rest" bullet. Don't blindly
+      // strip leading '*' (that would eat the opening ** of a bold marker).
+      var m = line.match(/^\\s*[-*]\\s+(?:\\*\\*\\s*([^*]+?)\\s*\\*\\*\\s*[—–:\\-]?\\s*)?([\\s\\S]+)$/);
+      if (!m) { var tt = line.trim(); if (!tt) return; m = [null, null, tt]; }
+      var marker = m[1], rest = m[2];
       var row = document.createElement('div'); row.className = 'finding';
-      if (sev) { var b = document.createElement('span'); var s = sev.toLowerCase(); b.className = 'badge ' + (s === 'bug' || s === 'major' || s === 'high' ? 'bug' : (s === 'info' ? 'info' : 'minor')); b.textContent = sev; row.appendChild(b); }
-      var span = document.createElement('span'); span.innerHTML = mdToHtml(t); row.appendChild(span);
+      if (marker) { var b = document.createElement('span'); b.className = 'badge ' + sevClass(marker); b.textContent = marker; row.appendChild(b); }
+      var span = document.createElement('span'); span.innerHTML = inline(rest); row.appendChild(span);
       card.appendChild(row);
     });
     log.appendChild(card);
   }
-  // Split an agent summary into the main body + an optional Findings section.
+  // Split a summary into the main body + the Findings BULLET LIST only. The
+  // heading + its bullets are removed from main; everything else (incl. a
+  // results table that may follow Findings) stays in main so it renders as a
+  // proper markdown block — not line-by-line.
   function splitFindings(s) {
-    var m = s.match(/(^|\\n)#{1,6}\\s*Findings\\b/i) || s.match(/(^|\\n)\\s*Findings\\s*:/i);
-    if (!m) return { main: s, findings: null };
-    var idx = m.index + (m[1] ? m[1].length : 0);
-    var after = s.slice(idx).replace(/^#{1,6}\\s*Findings\\b[:：]?/i, '').replace(/^\\s*Findings\\s*:/i, '');
-    return { main: s.slice(0, idx).trim(), findings: after.trim() };
+    var lines = s.split('\\n'); var hi = -1;
+    for (var i = 0; i < lines.length; i++) { var t = lines[i].trim(); if (/^#{1,6}\\s*(findings|bugs|issues)\\b/i.test(t) || /^findings\\s*:/i.test(t)) { hi = i; break; } }
+    if (hi < 0) return { main: s, findings: null };
+    var j = hi + 1; while (j < lines.length && lines[j].trim() === '') j++;
+    var start = j; while (j < lines.length && /^\\s*[-*]\\s+/.test(lines[j])) j++;
+    var bullets = lines.slice(start, j);
+    var main = lines.slice(0, hi).concat(lines.slice(j)).join('\\n').replace(/\\n{3,}/g, '\\n\\n').trim();
+    return { main: main, findings: bullets.length ? bullets.join('\\n') : null };
   }
   // Minimal, safe markdown → HTML (escape first, then a few constructs).
   function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
