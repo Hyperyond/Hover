@@ -6,6 +6,8 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+# Packaged VSCode extension (build artifact — produced by `vsce package`)
+*.vsix
 .vite/
 .turbo/
 .astro/

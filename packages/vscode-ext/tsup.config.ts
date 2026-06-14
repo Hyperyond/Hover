@@ -9,7 +9,12 @@ export default defineConfig({
   format: ['cjs'],
   outExtension: () => ({ js: '.cjs' }),
   target: 'node18',
-  external: ['vscode'],
+  // `vscode` is provided by the host. `ws` is BUNDLED (noExternal) so the .vsix
+  // is self-contained and `vsce package --no-dependencies` works cleanly in this
+  // pnpm monorepo (vsce can't walk pnpm's symlinked node_modules). ws's optional
+  // native speedups stay external — ws falls back gracefully without them.
+  external: ['vscode', 'bufferutil', 'utf-8-validate'],
+  noExternal: ['ws'],
   clean: true,
   sourcemap: true,
 });

@@ -1,9 +1,8 @@
 {
-  "name": "@hover-dev/vscode-ext",
+  "name": "hover-dev",
   "version": "0.0.0",
-  "private": true,
   "displayName": "Hover",
-  "description": "Hover's VSCode extension — the primary surface over the agent-agnostic engine: review optimization candidates, jump from page element to source, and author authz/security tests in the editor.",
+  "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "license": "Apache-2.0",
   "author": "Hyperyond",
   "publisher": "hyperyond",

@@ -1,9 +1,13 @@
-# @hover-dev/vscode-ext
+# Hover (`hover-dev`)
 
 Hover's VSCode extension — the **primary surface** over Hover's agent-agnostic
-engine (`@hover-dev/cli` / `@hover-dev/core`). It is a thin GUI face: it never
-re-implements the engine, and every artifact it helps author stays plain
-`@playwright/test`.
+engine (`@hover-dev/cli` / `@hover-dev/core`). One extension for **AI test
+authoring + application-security (authz / BOLA) testing**: explore your app,
+crystallize verified flows into plain `@playwright/test` specs that run in CI
+with no AI. It is a thin GUI face — it never re-implements the engine.
+
+(npm package name `hover-dev`; Marketplace id will be `hyperyond.hover-dev`.
+Display name stays "Hover".)
 
 Design: `docs/superpowers/specs/2026-06-14-security-direction-design.md` (§3.2,
 why-primary) and `docs/superpowers/specs/2026-06-06-vscode-extension-design.md`
@@ -32,6 +36,23 @@ F4 seed-library authoring.
 ## Develop
 
 ```bash
-pnpm --filter @hover-dev/vscode-ext typecheck
-pnpm --filter @hover-dev/vscode-ext build   # tsup → dist/extension.cjs (vscode external)
+pnpm --filter hover-dev typecheck
+pnpm --filter hover-dev build    # tsup → dist/extension.cjs (ws bundled, vscode external)
+pnpm --filter hover-dev watch    # rebuild on change; Reload Window in the dev host
 ```
+
+Press <kbd>F5</kbd> from this folder (uses `.vscode/launch.json`) to run an
+Extension Development Host with `examples/basic-app` open.
+
+## Install as a real extension (sideload)
+
+```bash
+pnpm --filter hover-dev build
+cd packages/vscode-ext && pnpm dlx @vscode/vsce package --no-dependencies
+# → hover-dev-0.0.0.vsix
+```
+
+Install the `.vsix`: VSCode **Extensions** view → **⋯** → **Install from
+VSIX…** (or `code --install-extension hover-dev-0.0.0.vsix` if the `code` shell
+command is installed; Cursor/Windsurf use the same VSIX). This is local
+sideloading — **not** a Marketplace publish.
