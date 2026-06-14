@@ -29,6 +29,8 @@ import { registerSessionsView } from './sessionsView.js';
 import { registerSeedsView } from './seedsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
 import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
+import { EnvironmentStore, LOCAL_ENV_ID } from './environments.js';
+import { registerEnvironmentsView } from './environmentsView.js';
 import { startEngine, stopEngine } from './engine.js';
 
 /** Where the optimizer writes its candidate, relative to the workspace root:
@@ -115,6 +117,18 @@ let stepCount = 0;
 let runCost = 0;
 /** Most recent reachable dev URL (configured or auto-detected). */
 let detectedUrl: string | null = null;
+/** Test-environment + account store (Local + configured domains). */
+let envStore: EnvironmentStore | undefined;
+
+/** The run target = the active environment's URL. For `local` we keep the
+ *  existing zero-config behaviour (configured appUrl, else auto-detected). */
+async function resolveTargetUrl(): Promise<string | null> {
+  const active = await envStore?.getActive();
+  if (!active || active.id === LOCAL_ENV_ID) {
+    return vscode.workspace.getConfiguration('hover').get<string>('appUrl') || detectedUrl;
+  }
+  return active.url;
+}
 /** Resolver for an in-flight ensureBrowser() handshake. */
 let pendingBrowser: ((ok: boolean) => void) | undefined;
 /** Spec being optimized, so we can auto-open the diff when the candidate lands. */
@@ -151,7 +165,7 @@ async function runPrompt(prompt: string): Promise<void> {
   runCost = 0;
   chatProvider?.setRunning(true);
 
-  const url = vscode.workspace.getConfiguration('hover').get<string>('appUrl') || detectedUrl;
+  const url = await resolveTargetUrl();
   if (url) {
     const ready = await ensureBrowser(url);
     if (!ready) {
@@ -299,30 +313,53 @@ async function probeUrl(url: string, timeoutMs = 1500): Promise<boolean> {
 }
 
 async function pollAppStatus(): Promise<void> {
-  const configured = vscode.workspace.getConfiguration('hover').get<string>('appUrl');
-  const candidates = configured ? [configured] : COMMON_DEV_URLS;
-  let online: string | null = null;
-  for (const u of candidates) {
-    if (await probeUrl(u)) { online = u; break; }
+  const active = await envStore?.getActive();
+  const isLocal = !active || active.id === LOCAL_ENV_ID;
+  let online = false;
+  let target: string | null = null;
+  let label: string | null = null;
+
+  if (isLocal) {
+    const configured = vscode.workspace.getConfiguration('hover').get<string>('appUrl');
+    const candidates = configured ? [configured] : COMMON_DEV_URLS;
+    for (const u of candidates) {
+      if (await probeUrl(u)) { target = u; break; }
+    }
+    online = Boolean(target);
+    detectedUrl = target ?? (configured || null);
+    target = target ?? configured ?? null;
+    label = target ? target.replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
+  } else {
+    target = active.url;
+    online = await probeUrl(active.url);
+    label = active.name;
   }
-  detectedUrl = online ?? (configured || null);
-  chatProvider?.updateApp(Boolean(online), online ?? configured ?? null);
+  chatProvider?.updateApp(online, label, target ?? undefined);
 }
 
-/** Top-right pill click: set the URL or start the app. */
+/** Top-right pill click: switch the active environment, or start / set local. */
 async function appStatus(): Promise<void> {
-  const pick = await vscode.window.showQuickPick(
-    [
-      { label: '$(play) Start App', description: 'dev server + browser', action: 'start' },
-      { label: '$(link) Set app URL…', description: 'manually set the dev server URL', action: 'set' },
-    ],
-    { title: 'Hover — app' },
-  );
-  if (pick?.action === 'start') await startApp();
-  else if (pick?.action === 'set') {
+  const envs = (await envStore?.load()) ?? [];
+  const activeId = envStore?.getActiveId();
+  type Item = vscode.QuickPickItem & { envId?: string; action?: string };
+  const items: Item[] = envs.map((e) => ({
+    label: `${e.id === activeId ? '$(circle-large-filled)' : '$(circle-large-outline)'} ${e.name}`,
+    description: e.url.replace(/^https?:\/\//, '').replace(/\/$/, '') + (e.id === LOCAL_ENV_ID ? '' : e.verified ? '  ✓' : '  ⚠ unverified'),
+    envId: e.id,
+  }));
+  items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+  items.push({ label: '$(rocket) Start App', description: 'dev server + browser', action: 'start' });
+  items.push({ label: '$(link) Set local URL…', description: 'manually set the dev server URL', action: 'set' });
+  items.push({ label: '$(gear) Manage environments…', action: 'manage' });
+
+  const pick = await vscode.window.showQuickPick(items, { title: 'Hover — target environment' });
+  if (!pick) return;
+  if (pick.action === 'start') await startApp();
+  else if (pick.action === 'manage') await vscode.commands.executeCommand('hover.environments.focus');
+  else if (pick.action === 'set') {
     const cfg = vscode.workspace.getConfiguration('hover');
     const url = await vscode.window.showInputBox({
-      title: 'Hover: app URL',
+      title: 'Hover: local app URL',
       prompt: 'Your dev server URL',
       value: cfg.get<string>('appUrl') || 'http://localhost:5173',
     });
@@ -330,6 +367,9 @@ async function appStatus(): Promise<void> {
       await cfg.update('appUrl', url, vscode.ConfigurationTarget.Workspace);
       void pollAppStatus();
     }
+  } else if (pick.envId) {
+    await envStore?.setActiveId(pick.envId);
+    void pollAppStatus();
   }
 }
 
@@ -382,6 +422,19 @@ async function startApp(): Promise<void> {
     void vscode.window.showWarningMessage('Hover: open a project folder first.');
     return;
   }
+  // A remote environment (staging/prod) has no local dev server to spawn — just
+  // point the browser at its URL.
+  const active = await envStore?.getActive();
+  if (active && active.id !== LOCAL_ENV_ID) {
+    const silent = isSilent();
+    if (pool?.launchChrome(active.url, silent)) {
+      chatProvider?.pushSystem(`Browser ${silent ? 'running silently (headless)' : 'opened'} at ${active.name} (${active.url}).`);
+    } else {
+      chatProvider?.pushSystem('Could not launch the browser — the engine may still be starting.');
+    }
+    return;
+  }
+
   const url = await getAppUrl();
   if (!url) return;
 
@@ -415,7 +468,7 @@ async function toggleBrowser(): Promise<void> {
   await cfg.update('browser', next, vscode.ConfigurationTarget.Workspace);
   pushChatConfig();
   settingsProvider?.refresh();
-  const url = cfg.get<string>('appUrl');
+  const url = await resolveTargetUrl();
   if (url && pool?.launchChrome(url, next === 'silent')) {
     chatProvider?.pushSystem(`Browser mode: ${next === 'silent' ? 'silent (headless)' : 'visible'} — relaunched at ${url}.`);
   } else {
@@ -500,12 +553,14 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   });
   settingsProvider = settings.provider;
+  envStore = new EnvironmentStore(context);
   context.subscriptions.push(
     chat.disposable,
     settings.disposable,
     ...registerSpecsView(),
     ...registerSessionsView(),
     ...registerSeedsView(),
+    ...registerEnvironmentsView(envStore, () => void pollAppStatus()),
   );
 
   // Status bar: current mode + service connection, click to switch mode.
@@ -776,7 +831,7 @@ async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   stepCount = 0;
   runCost = 0;
   chatProvider?.setRunning(true);
-  const url = vscode.workspace.getConfiguration('hover').get<string>('appUrl') || detectedUrl;
+  const url = await resolveTargetUrl();
   if (url) {
     const ready = await ensureBrowser(url);
     if (!ready) {

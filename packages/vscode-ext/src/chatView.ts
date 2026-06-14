@@ -56,9 +56,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   updateStatus(text: string): void {
     this.post({ type: 'status', text });
   }
-  /** App/dev-server status shown top-right (url + reachability). */
-  updateApp(online: boolean, url: string | null): void {
-    this.post({ type: 'appstatus', online, url });
+  /** Active-environment status shown top-right (label + reachability; the full
+   *  URL is the tooltip). `label` is the env name for remote targets, or the
+   *  host:port for Local. */
+  updateApp(online: boolean, label: string | null, title?: string): void {
+    this.post({ type: 'appstatus', online, label, title: title ?? label });
   }
   /** Push live config to the webview (drives voice + the silent-run border). */
   updateConfig(speech: boolean, silent: boolean): void {
@@ -525,9 +527,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       applyBorder();
     }
     else if (m.type==='appstatus') {
-      var dot=document.getElementById('app-dot'); var lab=document.getElementById('app-label');
-      if (m.url) { var short=String(m.url).replace(/^https?:\\/\\//,'').replace(/\\/$/,''); lab.textContent = m.online ? short : short+' (offline)'; dot.className = m.online ? 'dot' : 'dot offline'; }
-      else { lab.textContent='Set app URL'; dot.className='dot offline'; }
+      var dot=document.getElementById('app-dot'); var lab=document.getElementById('app-label'); var btn=document.getElementById('appstatus');
+      if (m.label) { lab.textContent = m.online ? String(m.label) : String(m.label)+' (offline)'; dot.className = m.online ? 'dot' : 'dot offline'; if(btn&&m.title) btn.title = String(m.title); }
+      else { lab.textContent='Set target'; dot.className='dot offline'; }
     }
     else if (m.type==='running') { running = !!m.running; if (running) { curGroup = null; pendingTitle = null; } updateWorking(); applyBorder(); syncSend(); }
     else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Silent' : 'Visible'; applyBorder(); }

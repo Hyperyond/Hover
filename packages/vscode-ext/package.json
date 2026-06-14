@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.9.4",
+  "version": "0.10.0",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -133,6 +133,47 @@
         "title": "Refresh Seeds",
         "category": "Hover",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "hover.refreshEnvironments",
+        "title": "Refresh Environments",
+        "category": "Hover",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hover.env.add",
+        "title": "Add Environment",
+        "category": "Hover",
+        "icon": "$(add)"
+      },
+      {
+        "command": "hover.env.editUrl",
+        "title": "Edit URL",
+        "category": "Hover",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "hover.env.remove",
+        "title": "Remove Environment",
+        "category": "Hover",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "hover.env.setActive",
+        "title": "Set Active Environment",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.env.addAccount",
+        "title": "Add Test Account",
+        "category": "Hover",
+        "icon": "$(person-add)"
+      },
+      {
+        "command": "hover.env.removeAccount",
+        "title": "Remove Test Account",
+        "category": "Hover",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -170,6 +211,12 @@
           "id": "hover.sessions",
           "name": "Sessions",
           "icon": "$(history)",
+          "contextualTitle": "Hover"
+        },
+        {
+          "id": "hover.environments",
+          "name": "Environments",
+          "icon": "$(globe)",
           "contextualTitle": "Hover"
         },
         {
@@ -267,9 +314,44 @@
           "command": "hover.refreshSeeds",
           "when": "view == hover.seeds",
           "group": "navigation@2"
+        },
+        {
+          "command": "hover.env.add",
+          "when": "view == hover.environments",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hover.refreshEnvironments",
+          "when": "view == hover.environments",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
+        {
+          "command": "hover.env.addAccount",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "hover.env.editUrl",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Unverified)?$/",
+          "group": "1_env@1"
+        },
+        {
+          "command": "hover.env.addAccount",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
+          "group": "1_env@2"
+        },
+        {
+          "command": "hover.env.remove",
+          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Unverified)?$/",
+          "group": "1_env@3"
+        },
+        {
+          "command": "hover.env.removeAccount",
+          "when": "view == hover.environments && viewItem == hoverAccount",
+          "group": "inline@1"
+        },
         {
           "command": "hover.runSpec",
           "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",

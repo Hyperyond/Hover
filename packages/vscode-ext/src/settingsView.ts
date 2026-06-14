@@ -78,6 +78,8 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   .slider:before { content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
   .switch input:checked + .slider { background:var(--accent); }
   .switch input:checked + .slider:before { transform:translateX(16px); }
+  .cloud .label { opacity:.65; }
+  .cloudbtn { background:var(--bg-3); color:var(--mute); border:1px solid var(--line); border-radius:6px; padding:5px 10px; font:inherit; opacity:.6; cursor:not-allowed; }
 </style>
 </head><body>
   <div class="row">
@@ -99,6 +101,10 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   <div class="field">
     <div class="label">Model API key<span class="sub">Optional — drive on your own key. Stored locally (SecretStorage), never uploaded.</span></div>
     <input type="password" id="apiKey" placeholder="sk-…  (blank = use your logged-in CLI)" />
+  </div>
+  <div class="row cloud">
+    <div class="label">Hover Cloud<span class="sub">Cross-machine sync, team-shared environments, run dashboards — coming soon.</span></div>
+    <button class="cloudbtn" disabled title="Coming with Hover Cloud">☁ Sign in</button>
   </div>
 <script nonce="${nonce}">
   var vscode = acquireVsCodeApi();
