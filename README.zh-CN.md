@@ -10,8 +10,6 @@
 
 你还需要 `PATH` 上有**一个编码 Agent CLI**:[Claude Code](https://claude.com/claude-code)(`npm i -g @anthropic-ai/claude-code`)或 [OpenAI Codex](https://github.com/openai/codex)(`npm i -g @openai/codex`),用你的订阅或自己的 API key 登录即可。除此之外**没有别的要配** —— Hover 不带任何模型 SDK,也不存任何 key。
 
-[▶ 看 2 分钟演示](https://www.youtube.com/watch?v=lQV5dmVWaIA)
-
 ## 你能得到什么
 
 - **对话即生成测试文件** —— 用大白话描述你要验证什么,Hover 操作你真实的应用,把跑通的流程存成纯 `@playwright/test` 用例。AI 的活到“保存”为止 —— CI 是纯 Playwright,零 token、不用往 CI 里塞 key。

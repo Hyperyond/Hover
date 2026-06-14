@@ -10,8 +10,6 @@ Get it on the **[VS Code Marketplace](https://marketplace.visualstudio.com/items
 
 You also need **one coding-agent CLI** on your `PATH`: [Claude Code](https://claude.com/claude-code) (`npm i -g @anthropic-ai/claude-code`) or [OpenAI Codex](https://github.com/openai/codex) (`npm i -g @openai/codex`), signed in with your subscription or your own API key. That's the only thing to configure — Hover ships no model SDK and no keys of its own.
 
-[▶ Watch the 2-minute demo](https://www.youtube.com/watch?v=lQV5dmVWaIA)
-
 ## What you get
 
 - **Chat to a test file** — Describe what you want to verify in plain English; Hover drives your real app and saves the verified run as a plain `@playwright/test` spec. The AI's job ends at "save" — CI is pure Playwright, with zero tokens and no key wired in.
