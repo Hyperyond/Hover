@@ -29,10 +29,20 @@ export interface ServiceClientPool {
  * whenever any of them relays a `reveal-source` message. Returns a handle that
  * tears every socket down.
  */
-export function connectServicePool(onRevealSource: (source: string) => void): ServiceClientPool {
+export function connectServicePool(
+  onRevealSource: (source: string) => void,
+  onStatus?: (connectedCount: number) => void,
+): ServiceClientPool {
   const sockets = new Map<number, WebSocket>();
   const timers = new Map<number, ReturnType<typeof setTimeout>>();
   let disposed = false;
+
+  const reportStatus = (): void => {
+    if (disposed || !onStatus) return;
+    let open = 0;
+    for (const s of sockets.values()) if (s.readyState === WebSocket.OPEN) open++;
+    onStatus(open);
+  };
 
   const connect = (port: number): void => {
     if (disposed) return;
@@ -44,6 +54,8 @@ export function connectServicePool(onRevealSource: (source: string) => void): Se
       return;
     }
     sockets.set(port, ws);
+
+    ws.on('open', () => reportStatus());
 
     ws.on('message', (data: WebSocket.RawData) => {
       let msg: { type?: unknown; payload?: { source?: unknown } };
@@ -62,6 +74,7 @@ export function connectServicePool(onRevealSource: (source: string) => void): Se
     ws.on('error', () => {});
     ws.on('close', () => {
       sockets.delete(port);
+      reportStatus();
       scheduleReconnect(port);
     });
   };

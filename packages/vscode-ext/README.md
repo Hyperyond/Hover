@@ -15,9 +15,17 @@ why-primary) and `docs/superpowers/specs/2026-06-06-vscode-extension-design.md`
 
 ## Status
 
-Scaffold. Two commands so far:
+Scaffold — native UI (no webview; matches VSCode's look):
 
-- **F1** *Review Optimization Candidate* — opens a native `vscode.diff` between
+- **Activity Bar → Hover** — a *Specs* tree listing crystallized
+  `*.spec.ts` / `*.security.spec.ts` (with the stamped prompt as the row
+  description; click to open). Auto-refreshes as specs change.
+- **Status bar** — `✨ Hover` reflects whether a Hover dev service is reachable;
+  click to focus the sidebar.
+
+Commands & editor integrations:
+
+- **F1** *Review Optimization Candidate* (command + editor-title button) — opens a native `vscode.diff` between
   the active spec and its candidate at
   `<workspaceRoot>/.hover/cache/optimized/<spec>.draft`. Invoke from the editor
   title bar on a `*.spec.ts` file or via the palette.

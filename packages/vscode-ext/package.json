@@ -34,8 +34,33 @@
         "command": "hover.newProbeSeed",
         "title": "New Probe Seed",
         "category": "Hover"
+      },
+      {
+        "command": "hover.refreshSpecs",
+        "title": "Refresh Specs",
+        "category": "Hover",
+        "icon": "$(refresh)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hover",
+          "title": "Hover",
+          "icon": "$(beaker)"
+        }
+      ]
+    },
+    "views": {
+      "hover": [
+        {
+          "id": "hover.specs",
+          "name": "Specs",
+          "icon": "$(beaker)",
+          "contextualTitle": "Hover"
+        }
+      ]
+    },
     "jsonValidation": [
       {
         "fileMatch": ["**/.hover/rules/security/*.json", "**/.hover/rules/security/**/*.json"],
@@ -47,6 +72,13 @@
         {
           "command": "hover.reviewOptimizationCandidate",
           "when": "resourceFilename =~ /\\.spec\\.ts$/",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "hover.refreshSpecs",
+          "when": "view == hover.specs",
           "group": "navigation"
         }
       ]

@@ -17,6 +17,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { connectServicePool } from './serviceClient.js';
 import { SpecLensProvider } from './specLens.js';
+import { registerSpecsView } from './specsView.js';
 
 /**
  * Where the optimizer writes its candidate, relative to the workspace root. The
@@ -46,11 +47,38 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
+  // Native sidebar: the Hover Activity Bar view listing crystallized specs.
+  context.subscriptions.push(...registerSpecsView());
+
+  // Status bar: surfaces whether a Hover dev service is reachable, and gives a
+  // visible, always-on entry point to the sidebar.
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  status.command = 'hover.specs.focus';
+  const setStatus = (connected: number): void => {
+    status.text = connected > 0 ? '$(sparkle) Hover' : '$(sparkle) Hover $(circle-slash)';
+    status.tooltip =
+      connected > 0
+        ? `Hover — connected to ${connected} dev service${connected > 1 ? 's' : ''}`
+        : 'Hover — no dev service detected (run a Hover-enabled dev server)';
+  };
+  setStatus(0);
+  status.show();
+  context.subscriptions.push(status);
+  context.subscriptions.push(
+    vscode.commands.registerCommand('hover.specs.focus', () =>
+      vscode.commands.executeCommand('workbench.view.extension.hover'),
+    ),
+  );
+
   // F2 transport: listen for `reveal-source` relayed by any running Hover
-  // service and jump the editor there. The pool reconnects across HMR.
-  const pool = connectServicePool((source) => {
-    void openSource(source);
-  });
+  // service and jump the editor there. The pool reconnects across HMR; its
+  // connection count drives the status-bar indicator.
+  const pool = connectServicePool(
+    (source) => {
+      void openSource(source);
+    },
+    (connected) => setStatus(connected),
+  );
   context.subscriptions.push({ dispose: () => pool.dispose() });
 }
 
