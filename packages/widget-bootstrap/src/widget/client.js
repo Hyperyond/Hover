@@ -444,6 +444,32 @@
     ws.send(JSON.stringify({ type: 'set-api-key', payload: { key: settings.apiKey || '' } }));
   };
 
+  // F2 — Alt+click any host element to jump the editor to its source. The
+  // VSCode extension listens (via the service relay) for `reveal-source` and
+  // opens `<rel-path>:<line>:<col>`, the value @hover-dev/transform-source
+  // stamps onto every host element as `data-hover-source`. Alt+click so normal
+  // clicks are untouched; we skip our own widget DOM (data-vibe-test). No-op
+  // when nothing is listening — the service just relays to zero other clients.
+  window.addEventListener(
+    'click',
+    (e) => {
+      if (!e.altKey || !wsOpen()) return;
+      let el = e.target;
+      while (el && el.nodeType === 1) {
+        if (el.hasAttribute('data-vibe-test')) return; // our own UI — ignore
+        const source = el.getAttribute('data-hover-source');
+        if (source) {
+          e.preventDefault();
+          e.stopPropagation();
+          ws.send(JSON.stringify({ type: 'reveal-source', payload: { source } }));
+          return;
+        }
+        el = el.parentElement;
+      }
+    },
+    true,
+  );
+
   const renderCdpOverlay = () => {
     // Hide overlay entirely when widget is healthy.
     const blocking = cdpState === 'wrong-window' || cdpState === 'no-cdp' || cdpLaunching;

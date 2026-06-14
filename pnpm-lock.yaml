@@ -650,6 +650,10 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
 
   packages/vscode-ext:
+    dependencies:
+      ws:
+        specifier: ^8.18.0
+        version: 8.20.1
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -657,6 +661,9 @@ importers:
       '@types/vscode':
         specifier: ^1.85.0
         version: 1.120.0
+      '@types/ws':
+        specifier: ^8.5.0
+        version: 8.18.1
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)

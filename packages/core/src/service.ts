@@ -35,8 +35,10 @@
  *     { type: 'list-seeds' }                                            // ask for built-in + .hover/rules/ translation seeds (read-only)
  *     { type: 'list-agents' }                                          // ask for the full agent registry + install status
  *     { type: 'switch-agent',  payload: { agentId } }                  // set the service's current agent; broadcasts to all connections
+ *     { type: 'reveal-source', payload: { source } }                   // relay a data-hover-source value to other clients (F2 page→editor)
  *
  *   server → client (in addition to those documented in the file body):
+ *     { type: 'reveal-source', payload: { source } }                   // relayed to non-origin clients (the VSCode ext jumps the editor)
  *     { type: 'agents',        payload: { current: string, available: AgentAvailability[] } }
  *     { type: 'modes',         payload: { current: string|null, available: ModeEntry[] } }
  *     { type: '<plugin-namespaced>', payload: <plugin-specific> }
@@ -630,6 +632,20 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       }
       if (msg.type === 'cancel') {
         cancel();
+        return;
+      }
+      if (msg.type === 'reveal-source') {
+        // F2 page→editor transport: an in-page client (widget) captured a
+        // `data-hover-source` value off a clicked element. Relay it to every
+        // OTHER connected client — the VSCode extension listens and opens the
+        // file at <rel-path>:<line>:<col>. The originating page needs no echo.
+        const source = msg.payload?.source;
+        if (typeof source !== 'string' || !source) return;
+        for (const client of wss.clients) {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            send(client, { type: 'reveal-source', payload: { source } });
+          }
+        }
         return;
       }
       if (msg.type === 'list-modes') {

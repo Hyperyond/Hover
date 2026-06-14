@@ -15,6 +15,7 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import { connectServicePool } from './serviceClient.js';
 
 /**
  * Where the optimizer writes its candidate, relative to the workspace root. The
@@ -36,6 +37,13 @@ export function activate(context: vscode.ExtensionContext): void {
       (source?: string) => openSource(source),
     ),
   );
+
+  // F2 transport: listen for `reveal-source` relayed by any running Hover
+  // service and jump the editor there. The pool reconnects across HMR.
+  const pool = connectServicePool((source) => {
+    void openSource(source);
+  });
+  context.subscriptions.push({ dispose: () => pool.dispose() });
 }
 
 export function deactivate(): void {
