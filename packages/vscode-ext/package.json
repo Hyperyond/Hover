@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "displayName": "Hover",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "license": "Apache-2.0",
@@ -47,7 +47,7 @@
         {
           "id": "hover",
           "title": "Hover",
-          "icon": "$(beaker)"
+          "icon": "resources/hover.svg"
         }
       ]
     },
