@@ -34,6 +34,8 @@ export interface ClientMessage {
     pageUrl?: string;
     /** switch-agent only — id of the agent to switch the service to. */
     agentId?: string;
+    /** set-model only — the model id to use for subsequent runs (e.g. opus). */
+    model?: string;
     /** set-mode only — id of the plugin-contributed mode to activate,
      *  or null to return to normal (unmoded) operation. */
     modeId?: string | null;

@@ -28,6 +28,7 @@ import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
 import { registerSeedsView } from './seedsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
+import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
 import { startEngine, stopEngine } from './engine.js';
 
 /** Where the optimizer writes its candidate, relative to the workspace root:
@@ -41,6 +42,24 @@ let availableModes: ModeEntry[] = [];
 let connectedServices = 0;
 let modeStatus: vscode.StatusBarItem;
 let chatProvider: ChatViewProvider | undefined;
+let settingsProvider: SettingsViewProvider | undefined;
+
+let extContext: vscode.ExtensionContext | undefined;
+
+/** Push speech + silent flags to the chat (drives voice + the running border). */
+function pushChatConfig(): void {
+  const cfg = vscode.workspace.getConfiguration('hover');
+  chatProvider?.updateConfig(cfg.get<boolean>('speech', false), cfg.get<string>('browser', 'silent') !== 'visible');
+}
+
+/** When the engine (re)connects, hand it the persisted model + API key. */
+async function pushEngineConfig(): Promise<void> {
+  if (!pool) return;
+  const model = vscode.workspace.getConfiguration('hover').get<string>('model', 'sonnet');
+  if (model) pool.setModel(model);
+  const key = await extContext?.secrets.get('hover.apiKey');
+  if (key) pool.setApiKey(key);
+}
 
 /** The modes the one extension offers, independent of any running service —
  *  mode is the extension's own state (the engine, once hosted here, reads it).
@@ -373,7 +392,8 @@ async function toggleBrowser(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration('hover');
   const next = isSilent() ? 'visible' : 'silent';
   await cfg.update('browser', next, vscode.ConfigurationTarget.Workspace);
-  chatProvider?.updateStatus(next === 'silent' ? 'ready' : 'visible');
+  pushChatConfig();
+  settingsProvider?.refresh();
   const url = cfg.get<string>('appUrl');
   if (url && pool?.launchChrome(url, next === 'silent')) {
     chatProvider?.pushSystem(`Browser mode: ${next === 'silent' ? 'silent (headless)' : 'visible'} — relaunched at ${url}.`);
@@ -396,6 +416,7 @@ async function saveSpec(): Promise<void> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  extContext = context;
   context.subscriptions.push(
     vscode.commands.registerCommand('hover.reviewOptimizationCandidate', (arg?: vscode.TreeItem | vscode.Uri) =>
       reviewOptimizationCandidate(arg),
@@ -437,7 +458,32 @@ export function activate(context: vscode.ExtensionContext): void {
   const chat = registerChatView();
   chatProvider = chat.provider;
   chatProvider.runHandler = (prompt) => void runPrompt(prompt);
-  context.subscriptions.push(chat.disposable, ...registerSpecsView(), ...registerSessionsView(), ...registerSeedsView());
+
+  const settings = registerSettingsView({
+    getApiKey: async () => (await context.secrets.get('hover.apiKey')) ?? '',
+    onChange: async (change) => {
+      const cfg = vscode.workspace.getConfiguration('hover');
+      if (typeof change.speech === 'boolean') await cfg.update('speech', change.speech, vscode.ConfigurationTarget.Global);
+      if (typeof change.browser === 'string') await cfg.update('browser', change.browser, vscode.ConfigurationTarget.Workspace);
+      if (typeof change.model === 'string') {
+        await cfg.update('model', change.model, vscode.ConfigurationTarget.Workspace);
+        pool?.setModel(change.model);
+      }
+      if (typeof change.apiKey === 'string') {
+        await context.secrets.store('hover.apiKey', change.apiKey);
+        pool?.setApiKey(change.apiKey);
+      }
+      pushChatConfig();
+    },
+  });
+  settingsProvider = settings.provider;
+  context.subscriptions.push(
+    chat.disposable,
+    settings.disposable,
+    ...registerSpecsView(),
+    ...registerSessionsView(),
+    ...registerSeedsView(),
+  );
 
   // Status bar: current mode + service connection, click to switch mode.
   modeStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -450,8 +496,10 @@ export function activate(context: vscode.ExtensionContext): void {
   pool = connectServicePool({
     onRevealSource: (source) => void openSource(source),
     onStatus: (connected) => {
+      const was = connectedServices;
       connectedServices = connected;
       renderModeStatus();
+      if (was === 0 && connected > 0) void pushEngineConfig();
     },
     onModes: (current, available) => {
       currentMode = current;
@@ -479,6 +527,9 @@ export function activate(context: vscode.ExtensionContext): void {
   void pollAppStatus();
   appStatusTimer = setInterval(() => void pollAppStatus(), 5000);
   context.subscriptions.push({ dispose: () => { if (appStatusTimer) clearInterval(appStatusTimer); } });
+
+  // Initial config → chat (voice + silent-run border).
+  pushChatConfig();
 
   // One-time nudge: VSCode can't default a view to the Secondary Side Bar, so
   // guide the user to dock Chat on the right for a code-center / chat-right

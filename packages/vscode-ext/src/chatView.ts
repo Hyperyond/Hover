@@ -60,6 +60,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   updateApp(online: boolean, url: string | null): void {
     this.post({ type: 'appstatus', online, url });
   }
+  /** Push live config to the webview (drives voice + the silent-run border). */
+  updateConfig(speech: boolean, silent: boolean): void {
+    this.post({ type: 'config', speech, silent });
+  }
   updateAgent(label: string): void {
     this.post({ type: 'agent', label });
   }
@@ -113,6 +117,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     font-family: var(--vscode-font-family, -apple-system, system-ui, sans-serif);
     font-size: 13px; color: var(--text); background: var(--bg);
   }
+  /* Silent mode + running: a rotating Google-Chrome-colored border, signalling
+     the invisible browser is working (the page itself you can't see). */
+  @property --hov-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  body.silent-running::after {
+    content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none; padding: 2.5px;
+    background: conic-gradient(from var(--hov-angle), #4285F4, #EA4335, #FBBC05, #34A853, #4285F4);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: hov-spinborder 2.4s linear infinite;
+  }
+  @keyframes hov-spinborder { to { --hov-angle: 360deg; } }
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 
@@ -259,9 +274,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   var sendBtn = document.getElementById('send');
   var cleared = false;
 
+  var speechOn = false, silentMode = false;
+  function speak(text) { if (!speechOn || !text) return; try { if (window.speechSynthesis) { window.speechSynthesis.speak(new SpeechSynthesisUtterance(String(text).slice(0, 300))); } } catch (e) {} }
+  function applyBorder() { document.body.classList.toggle('silent-running', silentMode && running); }
   function fresh() { if (!cleared) { log.innerHTML = ''; cleared = true; } }
   function scroll() { if (typeof workingEl !== 'undefined' && workingEl && running && workingEl.parentNode) log.appendChild(workingEl); log.scrollTop = log.scrollHeight; }
-  function addMessage(role, text) { fresh(); var el = document.createElement('div'); el.className = 'msg ' + role; el.textContent = text; log.appendChild(el); scroll(); }
+  function addMessage(role, text) { fresh(); var el = document.createElement('div'); el.className = 'msg ' + role; el.textContent = text; log.appendChild(el); if (role === 'assistant') speak(text); scroll(); }
   var curStep = null; // { el, start, snapshot }
   function finalizeStep(nextSnapshot) {
     if (!curStep) return;
@@ -290,6 +308,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     log.appendChild(el);
     curStep = { el: el, start: Date.now(), snapshot: typeof m.cost === 'number' ? m.cost : undefined };
+    speak(m.label);
     scroll();
   }
   function addResult(m) {
@@ -304,6 +323,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     card.appendChild(h); card.appendChild(body); card.appendChild(save);
     log.appendChild(card);
     if (parsed.findings) renderFindings(parsed.findings);
+    speak((m.verdict || 'Pass') + '. ' + parsed.main.replace(/[#*\`|>_-]+/g, ' '));
     scroll();
   }
   function renderFindings(text) {
@@ -417,7 +437,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (m.url) { var short=String(m.url).replace(/^https?:\\/\\//,'').replace(/\\/$/,''); lab.textContent = m.online ? short : short+' (offline)'; dot.className = m.online ? 'dot' : 'dot offline'; }
       else { lab.textContent='Set app URL'; dot.className='dot offline'; }
     }
-    else if (m.type==='running') { running = !!m.running; setWorking(running); syncSend(); }
+    else if (m.type==='running') { running = !!m.running; setWorking(running); applyBorder(); syncSend(); }
+    else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; applyBorder(); }
   });
   function emptyEl(){
     var d=document.createElement('div'); d.className='splash';

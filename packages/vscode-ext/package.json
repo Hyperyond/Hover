@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -177,6 +177,13 @@
           "name": "Probe Seeds",
           "icon": "$(law)",
           "contextualTitle": "Hover"
+        },
+        {
+          "id": "hover.settings",
+          "name": "Settings",
+          "type": "webview",
+          "icon": "$(gear)",
+          "contextualTitle": "Hover"
         }
       ]
     },
@@ -197,6 +204,17 @@
           ],
           "default": "silent",
           "description": "How Hover runs the browser. Silent = headless (default); Visible = a shown Chrome window you can watch."
+        },
+        "hover.speech": {
+          "type": "boolean",
+          "default": false,
+          "description": "Speak the agent's steps and final summary aloud while it runs."
+        },
+        "hover.model": {
+          "type": "string",
+          "enum": ["sonnet", "opus", "haiku"],
+          "default": "sonnet",
+          "description": "Model for runs. Sonnet is cheapest; Opus for harder flows; Haiku for speed."
         }
       }
     },

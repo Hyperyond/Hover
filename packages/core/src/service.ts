@@ -235,7 +235,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       `[hover] requested agent "${preferred}" is not installed; falling back to "${primary.descriptor.id}".\n`,
     );
   }
-  const model = opts.model ?? 'sonnet';
+  let model = opts.model ?? 'sonnet';
   // No default budget cap — long real-world flows (form filling, multi-step
   // checkouts) routinely run past the old $0.50 ceiling and got cut off
   // mid-run. The widget shows the running $ counter in the header instead,
@@ -727,6 +727,23 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         currentAgentId = wanted;
         await broadcastAgents();
+        return;
+      }
+      if (msg.type === 'set-model') {
+        // Persist the model for subsequent runs (sonnet / opus / haiku / …).
+        // Refuse mid-run so an in-flight invocation keeps the model it started
+        // with. Applies from the next command.
+        const wanted = msg.payload?.model;
+        if (typeof wanted !== 'string' || !wanted) {
+          send(ws, { type: 'error', payload: { message: 'set-model: model is required' } });
+          return;
+        }
+        if (activeRun) {
+          send(ws, { type: 'error', payload: { message: 'set-model: a command is already running; stop it first' } });
+          return;
+        }
+        model = wanted;
+        send(ws, { type: 'hello', payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION, optimizeMode } });
         return;
       }
       if (msg.type === 'set-api-key') {
