@@ -59,3 +59,6 @@ Thumbs.db
 .claude
 Harness
 superpowers
+# vscode-ext: generated, staged engine for the .vsix (Path A) — see scripts/stage-engine.mjs
+packages/vscode-ext/engine/node_modules/
+packages/vscode-ext/engine/*.tgz

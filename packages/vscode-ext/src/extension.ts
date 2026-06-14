@@ -21,6 +21,7 @@ import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
 import { registerSeedsView } from './seedsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
+import { startEngine, stopEngine } from './engine.js';
 
 /** Where the optimizer writes its candidate, relative to the workspace root:
  *  `.hover/cache/optimized/<spec>.draft`. */
@@ -62,6 +63,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.newProbeSeed', () => newProbeSeed()),
     vscode.commands.registerCommand('hover.runSpec', (item?: vscode.TreeItem | vscode.Uri) => runSpec(item)),
     vscode.commands.registerCommand('hover.switchMode', () => switchMode()),
+    vscode.commands.registerCommand('hover.startEngine', () => bootEngine(context, true)),
     vscode.commands.registerCommand('hover.specs.focus', () =>
       vscode.commands.executeCommand('workbench.view.extension.hover'),
     ),
@@ -100,10 +102,36 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   });
   context.subscriptions.push({ dispose: () => pool?.dispose() });
+
+  // Self-contained (Path A): boot the engine in-extension so the WS pool
+  // connects with no bundler plugin / dev server. Fire-and-forget; the pool
+  // connects when it's up. A missing staged engine (e.g. dev build before
+  // `stage:engine`) just leaves the extension in connect-when-available mode.
+  void bootEngine(context, false);
 }
 
 export function deactivate(): void {
   pool?.dispose();
+  stopEngine();
+}
+
+/** Start the hosted engine for the first workspace folder. `announce` shows a
+ *  toast on success/failure (for the explicit Start Engine command). */
+async function bootEngine(ctx: vscode.ExtensionContext, announce: boolean): Promise<void> {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!root) {
+    if (announce) void vscode.window.showWarningMessage('Hover: open a project folder to start the engine.');
+    return;
+  }
+  try {
+    const enginePort = await startEngine(ctx, root);
+    if (announce) void vscode.window.showInformationMessage(`Hover engine running on 127.0.0.1:${enginePort}.`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // Quiet on auto-start (the staged engine may be absent in dev); loud on demand.
+    if (announce) void vscode.window.showErrorMessage(`Hover engine failed to start: ${msg}`);
+    else console.error('[hover] engine auto-start failed:', msg);
+  }
 }
 
 function renderModeStatus(): void {
