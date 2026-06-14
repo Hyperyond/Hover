@@ -129,6 +129,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     animation: hov-spinborder 2.4s linear infinite;
   }
   @keyframes hov-spinborder { to { --hov-angle: 360deg; } }
+  /* Security mode running → orange border; pentest → red. Pulsing glow. */
+  body.border-security::after, body.border-pentest::after {
+    content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none; padding: 2.5px;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: hov-bpulse 1.6s ease-in-out infinite;
+  }
+  body.border-security::after { background: #fb923c; }
+  body.border-pentest::after { background: #f87171; }
+  @keyframes hov-bpulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 
@@ -284,7 +294,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           <button class="modepill" id="browser-toggle" type="button" title="Browser: Silent (headless) / Visible — click to toggle"><span id="browser-label">Silent</span><span class="caret">▾</span></button>
         </div>
         <div class="right">
-          <button class="modepill" id="mode" type="button" title="Switch mode (Testing / Security / Pentest)"><span class="bolt">⚡</span><span id="mode-label">Normal</span><span class="caret">▾</span></button>
+          <button class="modepill" id="mode" type="button" title="Switch mode (Testing / Security / Pentest)"><span class="bolt" id="mode-icon">⚡</span><span id="mode-label">Normal</span><span class="caret">▾</span></button>
           <button id="send" type="button" title="Send (Enter)" disabled>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
           </button>
@@ -299,9 +309,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   var sendBtn = document.getElementById('send');
   var cleared = false;
 
-  var speechOn = false, silentMode = false;
+  var speechOn = false, silentMode = false, currentModeId = null;
   function speak(text) { if (!speechOn || !text) return; try { if (window.speechSynthesis) { window.speechSynthesis.speak(new SpeechSynthesisUtterance(String(text).slice(0, 300))); } } catch (e) {} }
-  function applyBorder() { document.body.classList.toggle('silent-running', silentMode && running); }
+  // Running-border: pentest → red, security → orange, else silent → Chrome ring.
+  function applyBorder() {
+    var b = document.body;
+    b.classList.remove('silent-running', 'border-security', 'border-pentest');
+    if (!running) return;
+    if (currentModeId === 'pentest') b.classList.add('border-pentest');
+    else if (currentModeId === 'security') b.classList.add('border-security');
+    else if (silentMode) b.classList.add('silent-running');
+  }
   function fresh() { if (!cleared) { log.innerHTML = ''; cleared = true; } }
   function scroll() { if (typeof workingEl !== 'undefined' && workingEl && running && workingEl.parentNode) log.appendChild(workingEl); log.scrollTop = log.scrollHeight; }
   function addMessage(role, text) { fresh(); var el = document.createElement('div'); el.className = 'msg ' + role; el.textContent = text; log.appendChild(el); if (role === 'assistant') speak(text); scroll(); }
@@ -498,7 +516,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='step') addStep(m);
     else if (m.type==='result') addResult(m);
     else if (m.type==='reset') { log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
-    else if (m.type==='mode') { document.body.className = m.id ? 'mode-'+m.id : ''; document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal'; }
+    else if (m.type==='mode') {
+      currentModeId = m.id || null;
+      document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal';
+      document.getElementById('mode-icon').textContent = m.id==='pentest' ? '💀' : (m.id==='security' ? '🛡' : '⚡');
+      document.body.classList.remove('mode-security','mode-pentest');
+      if (m.id) document.body.classList.add('mode-'+m.id);
+      applyBorder();
+    }
     else if (m.type==='appstatus') {
       var dot=document.getElementById('app-dot'); var lab=document.getElementById('app-label');
       if (m.url) { var short=String(m.url).replace(/^https?:\\/\\//,'').replace(/\\/$/,''); lab.textContent = m.online ? short : short+' (offline)'; dot.className = m.online ? 'dot' : 'dot offline'; }
