@@ -242,6 +242,19 @@ export function activate(context: vscode.ExtensionContext): void {
   // connects when it's up. A missing staged engine (e.g. dev build before
   // `stage:engine`) just leaves the extension in connect-when-available mode.
   void bootEngine(context, false);
+
+  // One-time nudge: VSCode can't default a view to the Secondary Side Bar, so
+  // guide the user to dock Chat on the right for a code-center / chat-right
+  // layout (the placement persists once they move it).
+  if (!context.globalState.get('hover.chatHintShown')) {
+    void context.globalState.update('hover.chatHintShown', true);
+    void vscode.window.showInformationMessage(
+      'Hover Chat opened as its own panel. Drag it to the right (Secondary Side Bar) for a chat-beside-code layout.',
+      'Open Chat',
+    ).then((pick) => {
+      if (pick === 'Open Chat') void vscode.commands.executeCommand('hover.chat.focus');
+    });
+  }
 }
 
 export function deactivate(): void {

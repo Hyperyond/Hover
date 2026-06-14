@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "AI test authoring + application-security (authz / BOLA) testing in one extension — explore your app, crystallize verified flows into plain Playwright specs that run in CI with no AI.",
   "keywords": ["ai", "testing", "e2e", "end-to-end", "playwright", "security", "appsec", "authz", "bola", "idor", "test-automation"],
@@ -104,6 +104,11 @@
     "viewsContainers": {
       "activitybar": [
         {
+          "id": "hover-chat",
+          "title": "Hover Chat",
+          "icon": "resources/hover-chat.svg"
+        },
+        {
           "id": "hover",
           "title": "Hover",
           "icon": "resources/hover.svg"
@@ -111,14 +116,16 @@
       ]
     },
     "views": {
-      "hover": [
+      "hover-chat": [
         {
           "id": "hover.chat",
           "name": "Chat",
           "type": "webview",
-          "icon": "resources/hover.svg",
+          "icon": "resources/hover-chat.svg",
           "contextualTitle": "Hover"
-        },
+        }
+      ],
+      "hover": [
         {
           "id": "hover.specs",
           "name": "Specs",
