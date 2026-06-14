@@ -20,6 +20,7 @@ import { SpecLensProvider } from './specLens.js';
 import { registerSpecsView } from './specsView.js';
 import { registerSessionsView } from './sessionsView.js';
 import { registerSeedsView } from './seedsView.js';
+import { registerChatView } from './chatView.js';
 
 /** Where the optimizer writes its candidate, relative to the workspace root:
  *  `.hover/cache/optimized/<spec>.draft`. */
@@ -50,8 +51,14 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
-  // Native sidebar: three views under the Hover Activity Bar container.
-  context.subscriptions.push(...registerSpecsView(), ...registerSessionsView(), ...registerSeedsView());
+  // Sidebar under the Hover Activity Bar container: chat (webview) + three
+  // native tree views.
+  context.subscriptions.push(
+    registerChatView(),
+    ...registerSpecsView(),
+    ...registerSessionsView(),
+    ...registerSeedsView(),
+  );
 
   // Status bar: current mode + service connection, click to switch mode.
   modeStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);

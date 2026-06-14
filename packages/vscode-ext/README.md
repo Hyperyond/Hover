@@ -18,7 +18,12 @@ why-primary) and `docs/superpowers/specs/2026-06-06-vscode-extension-design.md`
 Native UI (no webview; matches VSCode's look). One extension for **testing +
 application security** — the split is a mode switch, not two extensions.
 
-**Activity Bar → Hover** has three views:
+**Activity Bar → Hover** has four views:
+
+- **Chat** — a webview panel: describe a flow in natural language and (once the
+  engine is wired in) Hover drives a browser and crystallizes the verified flow
+  into a spec. Styled with VSCode theme tokens. *(UI shell today; engine wiring
+  is the next slice.)*
 
 - **Specs** — crystallized `*.spec.ts` / `*.security.spec.ts`, grouped into
   **Tests** and **Security**, with the stamped prompt as the row description.
