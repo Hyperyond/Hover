@@ -90,9 +90,33 @@ interface SpecMsg {
 let transcript: SpecMsg[] = [];
 let runSessionId: string | undefined;
 let stepCount = 0;
+/** Most recent reachable dev URL (configured or auto-detected). */
+let detectedUrl: string | null = null;
+/** Resolver for an in-flight ensureBrowser() handshake. */
+let pendingBrowser: ((ok: boolean) => void) | undefined;
 
-/** Hand a chat prompt to the engine. */
-function runPrompt(prompt: string): void {
+/** Ensure a debug browser is up before a run (self-heal). Idempotent on the
+ *  engine side (launchDebugChrome no-ops if Chrome is already on the CDP port),
+ *  so this both first-launches and relaunches a browser that went away. */
+function ensureBrowser(url: string): Promise<boolean> {
+  if (!pool) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    pendingBrowser?.(false); // supersede any prior wait
+    let timer: ReturnType<typeof setTimeout>;
+    const done = (ok: boolean): void => {
+      if (pendingBrowser !== done) return;
+      clearTimeout(timer);
+      pendingBrowser = undefined;
+      resolve(ok);
+    };
+    pendingBrowser = done;
+    timer = setTimeout(() => done(false), 25_000);
+    pool?.launchChrome(url, isSilent());
+  });
+}
+
+/** Hand a chat prompt to the engine, ensuring the browser is up first. */
+async function runPrompt(prompt: string): Promise<void> {
   if (connectedServices === 0 || !pool) {
     chatProvider?.pushSystem('Engine not connected yet — give it a moment after opening the project, or run "Hover: Start Engine".');
     return;
@@ -100,7 +124,20 @@ function runPrompt(prompt: string): void {
   transcript.push({ kind: 'user', text: prompt });
   stepCount = 0;
   chatProvider?.setRunning(true);
-  if (!pool.run(prompt, runSessionId)) chatProvider?.pushSystem('Could not reach the engine.');
+
+  const url = vscode.workspace.getConfiguration('hover').get<string>('appUrl') || detectedUrl;
+  if (url) {
+    const ready = await ensureBrowser(url);
+    if (!ready) {
+      chatProvider?.setRunning(false);
+      chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Is the dev server running? Click "▶ Start App".`);
+      return;
+    }
+  }
+  if (!pool?.run(prompt, runSessionId)) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem('Could not reach the engine.');
+  }
 }
 
 /** Translate a streamed engine event into chat updates + transcript. */
@@ -116,6 +153,11 @@ function handleServerMessage(msg: ServerMessage): void {
   }
   if (msg.type === 'run-active') {
     chatProvider?.setRunning(true);
+    return;
+  }
+  if (msg.type === 'cdp-status') {
+    const p = (msg.payload ?? {}) as { state?: string; launching?: boolean };
+    if (!p.launching && pendingBrowser) pendingBrowser(p.state === 'same-window' || p.state === 'wrong-window');
     return;
   }
   if (msg.type !== 'event') return;
@@ -144,6 +186,10 @@ function handleServerMessage(msg: ServerMessage): void {
         if (/cdp|chrome|debug|9222|connect|browser/i.test(summary)) {
           chatProvider?.pushSystem('No app browser detected — click "▶ Start App" (in the chat) to start your dev server + browser.');
         }
+      } else if (stepCount === 0) {
+        // No browser actions — the agent just replied (e.g. a vague prompt).
+        // Don't fake a PASS; show it as a plain reply.
+        chatProvider?.pushAssistant(String(ev.summary ?? 'Done.'));
       } else {
         chatProvider?.pushResult('PASS', String(ev.summary ?? 'Done.'), stepCount);
       }
@@ -200,6 +246,7 @@ async function pollAppStatus(): Promise<void> {
   for (const u of candidates) {
     if (await probeUrl(u)) { online = u; break; }
   }
+  detectedUrl = online ?? (configured || null);
   chatProvider?.updateApp(Boolean(online), online ?? configured ?? null);
 }
 
@@ -365,7 +412,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // native tree views.
   const chat = registerChatView();
   chatProvider = chat.provider;
-  chatProvider.runHandler = (prompt) => runPrompt(prompt);
+  chatProvider.runHandler = (prompt) => void runPrompt(prompt);
   context.subscriptions.push(chat.disposable, ...registerSpecsView(), ...registerSessionsView(), ...registerSeedsView());
 
   // Status bar: current mode + service connection, click to switch mode.

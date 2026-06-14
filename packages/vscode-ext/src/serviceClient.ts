@@ -116,7 +116,13 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         const current = typeof msg.payload?.current === 'string' ? msg.payload.current : null;
         const available = Array.isArray(msg.payload?.available) ? (msg.payload!.available as AgentEntry[]) : [];
         handlers.onAgents(current, available);
-      } else if (msg.type === 'event' || msg.type === 'error' || msg.type === 'spec-saved' || msg.type === 'run-active') {
+      } else if (
+        msg.type === 'event' ||
+        msg.type === 'error' ||
+        msg.type === 'spec-saved' ||
+        msg.type === 'run-active' ||
+        msg.type === 'cdp-status'
+      ) {
         handlers.onServerMessage?.(msg as ServerMessage);
       }
     });

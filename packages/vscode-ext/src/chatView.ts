@@ -137,6 +137,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   @keyframes hoverpulse { 0%,100% { opacity: .3; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.12); } }
   .msg { padding: 8px 11px; border-radius: 10px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
   .msg.user { align-self: flex-end; max-width: 88%; background: var(--accent); color: var(--accent-ink); font-weight: 500; }
+  .msg.assistant { align-self: flex-start; max-width: 88%; background: var(--bg-2); border: 1px solid var(--line); }
   .msg.system { align-self: stretch; font-size: 12px; color: var(--text-mute); background: var(--bg-2); border: 1px solid var(--line); }
   .step { display: flex; align-items: center; gap: 9px; padding: 9px 11px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; }
   .step .check { color: var(--accent); font-weight: 700; }
