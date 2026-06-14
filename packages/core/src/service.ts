@@ -1120,6 +1120,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
                 name: reRecordSlug,
                 steps: runResult.steps,
                 overwrite: true,
+                // Same credential redaction as save-spec: if the re-record
+                // logged in via an @account, keep the creds out of the rewritten
+                // spec (parameterize into process.env refs).
+                redactions: msg.payload?.redactions,
               });
               emitToRun({
                 type: 'spec-saved',

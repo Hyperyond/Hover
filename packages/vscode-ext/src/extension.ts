@@ -939,6 +939,21 @@ async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   stepCount = 0;
   runCost = 0;
   chatProvider?.setRunning(true);
+
+  // Resolve @account mentions in the original prompt so the re-run can log in,
+  // and redact those creds out of the rewritten spec (engine-side writeSpec).
+  const resolved = (await envStore?.resolveMentions(prompt)) ?? [];
+  const accounts = resolved.map((a) => ({ label: a.label, username: a.username, password: a.password, role: a.role }));
+  const redactions: { value: string; envVar: string }[] = [];
+  for (const a of resolved) {
+    if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
+    if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
+  }
+  const missing = resolved.filter((a) => !a.password).map((a) => a.label);
+  if (missing.length) {
+    chatProvider?.pushSystem(`Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the re-record can log in.`);
+  }
+
   const url = await resolveTargetUrl();
   if (url) {
     const ready = await ensureBrowser(url);
@@ -948,7 +963,7 @@ async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
       return;
     }
   }
-  if (!pool?.reRecord(prompt, slug)) {
+  if (!pool?.reRecord(prompt, slug, accounts, redactions)) {
     chatProvider?.setRunning(false);
     chatProvider?.pushSystem('Could not reach the engine.');
   }
