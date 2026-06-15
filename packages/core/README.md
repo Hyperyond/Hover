@@ -57,28 +57,27 @@ agent's prompt-injection surface and needs no filesystem access. It writes an
 promotes or discards it via diff — **the deterministic original is always
 preserved**. Off by default.
 
-### Seed library — extending translation (`.hover/rules/`)
+### Seed library — translation patterns (`BUILTIN_SEEDS`)
 
-The optimization pass generalizes from **seeds**: human-written worked examples
-of "captured steps → the Playwright code they should produce." This is how
-coverage of new multi-step patterns grows **without core changes** — you (or the
-community) drop a JSON file; the pass picks it up as few-shot.
+The optimization pass generalizes from **seeds**: worked examples of "captured
+steps → the Playwright code they should produce", fed to the pass as few-shot.
+They ship inlined as the `BUILTIN_SEEDS` constant in
+[`src/specs/seeds.ts`](src/specs/seeds.ts) (`download`, `file-upload`, `dialog`,
+`network-gated-assertion`, `oauth-popup`); a seed is a `signature` (tool names)
++ a concrete `example` (`steps` → `code`):
 
-A seed lives at `<projectRoot>/.hover/rules/<name>.json` and matches
-[`src/specs/seed.schema.json`](src/specs/seed.schema.json):
-
-```json
+```ts
 {
-  "name": "oauth-popup",
-  "signature": ["browser_click", "browser_tabs:select"],
-  "note": "sign in through a provider popup that opens a new tab",
-  "example": {
-    "steps": [
-      { "tool": "browser_click", "element": "Sign in with Google button" },
-      { "tool": "browser_tabs", "action": "select", "idx": 1 }
+  name: 'oauth-popup',
+  signature: ['browser_click', 'browser_tabs:select'],
+  note: 'sign in through a provider popup that opens a new tab',
+  example: {
+    steps: [
+      { tool: 'browser_click', element: 'Sign in with Google button' },
+      { tool: 'browser_tabs', action: 'select', idx: 1 },
     ],
-    "code": "const [popup] = await Promise.all([\n  context.waitForEvent('page'),\n  page.getByRole('button', { name: 'Sign in with Google' }).click(),\n]);\nawait popup.getByLabel('Email').fill('user@example.com');"
-  }
+    code: `const [popup] = await Promise.all([ ... ]);`,
+  },
 }
 ```
 
@@ -87,18 +86,10 @@ A seed lives at `<projectRoot>/.hover/rules/<name>.json` and matches
   in the spec being optimized. It is **not** exact-matched.
 - **`code`** must obey the same rules as generated specs: semantic selectors, no
   XPath, no `waitForTimeout`.
-- **Built-in seeds** are JSON files in this package's
-  [`seeds/optimization/`](seeds/optimization/) directory — the full catalogue
-  ships with Hover (`download`, `file-upload`, `dialog`,
-  `network-gated-assertion`, `oauth-popup`), loaded synchronously at module init
-  into `BUILTIN_SEEDS`. Adding a built-in = dropping a JSON there (no code
-  change); `readSeeds(projectRoot)` returns those plus your `.hover/rules/*.json`
-  (malformed files skipped, not fatal). Semantic / judgement-based optimizations
-  (e.g. *which* feedback text to assert) are not seeds — they're standing
-  instructions in the prompt.
-- **Suppressing a built-in:** list its `name` under `disabled` in
-  `<projectRoot>/.hover/seeds.json` — e.g. `{ "disabled": ["oauth-popup"] }` —
-  and `readSeeds` filters it out.
+- Adding a pattern = appending a `SeedRule` to `BUILTIN_SEEDS`. There is no
+  user-authored-seed file mechanism: the catalogue is curated and ships with
+  Hover. Semantic / judgement-based optimizations (e.g. *which* feedback text to
+  assert) are not seeds — they're standing instructions in the prompt.
 
 ## Smoke test
 

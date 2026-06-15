@@ -53,7 +53,7 @@ Point them at any environment with `BASE_URL` (and the `HOVER_<LABEL>_*` account
 | 🟠 **Security** | Business / authz — MITM-replay IDOR / auth-bypass / parameter-tampering → `.security.spec.ts` CI gates |
 | 🔴 **Pentest** | Offensive — SQLi / XSS / SSTI / SSRF / IDOR on your **own** dev app → a findings report |
 
-Both are taught by **seeds** — small probe recipes (8 access-control + 9 vulnerability classes). The catalogue ships built-in; add your own JSON under `<root>/.hover/rules/`.
+Both run off a built-in **probe catalogue** — small recipes covering 8 access-control + 9 vulnerability classes, curated and shipped with Hover.
 
 ## Other surfaces
 
