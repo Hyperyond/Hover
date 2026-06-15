@@ -42,6 +42,19 @@ function originOf(u: string): string | null {
   try { return new URL(u).origin; } catch { return null; }
 }
 
+/** First line of an error, for a compact tool result. */
+function errLine(e: unknown): string {
+  return e instanceof Error ? e.message.split('\n')[0] : String(e);
+}
+
+/** Human label for a grounded target, for the tool's ✓/✗ result text. */
+function describe(g: { role?: string; name?: string; text?: string; testId?: string }): string {
+  if (g.role && g.name) return `${g.role} "${g.name}"`;
+  if (g.testId) return `testId "${g.testId}"`;
+  if (g.text) return `text "${g.text}"`;
+  return '(no target)';
+}
+
 /** Pick the page on the dev origin (the app under test), else the first page. */
 async function pickPage(): Promise<{ page: Page; close: () => Promise<void> } | null> {
   let browser;
@@ -57,6 +70,34 @@ async function pickPage(): Promise<{ page: Page; close: () => Promise<void> } | 
   const match = wantOrigin ? pages.find((p) => originOf(p.url()) === wantOrigin) : undefined;
   return { page: match ?? pages[0], close };
 }
+
+/**
+ * Build a grounded locator from what the agent read off the snapshot, in
+ * preference order: role+name (semantic, survives markup churn — Hover's
+ * preferred form) → testId (stable) → text (real visible text). All three are
+ * deterministic and crystallize 1:1; the agent never passes a freeform
+ * description, so the saved selector can't be a confabulation. Returns null
+ * when nothing usable was supplied.
+ */
+function locate(
+  page: Page,
+  g: { role?: string; name?: string; text?: string; testId?: string },
+): ReturnType<Page['locator']> | null {
+  if (g.role && g.name) return page.getByRole(g.role as Parameters<Page['getByRole']>[0], { name: g.name });
+  if (g.testId) return page.getByTestId(g.testId);
+  if (g.text) return page.getByText(g.text);
+  return null;
+}
+
+/** Shared "where" schema for the grounded actuation tools. */
+const GROUND = {
+  role: z.string().optional().describe("ARIA role from the snapshot, e.g. 'button', 'textbox', 'link'. Pair with `name`."),
+  name: z.string().optional().describe("Accessible name from the snapshot, exactly as shown. Pair with `role`."),
+  testId: z.string().optional().describe('A data-testid, if the element has one and no clean role+name (e.g. an unlabeled icon button).'),
+  text: z.string().optional().describe('Real visible text on the element — last resort when there is no role+name or testId.'),
+};
+
+const NEED_TARGET = '✗ pass role+name (preferred), or testId, or text — taken from the snapshot.';
 
 const server = new McpServer({ name: 'hover-control', version: '0.0.0' });
 
@@ -83,6 +124,79 @@ server.registerTool(
       return md(`✓ ${checked === false ? 'unchecked' : 'checked'} ${role} "${name}"${ok === null ? '' : ` (isChecked=${ok})`}`);
     } catch (e) {
       return md(`✗ could not toggle ${role} "${name}": ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
+    } finally {
+      await close();
+    }
+  },
+);
+
+server.registerTool(
+  'click_control',
+  {
+    description:
+      "Click an element by its accessible role + name (or testId / visible text) taken from the snapshot. This is how you click in Hover — Playwright's browser_click is disabled in this mode because its free-form element description doesn't round-trip to a replayable selector. Pass the role + name you see in browser_snapshot (e.g. role 'button', name 'Continue'). Crystallizes into page.getByRole(role, { name }).click().",
+    inputSchema: { ...GROUND },
+  },
+  async (g) => {
+    const picked = await pickPage();
+    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    const { page, close } = picked;
+    try {
+      const loc = locate(page, g);
+      if (!loc) return md(NEED_TARGET);
+      await loc.click({ timeout: 5000 });
+      return md(`✓ clicked ${describe(g)}`);
+    } catch (e) {
+      return md(`✗ could not click ${describe(g)}: ${errLine(e)}`);
+    } finally {
+      await close();
+    }
+  },
+);
+
+server.registerTool(
+  'fill_control',
+  {
+    description:
+      "Type a value into a text field by its accessible role + name (usually role 'textbox') taken from the snapshot, or testId / its label text. Use instead of Playwright's browser_type / browser_fill_form (disabled here). Crystallizes into page.getByRole('textbox', { name }).fill(value).",
+    inputSchema: { ...GROUND, value: z.string().describe('The text to type into the field.') },
+  },
+  async ({ value, ...g }) => {
+    const picked = await pickPage();
+    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    const { page, close } = picked;
+    try {
+      const loc = locate(page, g);
+      if (!loc) return md(NEED_TARGET);
+      await loc.fill(value, { timeout: 5000 });
+      return md(`✓ filled ${describe(g)} = "${value}"`);
+    } catch (e) {
+      return md(`✗ could not fill ${describe(g)}: ${errLine(e)}`);
+    } finally {
+      await close();
+    }
+  },
+);
+
+server.registerTool(
+  'select_control',
+  {
+    description:
+      "Choose an option in a <select> by its accessible name (role defaults to 'combobox') taken from the snapshot. Use instead of Playwright's browser_select_option (disabled here). Crystallizes into page.getByRole('combobox', { name }).selectOption(value).",
+    inputSchema: { ...GROUND, value: z.string().describe('The option label or value to choose.') },
+  },
+  async ({ value, ...g }) => {
+    const picked = await pickPage();
+    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    const { page, close } = picked;
+    try {
+      // A <select> is role 'combobox' — default it so the agent can pass name alone.
+      const loc = locate(page, { ...g, role: g.role ?? (g.name ? 'combobox' : undefined) });
+      if (!loc) return md(NEED_TARGET);
+      await loc.selectOption(value, { timeout: 5000 });
+      return md(`✓ selected "${value}" in ${describe(g)}`);
+    } catch (e) {
+      return md(`✗ could not select in ${describe(g)}: ${errLine(e)}`);
     } finally {
       await close();
     }

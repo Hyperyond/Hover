@@ -45,6 +45,12 @@ export interface RunSessionOptions {
   /** Extra hard-sandbox allow-list prefixes — e.g. active-mode plugin MCP
    *  server ids the service contributes. Appended to ['mcp__playwright']. */
   allowedToolsExtra?: string[];
+  /** Extra hard-sandbox deny entries — specific tools to forbid even though
+   *  their server is allowed. Normal mode passes the Playwright interaction
+   *  tools (browser_click / _type / _fill_form / _select_option) here so the
+   *  agent must use the grounded mcp__hover-control__* actuation tools, whose
+   *  role+name selectors crystallize 1:1 instead of confabulating getByText. */
+  disallowedToolsExtra?: string[];
   /** Appended to the agent's system prompt (the service folds in cdpHint +
    *  conventions + plugin additions + a language directive; the CLI omits it). */
   appendSystemPrompt?: string;
@@ -107,7 +113,7 @@ export async function runSession(
       ? ['mcp__playwright', ...(opts.allowedToolsExtra ?? [])]
       : undefined,
     disallowedTools: isHardSandbox
-      ? (descriptor?.defaultDisallowedTools ? [...descriptor.defaultDisallowedTools] : undefined)
+      ? [...(descriptor?.defaultDisallowedTools ?? []), ...(opts.disallowedToolsExtra ?? [])]
       : undefined,
     maxBudgetUsd: opts.maxBudgetUsd,
     model: opts.model,

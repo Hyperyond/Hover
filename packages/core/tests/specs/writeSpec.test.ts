@@ -161,6 +161,70 @@ describe('writeSpec — control actuation (check_control)', () => {
   });
 });
 
+describe('writeSpec — grounded actuation (click/fill/select_control)', () => {
+  // These carry role+name / testId / text straight from the snapshot, so the
+  // crystallized selector is grounded — never a confabulated getByText.
+  it('click_control with role+name → getByRole().click()', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'click continue',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Continue' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByRole("button", { name: "Continue" })`);
+    expect(src).toContain('el.click()');
+    expect(countOptimizableMarkers(src)).toBe(0);
+  });
+
+  it('fill_control → getByRole(textbox).fill(value)', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'fill email',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+        { kind: 'step', tool: 'mcp__hover-control__fill_control', input: { role: 'textbox', name: 'email', value: 'a@b.co' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByRole("textbox", { name: "email" })`);
+    expect(src).toContain(`el.fill("a@b.co")`);
+  });
+
+  it('select_control defaults role to combobox from name alone', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'pick state',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+        { kind: 'step', tool: 'mcp__hover-control__select_control', input: { name: 'state', value: 'CA' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByRole("combobox", { name: "state" })`);
+    expect(src).toContain(`el.selectOption("CA")`);
+  });
+
+  it('click_control falls back to testId, then text', async () => {
+    const byTestId = await writeSpec({
+      devRoot, name: 'icon delete',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { testId: 'delete-row' } },
+      ],
+    });
+    expect(readFileSync(byTestId.path, 'utf-8')).toContain(`page.getByTestId("delete-row")`);
+
+    const byText = await writeSpec({
+      devRoot, name: 'click link', overwrite: true,
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { text: 'Learn more' } },
+      ],
+    });
+    expect(readFileSync(byText.path, 'utf-8')).toContain(`page.getByText("Learn more")`);
+  });
+});
+
 describe('countOptimizableMarkers', () => {
   it('counts marker lines, ignoring the same text inside a string literal', () => {
     const src = [

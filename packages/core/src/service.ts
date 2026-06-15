@@ -158,6 +158,32 @@ const ZH_OUTPUT_DIRECTIVE =
   '角色名、标签、可访问名称和选择器——不要把它们翻译成中文。';
 
 /**
+ * Normal-mode grounded actuation. The Playwright MCP interaction tools take a
+ * free-form `element` description that doesn't round-trip to a replayable
+ * selector (it gets crystallized as a confabulated getByText). So in normal
+ * mode we DENY them and route every interaction through the Hover control MCP,
+ * whose role+name/testId/text args come straight from the snapshot and
+ * crystallize 1:1. (Security / pentest keep the Playwright tools — they explore
+ * to capture traffic, not to crystallize browser steps.)
+ */
+const GROUNDED_ACTUATION_DENY = [
+  'mcp__playwright__browser_click',
+  'mcp__playwright__browser_type',
+  'mcp__playwright__browser_fill_form',
+  'mcp__playwright__browser_select_option',
+];
+const GROUNDED_ACTUATION_DIRECTIVE =
+  'INTERACTING WITH THE PAGE: browser_click / browser_type / browser_fill_form / ' +
+  'browser_select_option are disabled. To act on the page, use the Hover control ' +
+  'tools — mcp__hover-control__click_control / fill_control / select_control / ' +
+  'check_control — passing the element\'s accessible role + name exactly as they ' +
+  'appear in the latest browser_snapshot (fall back to its testId, then its real ' +
+  'visible text, only when there is no clean role+name). Always browser_snapshot ' +
+  'first to read the real role + name. This keeps the saved spec\'s selectors ' +
+  'grounded in what the page actually exposes. browser_navigate / browser_snapshot ' +
+  '/ browser_wait_for / browser_tabs / browser_press_key remain available.';
+
+/**
  * Try to bind a WebSocketServer to <host>:<port>. Resolves with the wss on
  * success; rejects with the bind error (typically EADDRINUSE) on failure.
  */
@@ -1098,6 +1124,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           appendSystemPrompt = `${appendSystemPrompt}\n\n${ZH_OUTPUT_DIRECTIVE}`;
         }
 
+        // Normal mode (no security/pentest plugin active): force grounded
+        // actuation — the agent uses mcp__hover-control__* instead of the
+        // Playwright interaction tools, so saved selectors are role+name, never
+        // a confabulated getByText.
+        const groundedActuation = currentModeId === null;
+        if (groundedActuation) {
+          appendSystemPrompt = `${appendSystemPrompt}\n\n${GROUNDED_ACTUATION_DIRECTIVE}`;
+        }
+
         // Snapshot the agent id so a switch-agent message during the run
         // can't smear two agents across one invocation. (We also gate
         // switch-agent on an active run, but defense in depth.) runSession gates
@@ -1137,6 +1172,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             // mcp__playwright covers every browser tool; active-mode plugin MCP
             // servers are appended. (Save-as-Skill retired → no Skill tool.)
             allowedToolsExtra: activePluginMcpIds,
+            // Normal mode: deny the Playwright interaction tools so the agent
+            // must use the grounded mcp__hover-control__* actuation tools.
+            disallowedToolsExtra: groundedActuation ? GROUNDED_ACTUATION_DENY : undefined,
             maxBudgetUsd,
             model,
             apiKey: currentApiKey,

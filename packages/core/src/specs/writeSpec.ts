@@ -516,12 +516,22 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
   // to drop every Hover-MCP step (e.g. check_control) to an optimizable marker.
   const tool = rawTool.replace(/^mcp__[a-z0-9_-]+?__/, '');
   switch (tool) {
-    // Hover control-actuation tool → a deterministic role-based check step.
+    // Hover control-actuation tools → deterministic, grounded role/testid/text
+    // selectors (the agent passed these from the snapshot, so they replay).
     case 'check_control': {
       const role = String(input.role ?? 'radio');
       const name = String(input.name ?? '');
       const action = input.checked === false ? 'uncheck()' : 'check()';
       return [`await ${pageVar}.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)} }).${action}`];
+    }
+    case 'click_control':
+      return emitInteraction(groundedSelector(input, pageVar), 'click()');
+    case 'fill_control':
+      return emitInteraction(groundedSelector(input, pageVar), `fill(${renderFillValue(String(input.value ?? ''))})`);
+    case 'select_control': {
+      // A <select> is role 'combobox'; default it so a name-only step resolves.
+      const withRole = input.role ? input : { ...input, role: input.name ? 'combobox' : undefined };
+      return emitInteraction(groundedSelector(withRole, pageVar), `selectOption(${JSON.stringify(String(input.value ?? ''))})`);
     }
     case 'browser_navigate': {
       const url = String(input.url ?? '');
@@ -650,6 +660,25 @@ export function selectorFromDescription(desc: string, pageVar = 'page'): string 
   if (quoted) return `${pageVar}.getByText(${JSON.stringify(quoted[1])})`;
 
   return `${pageVar}.getByText(${JSON.stringify(trimmed)})`;
+}
+
+/**
+ * Selector for a Hover control-actuation step (click/fill/select_control). The
+ * agent supplied these fields straight from the snapshot, in the same priority
+ * order the actuation server resolves them — role+name → testId → text — so the
+ * crystallized selector is exactly the one that drove the action at record time
+ * (no free-form description, hence no confabulation). Mirrors
+ * `locate()` in `mcp/actuateServer.ts`.
+ */
+function groundedSelector(input: Record<string, unknown>, pageVar = 'page'): string {
+  const role = typeof input.role === 'string' ? input.role : '';
+  const name = typeof input.name === 'string' ? input.name : '';
+  const testId = typeof input.testId === 'string' ? input.testId : '';
+  const text = typeof input.text === 'string' ? input.text : '';
+  if (role && name) return `${pageVar}.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)} })`;
+  if (testId) return `${pageVar}.getByTestId(${JSON.stringify(testId)})`;
+  if (text) return `${pageVar}.getByText(${JSON.stringify(text)})`;
+  return `${pageVar}.locator('body')`;
 }
 
 /**
