@@ -148,7 +148,7 @@
       },
       {
         "command": "hover.reRecordSpec",
-        "title": "Re-record",
+        "title": "Self-heal (re-record)",
         "category": "Hover",
         "icon": "$(record)"
       },

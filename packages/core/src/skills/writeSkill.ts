@@ -1,14 +1,17 @@
 /**
  * Captured-step type.
  *
- * NOTE: Save-as-Skill (writing `.claude/skills/<slug>/SKILL.md` for agent
- * replay) was retired — `spec` + ⟳ Re-record covers intent-driven replay, and
- * "skill" collided with Claude Code's own skills concept. All that remains
- * here is `SkillStep`: the serialized message shape from the widget's
- * localStorage, which the whole spec pipeline (writeSpec, sidecar, listSpecs,
- * Page-Object extraction) consumes as `SpecStep`. The file keeps its path so
- * the many `import { SkillStep } from '../skills/writeSkill.js'` call sites
- * don't churn; renaming to a neutral module is a separate mechanical pass.
+ * @deprecated MODULE SLATED FOR REMOVAL. Save-as-Skill (writing
+ * `.claude/skills/<slug>/SKILL.md` for agent replay) was retired — `spec` +
+ * Self-healing (⟳ Re-record) covers intent-driven replay, and "skill" collided
+ * with Claude Code's own skills concept. All that remains here is `SkillStep`:
+ * the serialized captured-step shape the whole spec pipeline (writeSpec,
+ * sidecar, listSpecs, Page-Object extraction) consumes as `SpecStep`.
+ *
+ * TODO(cleanup): relocate `SkillStep` to a neutral module (e.g.
+ * `specs/specStep.ts`) and update the `import … from '../skills/writeSkill.js'`
+ * call sites, then delete this file. The path is kept for now only so those
+ * call sites don't churn ahead of that one mechanical pass.
  */
 
 /**

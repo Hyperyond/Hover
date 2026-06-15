@@ -1218,12 +1218,12 @@ async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
     /* unreadable */
   }
   if (!prompt) {
-    void vscode.window.showWarningMessage('Hover: this spec has no "Original prompt:" header (hand-authored) — it can\'t be re-recorded.');
+    void vscode.window.showWarningMessage('Hover: this spec has no "Original prompt:" header (hand-authored) — it can\'t be self-healed.');
     return;
   }
   const slug = specSlug(uri);
   await chatProvider?.reveal();
-  chatProvider?.pushSystem(`Re-recording "${slug}" — ${prompt}`);
+  chatProvider?.pushSystem(`Self-healing "${slug}" (re-recording) — ${prompt}`);
   stepCount = 0;
   runCost = 0;
   runTokens = 0;
@@ -1240,7 +1240,7 @@ async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   }
   const missing = resolved.filter((a) => !a.password).map((a) => a.label);
   if (missing.length) {
-    chatProvider?.pushSystem(`Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the re-record can log in.`);
+    chatProvider?.pushSystem(`Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the self-heal can log in.`);
   }
 
   const url = await resolveTargetUrl();
