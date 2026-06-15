@@ -30,7 +30,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
 import type { Flow, FlowStore } from './mitm/flows.js';
 import { replayFlow, type MutateOptions } from './mitm/replay.js';
-import { suggestProbes, cookieHeaderFor, builtinSecuritySeeds, readDisabledSeeds, adjudicate, type StorageState, type SecurityCheckStep, type BrowserFinding, type SeedCategory, type OracleResponse } from '@hover-dev/probe-engine';
+import { suggestProbes, cookieHeaderFor, builtinSecuritySeeds, adjudicate, type StorageState, type SecurityCheckStep, type BrowserFinding, type SeedCategory, type OracleResponse } from '@hover-dev/probe-engine';
 
 const PORT_RETRIES = 10;
 const DEFAULT_PORT = 51850;
@@ -435,18 +435,12 @@ export async function startControlPlane(
       }
 
       if (req.method === 'GET' && path === '/suggest-probes') {
-        // Match captured flows against the built-in probe seeds → the
+        // Match captured flows against the built-in probe catalogue → the
         // "what's worth probing" list the agent acts on. store.list()
         // returns full flows (headers + body), which suggestProbes needs.
         // Security mode restricts to authz seeds via `seedCategories`.
-        // A project can suppress a built-in by name in `.hover/seeds.json`
-        // (the same opt-out file the optimization-seed loader honours).
-        const disabled = await readDisabledSeeds(identityRoot);
-        const seeds = disabled.size
-          ? builtinSecuritySeeds.filter(s => !disabled.has(s.name))
-          : builtinSecuritySeeds;
         sendJson(res, 200, {
-          suggestions: suggestProbes(store.list(), seeds, { categories: options.seedCategories }),
+          suggestions: suggestProbes(store.list(), builtinSecuritySeeds, { categories: options.seedCategories }),
         });
         return;
       }

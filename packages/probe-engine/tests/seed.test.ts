@@ -1,12 +1,6 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { loadSecuritySeeds, isSecuritySeed, readDisabledSeeds } from '../src/seed.js';
-
-let devRoot: string;
-beforeEach(() => { devRoot = mkdtempSync(join(tmpdir(), 'hover-sec-seed-')); });
-afterEach(() => { rmSync(devRoot, { recursive: true, force: true }); });
+import { describe, test, expect } from 'vitest';
+import { isSecuritySeed } from '../src/seed.js';
+import { builtinSecuritySeeds } from '../src/builtins.js';
 
 const idor = {
   name: 'idor-numeric-id', class: 'idor',
@@ -14,12 +8,6 @@ const idor = {
   probe: { strategy: 'replay as B', signal: 'B gets A data' },
 };
 const optimizationSeed = { name: 'download', signature: ['browser_click'], example: { steps: [], code: 'x' } };
-
-function writeRule(rel: string, obj: unknown): void {
-  const p = join(devRoot, '.hover', 'rules', rel);
-  mkdirSync(join(p, '..'), { recursive: true });
-  writeFileSync(p, JSON.stringify(obj), 'utf-8');
-}
 
 describe('isSecuritySeed', () => {
   test('accepts a probe seed, rejects an optimization seed', () => {
@@ -36,43 +24,16 @@ describe('isSecuritySeed', () => {
   });
 });
 
-describe('loadSecuritySeeds', () => {
-  test('loads from rules/ and rules/security/, ignores optimization seeds', async () => {
-    writeRule('security/idor.json', idor);
-    writeRule('download.json', optimizationSeed);
-    const seeds = await loadSecuritySeeds(devRoot);
-    expect(seeds.map(s => s.name)).toEqual(['idor-numeric-id']);
+describe('builtinSecuritySeeds (inlined catalogue)', () => {
+  test('ships a non-empty catalogue of well-formed seeds with unique names', () => {
+    expect(builtinSecuritySeeds.length).toBeGreaterThan(0);
+    expect(builtinSecuritySeeds.every(isSecuritySeed)).toBe(true);
+    const names = builtinSecuritySeeds.map(s => s.name);
+    expect(new Set(names).size).toBe(names.length);
   });
-  test('returns [] when no rules dir exists', async () => {
-    expect(await loadSecuritySeeds(devRoot)).toEqual([]);
-  });
-  test('dedupes by name when a seed is in both rules/ and rules/security/', async () => {
-    writeRule('idor.json', idor);
-    writeRule('security/idor.json', idor);
-    const seeds = await loadSecuritySeeds(devRoot);
-    expect(seeds.map(s => s.name)).toEqual(['idor-numeric-id']);
-  });
-});
-
-describe('readDisabledSeeds', () => {
-  function writeSeedsConfig(obj: unknown): void {
-    const p = join(devRoot, '.hover', 'seeds.json');
-    mkdirSync(join(p, '..'), { recursive: true });
-    writeFileSync(p, JSON.stringify(obj), 'utf-8');
-  }
-
-  test('returns an empty set when .hover/seeds.json is absent', async () => {
-    expect((await readDisabledSeeds(devRoot)).size).toBe(0);
-  });
-  test('reads the disabled name list', async () => {
-    writeSeedsConfig({ disabled: ['jwt-claim-tamper', 'cors-reflected-origin'] });
-    const disabled = await readDisabledSeeds(devRoot);
-    expect(disabled.has('jwt-claim-tamper')).toBe(true);
-    expect(disabled.has('cors-reflected-origin')).toBe(true);
-    expect(disabled.has('idor-numeric-id')).toBe(false);
-  });
-  test('ignores a malformed file and non-string entries', async () => {
-    writeSeedsConfig({ disabled: ['ok', 42, null] });
-    expect([...(await readDisabledSeeds(devRoot))]).toEqual(['ok']);
+  test('covers both authz (security) and vuln (pentest) categories', () => {
+    const cats = new Set(builtinSecuritySeeds.map(s => s.category));
+    expect(cats.has('authz')).toBe(true);
+    expect(cats.has('vuln')).toBe(true);
   });
 });

@@ -555,7 +555,6 @@ export {
   type SecurityClass,
   type SecuritySeed,
   isSecuritySeed,
-  loadSecuritySeeds,
   hasAuth,
   matchesFlow,
   matchSeeds,

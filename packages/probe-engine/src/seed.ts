@@ -1,6 +1,3 @@
-import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
 export type SecurityClass =
   // business / authorization (orange "security mode")
   | 'idor' | 'bola' | 'bfla' | 'mass-assignment' | 'auth-bypass'
@@ -45,56 +42,4 @@ export function isSecuritySeed(o: unknown): o is SecuritySeed {
   // seed missing `signal` can't pass the guard and surprise downstream readers.
   if (typeof probe.strategy !== 'string' || typeof probe.signal !== 'string') return false;
   return true;
-}
-
-/** Load security-probe seeds from `<devRoot>/.hover/rules/` (flat) and its
- *  `security/` subdir. Optimization seeds in the same tree are skipped. */
-export async function loadSecuritySeeds(devRoot: string): Promise<SecuritySeed[]> {
-  const root = join(devRoot, '.hover', 'rules');
-  const collected: SecuritySeed[] = [];
-  await collect(root, collected);
-  await collect(join(root, 'security'), collected);
-  // A seed can land in both rules/ and rules/security/ (copy or symlink) —
-  // keep the first per name so one flow never gets probed twice by it.
-  const seen = new Set<string>();
-  return collected.filter(s => {
-    if (seen.has(s.name)) return false;
-    seen.add(s.name);
-    return true;
-  });
-}
-
-/** Names of seeds the project disabled via `<devRoot>/.hover/seeds.json`
- *  (`{ "disabled": ["jwt-claim-tamper", …] }`). Shared opt-out file with the
- *  optimization-seed loader in `@hover-dev/core`. Best-effort — a missing or
- *  malformed file disables nothing. */
-export async function readDisabledSeeds(devRoot: string): Promise<Set<string>> {
-  try {
-    const raw = await readFile(join(devRoot, '.hover', 'seeds.json'), 'utf-8');
-    const cfg = JSON.parse(raw) as { disabled?: unknown };
-    if (Array.isArray(cfg.disabled)) {
-      return new Set(cfg.disabled.filter((n): n is string => typeof n === 'string'));
-    }
-  } catch {
-    /* no .hover/seeds.json, or malformed — disable nothing */
-  }
-  return new Set<string>();
-}
-
-async function collect(dir: string, out: SecuritySeed[]): Promise<void> {
-  let entries: string[];
-  try {
-    entries = await readdir(dir);
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (!entry.endsWith('.json')) continue;
-    try {
-      const parsed: unknown = JSON.parse(await readFile(join(dir, entry), 'utf-8'));
-      if (isSecuritySeed(parsed)) out.push(parsed);
-    } catch {
-      /* skip malformed */
-    }
-  }
 }
