@@ -92,12 +92,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   // Streamed run rendering (called by the extension as engine events arrive).
-  pushStep(step: { label: string; tool?: string; detail?: string; cost?: number }): void {
+  pushStep(step: { label: string; tool?: string; detail?: string; cost?: number; tokens?: number }): void {
     this.post({ type: 'step', ...step });
   }
   /** AI narration → the next step group's title. */
   pushNarration(text: string): void {
     this.post({ type: 'narration', text });
+  }
+  /** Running token total (from usage events) → live group counter. */
+  pushUsage(tokens: number): void {
+    this.post({ type: 'usage', tokens });
   }
   pushAssistant(text: string): void {
     this.post({ type: 'assistant', text });
@@ -105,8 +109,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   pushSystem(text: string): void {
     this.post({ type: 'system', text });
   }
-  pushResult(verdict: string, summary: string, steps?: number, cost?: number): void {
-    this.post({ type: 'result', verdict, summary, steps, cost });
+  pushResult(verdict: string, summary: string, steps?: number, cost?: number, tokens?: number): void {
+    this.post({ type: 'result', verdict, summary, steps, cost, tokens });
   }
   setRunning(running: boolean): void {
     this.post({ type: 'running', running });
@@ -190,7 +194,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
   .dot.offline { background: var(--text-dim); }
 
-  #log { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+  #log { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 768px; margin: 0 auto; }
   .empty { margin: auto; text-align: center; color: var(--text-dim); padding: 0 26px; line-height: 1.55; }
   .empty em { color: var(--text-mute); font-style: normal; }
   /* Branded launch splash (Codex-style): mark + wordmark + tagline + site link. */
@@ -246,8 +250,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .gt-name { color: var(--link); flex-shrink: 0; white-space: nowrap; }
   .group-tool.error .gt-name { color: var(--err); }
   .gt-args { color: var(--text-dim); min-width: 0; word-break: break-all; overflow-wrap: anywhere; }
-  .result { border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-dim); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .result .head { font-weight: 700; color: var(--accent); }
+  .result { border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); padding: 13px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .result .head { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); font-size: 13px; }
+  .result .head .rcheck { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent-dim); color: var(--accent); font-size: 11px; font-weight: 700; }
+  .result .head .rmeta { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
+  .result .head .rmeta .rcost { color: var(--accent); }
   .md { line-height: 1.5; }
   .md h4 { font-size: 1em; margin: 8px 0 4px; }
   .md div { margin: 2px 0; }
@@ -255,10 +262,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .md table { border-collapse: collapse; margin: 6px 0; font-size: 12px; }
   .md th, .md td { border: 1px solid var(--line); padding: 3px 7px; text-align: left; }
   .md ul { margin: 4px 0; padding-left: 18px; }
+  .md hr { border: none; border-top: 1px solid var(--line); margin: 9px 0; }
   .saveas { align-self: flex-start; padding: 6px 11px; border: 1px solid var(--accent); border-radius: 7px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
   .saveas:hover { background: var(--accent); color: var(--accent-ink); }
-  .findings { border: 1px solid var(--warn); border-radius: 12px; background: rgba(251,146,60,0.10); padding: 12px; display: flex; flex-direction: column; gap: 7px; }
-  .findings .fhead { font-weight: 700; color: var(--warn); }
+  .findings { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 12px; background: var(--bg-2); padding: 13px 14px; display: flex; flex-direction: column; gap: 9px; }
+  .findings .fhead { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--warn); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
   .finding { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; }
   .badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; flex: none; text-transform: uppercase; letter-spacing: .03em; }
   .badge.bug { background: #f87171; color: #240808; }
@@ -266,7 +274,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .badge.info { background: var(--line); color: var(--text); }
 
   /* Claude-Code-style input box: one rounded container, toolbar row inside. */
-  #composer { padding: 10px 12px 12px; position: relative; }
+  #composer { padding: 10px 12px 12px; position: relative; width: 100%; max-width: 768px; margin: 0 auto; }
   .mentions { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 6px); z-index: 20;
     background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     box-shadow: 0 8px 24px rgba(0,0,0,.35); max-height: 220px; overflow-y: auto; }
@@ -289,7 +297,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   #input::placeholder { color: var(--text-dim); }
   .inputrow { display: flex; align-items: flex-start; gap: 6px; }
   .inputrow #input { flex: 1; }
-  #toolbar { display: flex; align-items: center; gap: 6px; }
+  #toolbar { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); margin: 4px -10px 0; padding: 7px 10px 0; }
   #toolbar .left { display: flex; align-items: center; gap: 6px; }
   #toolbar .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
   /* Borderless toolbar buttons (Claude-Code "auto mode" style): icon + text,
@@ -298,6 +306,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .barebtn:hover { color: var(--text); background: var(--bg-2); }
   .barebtn .caret { color: var(--text-dim); font-size: 10px; }
   .barebtn svg { opacity: .9; }
+  #mode-icon { display: inline-flex; align-items: center; }
+  .p-ic svg { display: block; margin: 1px auto 0; }
+  /* While a run is active, the target can't change mid-flight — lock the
+     browser / model / mode pickers (send becomes the stop control). */
+  body.running #browser-toggle, body.running #model-btn, body.running #mode { pointer-events: none; opacity: .4; }
   /* Mode button tints to the active mode. */
   body.mode-security #mode { color: var(--warn); }
   body.mode-pentest #mode { color: var(--err); }
@@ -355,10 +368,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             <svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="3.2"/><path d="M24 6a18 18 0 0 1 15.6 9H24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M8.4 15a18 18 0 0 0 7.8 26.4l7.8-13.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M39.6 15a18 18 0 0 1-15.6 27l7.8-13.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
             <span id="browser-label">Headless</span>
           </button>
-          <button class="barebtn" id="model-btn" type="button" title="Model — click to switch"><span id="model-label">Sonnet 4.6</span><span class="caret">▾</span></button>
+          <button class="barebtn" id="model-btn" type="button" title="Model — click to switch"><span id="model-label">Sonnet 4.6</span></button>
         </div>
         <div class="right">
-          <button class="barebtn" id="mode" type="button" title="Switch mode (Normal / Security / Pentest)"><span class="bolt" id="mode-icon">⚡</span><span id="mode-label">Normal</span><span class="caret">▾</span></button>
+          <button class="barebtn" id="mode" type="button" title="Switch mode (Frontend / Security / Pentest)"><span class="bolt" id="mode-icon"></span><span id="mode-label">Frontend</span></button>
           <button id="send" type="button" title="Send (Enter)" disabled>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
           </button>
@@ -401,18 +414,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (status === 'running') { g.icon.className = 'gr-icon gr-ring'; g.icon.textContent = ''; }
     else { g.icon.className = 'gr-icon'; g.icon.textContent = status === 'error' ? '✗' : '✓'; }
   }
-  function setGroupMeta(g, endSnapshot, live) {
-    var parts = [((Date.now() - g.start) / 1000).toFixed(1) + 's'];
-    var endC = (typeof endSnapshot === 'number') ? endSnapshot : g.snapEnd;
-    if (typeof endC === 'number' && typeof g.snapStart === 'number') { var d = endC - g.snapStart; if (d > 0.00005) parts.push('<span class="gr-cost">$' + d.toFixed(4) + '</span>'); }
-    if (g.count) parts.push(g.count + (g.count > 1 ? ' steps' : ' step'));
-    g.meta.innerHTML = parts.join(' · ') + (live ? '…' : '');
+  // Compact duration: sub-minute keeps one decimal ("48.3s"); a minute or more
+  // rolls into "1m 6s" so long groups don't read as an unbounded second count.
+  function fmtDur(ms) {
+    var s = ms / 1000;
+    if (s < 60) return s.toFixed(1) + 's';
+    var mn = Math.floor(s / 60), rs = Math.round(s - mn * 60);
+    if (rs === 60) { mn++; rs = 0; }
+    return mn + 'm' + (rs ? ' ' + rs + 's' : '');
   }
+  // Full token count with thousands separators (no k/M abbreviation) — the
+  // user wants the exact live number, like Claude Code.
+  function fmtTokens(n) { return Math.round(n).toLocaleString() + ' tok'; }
+  function setGroupMeta(g, endSnapshot, live) {
+    // Duration + step count tick live off the wall clock; tokens are the
+    // delta between this group's first and last usage snapshot.
+    var parts = [fmtDur(Date.now() - g.start)];
+    var endT = (typeof endSnapshot === 'number') ? endSnapshot : g.tokEnd;
+    if (typeof endT === 'number' && typeof g.tokStart === 'number') {
+      var d = endT - g.tokStart;
+      if (d > 0) parts.push('<span class="gr-cost">' + fmtTokens(d) + '</span>');
+    }
+    if (g.count) parts.push(g.count + (g.count > 1 ? ' steps' : ' step'));
+    g.meta.innerHTML = parts.join(' · ');
+  }
+  // Tick the active group's meta ~10×/s so the seconds run like a stopwatch
+  // (0.1, 0.2, … 1.2, 1.3) instead of jumping a whole second at a time.
+  var groupTick = null;
+  function startTick() {
+    if (groupTick) return;
+    groupTick = setInterval(function () {
+      if (curGroup) setGroupMeta(curGroup, undefined, true);
+      else stopTick();
+    }, 100);
+  }
+  function stopTick() { if (groupTick) { clearInterval(groupTick); groupTick = null; } }
   function finalizeGroup(endSnapshot) {
     if (!curGroup) return;
     setGroupStatus(curGroup, 'ok');
     setGroupMeta(curGroup, endSnapshot, false);
     curGroup = null;
+    stopTick();
     updateWorking();
   }
   function openGroup(titleText, snapshot) {
@@ -428,13 +470,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     row.addEventListener('click', function () { root.classList.toggle('open'); });
     root.appendChild(row); root.appendChild(tools);
     log.appendChild(root);
-    curGroup = { root: root, icon: icon, meta: meta, tools: tools, count: 0, start: Date.now(), snapStart: (typeof snapshot === 'number' ? snapshot : undefined), snapEnd: undefined };
+    curGroup = { root: root, icon: icon, meta: meta, tools: tools, count: 0, start: Date.now(), tokStart: (typeof snapshot === 'number' ? snapshot : undefined), tokEnd: undefined };
+    startTick();
     updateWorking();
   }
   function addNarration(text) { if (text && text.trim()) pendingTitle = text.trim(); }
   function addStep(m) {
-    if (curGroup && (BOUNDARY[m.tool] || curGroup.count >= MAX_GROUP)) finalizeGroup(typeof m.cost === 'number' ? m.cost : undefined);
-    if (!curGroup) { openGroup(pendingTitle || m.label, typeof m.cost === 'number' ? m.cost : undefined); pendingTitle = null; }
+    if (curGroup && (BOUNDARY[m.tool] || curGroup.count >= MAX_GROUP)) finalizeGroup(typeof m.tokens === 'number' ? m.tokens : undefined);
+    if (!curGroup) { openGroup(pendingTitle || m.label, typeof m.tokens === 'number' ? m.tokens : undefined); pendingTitle = null; }
     var line = document.createElement('div'); line.className = 'group-tool' + (m.isError ? ' error' : '');
     var dot = document.createElement('span'); dot.className = 'gt-dot'; dot.textContent = '·';
     var name = document.createElement('span'); name.className = 'gt-name'; name.textContent = m.tool || m.label;
@@ -442,18 +485,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     line.appendChild(dot); line.appendChild(name); line.appendChild(args);
     curGroup.tools.appendChild(line);
     curGroup.count++;
-    if (typeof m.cost === 'number') curGroup.snapEnd = m.cost;
+    if (typeof m.tokens === 'number') curGroup.tokEnd = m.tokens;
     setGroupMeta(curGroup, undefined, true);
     speak(m.label);
     scroll();
   }
   function addResult(m) {
     fresh();
-    finalizeGroup(typeof m.cost === 'number' ? m.cost : undefined);
+    finalizeGroup(typeof m.tokens === 'number' ? m.tokens : undefined);
     var parsed = splitFindings(m.summary || '');
     var card = document.createElement('div'); card.className = 'result';
     var h = document.createElement('div'); h.className = 'head';
-    h.textContent = '✓ ' + (m.verdict || 'PASS') + (m.steps ? ' — done in ' + m.steps + ' steps' : '') + (typeof m.cost === 'number' && m.cost > 0 ? ' · $' + m.cost.toFixed(4) : '');
+    var chk = document.createElement('span'); chk.className = 'rcheck'; chk.textContent = '✓'; h.appendChild(chk);
+    var lbl = document.createElement('span'); lbl.textContent = m.verdict || 'Done'; h.appendChild(lbl);
+    var metaBits = [];
+    if (m.steps) metaBits.push(m.steps + (m.steps > 1 ? ' steps' : ' step'));
+    if (typeof m.tokens === 'number' && m.tokens > 0) metaBits.push('<span class="rcost">' + fmtTokens(m.tokens) + '</span>');
+    if (metaBits.length) { var rm = document.createElement('span'); rm.className = 'rmeta'; rm.innerHTML = metaBits.join(' · '); h.appendChild(rm); }
     var body = document.createElement('div'); body.className = 'md'; body.innerHTML = mdToHtml(parsed.main);
     // Pentest (🔴) crystallizes a findings REPORT, never a Playwright spec —
     // a regression spec of an attack run is the wrong artifact. Other modes
@@ -468,7 +516,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     speak((m.verdict || 'Pass') + '. ' + parsed.main.replace(/[#*\`|>_-]+/g, ' '));
     scroll();
   }
-  function sevClass(s) { s = (s || '').toLowerCase(); return (s === 'bug' || s === 'major' || s === 'high' || s === 'critical') ? 'bug' : (s === 'info' || s === 'note' ? 'info' : 'minor'); }
+  function sevClass(s) {
+    s = (s || '').toLowerCase();
+    if (s === 'bug' || s === 'major' || s === 'high' || s === 'critical' || /严重|高危|高/.test(s)) return 'bug';
+    if (s === 'info' || s === 'note' || /提示|信息/.test(s)) return 'info';
+    return 'minor';
+  }
+  // A badge is only a SHORT severity tag. The agent sometimes bolds a whole
+  // sentence ("**严重 Bug — Sex … 无法选择**"); that's emphasis, not a tag, so we
+  // fold a long "marker" back into the text instead of rendering a giant badge.
+  function badgeWord(marker) {
+    if (!marker) return null;
+    var m = marker.trim();
+    if (m.length <= 12 && !/\\s.*\\s/.test(m)) return m; // ≤12 chars, at most one space
+    return null;
+  }
   function renderFindings(text) {
     var card = document.createElement('div'); card.className = 'findings';
     var h = document.createElement('div'); h.className = 'fhead'; h.textContent = '⚠ Findings'; card.appendChild(h);
@@ -478,8 +540,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       var m = line.match(/^\\s*[-*]\\s+(?:\\*\\*\\s*([^*]+?)\\s*\\*\\*\\s*[—–:\\-]?\\s*)?([\\s\\S]+)$/);
       if (!m) { var tt = line.trim(); if (!tt) return; m = [null, null, tt]; }
       var marker = m[1], rest = m[2];
+      var word = badgeWord(marker);
       var row = document.createElement('div'); row.className = 'finding';
-      if (marker) { var b = document.createElement('span'); b.className = 'badge ' + sevClass(marker); b.textContent = marker; row.appendChild(b); }
+      if (word) { var b = document.createElement('span'); b.className = 'badge ' + sevClass(word); b.textContent = word; row.appendChild(b); }
+      else if (marker) { rest = '**' + marker + '** ' + rest; } // long bold = sentence, keep inline
       var span = document.createElement('span'); span.innerHTML = inline(rest); row.appendChild(span);
       card.appendChild(row);
     });
@@ -516,6 +580,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         out.push(html + '</table>'); continue;
       }
       var hm = line.match(/^(#{1,6})\\s+(.*)$/); if (hm) { out.push('<h4>' + inline(hm[2]) + '</h4>'); i++; continue; }
+      if (/^\\s*([-*_])\\1{2,}\\s*$/.test(line)) { out.push('<hr/>'); i++; continue; } // --- *** ___ rule
       if (/^\\s*[-*]\\s+/.test(line)) { var items = []; while (i < lines.length && /^\\s*[-*]\\s+/.test(lines[i])) { items.push('<li>' + inline(lines[i].replace(/^\\s*[-*]\\s+/, '')) + '</li>'); i++; } out.push('<ul>' + items.join('') + '</ul>'); continue; }
       if (line.trim() === '') { out.push(''); i++; continue; }
       out.push('<div>' + inline(line) + '</div>'); i++;
@@ -607,11 +672,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   var modeMenu = document.getElementById('mode-menu');
   var modelMenu = document.getElementById('model-menu');
   var models = [], currentModel = '';
+  var MODE_ICONS = {
+    normal:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2H11l-1 8.8 8.6-12.2H12.1L13 2z"/></svg>',
+    security: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.2-3 7.6-7 9-4-1.4-7-4.8-7-9V6l7-3z"/></svg>',
+    pentest:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3a7 7 0 0 0-3.6 13V18a1 1 0 0 0 1 1H10v-2M12 3a7 7 0 0 1 3.6 13V18a1 1 0 0 1-1 1H14v-2M9.5 19h5"/><circle cx="9.2" cy="11.5" r="1.4" fill="currentColor"/><circle cx="14.8" cy="11.5" r="1.4" fill="currentColor"/></svg>',
+  };
   var MODES = [
-    { value:'normal',   icon:'⚡', title:'Normal',   desc:'AI drives your app & saves a Playwright spec' },
-    { value:'security', icon:'🛡', title:'Security', desc:'Business logic & authz — IDOR / BOLA → security spec' },
-    { value:'pentest',  icon:'💀', title:'Pentest',  desc:'Offensive scan of your OWN app → findings report' },
+    { value:'normal',   icon:MODE_ICONS.normal,   title:'Frontend', desc:'AI drives your app & saves a Playwright spec' },
+    { value:'security', icon:MODE_ICONS.security, title:'Security', desc:'Business logic & authz — IDOR / BOLA → security spec' },
+    { value:'pentest',  icon:MODE_ICONS.pentest,  title:'Pentest',  desc:'Offensive scan of your OWN app → findings report' },
   ];
+  document.getElementById('mode-icon').innerHTML = MODE_ICONS[currentModeId || 'normal'];
   function renderPicker(menuEl, header, items, activeVal){
     menuEl.innerHTML = '<div class="p-hdr">'+esc(header)+'</div>' + items.map(function(it){
       return '<div class="p-item'+(it.value===activeVal?' active':'')+'" data-v="'+esc(String(it.value))+'">'
@@ -697,12 +768,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (m.type==='user'||m.type==='system'||m.type==='assistant') addMessage(m.type, m.text);
     else if (m.type==='narration') addNarration(m.text);
     else if (m.type==='step') addStep(m);
+    else if (m.type==='usage') { if (curGroup && typeof m.tokens === 'number') { if (typeof curGroup.tokStart !== 'number') curGroup.tokStart = m.tokens; if (m.tokens >= curGroup.tokStart) { curGroup.tokEnd = m.tokens; setGroupMeta(curGroup, undefined, true); } } }
     else if (m.type==='result') addResult(m);
-    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } workingEl=null; running=false; log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
+    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopTick(); workingEl=null; running=false; log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') {
       currentModeId = m.id || null;
-      document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Normal';
-      document.getElementById('mode-icon').textContent = m.id==='pentest' ? '💀' : (m.id==='security' ? '🛡' : '⚡');
+      document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Frontend';
+      document.getElementById('mode-icon').innerHTML = MODE_ICONS[m.id==='pentest' ? 'pentest' : (m.id==='security' ? 'security' : 'normal')];
       document.body.classList.remove('mode-security','mode-pentest');
       if (m.id) document.body.classList.add('mode-'+m.id);
       if (!modeMenu.hidden) renderPicker(modeMenu, 'Mode', MODES, currentModeId || 'normal');
@@ -722,7 +794,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     else if (m.type==='accounts') { accounts = Array.isArray(m.accounts) ? m.accounts : []; }
     else if (m.type==='busy') { setBusy(m.done ? null : (m.text||'Working…')); }
-    else if (m.type==='running') { running = !!m.running; if (running) { curGroup = null; pendingTitle = null; } else if (curGroup) { finalizeGroup(); } updateWorking(); applyBorder(); syncSend(); }
+    else if (m.type==='running') { running = !!m.running; document.body.classList.toggle('running', running); if (running) { curGroup = null; pendingTitle = null; closePickers(); } else if (curGroup) { finalizeGroup(); } updateWorking(); applyBorder(); syncSend(); }
     else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Headless' : 'Normal'; applyBorder(); }
   });
   function emptyEl(){

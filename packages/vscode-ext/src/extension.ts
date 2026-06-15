@@ -15,7 +15,7 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import {
   connectServicePool,
   type AgentEntry,
@@ -25,6 +25,7 @@ import {
 } from './serviceClient.js';
 import { SpecLensProvider } from './specLens.js';
 import { registerSpecsView } from './specsView.js';
+import { registerDashboardView } from './dashboardView.js';
 import { registerSessionsView } from './sessionsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
 import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
@@ -158,6 +159,10 @@ let transcript: SpecMsg[] = [];
 let runSessionId: string | undefined;
 let stepCount = 0;
 let runCost = 0;
+let runTokens = 0;
+/** In-run source-read grant from "Allow once" / "Deny" (reset each run). The
+ *  persistent "Always allow" lives in workspaceState ('hover.sourceAlways'). */
+let runSourceGrant: 'allow' | 'deny' | null = null;
 /** Accounts resolved from @-mentions in the current run's prompt — kept so
  *  "Save as spec" can redact their credentials into process.env refs. */
 let lastRunAccounts: ResolvedAccount[] = [];
@@ -217,6 +222,7 @@ async function runPrompt(prompt: string): Promise<void> {
   transcript.push({ kind: 'user', text: prompt });
   stepCount = 0;
   runCost = 0;
+  runTokens = 0;
   chatProvider?.setRunning(true);
 
   // Resolve @account mentions → creds for the agent to log in with; remembered
@@ -229,17 +235,67 @@ async function runPrompt(prompt: string): Promise<void> {
   }
 
   const url = await resolveTargetUrl();
-  if (url) {
-    const ready = await ensureBrowser(url);
-    if (!ready) {
-      chatProvider?.setRunning(false);
-      chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Is the dev server running? Click "▶ Start App".`);
-      return;
-    }
+  if (!url) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem('No target URL — start your dev server, then click "▶ Start App" (or set a local URL).');
+    return;
   }
-  if (!pool?.run(prompt, runSessionId, accounts)) {
+  // Real reachability gate. A matching Chrome tab is NOT proof the server is up:
+  // a connection-refused page keeps the same origin in the address bar, so the
+  // CDP "same-window" check passes even when nothing is serving. Probe HTTP first
+  // so the agent never runs against a dead page.
+  if (!(await probeUrl(url, 4000))) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem(`Couldn't reach ${url} — the dev server isn't responding. Start it, then click "▶ Start App".`);
+    return;
+  }
+  const ready = await ensureBrowser(url);
+  if (!ready) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Click "▶ Start App".`);
+    return;
+  }
+  const activeEnv = await envStore?.getActive();
+  runSourceGrant = null; // fresh per run
+  if (!pool?.run(prompt, runSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun())) {
     chatProvider?.setRunning(false);
     chatProvider?.pushSystem('Could not reach the engine.');
+  }
+}
+
+/** The source-read grant to start a run with: 'always' skips the per-read gate
+ *  (persisted choice); otherwise 'ask' so the engine gates each read through
+ *  the approval popup. */
+function sourceAccessForRun(): 'always' | 'ask' {
+  return extContext?.workspaceState.get<boolean>('hover.sourceAlways') === true ? 'always' : 'ask';
+}
+
+/** Decide a source-read approval request from the engine: honor a standing
+ *  grant, else pop the Always / Once / Deny prompt. */
+async function handleSourceApproval(msg: ServerMessage): Promise<void> {
+  const id = typeof msg.payload?.approvalId === 'string' ? msg.payload.approvalId : undefined;
+  if (!id) return;
+  const path = typeof msg.payload?.sourcePath === 'string' ? msg.payload.sourcePath : 'source';
+  if (sourceAccessForRun() === 'always' || runSourceGrant === 'allow') { pool?.sendSourceApproval(id, true); return; }
+  if (runSourceGrant === 'deny') { pool?.sendSourceApproval(id, false); return; }
+  const choice = await vscode.window.showWarningMessage(
+    `Hover wants to read ${path} to understand the page (read-only, fenced — secrets / .env / .git / node_modules are blocked).`,
+    'Always allow',
+    'Allow once',
+    'Deny',
+  );
+  if (choice === 'Always allow') {
+    await extContext?.workspaceState.update('hover.sourceAlways', true);
+    runSourceGrant = 'allow';
+    pool?.sendSourceApproval(id, true);
+  } else if (choice === 'Allow once') {
+    runSourceGrant = 'allow'; // allow the rest of this run
+    pool?.sendSourceApproval(id, true);
+  } else if (choice === 'Deny') {
+    runSourceGrant = 'deny'; // refuse the rest of this run
+    pool?.sendSourceApproval(id, false);
+  } else {
+    pool?.sendSourceApproval(id, false); // dismissed → deny this one, ask again next
   }
 }
 
@@ -248,6 +304,10 @@ function handleServerMessage(msg: ServerMessage): void {
   if (msg.type === 'error') {
     chatProvider?.setRunning(false);
     chatProvider?.pushSystem(String(msg.payload?.message ?? 'error'));
+    return;
+  }
+  if (msg.type === 'source-approval-request') {
+    void handleSourceApproval(msg);
     return;
   }
   if (msg.type === 'spec-saved') {
@@ -298,6 +358,7 @@ function handleServerMessage(msg: ServerMessage): void {
       transcript.push({ kind: 'step', tool: ev.tool, input: ev.input });
       stepCount++;
       if (typeof ev.costUsdSnapshot === 'number') runCost = ev.costUsdSnapshot;
+      if (typeof ev.tokensSnapshot === 'number') runTokens = ev.tokensSnapshot;
       let detail = '';
       try {
         detail = ev.input == null ? '{}' : JSON.stringify(ev.input);
@@ -309,11 +370,13 @@ function handleServerMessage(msg: ServerMessage): void {
         tool: String(ev.tool ?? ''),
         detail,
         cost: typeof ev.costUsdSnapshot === 'number' ? ev.costUsdSnapshot : undefined,
+        tokens: typeof ev.tokensSnapshot === 'number' ? ev.tokensSnapshot : undefined,
       });
       break;
     }
     case 'usage':
       if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
+      if (typeof ev.tokens === 'number') { runTokens = ev.tokens; chatProvider?.pushUsage(ev.tokens); }
       break;
     case 'text':
       if (typeof ev.text === 'string' && ev.text.trim()) {
@@ -324,6 +387,7 @@ function handleServerMessage(msg: ServerMessage): void {
     case 'session_end':
       transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
       if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
+      if (typeof ev.tokens === 'number') runTokens = ev.tokens;
       chatProvider?.setRunning(false);
       if (ev.cancelled) {
         chatProvider?.pushSystem('Run cancelled.');
@@ -338,17 +402,27 @@ function handleServerMessage(msg: ServerMessage): void {
         // Don't fake a PASS; show it as a plain reply.
         chatProvider?.pushAssistant(String(ev.summary ?? 'Done.'));
       } else {
-        chatProvider?.pushResult('PASS', String(ev.summary ?? 'Done.'), stepCount, runCost);
+        // "Done" not "PASS": the run finished and here's the summary — it is
+        // not a test-pass assertion (the agent may have logged real bugs in
+        // ## Findings). PASS read as a green light even when issues existed.
+        chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), stepCount, runCost, runTokens);
       }
       break;
   }
 }
 
 /** Short, human label for a browser/MCP tool call. */
-function humanizeTool(tool: string, input: unknown): string {
+function humanizeTool(rawTool: string, input: unknown): string {
   const i = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const s = (v: unknown): string => (typeof v === 'string' ? v : '');
+  // Non-playwright MCP tools (e.g. the fenced source reader) keep their
+  // mcp__<server>__ prefix; strip it so the switch + fallback read cleanly.
+  const tool = rawTool.replace(/^mcp__[a-z0-9_]+__/, '');
+  const base = (p: string): string => p.split(/[\\/]/).pop() || p;
   switch (tool) {
+    case 'check_control': return `${i.checked === false ? 'Clear' : 'Select'} ${s(i.name) || s(i.role) || 'control'}`;
+    case 'read_source': return `📄 Read source: ${base(s(i.path))}`.trim();
+    case 'list_source': return `📄 Browse source${i.path ? ': ' + base(s(i.path)) : ''}`;
     case 'browser_navigate': return `Navigate to ${s(i.url)}`;
     case 'browser_click': return `Click ${s(i.element) || s(i.ref) || s(i.selector)}`.trim();
     case 'browser_type': return `Type "${s(i.text)}"${i.element ? ` into ${s(i.element)}` : ''}`;
@@ -433,12 +507,14 @@ async function appStatus(): Promise<void> {
   }));
   items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
   items.push({ label: '$(rocket) Start App', description: 'dev server + browser', action: 'start' });
+  items.push({ label: '$(refresh) Reopen browser', description: 'relaunch the debug Chrome (if closed / no window appeared)', action: 'reopen' });
   items.push({ label: '$(link) Set local URL…', description: 'manually set the dev server URL', action: 'set' });
   items.push({ label: '$(gear) Manage environments…', action: 'manage' });
 
   const pick = await vscode.window.showQuickPick(items, { title: 'Hover — target environment' });
   if (!pick) return;
   if (pick.action === 'start') await startApp();
+  else if (pick.action === 'reopen') await reopenBrowser();
   else if (pick.action === 'manage') {
     await vscode.commands.executeCommand('workbench.view.extension.hover');
     await vscode.commands.executeCommand('hover.environments.focus');
@@ -555,10 +631,29 @@ async function toggleBrowser(): Promise<void> {
   pushChatConfig();
   settingsProvider?.refresh();
   const url = await resolveTargetUrl();
-  if (url && pool?.launchChrome(url, next === 'silent')) {
+  // force: the launcher is idempotent on the port, so without this a
+  // headless↔visible switch would no-op (the old-mode Chrome keeps running and
+  // a "visible" window never appears). force closes + relaunches in the new mode.
+  if (url && pool?.launchChrome(url, next === 'silent', true)) {
     chatProvider?.pushSystem(`Browser mode: ${next === 'silent' ? 'silent (headless)' : 'visible'} — relaunched at ${url}.`);
   } else {
     void vscode.window.showInformationMessage(`Hover browser mode: ${next}. Takes effect on the next launch.`);
+  }
+}
+
+/** Reopen the debug browser at the current target in the current mode — for
+ *  when it was closed (or a visible window didn't appear). force-relaunches so
+ *  it comes back even if a stale instance is still on the CDP port. */
+async function reopenBrowser(): Promise<void> {
+  const url = await resolveTargetUrl();
+  if (!url) {
+    void vscode.window.showWarningMessage('Hover: no target URL — set one or start your dev server first.');
+    return;
+  }
+  if (pool?.launchChrome(url, isSilent(), true)) {
+    chatProvider?.pushSystem(`Browser ${isSilent() ? 'running silently (headless)' : 'reopened'} at ${url}.`);
+  } else {
+    void vscode.window.showWarningMessage('Hover: could not reach the engine to reopen the browser.');
   }
 }
 
@@ -605,6 +700,13 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand('hover.openSource', (source?: string) => openSource(source)),
     vscode.commands.registerCommand('hover.runSpec', (item?: vscode.TreeItem | vscode.Uri) => runSpec(item)),
+    vscode.commands.registerCommand('hover.runFolderSpecs', (item?: vscode.TreeItem) => runFolderSpecs(item)),
+    vscode.commands.registerCommand('hover.runAllSpecs', () => runAllSpecs()),
+    vscode.commands.registerCommand('hover.resetSourceAccess', async () => {
+      await extContext?.workspaceState.update('hover.sourceAlways', false);
+      runSourceGrant = null;
+      void vscode.window.showInformationMessage('Hover: source-read permission reset — you\'ll be asked again next time.');
+    }),
     vscode.commands.registerCommand('hover.switchMode', () => switchMode()),
     vscode.commands.registerCommand('hover.switchAgent', () => switchAgent()),
     vscode.commands.registerCommand('hover.newSession', () => newSession()),
@@ -616,6 +718,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.addCiWorkflow', () => addCiWorkflow()),
     vscode.commands.registerCommand('hover.startApp', () => startApp()),
     vscode.commands.registerCommand('hover.toggleBrowser', () => toggleBrowser()),
+    vscode.commands.registerCommand('hover.reopenBrowser', () => reopenBrowser()),
     vscode.commands.registerCommand('hover.appStatus', () => appStatus()),
     vscode.window.onDidCloseTerminal((t) => {
       if (t === devTerminal) devTerminal = undefined;
@@ -693,6 +796,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     chat.disposable,
     settings.disposable,
+    ...registerDashboardView(),
     ...registerSpecsView(),
     ...registerSessionsView(),
     ...registerEnvironmentsView(envStore, () => {
@@ -814,7 +918,7 @@ async function switchMode(): Promise<void> {
   // it; otherwise it applies locally and takes effect on the next run.
   type Pick = vscode.QuickPickItem & { modeId: string | null };
   const items: Pick[] = [
-    { label: '$(circle-outline) Normal', description: 'testing — no security mode', modeId: null },
+    { label: '$(circle-outline) Frontend', description: 'frontend testing — no security mode', modeId: null },
     ...allModes().map((m) => ({
       label: `${m.id === 'pentest' ? '$(flame)' : '$(shield)'} ${m.label}`,
       description: m.description ?? m.id,
@@ -904,23 +1008,89 @@ async function openOptimizeDiff(specUri: vscode.Uri, opts: { silentIfMissing: bo
   );
 }
 
-/** Run one spec in a terminal via Playwright. We delegate to the user's
- *  Playwright runner rather than reimplementing a test explorer (the official
- *  Playwright extension owns that, design non-goal N1) — this is just a
- *  one-click `playwright test <file>` convenience. */
+/** Run a single spec (inline ▶ on a spec row, or the active spec editor). */
 async function runSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
-  const uri =
-    arg instanceof vscode.Uri ? arg : (arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri);
-  if (!uri || uri.scheme !== 'file') {
+  const uri = resolveSpecUri(arg);
+  if (!uri || uri.scheme !== 'file' || !/\.spec\.ts$/.test(uri.fsPath)) {
     void vscode.window.showWarningMessage('Hover: open or select a spec to run.');
     return;
   }
-  const folder = vscode.workspace.getWorkspaceFolder(uri);
-  const cwd = folder?.uri.fsPath;
-  const rel = folder ? path.relative(folder.uri.fsPath, uri.fsPath) : uri.fsPath;
-  const terminal = vscode.window.createTerminal({ name: 'Hover · Playwright', cwd });
+  await runPlaywright([uri], path.basename(uri.fsPath));
+}
+
+/** Run every spec in a folder group (inline ▶ on a `__vibe_tests__` subfolder). */
+async function runFolderSpecs(arg?: vscode.TreeItem): Promise<void> {
+  const uris = (arg as { uris?: vscode.Uri[] } | undefined)?.uris;
+  if (!uris?.length) {
+    void vscode.window.showWarningMessage('Hover: no specs in this group.');
+    return;
+  }
+  const label = typeof arg?.label === 'string' ? arg.label.replace(/\s*\(\d+\)\s*$/, '') : 'group';
+  await runPlaywright(uris, label);
+}
+
+/** Run the whole crystallized suite (▶ in the Specs view title). */
+async function runAllSpecs(): Promise<void> {
+  await runPlaywright([], 'all specs');
+}
+
+/**
+ * Drive the user's own Playwright runner in a terminal — we delegate rather
+ * than reimplement a test explorer (the official Playwright extension owns
+ * that, design non-goal N1). `uris` empty = the whole suite.
+ *
+ * Three things make a one-click run trustworthy:
+ *   1. Refuse (and offer to install) if @playwright/test isn't in the project,
+ *      so the run can't silently no-op.
+ *   2. Pass the active environment's URL as PLAYWRIGHT_BASE_URL (best-effort —
+ *      the project's playwright.config must read it to honor a remote target;
+ *      Local works via the config's own baseURL/webServer regardless).
+ *   3. Inject the active env's @account credentials (HOVER_<LABEL>_USER/PASS,
+ *      passwords from SecretStorage) so login specs can authenticate.
+ * Results are written to `.hover/runs/<ts>.json` (Playwright's json reporter)
+ * — the structured record the local dashboard reads.
+ */
+async function runPlaywright(uris: vscode.Uri[], label: string): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showWarningMessage('Hover: open a project folder first.');
+    return;
+  }
+  const root = folder.uri.fsPath;
+
+  if (!existsSync(path.join(root, 'node_modules', '@playwright', 'test'))) {
+    const pick = await vscode.window.showWarningMessage(
+      "Playwright isn't installed in this project — specs can't run.",
+      'Install Playwright',
+      'Cancel',
+    );
+    if (pick === 'Install Playwright') {
+      const t = vscode.window.createTerminal({ name: 'Hover · Playwright setup', cwd: root });
+      t.show();
+      t.sendText(`${detectPackageManager(root)} add -D @playwright/test && npx playwright install chromium`);
+    }
+    return;
+  }
+
+  const env: Record<string, string> = {};
+  const url = await resolveTargetUrl();
+  if (url) env.PLAYWRIGHT_BASE_URL = url;
+  const activeEnv = await envStore?.getActive();
+  if (activeEnv) for (const e of await envStore!.accountEnvEntries(activeEnv)) env[e.name] = e.value;
+
+  const runsDir = path.join(root, '.hover', 'runs');
+  try {
+    mkdirSync(runsDir, { recursive: true });
+  } catch {
+    /* best-effort — the run still works, just no dashboard record */
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  env.PLAYWRIGHT_JSON_OUTPUT_NAME = path.join(runsDir, `${stamp}.json`);
+
+  const terminal = vscode.window.createTerminal({ name: `Hover · Test (${label})`, cwd: root, env });
   terminal.show();
-  terminal.sendText(`npx playwright test ${JSON.stringify(rel)}`);
+  const files = uris.map((u) => JSON.stringify(path.relative(root, u.fsPath))).join(' ');
+  terminal.sendText(`npx playwright test ${files} --reporter=list,json`.replace(/\s+/g, ' ').trim());
 }
 
 /** Generate a GitHub Actions workflow that runs the crystallized specs on every
@@ -1034,6 +1204,7 @@ async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   chatProvider?.pushSystem(`Re-recording "${slug}" — ${prompt}`);
   stepCount = 0;
   runCost = 0;
+  runTokens = 0;
   chatProvider?.setRunning(true);
 
   // Resolve @account mentions in the original prompt so the re-run can log in,
@@ -1051,15 +1222,25 @@ async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
   }
 
   const url = await resolveTargetUrl();
-  if (url) {
-    const ready = await ensureBrowser(url);
-    if (!ready) {
-      chatProvider?.setRunning(false);
-      chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Click "▶ Start App".`);
-      return;
-    }
+  if (!url) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem('No target URL — start your dev server, then click "▶ Start App" (or set a local URL).');
+    return;
   }
-  if (!pool?.reRecord(prompt, slug, accounts, redactions)) {
+  if (!(await probeUrl(url, 4000))) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem(`Couldn't reach ${url} — the dev server isn't responding. Start it, then click "▶ Start App".`);
+    return;
+  }
+  const ready = await ensureBrowser(url);
+  if (!ready) {
+    chatProvider?.setRunning(false);
+    chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Click "▶ Start App".`);
+    return;
+  }
+  const rrEnv = await envStore?.getActive();
+  runSourceGrant = null;
+  if (!pool?.reRecord(prompt, slug, accounts, redactions, rrEnv ? { id: rrEnv.id, name: rrEnv.name } : undefined, sourceAccessForRun())) {
     chatProvider?.setRunning(false);
     chatProvider?.pushSystem('Could not reach the engine.');
   }
