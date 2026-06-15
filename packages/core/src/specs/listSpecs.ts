@@ -1,14 +1,11 @@
 /**
  * List + parse Hover-generated Playwright specs under `<devRoot>/__vibe_tests__/`.
  *
- * Used by:
- *   - The widget's "Specs" overlay tab (server pushes a SpecSummary[] list).
- *   - The CLI's `hover re-record <spec>` subcommand (parses one spec for its
- *     `Original prompt:` JSDoc header).
+ * Used by the extension's "Specs" view (the engine pushes a SpecSummary[]
+ * list, each carrying the parsed JSDoc header).
  *
  * Hand-authored specs (no Hover JSDoc header) are listed but reported with
- * `originalPrompt: null` — the UI / CLI surfaces that "this spec can't be
- * re-recorded automatically; the natural-language intent isn't recorded."
+ * `originalPrompt: null` — the natural-language intent isn't recorded for them.
  *
  * Shares the SpecSummary row shape the widget's Specs tab renders.
  */
@@ -24,9 +21,8 @@ export interface SpecSummary {
   slug: string;
   /** Absolute path to the .spec.ts file. */
   path: string;
-  /** `Original prompt:` parsed from the JSDoc header. `null` for
-   *  hand-authored specs that have no header — they list but can't be
-   *  re-recorded automatically. */
+  /** `Original prompt:` parsed from the JSDoc header (provenance — what the
+   *  spec verifies). `null` for hand-authored specs that have no header. */
   originalPrompt: string | null;
   /** First line of `Outcome:` from the JSDoc header, if present. */
   outcome: string | null;

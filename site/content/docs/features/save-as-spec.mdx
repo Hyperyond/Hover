@@ -34,7 +34,7 @@ The generated file has two layers:
  */
 ```
 
-The `Original prompt:` line is **load-bearing**: [Re-record](/docs/features/re-record) reads it to regenerate the spec when the UI changes.
+The `Original prompt:` line is **provenance**: it documents, in plain English, what the spec was authored to verify — useful when reviewing a diff months later, and the natural hook for Hover Cloud's planned on-failure self-heal (replaying the recorded intent against the current UI).
 
 **2. The test body** — each captured tool call becomes a block-scoped block with a visibility prelude before the interaction:
 
@@ -88,11 +88,12 @@ The Result card's "Save as Spec" path enforces this in code — see [`packages/c
 
 ## When selectors do break
 
-Sometimes the UI changes enough that the semantic selector itself goes stale — a button renamed `Sign in`, a label refactored, a role swapped. The saved spec turns red. Three options:
+Sometimes the UI changes enough that the semantic selector itself goes stale — a button renamed `Sign in`, a label refactored, a role swapped. The saved spec turns red. Locally you have two options:
 
-1. **[Re-record](/docs/features/re-record)** — fastest, agent regenerates selectors from the original prompt.
-2. **Hand-edit** — open the `.spec.ts`, change the selector. Faster if you know exactly what changed.
-3. **Treat as a regression** — the flow itself may have legitimately changed; update the test by hand or delete and start fresh.
+1. **Hand-edit** — open the `.spec.ts`, change the selector. The file is plain `@playwright/test` and yours to own; fast if you know exactly what changed.
+2. **Treat as a regression** — the flow itself may have legitimately changed; update the test by hand or delete and start fresh.
+
+Automatic, on-failure healing — replaying the spec's recorded intent against the current UI and proposing a diff — is the planned path for **[Hover Cloud](/docs/reference/roadmap)**, not a local feature. The local extension is purely author + run.
 
 The [FAQ](/docs/faq#my-ui-changed-and-my-saved-spec-breaks-what-now) covers the trade-offs in depth.
 

@@ -65,7 +65,7 @@ npx playwright test __vibe_tests__
 
 ## FAQ
 
-**UI 改了,我存的 spec 挂了。** 大多数 UI 改动不会挂 —— 选择器是语义化的,不是 CSS/XPath。语义真变了 spec 会红:**重录**(Agent 重放原始 prompt,约 30 秒)、手改(它就是普通 Playwright)、或当成一个真 regression。CI 阶段故意不自愈 —— 保持确定 + 免费(自愈作为可选的 Hover Cloud 在路上)。
+**UI 改了,我存的 spec 挂了。** 大多数 UI 改动不会挂 —— 选择器是语义化的,不是 CSS/XPath。语义真变了 spec 会红:手改(它就是普通 Playwright)、或当成一个真 regression。CI 阶段故意不自愈 —— 保持确定 + 免费。失败时自动修复界面漂移的 spec 会通过 **Hover Cloud** 提供,而不是本地插件(本地只做创作 + 运行)。
 
 **Hover 会上传我的源码或 DOM 吗?** 不会。`PATH` 上的 CLI 与它自己的厂商通信;`@hover-dev/core` 没有上传通道、无遥测、只绑 `127.0.0.1`。
 

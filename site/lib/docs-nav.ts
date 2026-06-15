@@ -26,8 +26,6 @@ export const DOCS_NAV: DocSection[] = [
       { text: 'Save as Spec', href: '/docs/features/save-as-spec' },
       { text: 'Structured spec output', href: '/docs/features/structured-output' },
       { text: 'Optimize a spec', href: '/docs/features/optimization-pass' },
-      { text: 'Seed library', href: '/docs/features/seed-library' },
-      { text: 'Re-record a spec', href: '/docs/features/re-record' },
       { text: 'Save as Security spec', href: '/docs/features/security-spec' },
       { text: 'Findings cards', href: '/docs/features/findings-cards' },
     ],

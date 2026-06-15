@@ -18,12 +18,7 @@
  *     { type: 'error',           payload: { message } }
  *
  *   client → server
- *     { type: 'command',       payload: { text, sessionId?, reRecord?: { slug } } }
- *                                                  // when reRecord.slug is set, the
- *                                                  // service collects tool_use events
- *                                                  // into a step list and on a clean
- *                                                  // session_end overwrites
- *                                                  // __vibe_tests__/<slug>.spec.ts
+ *     { type: 'command',       payload: { text, sessionId? } }
  *     { type: 'cancel' }
  *     { type: 'check-cdp',     payload: { pageUrl } }                 // "is this widget in the debug Chrome?"
  *     { type: 'launch-chrome', payload: { pageUrl } }                 // start debug Chrome, navigate to pageUrl
@@ -805,10 +800,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         return;
       }
       if (msg.type === 'list-specs') {
-        // Widget asks for every spec under <devRoot>/__vibe_tests__/ so it
-        // can render the Specs tab in the Saved-sessions overlay. Each
-        // summary carries `originalPrompt` (parsed from the JSDoc header)
-        // so the Re-record button can resubmit it as a normal command.
+        // The extension asks for every spec under <devRoot>/__vibe_tests__/ to
+        // render the Specs view. Each summary carries `originalPrompt` (parsed
+        // from the JSDoc header) as provenance — what the spec verifies.
         const specs = await listSpecs(devRoot);
         send(ws, { type: 'specs-list', payload: { specs } });
         return;
@@ -916,16 +910,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       const resumeSessionId =
         typeof msg.payload?.sessionId === 'string' && msg.payload.sessionId.length > 0
           ? msg.payload.sessionId
-          : undefined;
-      // Re-record mode: when the client (widget Specs tab or hover CLI)
-      // passes `reRecord: { slug }`, runSession collects the tool_use events
-      // into a SpecStep[] and, on a clean finish, we overwrite the existing
-      // __vibe_tests__/<slug>.spec.ts. Same flow the widget uses for "Save as
-      // Spec", but the spec already exists and is being regenerated for the
-      // current UI.
-      const reRecordSlug =
-        msg.payload && typeof msg.payload === 'object' && 'reRecord' in msg.payload
-          ? ((msg.payload as { reRecord?: { slug?: unknown } }).reRecord?.slug as string | undefined)
           : undefined;
       if (typeof text !== 'string' || !text.trim()) return;
       if (activeRun) {
@@ -1190,51 +1174,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             steps: runResult.steps,
           },
         );
-
-        // Re-record: write a fresh spec from the steps runSession accumulated
-        // (`user` → `step`* → `done`). Only on a clean, non-cancelled finish —
-        // a cancelled/aborted run throws out of runSession into the catch
-        // below, and an errored agent leaves the original spec untouched.
-        if (reRecordSlug && !run.cancelled) {
-          if (runResult.isError) {
-            emitToRun({
-              type: 'error',
-              payload: {
-                message:
-                  `Re-record failed: ${runResult.summary || 'agent reported an error'}. ` +
-                  `Original spec left unchanged.`,
-              },
-            });
-          } else {
-            try {
-              const { writeSpec } = await import('./specs/writeSpec.js');
-              const written = await writeSpec({
-                devRoot,
-                name: reRecordSlug,
-                steps: runResult.steps,
-                overwrite: true,
-                // Guarantee a leading goto when the agent never navigated
-                // (already-open tab) — and the fallback baseURL for a scaffolded
-                // playwright config.
-                startUrl: opts.devUrl,
-                // Same credential redaction as save-spec: if the re-record
-                // logged in via an @account, keep the creds out of the rewritten
-                // spec (parameterize into process.env refs).
-                redactions: msg.payload?.redactions,
-              });
-              emitToRun({
-                type: 'spec-saved',
-                payload: { name: reRecordSlug, path: written.path },
-              });
-            } catch (e) {
-              const m = e instanceof Error ? e.message : String(e);
-              emitToRun({
-                type: 'error',
-                payload: { message: `Re-record could not write spec: ${m}` },
-              });
-            }
-          }
-        }
       } catch (err) {
         // A user-initiated cancel() already sent a synthetic session_end
         // {cancelled:true}. The subsequent AbortError surfacing here would

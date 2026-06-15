@@ -2,9 +2,9 @@
  * Captured-step type.
  *
  * @deprecated MODULE SLATED FOR REMOVAL. Save-as-Skill (writing
- * `.claude/skills/<slug>/SKILL.md` for agent replay) was retired — `spec` +
- * Self-healing (⟳ Re-record) covers intent-driven replay, and "skill" collided
- * with Claude Code's own skills concept. All that remains here is `SkillStep`:
+ * `.claude/skills/<slug>/SKILL.md` for agent replay) was retired — the saved
+ * `spec` covers replay, and "skill" collided with Claude Code's own skills
+ * concept. All that remains here is `SkillStep`:
  * the serialized captured-step shape the whole spec pipeline (writeSpec,
  * sidecar, listSpecs, Page-Object extraction) consumes as `SpecStep`.
  *

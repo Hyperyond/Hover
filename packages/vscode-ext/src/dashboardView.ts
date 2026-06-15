@@ -26,7 +26,7 @@ interface DashboardData {
   hasRuns: boolean;
   tiles: { specs: number; passRate: number | null; flaky: number; tokens7d: number; findings: number };
   runs: { id: string; ts: string }[];
-  rows: { spec: string; cells: (Status | null)[]; heal: boolean }[];
+  rows: { spec: string; cells: (Status | null)[] }[];
   findings: { severity: string; text: string; prompt?: string }[];
 }
 
@@ -87,13 +87,7 @@ async function gather(): Promise<DashboardData> {
   for (const r of runs) for (const k of Object.keys(r.specs)) allSpecs.add(k);
   const rows = [...allSpecs]
     .sort((a, b) => a.localeCompare(b))
-    .map((spec) => {
-      const cells = runs.map((r) => r.specs[spec] ?? null) as (Status | null)[];
-      // Self-heal is offered when the spec's most recent run failed or flaked —
-      // re-recording (the agent re-derives the flow) is the heal action.
-      const latest = [...cells].reverse().find((c) => c != null) ?? null;
-      return { spec, cells, heal: latest === 'fail' || latest === 'flaky' };
-    });
+    .map((spec) => ({ spec, cells: runs.map((r) => r.specs[spec] ?? null) as (Status | null)[] }));
 
   // Flaky = a spec that both passed and failed across the window.
   const flaky = rows.filter((r) => {
@@ -149,15 +143,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       if (msg.type === 'ready' || msg.type === 'refresh') void this.push();
       else if (msg.type === 'runAll') void vscode.commands.executeCommand('hover.runAllSpecs');
       else if (msg.type === 'openSpec' && msg.spec) void this.openSpec(msg.spec);
-      else if (msg.type === 'selfHeal' && msg.spec) void this.selfHeal(msg.spec);
     });
-  }
-
-  /** Self-heal a failing spec: re-run the agent against its original prompt so
-   *  it re-derives the flow, overwriting the spec. Reuses hover.reRecordSpec. */
-  private async selfHeal(basename: string): Promise<void> {
-    const hits = await vscode.workspace.findFiles(`**/__vibe_tests__/**/${basename}`, '**/node_modules/**', 1);
-    if (hits[0]) void vscode.commands.executeCommand('hover.reRecordSpec', hits[0]);
   }
 
   refresh(): void {
@@ -202,8 +188,6 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
   .cells { display:flex; gap:3px; }
   .sq { width:13px; height:13px; border-radius:3px; flex:none; background:var(--line); }
   .sq.pass { background:var(--pass); } .sq.fail { background:var(--fail); } .sq.flaky { background:var(--flaky); }
-  .heal { flex:none; margin-left:auto; padding:1px 5px; border:1px solid var(--line); background:var(--bg-3); line-height:1.3; }
-  .heal:hover { border-color:var(--flaky); }
   .legend { display:flex; gap:12px; color:var(--dim); font-size:10.5px; margin-top:9px; }
   .legend span { display:inline-flex; align-items:center; gap:4px; }
   .legend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
@@ -246,8 +230,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     html += '<h3>Spec × recent runs</h3><div class="matrix">';
     d.rows.forEach(function(r){
       var cells = r.cells.map(function(c){ return '<span class="sq '+(c||'')+'"></span>'; }).join('');
-      var heal = r.heal ? '<button class="heal" data-spec="'+esc(r.spec)+'" title="Self-heal — re-record this spec against its original prompt">🔧</button>' : '';
-      html += '<div class="mrow"><span class="mname" data-spec="'+esc(r.spec)+'" title="'+esc(r.spec)+'">'+esc(r.spec)+'</span><span class="cells">'+cells+'</span>'+heal+'</div>';
+      html += '<div class="mrow"><span class="mname" data-spec="'+esc(r.spec)+'" title="'+esc(r.spec)+'">'+esc(r.spec)+'</span><span class="cells">'+cells+'</span></div>';
     });
     html += '</div><div class="legend">'
       + '<span><i style="background:var(--pass)"></i>pass</span>'
@@ -269,9 +252,6 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
     if (b) b.addEventListener('click', function(){ vscode.postMessage({type:'runAll'}); });
     Array.prototype.forEach.call(document.querySelectorAll('.mname'), function(el){
       el.addEventListener('click', function(){ vscode.postMessage({type:'openSpec', spec: el.getAttribute('data-spec')}); });
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('.heal'), function(el){
-      el.addEventListener('click', function(){ vscode.postMessage({type:'selfHeal', spec: el.getAttribute('data-spec')}); });
     });
   }
   window.addEventListener('message', function(e){ var m=e.data; if(m && m.type==='data') render(m.data); });

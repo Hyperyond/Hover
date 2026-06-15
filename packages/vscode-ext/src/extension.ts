@@ -193,9 +193,9 @@ function endOptimize(): void {
   chatProvider?.clearBusy();
 }
 
-/** Ensure a debug browser is up before a run (self-heal). Idempotent on the
- *  engine side (launchDebugChrome no-ops if Chrome is already on the CDP port),
- *  so this both first-launches and relaunches a browser that went away. */
+/** Ensure a debug browser is up before a run. Idempotent on the engine side
+ *  (launchDebugChrome no-ops if Chrome is already on the CDP port), so this
+ *  both first-launches and relaunches a browser that went away. */
 function ensureBrowser(url: string): Promise<boolean> {
   if (!pool) return Promise.resolve(false);
   return new Promise((resolve) => {
@@ -736,7 +736,6 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.saveFindingsReport', () => saveFindingsReport()),
     vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel()),
     vscode.commands.registerCommand('hover.optimizeSpec', (a?: vscode.TreeItem | vscode.Uri) => optimizeSpec(a)),
-    vscode.commands.registerCommand('hover.reRecordSpec', (a?: vscode.TreeItem | vscode.Uri) => reRecordSpec(a)),
     vscode.commands.registerCommand('hover.addCiWorkflow', () => addCiWorkflow()),
     vscode.commands.registerCommand('hover.startApp', () => startApp()),
     vscode.commands.registerCommand('hover.toggleBrowser', () => toggleBrowser()),
@@ -1200,71 +1199,6 @@ async function optimizeSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
       chatProvider?.clearBusy();
       chatProvider?.pushSystem(`Optimize for "${slug}" is taking unusually long — it may have failed. Check the engine, or try again.`);
     }, 150_000);
-  }
-}
-
-async function reRecordSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
-  const uri = resolveSpecUri(arg);
-  if (!uri) return;
-  if (!pool || connectedServices === 0) {
-    void vscode.window.showWarningMessage('Hover: engine not connected.');
-    return;
-  }
-  let prompt: string | null = null;
-  try {
-    const txt = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-    prompt = (/Original prompt:\s*(.+)/.exec(txt) ?? [])[1]?.trim() ?? null;
-  } catch {
-    /* unreadable */
-  }
-  if (!prompt) {
-    void vscode.window.showWarningMessage('Hover: this spec has no "Original prompt:" header (hand-authored) — it can\'t be self-healed.');
-    return;
-  }
-  const slug = specSlug(uri);
-  await chatProvider?.reveal();
-  chatProvider?.pushSystem(`Self-healing "${slug}" (re-recording) — ${prompt}`);
-  stepCount = 0;
-  runCost = 0;
-  runTokens = 0;
-  chatProvider?.setRunning(true);
-
-  // Resolve @account mentions in the original prompt so the re-run can log in,
-  // and redact those creds out of the rewritten spec (engine-side writeSpec).
-  const resolved = (await envStore?.resolveMentions(prompt)) ?? [];
-  const accounts = resolved.map((a) => ({ label: a.label, username: a.username, password: a.password, role: a.role }));
-  const redactions: { value: string; envVar: string }[] = [];
-  for (const a of resolved) {
-    if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
-    if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
-  }
-  const missing = resolved.filter((a) => !a.password).map((a) => a.label);
-  if (missing.length) {
-    chatProvider?.pushSystem(`Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the self-heal can log in.`);
-  }
-
-  const url = await resolveTargetUrl();
-  if (!url) {
-    chatProvider?.setRunning(false);
-    chatProvider?.pushSystem('No target URL — start your dev server, then click "▶ Start App" (or set a local URL).');
-    return;
-  }
-  if (!(await probeUrl(url, 4000))) {
-    chatProvider?.setRunning(false);
-    chatProvider?.pushSystem(`Couldn't reach ${url} — the dev server isn't responding. Start it, then click "▶ Start App".`);
-    return;
-  }
-  const ready = await ensureBrowser(url);
-  if (!ready) {
-    chatProvider?.setRunning(false);
-    chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Click "▶ Start App".`);
-    return;
-  }
-  const rrEnv = await envStore?.getActive();
-  runSourceGrant = null;
-  if (!pool?.reRecord(prompt, slug, accounts, redactions, rrEnv ? { id: rrEnv.id, name: rrEnv.name } : undefined, sourceAccessForRun())) {
-    chatProvider?.setRunning(false);
-    chatProvider?.pushSystem('Could not reach the engine.');
   }
 }
 

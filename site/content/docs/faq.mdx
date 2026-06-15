@@ -10,17 +10,18 @@ Hover generates `getByRole / getByLabel / getByTestId` semantic selectors — ne
 
 ### 2. When the *semantics* shift — button renamed, label changed, role swapped — the spec turns red
 
-You have three options, listed from cheapest to most explicit:
+You have two local options:
 
-- **Re-record it.** Open the **Specs** view and click **⟳ Re-record**. The agent reads the spec's JSDoc `Original prompt:` header ("log in then add a todo") and replays it against the *current* UI, then overwrites the `.spec.ts` with new selectors. About 30 seconds, about $0.10 per spec. Review the `git diff` before committing. See the [Re-record a spec](/docs/features/re-record) page for the full walkthrough.
-- **Edit by hand.** The spec is plain `@playwright/test` — `getByRole('button', { name: 'Submit' })` → `'Sign in'`. Faster if you know exactly what changed.
+- **Edit by hand.** The spec is plain `@playwright/test` — `getByRole('button', { name: 'Submit' })` → `'Sign in'`. Fast if you know exactly what changed, and the file is yours to own.
 - **Treat it as a regression.** If the test fails because the *flow* broke (not just the selector), that's the test catching a real bug — fix the app, not the spec.
+
+Automatic, on-failure healing — the agent replaying a spec's intent against the current UI and proposing a diff — is planned as part of **[Hover Cloud](/docs/reference/roadmap)**, not a local feature. The local extension is purely author + run; it ships no re-record command.
 
 ### 3. Why we don't auto-heal at CI time
 
 The Stagehand / Midscene model: tests "self-heal" by calling an LLM mid-run, retrying with new selectors until they pass. It works, but it builds a permanent runtime dependency on a hosted AI provider — every CI run pays an LLM call, every PR, every nightly. Across a year of CI cycles that's measurable money and a fragility surface (provider rate limits, regional outages, model deprecations).
 
-Hover takes the opposite position: **AI is for authoring tests, not running them.** The saved `.spec.ts` is plain Playwright — `pnpm test:e2e` is deterministic and free. When the UI changes enough that selectors break, you trigger Re-record once, deliberately, and the new spec is again deterministic and free. The token cost concentrates at the moment you actually need a model, not amortised across thousands of regression runs.
+Hover takes the opposite position: **AI is for authoring tests, not running them.** The saved `.spec.ts` is plain Playwright — `pnpm test:e2e` is deterministic and free. When the UI changes enough that selectors break, you fix the selector deliberately (by hand locally, or via Hover Cloud's planned on-failure self-heal), and the spec stays deterministic and free to run. The token cost concentrates at the moment you actually need a model, not amortised across thousands of regression runs.
 
 ## My button is still in the DOM but moved behind a kebab menu — does the spec catch that?
 
@@ -54,17 +55,7 @@ Credit: the gap was pointed out on X (and the framing sharpened in follow-up) �
 
 What this still doesn't fix:
 - **`disabled` buttons** — Playwright auto-waits for actionability there too, so `.click()` on a disabled control still times out at 30 s with a generic message. (Tighten by hand with `await expect(el).toBeEnabled()` where it matters.) Same shape of failure as before for this case.
-- **An intermediate step quietly disappearing from the flow** — each step still passes individually; only by reading the JSDoc `Steps:` block can you tell something changed. The Re-record path handles this case (agent regenerates the full sequence against current UI).
-
-## Why no `re-record --all` or `--failed`?
-
-Both rejected on purpose.
-
-**`--all`** would re-record every spec under `__vibe_tests__/`. Sounds convenient — but it burns LLM tokens on specs that were perfectly fine. With 20 specs in the project and 3 actually broken, `--all` pays for 17 unnecessary agent runs. It also produces git-diff noise across the 17 that don't need changing: same intent, different agent-chosen selector style, still a diff you have to review.
-
-**`--failed`** is the right shape of the answer — only re-record specs that Playwright reports as failing — and remains on the roadmap for a future release. It needs a first-class run-Playwright-and-collect-failures step the CLI doesn't yet ship.
-
-The pattern is: CI tells you which specs are red, you re-record them one at a time and review each diff. Slightly slower, much cleaner history.
+- **An intermediate step quietly disappearing from the flow** — each step still passes individually; only by reading the JSDoc `Steps:` block can you tell something changed. Re-running the original prompt against the current UI catches this, which is the kind of intent-level repair planned for Hover Cloud.
 
 ## Security spec auth setup — how do I run a security spec in CI when the auth cookies live in my debug Chrome?
 

@@ -120,8 +120,8 @@ export async function runSession(
     } else if (ev.kind === 'tool_result') {
       // Mark the step this result belongs to (the normalized stream emits
       // tool_result right after its tool_use). A failed action stays in the
-      // sidecar for full-fidelity re-record, but writeSpec drops it from the
-      // runnable spec so the artifact reflects the working flow, not the agent's
+      // sidecar as part of the full-fidelity record, but writeSpec drops it from
+      // the runnable spec so the artifact reflects the working flow, not the agent's
       // trial-and-error.
       if (lastStepIdx >= 0 && ev.isError) steps[lastStepIdx].isError = true;
     } else if (ev.kind === 'session_end') {

@@ -68,7 +68,7 @@ Runnable apps under [`examples/`](./examples/) stress different testing surfaces
 
 ## FAQ
 
-**My UI changed and my saved spec breaks.** Most UI churn doesn't — selectors are semantic, not CSS/XPath. When semantics shift, **Re-record** (the agent replays the original prompt, ~30 s), edit by hand (it's plain Playwright), or treat it as a real regression. No CI-time auto-heal on purpose — CI stays deterministic and free (self-heal is coming as opt-in Hover Cloud).
+**My UI changed and my saved spec breaks.** Most UI churn doesn't — selectors are semantic, not CSS/XPath. When semantics shift, edit the spec by hand (it's plain Playwright) or treat it as a real regression. No CI-time auto-heal on purpose — CI stays deterministic and free. Automatic on-failure self-heal of UI-drifted specs is coming via **Hover Cloud**, not the local extension (which stays purely author + run).
 
 **Does Hover upload my source or DOM?** No. The CLI on your `PATH` talks to its own provider; `@hover-dev/core` has no upload path, no telemetry, binds `127.0.0.1`.
 

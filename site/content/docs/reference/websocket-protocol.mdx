@@ -23,7 +23,7 @@ The client (the extension chat) and the engine (`@hover-dev/core`) communicate o
 ## Client → server
 
 ```
-{ type: 'command',       payload: { text, sessionId?, reRecord?: { slug } } }   // when reRecord.slug is set, the service collects tool_use events server-side and on a clean session_end overwrites __vibe_tests__/<slug>.spec.ts (v0.11 ⟳ Re-record)
+{ type: 'command',       payload: { text, sessionId? } }       // run a natural-language instruction; tool_use events stream back as steps
 { type: 'cancel' }
 { type: 'check-cdp',     payload: { pageUrl } }                 // "is this widget in the debug Chrome?"
 { type: 'launch-chrome', payload: { pageUrl } }                 // start debug Chrome, navigate to pageUrl

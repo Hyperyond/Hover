@@ -12,7 +12,7 @@ the original behind your back.
   those observations into `await expect(...)` assertions.
 - **Completes multi-step shapes.** Where the deterministic draft left a
   `// hover:optimizable` marker (a file upload, a download), the pass can fill it
-  in, learning from the [seed library](/docs/features/seed-library).
+  in, learning from Hover's built-in worked-example seeds.
 - **Flags buggy behaviour, doesn't hide it.** When an observed outcome looks
   like a bug (a stale error that never clears), the pass still asserts what
   actually happened but marks the line `// KNOWN BUG: …`, so a human can find it
@@ -36,7 +36,7 @@ always kept and never auto-promoted.
 
 The pass is a code-generation helper issued by the local service — its input is
 data the service already holds (the draft, the [sidecar](/docs/features/structured-output),
-your seeds), never live page content. It runs through the same validator as the
+the built-in seeds), never live page content. It runs through the same validator as the
 deterministic path (no XPath, no `waitForTimeout`, must parse). And it never
 becomes the spec without a human diff. CI still runs plain Playwright, zero
 tokens.

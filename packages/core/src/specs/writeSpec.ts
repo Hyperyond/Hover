@@ -69,7 +69,7 @@ function isExploratoryTool(rawTool: string): boolean {
 /**
  * Dirty-recording cleanup. An agent run is exploratory: it makes failed
  * attempts and reads source to orient itself. Those are captured as steps (and
- * kept in the sidecar for re-record), but the runnable spec must reflect only
+ * kept in the sidecar), but the runnable spec must reflect only
  * the working flow. Drop step-kind entries that errored or are pure
  * exploration; keep everything else (user/done/ai markers and successful
  * actions) untouched. Returns the filtered steps plus how many were omitted.
@@ -195,8 +195,9 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   // Dirty-recording cleanup: the agent's failed attempts (isError) and
   // read-only exploration (list_source / read_source) are real captured steps
   // but must NOT land in the runnable spec — only the working flow should. They
-  // stay in `steps` (hence the sidecar) for full-fidelity re-record; the spec
-  // renders from the filtered view, with a JSDoc note of how many were omitted.
+  // stay in `steps` (hence the sidecar) as the full-fidelity record the
+  // optimization pass reads; the spec renders from the filtered view, with a
+  // JSDoc note of how many were omitted.
   const { clean: cleanSteps, omitted } = filterDirtySteps(steps);
   const manifest = await readPageObjectManifest(opts.devRoot);
   const match = manifest ? matchPageObject(cleanSteps, manifest) : null;
@@ -388,7 +389,7 @@ function renderSpec(
     lines.push(' *');
     lines.push(` * Note: ${omitted} exploratory/failed step${omitted === 1 ? '' : 's'} from the session`);
     lines.push(' * were omitted from this runnable flow (the full capture is kept in');
-    lines.push(' * .hover/sidecars for ⟳ Re-record / Optimize).');
+    lines.push(' * .hover/sidecars for the optimization pass).');
   }
   lines.push(' *');
   lines.push(' * Selectors prefer getByRole / getByLabel / getByTestId — generated from');

@@ -90,10 +90,6 @@ export interface ServiceClientPool {
   launchChrome(pageUrl: string, headless: boolean, force?: boolean): boolean;
   /** Run the deterministic + LLM optimization pass on a saved spec. */
   optimizeSpec(slug: string): boolean;
-  /** Re-record a spec: re-run its original prompt and overwrite the spec.
-   *  `accounts` let the agent log in via @mentions; `redactions` keep those
-   *  creds out of the rewritten spec. */
-  reRecord(text: string, slug: string, accounts?: RunAccount[], redactions?: Redaction[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean;
   dispose(): void;
 }
 
@@ -234,12 +230,6 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       const ws = firstOpen();
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug } }));
-      return true;
-    },
-    reRecord(text: string, slug: string, accounts?: RunAccount[], redactions?: Redaction[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean {
-      const ws = firstOpen();
-      if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'command', payload: { text, reRecord: { slug }, accounts, redactions, env, sourceAccess } }));
       return true;
     },
     setModel(model: string): void {

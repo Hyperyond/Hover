@@ -147,12 +147,6 @@
         "icon": "$(sparkle)"
       },
       {
-        "command": "hover.reRecordSpec",
-        "title": "Self-heal (re-record)",
-        "category": "Hover",
-        "icon": "$(record)"
-      },
-      {
         "command": "hover.startApp",
         "title": "Start App (dev server + browser)",
         "category": "Hover",
@@ -463,11 +457,6 @@
           "command": "hover.optimizeSpec",
           "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
           "group": "1_hover@1"
-        },
-        {
-          "command": "hover.reRecordSpec",
-          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
-          "group": "1_hover@2"
         },
         {
           "command": "hover.reviewOptimizationCandidate",
