@@ -50,6 +50,40 @@ export function countOptimizableMarkers(source: string): number {
   return source.split('\n').filter(l => l.trimStart().startsWith(OPTIMIZABLE_MARKER)).length;
 }
 
+/** Strip the `mcp__<server>__` prefix off a Hover-MCP tool name. The server
+ *  segment is kebab-case (`hover-source`), so the class includes `-`; lazy so
+ *  the tool name (which may contain `_`) is preserved. */
+function bareTool(rawTool: string): string {
+  return rawTool.replace(/^mcp__[a-z0-9_-]+?__/, '');
+}
+
+/** Read-only exploration the agent does to understand the page/code — never a
+ *  user action, so it must not appear in the crystallized spec. (browser_* read
+ *  tools are dropped inside translateStep; these Hover-MCP source reads are
+ *  dropped at the filter so they don't even reach prose.) */
+function isExploratoryTool(rawTool: string): boolean {
+  const tool = bareTool(rawTool);
+  return tool === 'list_source' || tool === 'read_source';
+}
+
+/**
+ * Dirty-recording cleanup. An agent run is exploratory: it makes failed
+ * attempts and reads source to orient itself. Those are captured as steps (and
+ * kept in the sidecar for re-record), but the runnable spec must reflect only
+ * the working flow. Drop step-kind entries that errored or are pure
+ * exploration; keep everything else (user/done/ai markers and successful
+ * actions) untouched. Returns the filtered steps plus how many were omitted.
+ */
+function filterDirtySteps(steps: SpecStep[]): { clean: SpecStep[]; omitted: number } {
+  let omitted = 0;
+  const clean = steps.filter(s => {
+    if (s.kind !== 'step' || !s.tool) return true; // non-action entries pass through
+    if (s.isError || isExploratoryTool(s.tool)) { omitted++; return false; }
+    return true;
+  });
+  return { clean, omitted };
+}
+
 export interface SpecAssertion {
   /** Generated Playwright code (single line, no leading "await "). */
   code: string;
@@ -152,9 +186,15 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   // Stage 3c: if a prior extraction left a Page Object whose flow prefixes
   // this spec, consume it (await loginPage.login(…)) instead of re-emitting
   // the steps inline. No manifest (extraction never ran) → plain spec.
+  // Dirty-recording cleanup: the agent's failed attempts (isError) and
+  // read-only exploration (list_source / read_source) are real captured steps
+  // but must NOT land in the runnable spec — only the working flow should. They
+  // stay in `steps` (hence the sidecar) for full-fidelity re-record; the spec
+  // renders from the filtered view, with a JSDoc note of how many were omitted.
+  const { clean: cleanSteps, omitted } = filterDirtySteps(steps);
   const manifest = await readPageObjectManifest(opts.devRoot);
-  const match = manifest ? matchPageObject(steps, manifest) : null;
-  const source = renderSpec(slug, opts.name, opts.description ?? '', steps, opts.assertions ?? [], match);
+  const match = manifest ? matchPageObject(cleanSteps, manifest) : null;
+  const source = renderSpec(slug, opts.name, opts.description ?? '', cleanSteps, opts.assertions ?? [], match, omitted);
   await writeFile(path, source, 'utf-8');
   // Specs use relative URLs (page.goto("/")), which need a `baseURL` in the
   // project's Playwright config. If the project has NO config at all, the saved
@@ -219,6 +259,7 @@ function renderSpec(
   steps: SpecStep[],
   assertions: SpecAssertion[],
   match: PageObjectMatch | null,
+  omitted = 0,
 ): string {
   const userMsg = steps.find(s => s.kind === 'user');
   const doneMsg = [...steps].reverse().find(s => s.kind === 'done');
@@ -322,6 +363,12 @@ function renderSpec(
     lines.push(' *');
     lines.push(' * Expected:');
     for (const e of expectedLines) lines.push(` *   • ${jsdocEscape(e)}`);
+  }
+  if (omitted > 0) {
+    lines.push(' *');
+    lines.push(` * Note: ${omitted} exploratory/failed step${omitted === 1 ? '' : 's'} from the session`);
+    lines.push(' * were omitted from this runnable flow (the full capture is kept in');
+    lines.push(' * .hover/sidecars for ⟳ Re-record / Optimize).');
   }
   lines.push(' *');
   lines.push(' * Selectors prefer getByRole / getByLabel / getByTestId — generated from');

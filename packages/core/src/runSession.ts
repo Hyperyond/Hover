@@ -74,6 +74,11 @@ export async function runSession(
   const steps: SkillStep[] = [{ kind: 'user', text: opts.prompt }];
   let summary = '';
   let isError = false;
+  // Index of the most recently captured tool step, so the tool_result that
+  // follows can mark whether that action errored. Without this, every captured
+  // step looks successful and the agent's failed exploration attempts get
+  // crystallized into the spec as if they were real flow.
+  let lastStepIdx = -1;
 
   const mcpConfig =
     opts.mcpConfig ??
@@ -111,7 +116,14 @@ export async function runSession(
   })) {
     onEvent(ev);
     if (ev.kind === 'tool_use') {
-      steps.push({ kind: 'step', tool: ev.tool, input: ev.input });
+      lastStepIdx = steps.push({ kind: 'step', tool: ev.tool, input: ev.input }) - 1;
+    } else if (ev.kind === 'tool_result') {
+      // Mark the step this result belongs to (the normalized stream emits
+      // tool_result right after its tool_use). A failed action stays in the
+      // sidecar for full-fidelity re-record, but writeSpec drops it from the
+      // runnable spec so the artifact reflects the working flow, not the agent's
+      // trial-and-error.
+      if (lastStepIdx >= 0 && ev.isError) steps[lastStepIdx].isError = true;
     } else if (ev.kind === 'session_end') {
       if (ev.summary) summary = ev.summary;
       if (ev.isError) isError = true;

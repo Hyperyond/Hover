@@ -586,18 +586,71 @@ describe('writeSpec — hyphenated Hover-MCP tool names (bug B)', () => {
     expect(src).not.toContain(OPTIMIZABLE_MARKER);
   });
 
-  it('still leaves a marker for a genuinely untranslatable Hover-MCP tool', async () => {
+  it('strips the hyphenated prefix even for a tool that falls to a marker', async () => {
     const steps: SkillStep[] = [
       { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
-      { kind: 'step', tool: 'mcp__hover-source__list_source', input: {} },
+      // A hyphenated Hover-MCP tool with no single-step translation that is NOT
+      // exploratory (so it isn't dropped): the prefix must still be stripped.
+      { kind: 'step', tool: 'mcp__hover-control__drag_control', input: {} },
     ];
-    const r = await writeSpec({ devRoot, name: 'source list', steps });
+    const r = await writeSpec({ devRoot, name: 'drag control', steps });
     const src = readFileSync(r.path, 'utf-8');
-    // Prefix is stripped (no raw mcp__… leaks into the marker) but the tool has
-    // no single-step translation, so the marker names the bare tool.
-    expect(src).toContain(`${OPTIMIZABLE_MARKER}: list_source`);
+    expect(src).toContain(`${OPTIMIZABLE_MARKER}: drag_control`);
     const markerLine = src.split('\n').find(l => l.includes(OPTIMIZABLE_MARKER));
-    expect(markerLine).not.toContain('mcp__hover-source__');
+    expect(markerLine).not.toContain('mcp__hover-control__');
+  });
+});
+
+describe('writeSpec — dirty-recording cleanup', () => {
+  // The agent explores: it makes failed attempts (isError) and reads source to
+  // orient itself. Those are captured but must NOT pollute the runnable spec.
+  const dirtySession: SkillStep[] = [
+    { kind: 'user', text: 'select female then continue' },
+    { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+    // Agent flails at a radio: two failed clicks on labels that don't exist…
+    { kind: 'step', tool: 'browser_click', input: { element: 'sex female label' }, isError: true },
+    { kind: 'step', tool: 'browser_click', input: { element: 'Female pill wrapper' }, isError: true },
+    // …reads the component source to understand it…
+    { kind: 'step', tool: 'mcp__hover-source__read_source', input: { path: 'src/form.tsx' } },
+    // …then succeeds via the control-actuation tool.
+    { kind: 'step', tool: 'mcp__hover-control__check_control', input: { role: 'radio', name: 'Female' } },
+    { kind: 'step', tool: 'browser_click', input: { element: 'Continue button' } },
+    { kind: 'done', summary: 'Selected Female and continued.' },
+  ];
+
+  it('drops errored steps and source reads from the runnable body', async () => {
+    const r = await writeSpec({ devRoot, name: 'clean flow', steps: dirtySession });
+    const src = readFileSync(r.path, 'utf-8');
+    // Kept: the working actions.
+    expect(src).toContain(`getByRole("radio", { name: "Female" }).check()`);
+    expect(src).toContain(`getByRole('button', { name: "Continue" })`);
+    // Dropped: the failed flailing and the source read.
+    expect(src).not.toContain('sex female label');
+    expect(src).not.toContain('Female pill wrapper');
+    expect(src).not.toContain('read_source');
+    expect(countOptimizableMarkers(src)).toBe(0);
+  });
+
+  it('notes how many steps were omitted in the JSDoc header', async () => {
+    const r = await writeSpec({ devRoot, name: 'clean flow', steps: dirtySession });
+    const src = readFileSync(r.path, 'utf-8');
+    // 2 errored clicks + 1 source read = 3 omitted.
+    expect(src).toContain('3 exploratory/failed steps from the session');
+  });
+
+  it('keeps the full unfiltered capture (errors included) in the sidecar', async () => {
+    const r = await writeSpec({ devRoot, name: 'clean flow', steps: dirtySession });
+    const sidecar = readFileSync(join(devRoot, '.hover', 'sidecars', `${r.slug}.json`), 'utf-8');
+    // Sidecar is the full-fidelity record for re-record / optimize.
+    expect(sidecar).toContain('sex female label');
+    expect(sidecar).toContain('read_source');
+    expect(sidecar).toContain('"isError": true');
+  });
+
+  it('adds no omission note when the session is clean', async () => {
+    const r = await writeSpec({ devRoot, name: 'login + counter', steps: session });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).not.toContain('omitted from this runnable flow');
   });
 });
 
