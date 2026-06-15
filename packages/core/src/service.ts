@@ -173,15 +173,20 @@ const GROUNDED_ACTUATION_DENY = [
   'mcp__playwright__browser_select_option',
 ];
 const GROUNDED_ACTUATION_DIRECTIVE =
-  'INTERACTING WITH THE PAGE: browser_click / browser_type / browser_fill_form / ' +
-  'browser_select_option are disabled. To act on the page, use the Hover control ' +
-  'tools — mcp__hover-control__click_control / fill_control / select_control / ' +
-  'check_control — passing the element\'s accessible role + name exactly as they ' +
-  'appear in the latest browser_snapshot (fall back to its testId, then its real ' +
-  'visible text, only when there is no clean role+name). Always browser_snapshot ' +
-  'first to read the real role + name. This keeps the saved spec\'s selectors ' +
-  'grounded in what the page actually exposes. browser_navigate / browser_snapshot ' +
-  '/ browser_wait_for / browser_tabs / browser_press_key remain available.';
+  'INTERACTING WITH THE PAGE — IMPORTANT: You interact with the page ONLY through ' +
+  'the Hover control tools: mcp__hover-control__click_control, fill_control, ' +
+  'select_control, check_control. You ALREADY HAVE FULL PERMISSION to use them — ' +
+  'NEVER ask the user to grant permissions, never stop to request access, never ' +
+  'narrate a permission request. Just call the tools and keep going until the task ' +
+  'is done. Each takes the element\'s accessible role + name exactly as shown in ' +
+  'the latest browser_snapshot (fall back to its testId, then its real visible ' +
+  'text, only when there is no clean role+name). Workflow: browser_snapshot to read ' +
+  'the real roles + names, then call the matching *_control tool for each field / ' +
+  'option / button, snapshotting again after navigation. (browser_click / ' +
+  'browser_type / browser_fill_form / browser_select_option are intentionally not ' +
+  'available — the control tools fully replace them; this keeps the saved spec\'s ' +
+  'selectors grounded.) browser_navigate / browser_snapshot / browser_wait_for / ' +
+  'browser_tabs / browser_press_key remain available.';
 
 /**
  * Try to bind a WebSocketServer to <host>:<port>. Resolves with the wss on
