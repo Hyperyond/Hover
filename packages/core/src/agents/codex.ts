@@ -123,6 +123,7 @@ function estimateCostUsd(modelHint: string | undefined, usage: CodexUsage): numb
 interface CodexParserState extends ParserState {
   runningCost: number;
   runningTurns: number;
+  runningTokens: number;
   runningSessionId: string | undefined;
   lastAgentMessage: string | undefined;
   sawErrorEvent: boolean;
@@ -136,6 +137,7 @@ function codexState(state: ParserState): CodexParserState {
   if (typeof state.runningCost !== 'number') {
     state.runningCost = 0;
     state.runningTurns = 0;
+    state.runningTokens = 0;
     state.runningSessionId = undefined;
     state.lastAgentMessage = undefined;
     state.sawErrorEvent = false;
@@ -147,6 +149,7 @@ function codexState(state: ParserState): CodexParserState {
 function resetCodexCounters(s: CodexParserState): void {
   s.runningCost = 0;
   s.runningTurns = 0;
+  s.runningTokens = 0;
   s.runningSessionId = undefined;
   s.lastAgentMessage = undefined;
   s.sawErrorEvent = false;
@@ -252,11 +255,11 @@ export const codexAgent: AgentDescriptor = {
         // `name`, fall back to `tool`. Same for input.
         const rawName = it.name ?? it.tool ?? '';
         const tool = stripMcpPrefix(rawName);
-        out.push({ kind: 'tool_use', tool, input: it.input ?? it.arguments, costUsdSnapshot: s.runningCost });
+        out.push({ kind: 'tool_use', tool, input: it.input ?? it.arguments, costUsdSnapshot: s.runningCost, tokensSnapshot: s.runningTokens });
       } else if (it.type === 'command_execution') {
         // We DISCOURAGED this in developer_instructions but the agent can
         // still try. Surface it so the user sees it happen.
-        out.push({ kind: 'tool_use', tool: 'shell', input: { command: it.command }, costUsdSnapshot: s.runningCost });
+        out.push({ kind: 'tool_use', tool: 'shell', input: { command: it.command }, costUsdSnapshot: s.runningCost, tokensSnapshot: s.runningTokens });
       }
       return out;
     }
@@ -286,8 +289,9 @@ export const codexAgent: AgentDescriptor = {
         // estimateCostUsd fall back to its fixed default tier. Cost is a
         // high-water "should I hit Stop now" signal, not an invoice.
         s.runningCost += estimateCostUsd(undefined, ev.usage);
+        s.runningTokens += (ev.usage.input_tokens ?? 0) + (ev.usage.output_tokens ?? 0);
       }
-      out.push({ kind: 'usage', costUsd: s.runningCost, turns: s.runningTurns });
+      out.push({ kind: 'usage', costUsd: s.runningCost, turns: s.runningTurns, tokens: s.runningTokens });
       return out;
     }
 
@@ -315,6 +319,7 @@ export const codexAgent: AgentDescriptor = {
       kind: 'session_end',
       turns: s.runningTurns,
       costUsd: s.runningCost,
+      tokens: s.runningTokens,
       isError: s.sawErrorEvent || (exitCode != null && exitCode !== 0),
       summary: s.lastAgentMessage,
     };

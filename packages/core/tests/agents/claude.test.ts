@@ -103,8 +103,8 @@ describe('claudeAgent.parseEvent', () => {
     // Every assistant event now prepends a usage event with the running cost
     // and turn count, so the widget can show a live $ counter mid-stream.
     expect(claudeAgent.parseEvent(line)).toEqual([
-      { kind: 'usage', costUsd: 0, turns: 1 },
-      { kind: 'tool_use', tool: 'browser_navigate', input: { url: '/' }, costUsdSnapshot: 0 },
+      { kind: 'usage', costUsd: 0, turns: 1, tokens: 0 },
+      { kind: 'tool_use', tool: 'browser_navigate', input: { url: '/' }, costUsdSnapshot: 0, tokensSnapshot: 0 },
     ]);
   });
 
@@ -115,7 +115,7 @@ describe('claudeAgent.parseEvent', () => {
       message: { content: [{ type: 'text', text: '   ' }, { type: 'text', text: 'ok' }] },
     });
     expect(claudeAgent.parseEvent(line)).toEqual([
-      { kind: 'usage', costUsd: 0, turns: 1 },
+      { kind: 'usage', costUsd: 0, turns: 1, tokens: 0 },
       { kind: 'text', text: 'ok' },
     ]);
   });
@@ -128,7 +128,7 @@ describe('claudeAgent.parseEvent', () => {
       message: { content: [{ type: 'text', text: 'hi' }] },
     });
     expect(claudeAgent.parseEvent(line)).toEqual([
-      { kind: 'usage', costUsd: 0.0123, turns: 1 },
+      { kind: 'usage', costUsd: 0.0123, turns: 1, tokens: 0 },
       { kind: 'text', text: 'hi' },
     ]);
   });
@@ -144,7 +144,7 @@ describe('claudeAgent.parseEvent', () => {
     });
     const events = claudeAgent.parseEvent(line);
     // sonnet pricing: 1000 input @ $3/M + 500 output @ $15/M = $0.003 + $0.0075 = $0.0105
-    expect(events[0]).toEqual({ kind: 'usage', costUsd: 0.0105, turns: 1 });
+    expect(events[0]).toEqual({ kind: 'usage', costUsd: 0.0105, turns: 1, tokens: 1500 });
   });
 
   it('parses result events into session_end', () => {
@@ -156,7 +156,7 @@ describe('claudeAgent.parseEvent', () => {
       result: 'done',
     });
     expect(claudeAgent.parseEvent(line)).toEqual([
-      { kind: 'session_end', turns: 3, costUsd: 0.012, isError: false, summary: 'done' },
+      { kind: 'session_end', turns: 3, costUsd: 0.012, tokens: 0, isError: false, summary: 'done' },
     ]);
   });
 });

@@ -66,14 +66,14 @@ export interface InvokeOptions {
 export type InvokeEvent =
   | { kind: 'session_start'; sessionId: string; model?: string }
   | { kind: 'mcp_status'; server: string; status: string }
-  | { kind: 'tool_use'; tool: string; input: unknown; costUsdSnapshot?: number }
+  | { kind: 'tool_use'; tool: string; input: unknown; costUsdSnapshot?: number; tokensSnapshot?: number }
   | { kind: 'tool_result'; isError?: boolean; preview?: string }
   | { kind: 'text'; text: string }
   /** Running cost / turn-count update emitted mid-session so the widget can
    *  show a live $ counter without waiting for session_end. Claude Code's
    *  stream-json includes `total_cost_usd` on intermediate result-ish events;
    *  agents that don't surface running cost simply never emit this. */
-  | { kind: 'usage'; costUsd?: number; turns?: number }
+  | { kind: 'usage'; costUsd?: number; turns?: number; tokens?: number }
   /** End-of-session event. Three terminal states the widget renders distinctly:
    *
    *   - normal completion: `isError: false`, no `cancelled` flag
@@ -83,7 +83,7 @@ export type InvokeEvent =
    *     "user pressed Stop" with "agent crashed mid-run"). The widget
    *     renders this as a neutral "Stopped" state, not a red Failed card.
    */
-  | { kind: 'session_end'; turns?: number; costUsd?: number; isError?: boolean; cancelled?: boolean; summary?: string }
+  | { kind: 'session_end'; turns?: number; costUsd?: number; tokens?: number; isError?: boolean; cancelled?: boolean; summary?: string }
   | { kind: 'raw'; line: string };
 
 /**

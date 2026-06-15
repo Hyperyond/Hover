@@ -56,6 +56,12 @@ export function resolveMcpConfig(opts: {
   /** Suffix for the output filename so multiple parallel configs from
    *  the same service (e.g. mode toggle round-trips) don't share state. */
   suffix?: string;
+  /** Directory the Playwright MCP server writes its output files
+   *  (screenshots, PDFs, traces) into — passed as `--output-dir`. Hover
+   *  points this at `<devRoot>/.hover/screenshots/<session>` so test
+   *  artifacts land in the project's Hover home, grouped per run, instead
+   *  of the MCP server's default OS temp dir. Created if missing. */
+  outputDir?: string;
   /** Project root to resolve `@playwright/mcp` from. Defaults to
    *  `process.cwd()`. `hover run --cwd apps/web` passes the target workspace
    *  so a monorepo that installed `@hover-dev/core` only under that app (not
@@ -99,10 +105,16 @@ export function resolveMcpConfig(opts: {
   // bin shim on PATH and we skip yet another resolution layer.
   const cliPath = resolve(pkgRoot, 'cli.js');
 
+  const playwrightArgs = [cliPath, '--cdp-endpoint', opts.cdpUrl];
+  if (opts.outputDir) {
+    const abs = resolve(opts.outputDir);
+    mkdirSync(abs, { recursive: true });
+    playwrightArgs.push('--output-dir', abs);
+  }
   const mcpServers: Record<string, { command: string; args?: string[]; env?: Record<string, string> }> = {
     playwright: {
       command: process.execPath, // current Node binary
-      args: [cliPath, '--cdp-endpoint', opts.cdpUrl],
+      args: playwrightArgs,
     },
   };
   for (const extra of opts.extra ?? []) {

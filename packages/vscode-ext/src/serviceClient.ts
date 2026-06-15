@@ -74,7 +74,9 @@ export interface ServiceClientPool {
   /** Start a run (prompt) on the engine. `accounts` are the @-mentioned test
    *  accounts (with creds) the agent may log in with. Returns false if nothing
    *  is connected. */
-  run(text: string, sessionId?: string, accounts?: RunAccount[]): boolean;
+  run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean;
+  /** Reply to a source-read approval request from the engine's source MCP. */
+  sendSourceApproval(approvalId: string, allow: boolean): void;
   /** Cancel the active run. */
   cancel(): void;
   /** Crystallize the accumulated steps into a spec. `redactions` parameterize
@@ -85,13 +87,13 @@ export interface ServiceClientPool {
   pluginSave(type: string, payload: Record<string, unknown>): boolean;
   /** Ask the engine to launch the isolated debug Chrome at `pageUrl`
    *  (headless = silent, no window). */
-  launchChrome(pageUrl: string, headless: boolean): boolean;
+  launchChrome(pageUrl: string, headless: boolean, force?: boolean): boolean;
   /** Run the deterministic + LLM optimization pass on a saved spec. */
   optimizeSpec(slug: string): boolean;
   /** Re-record a spec: re-run its original prompt and overwrite the spec.
    *  `accounts` let the agent log in via @mentions; `redactions` keep those
    *  creds out of the rewritten spec. */
-  reRecord(text: string, slug: string, accounts?: RunAccount[], redactions?: Redaction[]): boolean;
+  reRecord(text: string, slug: string, accounts?: RunAccount[], redactions?: Redaction[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean;
   dispose(): void;
 }
 
@@ -154,6 +156,7 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'cdp-status' ||
         msg.type === 'optimize-result' ||
         msg.type === 'optimize-failed' ||
+        msg.type === 'source-approval-request' ||
         (typeof msg.type === 'string' && msg.type.endsWith(':saved'))
       ) {
         handlers.onServerMessage?.(msg as ServerMessage);
@@ -194,11 +197,15 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(body);
       }
     },
-    run(text: string, sessionId?: string, accounts?: RunAccount[]): boolean {
+    run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean {
       const ws = firstOpen();
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId, accounts } }));
+      ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId, accounts, env, sourceAccess } }));
       return true;
+    },
+    sendSourceApproval(approvalId: string, allow: boolean): void {
+      const ws = firstOpen();
+      if (ws) ws.send(JSON.stringify({ type: 'source-approval-response', payload: { approvalId, allow } }));
     },
     cancel(): void {
       for (const ws of sockets.values()) {
@@ -217,10 +224,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       ws.send(JSON.stringify({ type, payload }));
       return true;
     },
-    launchChrome(pageUrl: string, headless: boolean): boolean {
+    launchChrome(pageUrl: string, headless: boolean, force?: boolean): boolean {
       const ws = firstOpen();
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'launch-chrome', payload: { pageUrl, headless } }));
+      ws.send(JSON.stringify({ type: 'launch-chrome', payload: { pageUrl, headless, force } }));
       return true;
     },
     optimizeSpec(slug: string): boolean {
@@ -229,10 +236,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug } }));
       return true;
     },
-    reRecord(text: string, slug: string, accounts?: RunAccount[], redactions?: Redaction[]): boolean {
+    reRecord(text: string, slug: string, accounts?: RunAccount[], redactions?: Redaction[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean {
       const ws = firstOpen();
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'command', payload: { text, reRecord: { slug }, accounts, redactions } }));
+      ws.send(JSON.stringify({ type: 'command', payload: { text, reRecord: { slug }, accounts, redactions, env, sourceAccess } }));
       return true;
     },
     setModel(model: string): void {

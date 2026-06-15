@@ -13,23 +13,108 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hoverDir } from '../specs/sidecar.js';
 
-export const SESSION_RECORD_VERSION = 1;
+export const SESSION_RECORD_VERSION = 2;
+
+/** One agent-reported finding (the ## Findings block), persisted so the
+ *  ledger becomes a reusable findings log — not just a run-history list.
+ *  Severity is the raw marker the agent emitted (Bug / Minor / Info / …);
+ *  readers normalise it for display. */
+export interface SessionFinding {
+  severity: string;
+  text: string;
+}
 
 export interface SessionRecord {
+  /** Bumped to 2 when the reproducibility + outcome fields below were added.
+   *  Readers must tolerate v1 records (every new field is optional). */
   version: number;
   /** `<ISO-ts>-<rand>` — also the filename stem. */
   id: string;
   startedAt: string;
   endedAt: string;
+  /** Real wall-clock of the agent run (endedAt − startedAt in ms). The bare
+   *  timestamps can collapse to ~0 for an instant failure; this is explicit. */
+  durationMs?: number;
   agent: string;
   model?: string;
+  /** Active mode: null/absent = normal authoring, else 'security' / 'pentest'.
+   *  A pentest record is a different artifact from a normal one. */
+  mode?: string | null;
   prompt: string;
   outcome: 'saved' | 'completed' | 'error' | 'aborted';
+  /** Why an error/aborted run ended — engine message, preflight failure,
+   *  budget cutoff, user cancel. Makes a failed record diagnostic. */
+  errorReason?: string;
+  /** The agent's final verification prose (the Result card body), minus the
+   *  Findings block. Searchable history + context, not just the prompt. */
+  summary?: string;
+  /** Parsed ## Findings — the run's actual product output. */
+  findings?: SessionFinding[];
+  /** Per-tool call counts (browser_snapshot → 12, browser_click → 8). Explains
+   *  cost and feeds optimization targeting. */
+  toolCounts?: Record<string, number>;
+  /** What this run drove. envId/envName come from the editor's environment
+   *  store (Local vs a remote target); url is the active dev tab. The Cloud
+   *  run layer keys flakiness + scheduling off these. */
+  target?: { url?: string; envId?: string; envName?: string };
+  /** @account labels this run logged in with — LABELS ONLY, never the
+   *  username/password (same contract as spec redaction). */
+  accountLabels?: string[];
+  /** Tag of the `.hover/screenshots/<tag>` dir this run wrote to, so the UI
+   *  can open the run's artifacts. (Distinct from `id` because the screenshot
+   *  dir is named at MCP-launch time, before the record id exists.) */
+  screenshotTag?: string;
+  /** Chaining hook (reserved for Cloud): the prior turn's session id when this
+   *  was a `--resume` follow-up, so a multi-turn conversation links as one. */
+  resumeOf?: string;
   /** Set when the session was crystallized into a spec. */
   specSlug?: string;
   turns?: number;
   costUsd?: number;
+  /** Total tokens consumed (input + output + cache) — the raw-usage counterpart
+   *  to costUsd, surfaced by the widget/dashboard for users who track tokens
+   *  rather than dollars. */
+  tokensUsed?: number;
   stepCount: number;
+}
+
+/** Parse the agent's final summary into prose + structured findings, mirroring
+ *  the chat webview's splitter so the ledger and the UI agree on what counts
+ *  as a finding. Returns the summary with the Findings block stripped, plus the
+ *  parsed bullets. Pure + total — a malformed summary just yields no findings. */
+export function parseFindings(summary: string): { summary: string; findings: SessionFinding[] } {
+  const lines = summary.split('\n');
+  let hi = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (/^#{1,6}\s*(findings|bugs|issues)\b/i.test(t) || /^findings\s*:/i.test(t)) { hi = i; break; }
+  }
+  if (hi < 0) return { summary: summary.trim(), findings: [] };
+  let j = hi + 1;
+  while (j < lines.length && lines[j].trim() === '') j++;
+  const start = j;
+  while (j < lines.length && /^\s*[-*]\s+/.test(lines[j])) j++;
+  const bullets = lines.slice(start, j);
+  const findings: SessionFinding[] = [];
+  for (const line of bullets) {
+    const m = line.match(/^\s*[-*]\s+(?:\*\*\s*([^*]+?)\s*\*\*\s*[—–:-]?\s*)?([\s\S]+)$/);
+    if (!m) continue;
+    const text = (m[2] || '').trim();
+    if (!text) continue;
+    findings.push({ severity: (m[1] || 'note').trim(), text });
+  }
+  const main = lines.slice(0, hi).concat(lines.slice(j)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { summary: main, findings };
+}
+
+/** Count tool_use steps by tool name for the `toolCounts` field. */
+export function tallyTools(steps: { kind: string; tool?: string }[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const s of steps) {
+    if (s.kind !== 'step' || !s.tool) continue;
+    counts[s.tool] = (counts[s.tool] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export function sessionsDir(devRoot: string): string {

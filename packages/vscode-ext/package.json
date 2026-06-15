@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.15.1",
+  "version": "0.14.3",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "Local-first AI testing for the web. Chat → plain @playwright/test specs that pass CI with zero AI, using your own Claude Code / Codex CLI. 🟠 security · 🔴 pentest.",
   "keywords": [
@@ -72,6 +72,35 @@
         "title": "Run Spec",
         "category": "Hover",
         "icon": "$(play)"
+      },
+      {
+        "command": "hover.runFolderSpecs",
+        "title": "Run Group",
+        "category": "Hover",
+        "icon": "$(play)"
+      },
+      {
+        "command": "hover.runAllSpecs",
+        "title": "Run All Specs",
+        "category": "Hover",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "hover.refreshDashboard",
+        "title": "Refresh Dashboard",
+        "category": "Hover",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hover.resetSourceAccess",
+        "title": "Reset Source-Read Permission",
+        "category": "Hover"
+      },
+      {
+        "command": "hover.reopenBrowser",
+        "title": "Reopen Browser",
+        "category": "Hover",
+        "icon": "$(refresh)"
       },
       {
         "command": "hover.switchMode",
@@ -248,6 +277,13 @@
       ],
       "hover": [
         {
+          "id": "hover.dashboard",
+          "name": "Dashboard",
+          "type": "webview",
+          "icon": "$(dashboard)",
+          "contextualTitle": "Hover"
+        },
+        {
           "id": "hover.specs",
           "name": "Specs",
           "icon": "$(beaker)",
@@ -317,6 +353,11 @@
       ],
       "view/title": [
         {
+          "command": "hover.runAllSpecs",
+          "when": "view == hover.specs",
+          "group": "navigation@0"
+        },
+        {
           "command": "hover.switchMode",
           "when": "view == hover.specs",
           "group": "navigation@1"
@@ -330,6 +371,16 @@
           "command": "hover.refreshSpecs",
           "when": "view == hover.specs",
           "group": "navigation@3"
+        },
+        {
+          "command": "hover.runAllSpecs",
+          "when": "view == hover.dashboard",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hover.refreshDashboard",
+          "when": "view == hover.dashboard",
+          "group": "navigation@2"
         },
         {
           "command": "hover.newSession",
@@ -402,6 +453,11 @@
           "command": "hover.optimizeSpec",
           "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
           "group": "inline@2"
+        },
+        {
+          "command": "hover.runFolderSpecs",
+          "when": "view == hover.specs && viewItem == hoverFolder",
+          "group": "inline@1"
         },
         {
           "command": "hover.optimizeSpec",

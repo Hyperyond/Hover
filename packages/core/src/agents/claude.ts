@@ -71,6 +71,7 @@ function estimateCostUsd(modelHint: string | undefined, usage: ClaudeUsage): num
 interface ClaudeParserState extends ParserState {
   runningCost: number;
   runningTurns: number;
+  runningTokens: number;
   runningModel: string | undefined;
 }
 
@@ -79,6 +80,7 @@ function claudeState(state: ParserState): ClaudeParserState {
   if (typeof state.runningCost !== 'number') {
     state.runningCost = 0;
     state.runningTurns = 0;
+    state.runningTokens = 0;
     state.runningModel = undefined;
   }
   return state as ClaudeParserState;
@@ -180,6 +182,7 @@ export const claudeAgent: AgentDescriptor = {
       // Fresh session — reset the cost/turn accumulator.
       s.runningCost = 0;
       s.runningTurns = 0;
+      s.runningTokens = 0;
       s.runningModel = ev.model;
       if (ev.session_id) {
         out.push({ kind: 'session_start', sessionId: ev.session_id, model: ev.model });
@@ -201,7 +204,16 @@ export const claudeAgent: AgentDescriptor = {
       } else if (ev.message?.usage) {
         s.runningCost += estimateCostUsd(s.runningModel ?? ev.message.model, ev.message.usage);
       }
-      out.push({ kind: 'usage', costUsd: s.runningCost, turns: s.runningTurns });
+      // Token consumption = fresh input + output only. We deliberately EXCLUDE
+      // cache_read (and cache_creation): Claude re-reads ~the whole context from
+      // cache every turn, so summing cache_read across turns inflates the total
+      // ~5-10× and diverges from what Claude Code reports. input+output tracks
+      // the new tokens processed, matching the user's mental model + CC's number.
+      if (ev.message?.usage) {
+        const u = ev.message.usage;
+        s.runningTokens += (u.input_tokens ?? 0) + (u.output_tokens ?? 0);
+      }
+      out.push({ kind: 'usage', costUsd: s.runningCost, turns: s.runningTurns, tokens: s.runningTokens });
 
       for (const block of ev.message?.content ?? []) {
         if (block.type === 'tool_use') {
@@ -212,6 +224,7 @@ export const claudeAgent: AgentDescriptor = {
             tool,
             input: (block as { input?: unknown }).input,
             costUsdSnapshot: s.runningCost,
+            tokensSnapshot: s.runningTokens,
           });
         } else if (block.type === 'text') {
           const text = (block as { text?: string }).text?.trim();
@@ -235,6 +248,7 @@ export const claudeAgent: AgentDescriptor = {
         kind: 'session_end',
         turns: ev.num_turns,
         costUsd: ev.total_cost_usd,
+        tokens: s.runningTokens,
         isError: ev.is_error,
         summary: ev.result,
       });

@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, unlinkSync } from 'node:fs';
 import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { WebSocket } from 'ws';
 
 export interface LaunchOptions {
   /** CDP port to expose (default 9222). */
@@ -41,6 +42,12 @@ export interface LaunchOptions {
    *  a prior headed launch carries over. Used by the VSCode extension's silent
    *  mode. Default false (visible window). */
   headless?: boolean;
+  /** Close any existing debug Chrome on this port FIRST, then launch fresh.
+   *  The plain launch is idempotent (returns the running instance), so it can't
+   *  switch headless↔visible or recover a window that's there-but-not-showing —
+   *  `force` makes the headless/visible toggle and the "reopen browser" action
+   *  actually relaunch. Default false. */
+  force?: boolean;
 }
 
 export type LaunchResult =
@@ -95,6 +102,33 @@ export function findChromeBinary(): string | null {
   return null;
 }
 
+/**
+ * Close a debug Chrome on `port` by sending CDP `Browser.close` over its
+ * DevTools WebSocket (from /json/version). Works without a child-process handle
+ * — Hover spawns Chrome detached — so it's the only way to relaunch in a
+ * different mode. Resolves once closed (or the timeout lapses); never throws.
+ */
+export async function closeDebugChrome(port: number, timeoutMs = 4000): Promise<boolean> {
+  let wsUrl: string;
+  try {
+    const res = await fetch(`http://localhost:${port}/json/version`, { signal: AbortSignal.timeout(1500) });
+    if (!res.ok) return false;
+    wsUrl = ((await res.json()) as { webSocketDebuggerUrl?: string }).webSocketDebuggerUrl ?? '';
+  } catch {
+    return false;
+  }
+  if (!wsUrl) return false;
+  return await new Promise<boolean>((resolve) => {
+    let done = false;
+    const finish = (ok: boolean): void => { if (done) return; done = true; try { sock.close(); } catch { /* ignore */ } resolve(ok); };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    const sock = new WebSocket(wsUrl);
+    sock.on('open', () => sock.send(JSON.stringify({ id: 1, method: 'Browser.close' })));
+    sock.on('message', () => { clearTimeout(timer); finish(true); });
+    sock.on('error', () => { clearTimeout(timer); finish(false); });
+  });
+}
+
 async function isCdpAlive(port: number): Promise<boolean> {
   try {
     const res = await fetch(`http://localhost:${port}/json/version`, {
@@ -137,6 +171,14 @@ export async function launchDebugChrome(opts: LaunchOptions = {}): Promise<Launc
   const url = opts.url ?? 'about:blank';
   const readyTimeoutMs = opts.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS;
   const pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
+
+  // force: close any existing instance first so a headless↔visible switch (or
+  // a "reopen browser" click) actually relaunches instead of no-opping.
+  if (opts.force && (await isCdpAlive(port))) {
+    await closeDebugChrome(port);
+    // Give the port a moment to free up before relaunch.
+    for (let i = 0; i < 20 && (await isCdpAlive(port)); i++) await new Promise((r) => setTimeout(r, 150));
+  }
 
   if (await isCdpAlive(port)) {
     return { ok: true, alreadyRunning: true, userDataDir, port };

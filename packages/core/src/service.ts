@@ -65,7 +65,7 @@ import { getPreflight, invalidatePreflight } from './playwright/preflightCache.j
 import { resolveMcpConfig, mcpToolPrefix } from './playwright/resolveMcpConfig.js';
 import { launchDebugChrome } from './playwright/launchChrome.js';
 import { listSpecs } from './specs/listSpecs.js';
-import { writeSessionRecord } from './sessions/sessions.js';
+import { writeSessionRecord, parseFindings, tallyTools } from './sessions/sessions.js';
 import { readSeeds, BUILTIN_SEEDS } from './specs/seeds.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
@@ -91,6 +91,10 @@ import {
  *  dist/. Spawned only when codeContext is enabled. */
 const SOURCE_MCP_ID = 'hover-source';
 const SOURCE_MCP_SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), 'mcp', 'sourceServer.js');
+/** The control-actuation MCP server (always on) — force-toggles sr-only hidden
+ *  radios/checkboxes the locked-down Playwright `browser_click` can't actuate. */
+const CONTROL_MCP_ID = 'hover-control';
+const CONTROL_MCP_SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), 'mcp', 'actuateServer.js');
 
 export interface ServiceOptions {
   port: number;
@@ -255,7 +259,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   // forced an explicit one, but in that case mode-contributed servers
   // are silently dropped — we log a warning the first time it happens.
   let warnedExplicitMcpOverride = false;
-  const buildMcpConfig = (): string => {
+  const buildMcpConfig = (sessionTag?: string, sourceGate: 'always' | 'ask' | 'deny' = 'ask'): string => {
     if (opts.mcpConfig) {
       const activePlugin = currentModeId ? pluginsByModeId.get(currentModeId) : null;
       if (activePlugin?.mcpServers?.length && !warnedExplicitMcpOverride) {
@@ -289,14 +293,29 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       }
     }
     // codeContext (opt-in, all modes): the fenced read-only source reader.
-    if (opts.codeContext) {
+    // 'deny' drops it entirely; 'ask' makes it gate each read through the editor
+    // (HOVER_APPROVAL_PORT); 'always' lets it read without asking.
+    if (opts.codeContext && sourceGate !== 'deny') {
       extra.push({
         id: SOURCE_MCP_ID,
         command: process.execPath,
         args: [SOURCE_MCP_SCRIPT],
-        env: { HOVER_PROJECT_ROOT: devRoot },
+        env: {
+          HOVER_PROJECT_ROOT: devRoot,
+          HOVER_SOURCE_GATE: sourceGate === 'ask' ? 'ask' : 'allow',
+          ...(sourceGate === 'ask' ? { HOVER_APPROVAL_PORT: String(port) } : {}),
+        },
       });
     }
+    // Control actuation (always on, all modes): force-toggles sr-only hidden
+    // radios/checkboxes the locked-down Playwright click can't actuate. Drives
+    // the same debug Chrome over CDP; crystallizes to a normal .check() step.
+    extra.push({
+      id: CONTROL_MCP_ID,
+      command: process.execPath,
+      args: [CONTROL_MCP_SCRIPT],
+      env: { HOVER_CDP_URL: cdpUrl, HOVER_DEV_URL: opts.devUrl ?? cdpUrl },
+    });
     // Single-Chrome model: the Playwright MCP always points at the one debug
     // Chrome on the normal cdpUrl. (Pre-single-Chrome this branched to a
     // mode-specific port like 9333; there's no second Chrome anymore.)
@@ -307,6 +326,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // Suffix the filename by the mode so different mode toggles within
       // one service produce distinct config files (debugging aid).
       suffix: currentModeId ?? undefined,
+      // Screenshots / traces land under the project's .hover home, grouped
+      // per run, instead of the MCP server's default OS temp dir.
+      outputDir: sessionTag
+        ? resolve(devRoot, '.hover', 'screenshots', sessionTag.replace(/[^a-zA-Z0-9._-]+/g, '-'))
+        : undefined,
     });
   };
 
@@ -373,6 +397,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     prompt: string;
   }
   let activeRun: ActiveRun | null = null;
+  /** In-flight source-read approval requests: correlation id → the source-MCP
+   *  socket that asked, so the editor's response can be routed back to it. */
+  const pendingApprovals = new Map<string, WebSocket>();
   /** Send a run event to whichever ws is currently attached (survives reconnect). */
   const emitToRun = (msg: { type: string; payload?: unknown }): void => {
     const c = activeRun?.client;
@@ -648,6 +675,34 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         return;
       }
+      // Source-read approval gate (codeContext in 'ask' mode). The source MCP
+      // asks before each read; we relay to the editor (the active run's client)
+      // and route its decision back. No editor attached → default allow (the
+      // reader is fenced + read-only; the gate is consent UX, not a security
+      // boundary — never hang the run on it).
+      if (msg.type === 'source-approval-request') {
+        const id = msg.payload?.approvalId;
+        if (typeof id !== 'string') return;
+        const editor = activeRun?.client;
+        if (editor && editor.readyState === WebSocket.OPEN) {
+          pendingApprovals.set(id, ws);
+          send(editor, {
+            type: 'source-approval-request',
+            payload: { approvalId: id, sourcePath: msg.payload?.sourcePath, sourceKind: msg.payload?.sourceKind },
+          });
+        } else {
+          sendIfOpen(ws, { type: 'source-approval-response', payload: { approvalId: id, allow: true } });
+        }
+        return;
+      }
+      if (msg.type === 'source-approval-response') {
+        const id = msg.payload?.approvalId;
+        if (typeof id !== 'string') return;
+        const asker = pendingApprovals.get(id);
+        pendingApprovals.delete(id);
+        if (asker) sendIfOpen(asker, { type: 'source-approval-response', payload: { approvalId: id, allow: msg.payload?.allow === true } });
+        return;
+      }
       if (msg.type === 'list-modes') {
         broadcastModes(ws);
         return;
@@ -914,20 +969,52 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // Session-ledger state — declared outside the try so the catch path can
       // still record an aborted / thrown run (the spend view wants those too).
       const sessionStartedAt = new Date().toISOString();
-      let sessionEnd: { turns?: number; costUsd?: number } = {};
+      let sessionEnd: { turns?: number; costUsd?: number; tokens?: number } = {};
       let sessionRecorded = false;
-      const recordSession = async (outcome: 'completed' | 'error' | 'aborted', stepCount: number) => {
+      // Reproducibility context captured up front (snapshot the mode now so a
+      // mid-run switch can't smear it; the rest are filled as the run learns
+      // them). Account labels are LABELS ONLY — never the credentials.
+      const runMode = currentModeId;
+      const runResumeOf = resumeSessionId;
+      const screenshotTag = (resumeSessionId ?? sessionStartedAt).replace(/[^a-zA-Z0-9._-]+/g, '-');
+      const runEnv = ((): { id?: string; name?: string } | undefined => {
+        const e = (msg.payload as { env?: { id?: string; name?: string } } | undefined)?.env;
+        return e && typeof e === 'object' ? { id: e.id, name: e.name } : undefined;
+      })();
+      let runTargetUrl: string | undefined;
+      let runAccountLabels: string[] | undefined;
+      const recordSession = async (
+        outcome: 'completed' | 'error' | 'aborted',
+        stepCount: number,
+        detail?: { summary?: string; errorReason?: string; steps?: { kind: string; tool?: string }[] },
+      ) => {
         if (sessionRecorded) return;
         sessionRecorded = true;
+        const endedAt = new Date().toISOString();
+        const parsed = detail?.summary ? parseFindings(detail.summary) : { summary: '', findings: [] };
+        const toolCounts = detail?.steps ? tallyTools(detail.steps) : undefined;
+        const target =
+          runTargetUrl || runEnv ? { url: runTargetUrl, id: runEnv?.id, name: runEnv?.name } : undefined;
         await writeSessionRecord(devRoot, {
           startedAt: sessionStartedAt,
-          endedAt: new Date().toISOString(),
+          endedAt,
+          durationMs: Date.parse(endedAt) - Date.parse(sessionStartedAt),
           agent: currentAgentId,
           model,
+          mode: runMode,
           prompt: text,
           outcome,
+          errorReason: detail?.errorReason,
+          summary: parsed.summary || undefined,
+          findings: parsed.findings.length ? parsed.findings : undefined,
+          toolCounts: toolCounts && Object.keys(toolCounts).length ? toolCounts : undefined,
+          target: target ? { url: target.url, envId: target.id, envName: target.name } : undefined,
+          accountLabels: runAccountLabels,
+          screenshotTag,
+          resumeOf: runResumeOf,
           turns: sessionEnd.turns,
           costUsd: sessionEnd.costUsd,
+          tokensUsed: sessionEnd.tokens,
           stepCount,
         });
       };
@@ -936,7 +1023,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // us assert plugin-contributed servers landed in the config even
         // when CDP preflight subsequently fails (useful for smoke tests
         // that don't have a real debug Chrome wired up).
-        const mcpConfig = buildMcpConfig();
+        // Group this run's screenshots under .hover/screenshots/<tag>. A
+        // resumed session reuses its id so follow-up turns share one dir;
+        // a first turn keys on its start timestamp (the agent's own
+        // sessionId isn't known until session_start, after the MCP launches).
+        const sourceGate = msg.payload?.sourceAccess ?? 'ask';
+        const mcpConfig = buildMcpConfig(screenshotTag, sourceGate);
 
         // Preflight: refuse to invoke if CDP isn't reachable. Otherwise the
         // Playwright MCP server would silently launch its own Chromium —
@@ -952,15 +1044,23 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
               summary: cdp.reason,
             } satisfies InvokeEvent,
           });
+          // A preflight failure is the most common "why did my run die" — make
+          // it a diagnostic ledger row rather than silently returning.
+          await recordSession('error', 0, { errorReason: cdp.reason });
           return;
         }
+
+        // Target URL for the ledger: the localhost tab (the dev server) if we
+        // have one, else the first tab.
+        runTargetUrl =
+          cdp.tabs?.find((t) => /localhost|127\.0\.0\.1/.test(t.url))?.url ?? cdp.tabs?.[0]?.url;
 
         // Build a system-prompt addendum telling the agent about the user's
         // current tab. The most common waste we observed: agent calls
         // browser_navigate to the same URL the user is already on, triggering
-        // a wasteful full-page reload that also destroys the Hover widget
-        // momentarily (the widget re-injects + recovers, but the agent's
-        // own session sometimes gets confused).
+        // a wasteful full-page reload that discards the app state the run had
+        // built up (login session, form input, position in a flow) — so the
+        // agent has to redo work and sometimes loses track of where it was.
         // First turn pays the full rules + narration block; follow-up
         // turns (`resumeSessionId` set) get only the volatile tab list.
         // The static rules are already in the prior turn's context, and
@@ -1004,7 +1104,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // authoring; white-box confirmation when probing) instead of only
         // guessing from the rendered DOM.
         if (opts.codeContext) {
-          appendSystemPrompt = `${appendSystemPrompt}\n\nYou also have read-only access to this project's source via mcp__hover_source (read_source / list_source), fenced to the repo (secrets, keys, .env, .git, node_modules and build output are refused). Use it to read the actual component / route / API code — write tests against the real selectors and, when probing for security issues, confirm a finding against the server code (the query, the authz check) rather than guessing from the page alone.`;
+          appendSystemPrompt = `${appendSystemPrompt}\n\nYou also have read-only access to this project's source via mcp__hover_source (read_source / list_source), fenced to the repo (secrets, keys, .env, .git, node_modules and build output are refused). Use it to read the actual component / route / API code — write tests against the real selectors and, when probing for security issues, confirm a finding against the server code (the query, the authz check) rather than guessing from the page alone.\n\nIMPORTANT — when you get stuck or confused, READ THE CODE before concluding anything: a control you can't operate (a click that does nothing, a field that won't take input), validation that blocks you with no visible reason, a conditional section that won't appear. Use list_source / read_source to open that component's source and look at the real markup, CSS (e.g. visually-hidden / sr-only inputs), event handlers, and state wiring. Base your diagnosis and your next action on what the code actually does — never assert a framework / state / onChange bug you have not seen in the source. Reading source may require the user's one-click approval; if a read is declined or unavailable, just continue from what you can observe on the page and report honestly — do not retry the read in a loop, and do not fall back to guessing an unseen cause.`;
         }
 
         // Test accounts the prompt referenced via @label (resolved by the editor
@@ -1013,6 +1113,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // the saved spec (writeSpec redactions). Never echoed to the user.
         const runAccounts = Array.isArray(msg.payload?.accounts) ? msg.payload!.accounts : [];
         if (runAccounts.length) {
+          // Ledger keeps LABELS ONLY — never the username/password.
+          runAccountLabels = runAccounts.map((a) => a.label);
           const lines = runAccounts.map(a => {
             const role = a.role ? ` (${a.role})` : '';
             const user = a.username ? `username ${JSON.stringify(a.username)}` : 'username not on file';
@@ -1046,7 +1148,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // and `--allowedTools mcp__foo` matches every tool under that
         // prefix. We pass the prefix `mcp__<sanitized>` so all of the
         // server's tools are reachable.
-        const activePluginMcpIds: string[] = [];
+        // Control actuation is always reachable (every mode).
+        const activePluginMcpIds: string[] = [mcpToolPrefix(CONTROL_MCP_ID)];
         if (currentModeId) {
           for (const p of plugins) {
             for (const srv of p.mcpServers ?? []) {
@@ -1078,10 +1181,17 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             signal: run.abort.signal,
           },
           (ev) => {
-            // Cost/turns for the session ledger ride the session_end event,
-            // not the runSession result — snoop them off the stream.
+            // Cost/turns/tokens for the session ledger ride the session_end
+            // event — snoop them off the stream. Also track the running `usage`
+            // totals so an aborted/errored run still records partial spend.
             if (ev.kind === 'session_end') {
-              sessionEnd = { turns: ev.turns, costUsd: ev.costUsd };
+              sessionEnd = { turns: ev.turns, costUsd: ev.costUsd, tokens: ev.tokens };
+            } else if (ev.kind === 'usage') {
+              sessionEnd = {
+                turns: ev.turns ?? sessionEnd.turns,
+                costUsd: ev.costUsd ?? sessionEnd.costUsd,
+                tokens: ev.tokens ?? sessionEnd.tokens,
+              };
             }
             // Stream to whichever ws is attached NOW — survives the widget
             // reconnecting mid-run (emitToRun is a no-op during a reconnect gap).
@@ -1096,6 +1206,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         await recordSession(
           run.cancelled ? 'aborted' : runResult.isError ? 'error' : 'completed',
           runResult.steps.filter((s) => s.kind === 'step').length,
+          {
+            summary: runResult.summary,
+            errorReason: runResult.isError ? runResult.summary : undefined,
+            steps: runResult.steps,
+          },
         );
 
         // Re-record: write a fresh spec from the steps runSession accumulated
@@ -1153,7 +1268,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             summary: message,
           };
           emitToRun({ type: 'event', payload: errorEvent });
-          await recordSession('error', 0);
+          await recordSession('error', 0, { errorReason: message });
           // Force the next command to re-probe CDP. The error could be from
           // Chrome dying, MCP spawning a stray Chromium, the user closing
           // their debug window — anything that would make a cached "all
@@ -1161,7 +1276,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           invalidatePreflight(cdpUrl);
         } else {
           // User-initiated cancel — still worth a ledger row (spend view).
-          await recordSession('aborted', 0);
+          await recordSession('aborted', 0, { errorReason: 'Cancelled by the user.' });
         }
       } finally {
         if (run.graceTimer) clearTimeout(run.graceTimer);

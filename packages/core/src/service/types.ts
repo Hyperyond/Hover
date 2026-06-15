@@ -53,11 +53,27 @@ export interface ClientMessage {
     key?: string;
     /** launch-chrome only — launch the debug Chrome headless (silent mode). */
     headless?: boolean;
+    /** launch-chrome only — close any existing debug Chrome first, then
+     *  relaunch (so a headless↔visible switch / "reopen browser" takes effect). */
+    force?: boolean;
     /** reveal-source only — a `data-hover-source` value (`<rel-path>:<line>:<col>`)
      *  an in-page client (widget) captured from a clicked element. The service
      *  relays it to every OTHER connected client; the VSCode extension listens
      *  for it and jumps the editor to that location (F2 page→editor transport). */
     source?: string;
+    /** command only — the editor's source-read grant for this run:
+     *  'always' (skip the gate), 'ask' (gate each read), 'deny' (no source MCP).
+     *  Default 'ask' when absent. */
+    sourceAccess?: 'always' | 'ask' | 'deny';
+    /** command only — the active environment, recorded in the session ledger. */
+    env?: { id?: string; name?: string };
+    /** source-approval-request (from the source MCP) / -response (from the
+     *  editor): a correlation id, the requested repo-relative path + kind, and
+     *  the user's allow/deny decision. */
+    approvalId?: string;
+    sourcePath?: string;
+    sourceKind?: string;
+    allow?: boolean;
   };
 }
 

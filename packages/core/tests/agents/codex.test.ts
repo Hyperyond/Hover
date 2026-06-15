@@ -128,7 +128,7 @@ describe('codexAgent.parseEvent', () => {
       }),
     );
     expect(events).toEqual([
-      { kind: 'tool_use', tool: 'browser_click', input: { selector: '#go' }, costUsdSnapshot: 0 },
+      { kind: 'tool_use', tool: 'browser_click', input: { selector: '#go' }, costUsdSnapshot: 0, tokensSnapshot: 0 },
     ]);
   });
 
@@ -166,7 +166,7 @@ describe('codexAgent.parseEvent', () => {
       }),
     );
     expect(events).toEqual([
-      { kind: 'tool_use', tool: 'shell', input: { command: 'ls' }, costUsdSnapshot: 0 },
+      { kind: 'tool_use', tool: 'shell', input: { command: 'ls' }, costUsdSnapshot: 0, tokensSnapshot: 0 },
     ]);
   });
 
