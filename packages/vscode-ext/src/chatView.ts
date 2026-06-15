@@ -211,7 +211,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .msg { padding: 8px 11px; border-radius: 10px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
   .msg.user { align-self: flex-end; max-width: 88%; background: var(--accent); color: var(--accent-ink); font-weight: 500; }
   .msg.assistant { align-self: flex-start; max-width: 88%; background: var(--bg-2); border: 1px solid var(--line); }
-  .msg.system { align-self: stretch; font-size: 12px; color: var(--text-mute); background: var(--bg-2); border: 1px solid var(--line); }
+  .msg.system { align-self: stretch; font-size: 12px; color: var(--text-dim); background: none; border: none; padding: 2px 2px; }
   .step { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; }
   .step-head { display: flex; align-items: center; gap: 9px; }
   .step-icon { width: 14px; height: 14px; flex: none; text-align: center; }
