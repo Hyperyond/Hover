@@ -7,7 +7,6 @@
   "license": "Apache-2.0",
   "scripts": {
     "smoke": "pnpm --filter @hover-dev/core smoke",
-    "smoke:scan": "tsx packages/cli/src/index.ts scan --url http://localhost:5173 --cwd examples/basic-app",
     "smoke:chrome": "pnpm --filter @hover-dev/core smoke:chrome",
     "detect": "pnpm --filter @hover-dev/core detect",
     "ws-smoke": "pnpm --filter @hover-dev/core ws-smoke",
@@ -16,8 +15,8 @@
     "dev:site": "pnpm --filter @hover-dev/site dev",
     "build:site": "pnpm --filter @hover-dev/site build",
     "typecheck": "pnpm -r --filter './packages/*' --filter './examples/*' exec tsc --noEmit && pnpm --filter @hover-dev/site typecheck",
-    "build": "pnpm --filter @hover-dev/probe-engine --filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro --filter @hover-dev/nuxt --filter @hover-dev/next --filter webpack-plugin-hover --filter @hover-dev/cli --filter @hover-dev/security --filter @hover-dev/pentest build",
-    "clean": "pnpm --filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro --filter @hover-dev/nuxt --filter @hover-dev/next --filter webpack-plugin-hover --filter @hover-dev/cli clean",
+    "build": "pnpm --filter @hover-dev/probe-engine --filter @hover-dev/core --filter @hover-dev/security --filter @hover-dev/pentest build",
+    "clean": "pnpm --filter @hover-dev/core --filter @hover-dev/security --filter @hover-dev/pentest clean",
     "test": "pnpm -r --if-present test",
     "test:e2e": "pnpm --filter basic-app test",
     "commitlint": "commitlint --edit",

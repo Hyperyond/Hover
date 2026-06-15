@@ -121,9 +121,13 @@ jobs:
       - name: Resolve target + version
         id: resolve
         run: |
-          # Main packages publish in lockstep on a plain v* tag. Each plugin
-          # versions independently on its own tag prefix and publishes alone.
-          MAIN_FILTERS="--filter @hover-dev/core --filter @hover-dev/widget-bootstrap --filter vite-plugin-hover --filter @hover-dev/astro --filter @hover-dev/nuxt --filter @hover-dev/next --filter webpack-plugin-hover --filter @hover-dev/cli"
+          # The bundler-plugin / in-page-widget packages (vite-plugin-hover,
+          # @hover-dev/{astro,nuxt,next,cli,widget-bootstrap}, webpack-plugin-hover,
+          # @hover-dev/transform-source) were removed — that npm path is retired
+          # (the VS Code extension is the surface). Only @hover-dev/core remains
+          # on the main v* track; the security / pentest plugins version on their
+          # own tag prefixes below.
+          MAIN_FILTERS="--filter @hover-dev/core"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TARGET="${{ inputs.target }}"
             VERSION="${{ inputs.version }}"

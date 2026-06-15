@@ -20,29 +20,11 @@ const ROOT = resolve(HERE, '..');
 
 const PACKAGES = [
   { name: '@hover-dev/core', dir: join(ROOT, 'packages/core') },
-  { name: '@hover-dev/widget-bootstrap', dir: join(ROOT, 'packages/widget-bootstrap') },
-  // Security ships as a `main: dist/...` package because examples that
-  // import it (basic-app's vite.config.ts) typecheck against the
-  // published .d.ts, not the source .ts. A fresh-clone workflow that
-  // runs `pnpm install` + `pnpm typecheck` would otherwise fail with
-  // "Cannot find module '@hover-dev/security' or its corresponding
-  // type declarations" — surfaced when this combination landed in CI's
-  // publish.yml release gate for v0.7.0.
+  // Security/pentest ship as `main: dist/...` packages: the VS Code extension's
+  // staged engine resolves their compiled output, and a fresh-clone `pnpm
+  // install` + `pnpm typecheck` must find the built `.d.ts`. Rebuild on stale.
   { name: '@hover-dev/security', dir: join(ROOT, 'packages/security') },
-  // Same as security: basic-app's vite.config.ts imports `@hover-dev/pentest/plugin`
-  // (the RED pentest mode), which resolves to dist/plugin.js. A stale dist (e.g.
-  // after pulling a branch that added the widget entry) silently drops the
-  // plugin's widget contribution — the Save menu loses its "Findings report"
-  // entry — so a fresh install must rebuild it like the other dist-shape pkgs.
   { name: '@hover-dev/pentest', dir: join(ROOT, 'packages/pentest') },
-  // Private workspace package (never published). Ships as `main: dist/...`
-  // because (a) its source is multi-file and Node's strict ESM resolver
-  // can't follow `./types.js` imports back to on-disk `.ts` files when a
-  // consumer like vite-plugin-hover loads via Vite's user-config path,
-  // and (b) every integration shim's tsup build will inline this package
-  // into its own dist via `noExternal`, so dist artefacts must exist
-  // before those shims build.
-  { name: '@hover-dev/transform-source', dir: join(ROOT, 'packages/transform-source') },
 ];
 
 function newestMtime(dir) {
