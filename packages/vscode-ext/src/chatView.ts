@@ -18,6 +18,8 @@ import { randomBytes } from 'node:crypto';
 type Inbound =
   | { type: 'send'; text: string }
   | { type: 'command'; id: string }
+  | { type: 'setMode'; modeId: string | null }
+  | { type: 'setModel'; value: string }
   | { type: 'ready' };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -28,6 +30,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Set by the extension: the webview (re)loaded — re-push config / accounts /
    *  status, which would otherwise be lost if it resolves after activate. */
   onReady?: () => void;
+  /** Set by the extension: the user picked a mode (null = normal) / a model. */
+  modeHandler?: (modeId: string | null) => void;
+  modelHandler?: (value: string) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -41,6 +46,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     view.webview.onDidReceiveMessage((msg: Inbound) => {
       if (msg.type === 'send') void this.onSend(msg.text);
       else if (msg.type === 'command' && typeof msg.id === 'string') void vscode.commands.executeCommand(msg.id);
+      else if (msg.type === 'setMode') this.modeHandler?.(msg.modeId);
+      else if (msg.type === 'setModel' && typeof msg.value === 'string') this.modelHandler?.(msg.value);
       else if (msg.type === 'ready') this.onReady?.();
     });
   }
@@ -78,6 +85,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Push live config to the webview (drives voice + the silent-run border). */
   updateConfig(speech: boolean, silent: boolean): void {
     this.post({ type: 'config', speech, silent });
+  }
+  /** Push the model picker's list for the current agent + the active model. */
+  updateModels(models: { value: string; label: string; desc?: string }[], current: string): void {
+    this.post({ type: 'models', models, current });
   }
 
   // Streamed run rendering (called by the extension as engine events arrive).
@@ -281,11 +292,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   #toolbar { display: flex; align-items: center; gap: 6px; }
   #toolbar .left { display: flex; align-items: center; gap: 6px; }
   #toolbar .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-  .modelpill, .modepill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text-mute); cursor: pointer; font: inherit; font-size: 12px; }
-  .modelpill:hover, .modepill:hover { border-color: var(--accent); color: var(--text); }
-  /* Mode pill tints to the active mode (mirrors the body mode class). */
-  .modepill .bolt { color: var(--accent); }
-  body.mode-security .modepill, body.mode-pentest .modepill { border-color: var(--accent); color: var(--accent); }
+  /* Borderless toolbar buttons (Claude-Code "auto mode" style): icon + text,
+     no chrome, subtle hover. */
+  .barebtn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: none; background: none; color: var(--text-mute); cursor: pointer; font: inherit; font-size: 12px; border-radius: 7px; }
+  .barebtn:hover { color: var(--text); background: var(--bg-2); }
+  .barebtn .caret { color: var(--text-dim); font-size: 10px; }
+  .barebtn svg { opacity: .9; }
+  /* Mode button tints to the active mode. */
+  body.mode-security #mode { color: var(--warn); }
+  body.mode-pentest #mode { color: var(--err); }
+  /* Popup picker (modes / models) — mimics Claude Code's Modes list. */
+  .popup { position: absolute; bottom: calc(100% - 6px); z-index: 30; min-width: 252px; max-width: calc(100% - 24px);
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    box-shadow: 0 10px 28px rgba(0,0,0,.42); padding: 4px; }
+  #model-menu { left: 12px; }
+  #mode-menu { right: 12px; }
+  .popup .p-hdr { padding: 6px 8px 4px; font-size: 11px; color: var(--text-dim); }
+  .p-item { display: flex; gap: 9px; padding: 8px 8px; cursor: pointer; align-items: flex-start; border-radius: 7px; }
+  .p-item:hover, .p-item.sel { background: var(--bg-3); }
+  .p-item .p-ic { width: 18px; flex: none; text-align: center; color: var(--text-mute); }
+  .p-item .p-body { flex: 1; min-width: 0; }
+  .p-item .p-title { color: var(--text); font-size: 12.5px; }
+  .p-item .p-desc { color: var(--text-mute); font-size: 11px; line-height: 1.4; margin-top: 1px; }
+  .p-item .p-check { flex: none; color: var(--accent); opacity: 0; }
+  .p-item.active .p-check { opacity: 1; }
   #send {
     width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
     background: var(--accent); color: var(--accent-ink);
@@ -317,12 +347,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       <div class="inputrow">
         <textarea id="input" rows="1" placeholder="e.g. test the login flow  ·  @account to log in"></textarea>
       </div>
+      <div id="model-menu" class="popup" hidden></div>
+      <div id="mode-menu" class="popup" hidden></div>
       <div id="toolbar">
         <div class="left">
-          <button class="modepill" id="browser-toggle" type="button" title="Browser: Silent (headless) / Visible — click to toggle"><span id="browser-label">Silent</span><span class="caret">▾</span></button>
+          <button class="barebtn" id="browser-toggle" type="button" title="Browser: Headless (no window) / Normal (shown) — click to toggle">
+            <svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="3.2"/><path d="M24 6a18 18 0 0 1 15.6 9H24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M8.4 15a18 18 0 0 0 7.8 26.4l7.8-13.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M39.6 15a18 18 0 0 1-15.6 27l7.8-13.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
+            <span id="browser-label">Headless</span>
+          </button>
+          <button class="barebtn" id="model-btn" type="button" title="Model — click to switch"><span id="model-label">Sonnet 4.6</span><span class="caret">▾</span></button>
         </div>
         <div class="right">
-          <button class="modepill" id="mode" type="button" title="Switch mode (Testing / Security / Pentest)"><span class="bolt" id="mode-icon">⚡</span><span id="mode-label">Normal</span><span class="caret">▾</span></button>
+          <button class="barebtn" id="mode" type="button" title="Switch mode (Normal / Security / Pentest)"><span class="bolt" id="mode-icon">⚡</span><span id="mode-label">Normal</span><span class="caret">▾</span></button>
           <button id="send" type="button" title="Send (Enter)" disabled>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
           </button>
@@ -566,11 +602,59 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   input.addEventListener('blur', function(){ setTimeout(closeMenu, 120); });
 
   function cmd(id){ return function(){ vscode.postMessage({ type:'command', id:id }); }; }
-  document.getElementById('mode').addEventListener('click', cmd('hover.switchMode'));
+
+  // ── Mode + model pickers (Claude-Code "Modes" style popups) ──────────────
+  var modeMenu = document.getElementById('mode-menu');
+  var modelMenu = document.getElementById('model-menu');
+  var models = [], currentModel = '';
+  var MODES = [
+    { value:'normal',   icon:'⚡', title:'Normal',   desc:'AI drives your app & saves a Playwright spec' },
+    { value:'security', icon:'🛡', title:'Security', desc:'Business logic & authz — IDOR / BOLA → security spec' },
+    { value:'pentest',  icon:'💀', title:'Pentest',  desc:'Offensive scan of your OWN app → findings report' },
+  ];
+  function renderPicker(menuEl, header, items, activeVal){
+    menuEl.innerHTML = '<div class="p-hdr">'+esc(header)+'</div>' + items.map(function(it){
+      return '<div class="p-item'+(it.value===activeVal?' active':'')+'" data-v="'+esc(String(it.value))+'">'
+        + (it.icon ? '<span class="p-ic">'+it.icon+'</span>' : '')
+        + '<div class="p-body"><div class="p-title">'+esc(it.title)+'</div>'
+        + (it.desc ? '<div class="p-desc">'+esc(it.desc)+'</div>' : '')
+        + '</div><span class="p-check">✓</span></div>';
+    }).join('');
+  }
+  function closePickers(){ modeMenu.hidden = true; modelMenu.hidden = true; }
+  function toggleModeMenu(){
+    if (!modeMenu.hidden) { modeMenu.hidden = true; return; }
+    closePickers(); renderPicker(modeMenu, 'Mode', MODES, currentModeId || 'normal'); modeMenu.hidden = false;
+  }
+  function toggleModelMenu(){
+    if (!modelMenu.hidden) { modelMenu.hidden = true; return; }
+    if (!models.length) return;
+    closePickers();
+    renderPicker(modelMenu, 'Model', models.map(function(x){ return { value:x.value, title:x.label, desc:x.desc }; }), currentModel);
+    modelMenu.hidden = false;
+  }
+  modeMenu.addEventListener('mousedown', function(e){
+    var r = e.target && e.target.closest ? e.target.closest('.p-item') : null; if (!r) return;
+    e.preventDefault(); var v = r.getAttribute('data-v'); modeMenu.hidden = true;
+    vscode.postMessage({ type:'setMode', modeId: v==='normal' ? null : v });
+  });
+  modelMenu.addEventListener('mousedown', function(e){
+    var r = e.target && e.target.closest ? e.target.closest('.p-item') : null; if (!r) return;
+    e.preventDefault(); var v = r.getAttribute('data-v'); modelMenu.hidden = true;
+    vscode.postMessage({ type:'setModel', value: v });
+  });
+  document.getElementById('mode').addEventListener('click', function(e){ e.stopPropagation(); toggleModeMenu(); });
+  document.getElementById('model-btn').addEventListener('click', function(e){ e.stopPropagation(); toggleModelMenu(); });
   document.getElementById('browser-toggle').addEventListener('click', cmd('hover.toggleBrowser'));
   document.getElementById('history').addEventListener('click', cmd('hover.sessions.focus'));
   document.getElementById('new').addEventListener('click', cmd('hover.newSession'));
   document.getElementById('appstatus').addEventListener('click', cmd('hover.appStatus'));
+  document.addEventListener('mousedown', function(e){
+    var t = e.target;
+    if (!t || !t.closest || !t.closest('#mode-menu,#mode')) modeMenu.hidden = true;
+    if (!t || !t.closest || !t.closest('#model-menu,#model-btn')) modelMenu.hidden = true;
+  });
+  document.addEventListener('keydown', function(e){ if (e.key==='Escape') closePickers(); });
   // Delegated: the splash buttons live inside the (re-rendered) empty state.
   log.addEventListener('click', function(e){
     if (!e.target || !e.target.closest) return;
@@ -621,7 +705,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       document.getElementById('mode-icon').textContent = m.id==='pentest' ? '💀' : (m.id==='security' ? '🛡' : '⚡');
       document.body.classList.remove('mode-security','mode-pentest');
       if (m.id) document.body.classList.add('mode-'+m.id);
+      if (!modeMenu.hidden) renderPicker(modeMenu, 'Mode', MODES, currentModeId || 'normal');
       applyBorder();
+    }
+    else if (m.type==='models') {
+      models = Array.isArray(m.models) ? m.models : [];
+      currentModel = m.current || '';
+      var found = models.filter(function(x){ return x.value===currentModel; })[0];
+      document.getElementById('model-label').textContent = (found && found.label) || currentModel || 'Model';
+      if (!modelMenu.hidden) renderPicker(modelMenu, 'Model', models.map(function(x){ return { value:x.value, title:x.label, desc:x.desc }; }), currentModel);
     }
     else if (m.type==='appstatus') {
       var dot=document.getElementById('app-dot'); var lab=document.getElementById('app-label'); var btn=document.getElementById('appstatus');
@@ -631,7 +723,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='accounts') { accounts = Array.isArray(m.accounts) ? m.accounts : []; }
     else if (m.type==='busy') { setBusy(m.done ? null : (m.text||'Working…')); }
     else if (m.type==='running') { running = !!m.running; if (running) { curGroup = null; pendingTitle = null; } else if (curGroup) { finalizeGroup(); } updateWorking(); applyBorder(); syncSend(); }
-    else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Silent' : 'Visible'; applyBorder(); }
+    else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Headless' : 'Normal'; applyBorder(); }
   });
   function emptyEl(){
     var d=document.createElement('div'); d.className='splash';

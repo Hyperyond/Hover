@@ -107,6 +107,45 @@ function agentLabel(id: string | null): string {
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
+/** Model picker lists per agent — the `--model` value the CLI accepts + a
+ *  display label. Current as of 2026-06; trim deprecated tiers. The chat model
+ *  picker reads the list for the active agent (chosen in Settings). */
+interface ModelEntry { value: string; label: string; desc?: string }
+const MODEL_LISTS: Record<string, ModelEntry[]> = {
+  claude: [
+    { value: 'sonnet', label: 'Sonnet 4.6', desc: 'Balanced — the default' },
+    { value: 'opus', label: 'Opus 4.8', desc: 'Most capable (~5× cost)' },
+    { value: 'haiku', label: 'Haiku 4.5', desc: 'Fast & cheap' },
+    { value: 'claude-fable-5', label: 'Fable 5', desc: 'Always-on deep reasoning' },
+  ],
+  codex: [
+    { value: 'gpt-5.5', label: 'GPT-5.5', desc: 'Strongest — the default' },
+    { value: 'gpt-5.4', label: 'GPT-5.4', desc: 'Flagship reasoning' },
+    { value: 'gpt-5.4-mini', label: 'GPT-5.4-mini', desc: 'Fast & cheap' },
+  ],
+};
+function activeAgentId(): string {
+  return currentAgent ?? (vscode.workspace.getConfiguration('hover').get<string>('agent') || 'claude');
+}
+function modelsForAgent(agent: string): ModelEntry[] {
+  return MODEL_LISTS[agent] ?? MODEL_LISTS.claude;
+}
+/** Push the current agent's model list + active model to the chat picker.
+ *  If the stored model isn't valid for the agent (e.g. switched claude→codex),
+ *  fall back to that agent's default and persist it. */
+async function pushModels(): Promise<void> {
+  const agent = activeAgentId();
+  const list = modelsForAgent(agent);
+  const cfg = vscode.workspace.getConfiguration('hover');
+  let model = cfg.get<string>('model', list[0].value);
+  if (!list.some((m) => m.value === model)) {
+    model = list[0].value;
+    await cfg.update('model', model, vscode.ConfigurationTarget.Workspace);
+    pool?.setModel(model);
+  }
+  chatProvider?.updateModels(list, model);
+}
+
 // ── Run orchestration ─────────────────────────────────────────────────────
 // The chat sends a prompt → the engine runs it → streams events back. We
 // accumulate the same message shape the widget sends on save (user / step* /
@@ -602,11 +641,29 @@ export function activate(context: vscode.ExtensionContext): void {
   const chat = registerChatView(context.extensionUri);
   chatProvider = chat.provider;
   chatProvider.runHandler = (prompt) => void runPrompt(prompt);
+  // Mode picked from the chat popup → apply (same as the QuickPick path).
+  chatProvider.modeHandler = (modeId) => {
+    currentMode = modeId;
+    renderModeStatus();
+    chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
+    if (connectedServices > 0) pool?.setMode(modeId);
+  };
+  // Model picked from the chat popup → persist + push to the engine.
+  chatProvider.modelHandler = (value) => {
+    void (async () => {
+      const list = modelsForAgent(activeAgentId());
+      if (!list.some((m) => m.value === value)) return;
+      await vscode.workspace.getConfiguration('hover').update('model', value, vscode.ConfigurationTarget.Workspace);
+      pool?.setModel(value);
+      await pushModels();
+    })();
+  };
   // Re-sync state whenever the chat webview (re)loads — otherwise the initial
   // pushes race the view's first resolve and get dropped.
   chatProvider.onReady = () => {
     pushChatConfig();
     void pushAccounts();
+    void pushModels();
     void pollAppStatus();
     if (currentMode) chatProvider?.updateMode(currentMode, modeLabel(currentMode));
   };
@@ -670,6 +727,7 @@ export function activate(context: vscode.ExtensionContext): void {
       currentAgent = current;
       availableAgents = available;
       settingsProvider?.refresh();
+      void pushModels(); // agent may have changed → re-push the right model list
     },
     onServerMessage: (msg) => handleServerMessage(msg),
   });
@@ -687,9 +745,11 @@ export function activate(context: vscode.ExtensionContext): void {
   appStatusTimer = setInterval(() => void pollAppStatus(), 5000);
   context.subscriptions.push({ dispose: () => { if (appStatusTimer) clearInterval(appStatusTimer); } });
 
-  // Initial config → chat (voice + silent-run border) + accounts for @-mentions.
+  // Initial config → chat (voice + silent-run border) + accounts for @-mentions
+  // + the model picker list for the active agent.
   pushChatConfig();
   void pushAccounts();
+  void pushModels();
 
   // One-time nudge: VSCode can't default a view to the Secondary Side Bar, so
   // guide the user to dock Chat on the right for a code-center / chat-right
@@ -793,6 +853,7 @@ async function setAgent(agentId: string): Promise<void> {
   await vscode.workspace.getConfiguration('hover').update('agent', agentId, vscode.ConfigurationTarget.Workspace);
   if (connectedServices > 0) pool?.switchAgent(agentId);
   settingsProvider?.refresh();
+  await pushModels(); // new agent → new model list (+ reset model if incompatible)
 }
 
 async function newSession(): Promise<void> {

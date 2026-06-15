@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.14.3",
+  "version": "0.15.0",
   "displayName": "Hover — AI E2E Testing & Security",
   "description": "Local-first AI testing for the web. Chat → plain @playwright/test specs that pass CI with zero AI, using your own Claude Code / Codex CLI. 🟠 security · 🔴 pentest.",
   "keywords": [
@@ -302,13 +302,8 @@
         },
         "hover.model": {
           "type": "string",
-          "enum": [
-            "sonnet",
-            "opus",
-            "haiku"
-          ],
           "default": "sonnet",
-          "description": "Model for runs. Sonnet is cheapest; Opus for harder flows; Haiku for speed."
+          "description": "Model for runs, switchable from the chat toolbar. Values depend on the active agent (Claude: sonnet / opus / haiku / claude-fable-5; Codex: gpt-5.5 / gpt-5.4 / gpt-5.4-mini)."
         }
       }
     },
