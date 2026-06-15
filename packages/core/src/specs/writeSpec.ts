@@ -120,6 +120,12 @@ export interface WriteSpecOptions {
   overwrite?: boolean;
   /** Credentials to parameterize into `process.env.<envVar>` references. */
   redactions?: Redaction[];
+  /** The run's target URL (the active environment / dev origin). Used to
+   *  guarantee the spec opens the app: if the captured session has NO
+   *  navigation (the agent connected to an already-open tab and never called
+   *  browser_navigate), a leading `page.goto()` is synthesized from this, and
+   *  it's the fallback origin for the scaffolded playwright config. */
+  startUrl?: string;
 }
 
 /** Stored-step form of a redacted credential — a code expression, so it both
@@ -194,7 +200,7 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   const { clean: cleanSteps, omitted } = filterDirtySteps(steps);
   const manifest = await readPageObjectManifest(opts.devRoot);
   const match = manifest ? matchPageObject(cleanSteps, manifest) : null;
-  const source = renderSpec(slug, opts.name, opts.description ?? '', cleanSteps, opts.assertions ?? [], match, omitted);
+  const source = renderSpec(slug, opts.name, opts.description ?? '', cleanSteps, opts.assertions ?? [], match, omitted, opts.startUrl);
   await writeFile(path, source, 'utf-8');
   // Specs use relative URLs (page.goto("/")), which need a `baseURL` in the
   // project's Playwright config. If the project has NO config at all, the saved
@@ -203,7 +209,7 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   // just runs. Scaffold a minimal config in that case. Best-effort: it must
   // never break Save-as-spec, and it never overwrites an existing config.
   try {
-    await ensurePlaywrightConfig(opts.devRoot, steps);
+    await ensurePlaywrightConfig(opts.devRoot, steps, opts.startUrl);
   } catch { /* config scaffolding is best-effort */ }
   // Persist the structured session next to the spec so cross-session
   // extraction (F4) and the optimization pass (F7) read real SpecStep[]
@@ -260,6 +266,7 @@ function renderSpec(
   assertions: SpecAssertion[],
   match: PageObjectMatch | null,
   omitted = 0,
+  startUrl?: string,
 ): string {
   const userMsg = steps.find(s => s.kind === 'user');
   const doneMsg = [...steps].reverse().find(s => s.kind === 'done');
@@ -333,6 +340,19 @@ function renderSpec(
     const phase = !sawInteraction && s.tool === 'browser_navigate' ? 'Given' : 'When';
     pushTestStep(body, `${phase} · ${humanStep(s.tool!, s.input) ?? s.tool!}`, bodyLines);
     if (s.tool !== 'browser_navigate') sawInteraction = true;
+  }
+
+  // Guarantee the spec opens the app. The agent often connects to an
+  // already-open debug-Chrome tab and never calls browser_navigate, so the
+  // captured session can lack any navigation — a spec with no page.goto() runs
+  // against about:blank and every locator fails. When no navigation was
+  // captured, synthesize a leading goto from the run's target URL.
+  const hasNavigate = steps.some(s => s.kind === 'step' && s.tool === 'browser_navigate');
+  if (!hasNavigate && startUrl) {
+    const gotoBlock: string[] = [];
+    pushTestStep(gotoBlock, `Given · Open ${startUrl}`,
+      [`await page.goto(${JSON.stringify(stripBaseUrl(startUrl))});`]);
+    body.unshift(...gotoBlock);
   }
 
   // Then: Alt-click assertions group under the report's final stage.
@@ -540,7 +560,7 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
       const values = input.values as unknown[] | undefined;
       const val = (values && values.length > 0 ? values[0] : input.value) ?? '';
       return emitInteraction(
-        selectorFromDescription(target, pageVar),
+        selectorForSelect(target, pageVar),
         `selectOption(${JSON.stringify(String(val))})`,
       );
     }
@@ -632,6 +652,21 @@ export function selectorFromDescription(desc: string, pageVar = 'page'): string 
 }
 
 /**
+ * browser_select_option always targets a native `<select>` — whose ARIA role
+ * is `combobox`. The agent's description is usually the label ("marital
+ * status"), with no role keyword, so selectorFromDescription would fall back to
+ * getByText and match the *label text*, not the control — and `.selectOption()`
+ * on a text node throws. Force the combobox role by accessible name instead.
+ */
+export function selectorForSelect(desc: string, pageVar = 'page'): string {
+  const name = desc.trim()
+    .replace(/\s+(combobox|select|dropdown|listbox)$/i, '') // drop a trailing role keyword
+    .replace(/^"|"$/g, '');
+  if (!name) return `${pageVar}.locator('select')`;
+  return `${pageVar}.getByRole('combobox', { name: ${JSON.stringify(name)} })`;
+}
+
+/**
  * Form fields from browser_fill_form have a `name` that's typically the
  * accessible name / label / aria-label. getByLabel is the right primitive.
  * Fall back to getByRole('textbox') if we have a hint.
@@ -674,6 +709,12 @@ const PLAYWRIGHT_CONFIG_NAMES = [
   'playwright.config.cjs', 'playwright.config.mts', 'playwright.config.cts',
 ];
 
+/** Parse a URL's origin, or null if it isn't an absolute http(s) URL. */
+function originOf(url?: string): string | null {
+  if (!url || !/^https?:\/\//.test(url)) return null;
+  try { return new URL(url).origin; } catch { return null; }
+}
+
 /** Origin of the first real navigation captured in the session, e.g.
  *  http://localhost:5175 — the natural baseURL for the scaffolded config. */
 function firstNavigateOrigin(steps: SpecStep[]): string | null {
@@ -695,9 +736,9 @@ function firstNavigateOrigin(steps: SpecStep[]): string | null {
  * an existing config (the user owns it), and skips silently if no origin can be
  * inferred (leaves it to the user rather than guessing).
  */
-async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[]): Promise<void> {
+async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[], startUrl?: string): Promise<void> {
   if (PLAYWRIGHT_CONFIG_NAMES.some(n => existsSync(join(devRoot, n)))) return;
-  const origin = firstNavigateOrigin(steps);
+  const origin = firstNavigateOrigin(steps) ?? originOf(startUrl);
   if (!origin) return;
   const source = [
     `import { defineConfig } from '@playwright/test';`,

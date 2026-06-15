@@ -374,6 +374,19 @@ function handleServerMessage(msg: ServerMessage): void {
       });
       break;
     }
+    case 'tool_result': {
+      // Mark the step this result belongs to as failed, so writeSpec drops the
+      // agent's failed attempts from the saved spec (mirrors runSession's
+      // server-side marking — the Save path crystallizes this transcript, not
+      // runSession's steps, so without this the dirty-recording filter is inert
+      // on the extension's primary path).
+      if (ev.isError) {
+        for (let i = transcript.length - 1; i >= 0; i--) {
+          if (transcript[i].kind === 'step') { transcript[i].isError = true; break; }
+        }
+      }
+      break;
+    }
     case 'usage':
       if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
       if (typeof ev.tokens === 'number') { runTokens = ev.tokens; chatProvider?.pushUsage(ev.tokens); }
@@ -664,6 +677,15 @@ async function saveSpec(): Promise<void> {
   if (!steps.some((m) => m.kind === 'step')) {
     void vscode.window.showWarningMessage('Hover: nothing to save — no steps in the last run.');
     return;
+  }
+  // Guarantee the spec opens the app. The agent usually connects to an
+  // already-open debug-Chrome tab and never calls browser_navigate, so the
+  // recording can have no navigation — the saved spec would then run against
+  // about:blank and fail on the first locator. Prepend a goto from the run's
+  // target when none was captured (idempotent: only added if missing).
+  if (!steps.some((m) => m.kind === 'step' && m.tool === 'browser_navigate')) {
+    const url = await resolveTargetUrl();
+    if (url) steps.unshift({ kind: 'step', tool: 'browser_navigate', input: { url } });
   }
   const name = await vscode.window.showInputBox({ title: 'Save as Playwright spec', prompt: 'Spec name', placeHolder: 'login-flow' });
   if (!name) return;

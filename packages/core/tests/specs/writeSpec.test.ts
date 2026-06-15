@@ -654,6 +654,53 @@ describe('writeSpec — dirty-recording cleanup', () => {
   });
 });
 
+describe('writeSpec — guarantees the spec opens the app', () => {
+  // The agent often connects to an already-open debug-Chrome tab and never
+  // calls browser_navigate, so the recording can lack any navigation. Without
+  // a synthesized goto the spec runs against about:blank and every locator
+  // fails — exactly the "saved spec won't run" report.
+  const noNavSession: SkillStep[] = [
+    { kind: 'user', text: 'click continue' },
+    { kind: 'step', tool: 'browser_click', input: { element: 'Continue button' } },
+  ];
+
+  it('synthesizes a leading page.goto() from startUrl when no navigation was captured', async () => {
+    const r = await writeSpec({ devRoot, name: 'no nav', steps: noNavSession, startUrl: 'http://localhost:5175/' });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('await page.goto("/");');
+    // The goto comes first, before the click.
+    expect(src.indexOf('page.goto')).toBeLessThan(src.indexOf("getByRole('button', { name: \"Continue\" })"));
+  });
+
+  it('does NOT add a goto when the session already navigated', async () => {
+    const r = await writeSpec({ devRoot, name: 'has nav', steps: session, startUrl: 'http://localhost:9999/' });
+    const src = readFileSync(r.path, 'utf-8');
+    // Exactly one goto — the captured one, not a synthesized duplicate.
+    expect(src.match(/page\.goto/g)?.length).toBe(1);
+    expect(src).not.toContain('localhost:9999');
+  });
+
+  it('omits the goto when no navigation and no startUrl is available', async () => {
+    const r = await writeSpec({ devRoot, name: 'no nav no url', steps: noNavSession });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).not.toContain('page.goto');
+  });
+});
+
+describe('writeSpec — select targets the combobox, not the label text', () => {
+  it('emits getByRole(combobox) for browser_select_option, never getByText', async () => {
+    const steps: SkillStep[] = [
+      { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+      { kind: 'step', tool: 'browser_select_option', input: { element: 'marital status', values: ['Single'] } },
+    ];
+    const r = await writeSpec({ devRoot, name: 'select', steps });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByRole('combobox', { name: "marital status" })`);
+    expect(src).toContain(`el.selectOption("Single")`);
+    expect(src).not.toContain('getByText("marital status")');
+  });
+});
+
 describe('writeSpec — Playwright config scaffolding (bug A)', () => {
   // Specs use relative URLs; a project with no config has no baseURL, so
   // `page.goto("/")` throws "Cannot navigate to invalid URL". writeSpec must

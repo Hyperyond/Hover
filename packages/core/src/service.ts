@@ -1235,6 +1235,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
                 name: reRecordSlug,
                 steps: runResult.steps,
                 overwrite: true,
+                // Guarantee a leading goto when the agent never navigated
+                // (already-open tab) — and the fallback baseURL for a scaffolded
+                // playwright config.
+                startUrl: opts.devUrl,
                 // Same credential redaction as save-spec: if the re-record
                 // logged in via an @account, keep the creds out of the rewritten
                 // spec (parameterize into process.env refs).
