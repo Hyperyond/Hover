@@ -156,6 +156,15 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   const match = manifest ? matchPageObject(steps, manifest) : null;
   const source = renderSpec(slug, opts.name, opts.description ?? '', steps, opts.assertions ?? [], match);
   await writeFile(path, source, 'utf-8');
+  // Specs use relative URLs (page.goto("/")), which need a `baseURL` in the
+  // project's Playwright config. If the project has NO config at all, the saved
+  // spec fails on the first goto with "Cannot navigate to invalid URL" — which
+  // breaks Hover's core promise that the saved artifact is plain Playwright that
+  // just runs. Scaffold a minimal config in that case. Best-effort: it must
+  // never break Save-as-spec, and it never overwrites an existing config.
+  try {
+    await ensurePlaywrightConfig(opts.devRoot, steps);
+  } catch { /* config scaffolding is best-effort */ }
   // Persist the structured session next to the spec so cross-session
   // extraction (F4) and the optimization pass (F7) read real SpecStep[]
   // instead of parsing the generated code. Lands in .hover/, which
@@ -429,9 +438,23 @@ function flowArgValues(steps: SpecStep[]): string[] {
   return out;
 }
 
-function translateStep(tool: string, rawInput: unknown, pageVar = 'page'): string[] {
+function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): string[] {
   const input = (rawInput ?? {}) as Record<string, unknown>;
+  // Non-playwright Hover MCP tools keep their mcp__<server>__ prefix; strip it
+  // so the switch matches (playwright tools are already bare `browser_*`).
+  // The server-name segment is kebab-case (`hover-control`, `hover-source`), so
+  // the class MUST include `-`; a lazy quantifier stops at the first `__` so the
+  // tool name (which may contain `_`) is preserved. Missing the hyphen here used
+  // to drop every Hover-MCP step (e.g. check_control) to an optimizable marker.
+  const tool = rawTool.replace(/^mcp__[a-z0-9_-]+?__/, '');
   switch (tool) {
+    // Hover control-actuation tool → a deterministic role-based check step.
+    case 'check_control': {
+      const role = String(input.role ?? 'radio');
+      const name = String(input.name ?? '');
+      const action = input.checked === false ? 'uncheck()' : 'check()';
+      return [`await ${pageVar}.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)} }).${action}`];
+    }
     case 'browser_navigate': {
       const url = String(input.url ?? '');
       const path = stripBaseUrl(url);
@@ -595,6 +618,57 @@ function mapInputType(type: string): string | null {
     case 'switch':   return 'switch';
     default: return null;
   }
+}
+
+/** Playwright config filenames Playwright itself recognizes. If any exists we
+ *  assume the user owns baseURL config and never scaffold. */
+const PLAYWRIGHT_CONFIG_NAMES = [
+  'playwright.config.ts', 'playwright.config.js', 'playwright.config.mjs',
+  'playwright.config.cjs', 'playwright.config.mts', 'playwright.config.cts',
+];
+
+/** Origin of the first real navigation captured in the session, e.g.
+ *  http://localhost:5175 — the natural baseURL for the scaffolded config. */
+function firstNavigateOrigin(steps: SpecStep[]): string | null {
+  for (const s of steps) {
+    if (s.kind !== 'step' || s.tool !== 'browser_navigate') continue;
+    const url = String((s.input as Record<string, unknown> | undefined)?.url ?? '');
+    if (/^https?:\/\//.test(url)) {
+      try { return new URL(url).origin; } catch { /* not a parseable URL */ }
+    }
+  }
+  return null;
+}
+
+/**
+ * Bug A fix: crystallized specs use relative URLs, so a project with no
+ * Playwright config (hence no baseURL) can't run them — `page.goto("/")` throws
+ * "Cannot navigate to invalid URL". When no config exists, scaffold a minimal
+ * one with baseURL inferred from the session's first navigation. Never touches
+ * an existing config (the user owns it), and skips silently if no origin can be
+ * inferred (leaves it to the user rather than guessing).
+ */
+async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[]): Promise<void> {
+  if (PLAYWRIGHT_CONFIG_NAMES.some(n => existsSync(join(devRoot, n)))) return;
+  const origin = firstNavigateOrigin(steps);
+  if (!origin) return;
+  const source = [
+    `import { defineConfig } from '@playwright/test';`,
+    ``,
+    `/**`,
+    ` * Scaffolded by Hover so crystallized specs (which use relative URLs like`,
+    ` * page.goto("/")) resolve against a base. Override HOVER_BASE_URL in CI to`,
+    ` * point the same specs at staging/prod.`,
+    ` */`,
+    `export default defineConfig({`,
+    `  testDir: './__vibe_tests__',`,
+    `  use: {`,
+    `    baseURL: process.env.HOVER_BASE_URL ?? ${JSON.stringify(origin)},`,
+    `  },`,
+    `});`,
+    ``,
+  ].join('\n');
+  await writeFile(join(devRoot, 'playwright.config.ts'), source, 'utf-8');
 }
 
 function stripBaseUrl(url: string): string {

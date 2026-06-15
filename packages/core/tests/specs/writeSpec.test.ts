@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeSpec, countOptimizableMarkers, OPTIMIZABLE_MARKER } from '../../src/specs/writeSpec.js';
@@ -128,6 +128,36 @@ describe('writeSpec — optimizable markers', () => {
   it('emits no marker for a fully-translatable session', async () => {
     const r = await writeSpec({ devRoot, name: 'clean', steps: session });
     expect(countOptimizableMarkers(readFileSync(r.path, 'utf-8'))).toBe(0);
+  });
+});
+
+describe('writeSpec — control actuation (check_control)', () => {
+  it('crystallizes a check_control step into a deterministic getByRole().check()', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'pick sex',
+      steps: [
+        { kind: 'user', text: 'select Male' },
+        { kind: 'step', tool: 'mcp__hover_control__check_control', input: { role: 'radio', name: 'sex male' } },
+        { kind: 'done', summary: 'Selected.' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`await page.getByRole("radio", { name: "sex male" }).check()`);
+    expect(countOptimizableMarkers(src)).toBe(0); // it IS translatable
+  });
+
+  it('emits uncheck() when checked:false', async () => {
+    const r = await writeSpec({
+      devRoot,
+      name: 'clear opt-in',
+      steps: [
+        { kind: 'user', text: 'clear the box' },
+        { kind: 'step', tool: 'mcp__hover_control__check_control', input: { role: 'checkbox', name: 'newsletter', checked: false } },
+        { kind: 'done', summary: 'Cleared.' },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`getByRole("checkbox", { name: "newsletter" }).uncheck()`);
   });
 });
 
@@ -537,5 +567,63 @@ describe('writeSpec — credential redaction', () => {
     const src = readFileSync(r.path, 'utf-8');
     expect(src).toContain('hunter2-secret');
     expect(src).not.toContain('process.env.HOVER_AUSER_PASS');
+  });
+});
+
+describe('writeSpec — hyphenated Hover-MCP tool names (bug B)', () => {
+  // The MCP servers are kebab-case (`hover-control`, `hover-source`); the
+  // prefix-strip regex must include `-` or every Hover-MCP step silently
+  // degrades to an optimizable marker instead of a real Playwright call.
+  it('translates mcp__hover-control__check_control into a check() step, not a marker', async () => {
+    const steps: SkillStep[] = [
+      { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+      { kind: 'step', tool: 'mcp__hover-control__check_control', input: { role: 'radio', name: 'sex male' } },
+    ];
+    const r = await writeSpec({ devRoot, name: 'radio check', steps });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`getByRole("radio", { name: "sex male" }).check()`);
+    expect(countOptimizableMarkers(src)).toBe(0);
+    expect(src).not.toContain(OPTIMIZABLE_MARKER);
+  });
+
+  it('still leaves a marker for a genuinely untranslatable Hover-MCP tool', async () => {
+    const steps: SkillStep[] = [
+      { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+      { kind: 'step', tool: 'mcp__hover-source__list_source', input: {} },
+    ];
+    const r = await writeSpec({ devRoot, name: 'source list', steps });
+    const src = readFileSync(r.path, 'utf-8');
+    // Prefix is stripped (no raw mcp__… leaks into the marker) but the tool has
+    // no single-step translation, so the marker names the bare tool.
+    expect(src).toContain(`${OPTIMIZABLE_MARKER}: list_source`);
+    const markerLine = src.split('\n').find(l => l.includes(OPTIMIZABLE_MARKER));
+    expect(markerLine).not.toContain('mcp__hover-source__');
+  });
+});
+
+describe('writeSpec — Playwright config scaffolding (bug A)', () => {
+  // Specs use relative URLs; a project with no config has no baseURL, so
+  // `page.goto("/")` throws "Cannot navigate to invalid URL". writeSpec must
+  // scaffold a config (baseURL from the first navigation) when none exists.
+  it('scaffolds playwright.config.ts with baseURL from the first navigation', async () => {
+    await writeSpec({ devRoot, name: 'login + counter', steps: session });
+    const cfg = readFileSync(join(devRoot, 'playwright.config.ts'), 'utf-8');
+    expect(cfg).toContain(`baseURL: process.env.HOVER_BASE_URL ?? "http://localhost:5173"`);
+    expect(cfg).toContain(`testDir: './__vibe_tests__'`);
+  });
+
+  it('never overwrites an existing config', async () => {
+    const existing = join(devRoot, 'playwright.config.ts');
+    writeFileSync(existing, '// user-owned config\n');
+    await writeSpec({ devRoot, name: 'login + counter', steps: session });
+    expect(readFileSync(existing, 'utf-8')).toBe('// user-owned config\n');
+  });
+
+  it('skips scaffolding when no navigation origin can be inferred', async () => {
+    const steps: SkillStep[] = [
+      { kind: 'step', tool: 'browser_click', input: { element: 'Submit button' } },
+    ];
+    await writeSpec({ devRoot, name: 'no nav', steps });
+    expect(existsSync(join(devRoot, 'playwright.config.ts'))).toBe(false);
   });
 });
