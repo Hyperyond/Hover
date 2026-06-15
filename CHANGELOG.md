@@ -6,7 +6,7 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
-Theme: **Hover is now a VS Code extension.** The editor extension (`hover-dev`, on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)) is the going-forward surface — chat, the Specs / Sessions / Environments views, and the whole engine run inside the editor, nothing else to install. The npm bundler-plugin packages (`vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`) and the in-page widget are **frozen** — still installable, but no longer the primary path. `@hover-dev/core` keeps evolving as the extension's engine (consumed as local source, packed into the .vsix).
+Theme: **Hover is now a VS Code extension.** The editor extension (`hover-dev`) is the surface — chat, the Specs / Sessions / Environments views, and the whole engine run inside the editor, nothing else to install. (Sideload-only for now: build the `.vsix` and install it; not yet on the Marketplace.) The npm bundler-plugin packages (`vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`, `@hover-dev/transform-source`) and the in-page widget have been **removed** from the repo — previously published versions stay on the registry as historical artifacts. `@hover-dev/core` keeps evolving as the extension's engine (consumed as local source, packed into the .vsix).
 
 ### Added
 
@@ -19,7 +19,7 @@ Theme: **Hover is now a VS Code extension.** The editor extension (`hover-dev`, 
 
 ### Changed
 
-- **Going-forward distribution is the VS Code extension.** The npm bundler-plugin packages + in-page widget are frozen (no new versions planned); `@hover-dev/core` is not frozen.
+- **Distribution is the VS Code extension.** The npm bundler-plugin packages + in-page widget have been removed from the repo; `@hover-dev/core` remains as the extension's engine.
 
 ## [0.15.0] — 2026-06-07
 

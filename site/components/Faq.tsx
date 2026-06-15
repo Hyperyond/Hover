@@ -56,14 +56,14 @@ const ITEMS: Item[] = [
   },
   {
     q: 'Do I need to add a plugin or change my app?',
-    a: 'No. Hover is a VS Code extension — install it from the Marketplace and nothing changes in your app, your bundler config, or your dependencies. The extension spawns a local engine that drives your existing dev server over CDP in an isolated debug Chrome. Whatever you build with — Vite, Next.js, Nuxt, Astro, webpack — the extension drives it unchanged.',
+    a: 'No. Hover is a VS Code extension — install it and nothing changes in your app, your bundler config, or your dependencies. The extension spawns a local engine that drives your existing dev server over CDP in an isolated debug Chrome. Whatever you build with — Vite, Next.js, Nuxt, Astro, webpack — the extension drives it unchanged.',
     answer: (
       <>
-        No. Hover is a VS Code extension — install it from the Marketplace and
-        nothing changes in your app, your bundler config, or your dependencies.
-        The extension spawns a local engine that drives your existing dev server
-        over CDP in an isolated debug Chrome. Whatever you build with — Vite,
-        Next.js, Nuxt, Astro, webpack — the extension drives it unchanged.
+        No. Hover is a VS Code extension — install it and nothing changes in
+        your app, your bundler config, or your dependencies. The extension
+        spawns a local engine that drives your existing dev server over CDP in
+        an isolated debug Chrome. Whatever you build with — Vite, Next.js, Nuxt,
+        Astro, webpack — the extension drives it unchanged.
       </>
     ),
   },

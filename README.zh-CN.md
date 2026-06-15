@@ -2,11 +2,15 @@
 
 [English](./README.md) · **简体中文**
 
+[![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/hyperyond.hover-dev?label=VS%20Marketplace&color=1f9cf0&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/hyperyond.hover-dev?label=installs&color=1f9cf0)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
+
 **本地优先、开源的 Web AI 测试 —— 一个 VS Code 插件。** Hover 调用你本机已有的编码 Agent CLI(Claude Code / OpenAI Codex),通过 Playwright MCP 操作你真实的 Chrome,再把跑通的流程结晶成纯 `@playwright/test` 用例 —— **CI 里零 AI** 就能跑。✦ 优化 pass · 🟠 安全测试(IDOR / 越权)· 🔴 渗透测试(攻击性、白盒)。
 
 ## 安装
 
-到 **[VS Code 应用市场](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** 安装 —— 或在扩展面板搜 **“Hover — AI E2E Testing & Security”**。
+到 **[VS Code 应用市场安装 Hover](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** —— 打开扩展面板,搜索 **`hover-dev`**,点 Install(或执行 `code --install-extension hyperyond.hover-dev`)。
 
 你还需要 `PATH` 上有**一个编码 Agent CLI**:[Claude Code](https://claude.com/claude-code)(`npm i -g @anthropic-ai/claude-code`)或 [OpenAI Codex](https://github.com/openai/codex)(`npm i -g @openai/codex`),用你的订阅或自己的 API key 登录即可。除此之外**没有别的要配** —— Hover 不带任何模型 SDK,也不存任何 key。
 
@@ -54,10 +58,6 @@ npx playwright test __vibe_tests__
 | 🔴 **渗透测试** | 攻击性 —— SQLi / XSS / SSTI / SSRF / IDOR,只打你**自己的** dev 应用 → 一份发现报告 |
 
 两种安全模式都由 **seeds**(小的探测配方,8 类访问控制 + 9 类漏洞)驱动。全套内置;在 `<root>/.hover/rules/` 丢自己的 JSON 即可扩展。
-
-## 其他形态
-
-更想用终端或自己的 dev 页面?`hover run "<prompt>"` 在命令行里编写 spec,原来的页面内 widget 仍以 bundler 插件形式(Vite / Astro / Nuxt / Next.js / webpack)存在于 [`packages/`](./packages/) —— 这两条现在都**已冻结**;VS Code 插件是正向路径。
 
 ## 示例
 

@@ -38,7 +38,7 @@ const JSON_LD = {
   isAccessibleForFree: true,
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   author: { '@type': 'Organization', name: 'Hyperyond', url: 'https://github.com/Hyperyond' },
-  sameAs: [GITHUB, MARKETPLACE_URL],
+  sameAs: [GITHUB],
 };
 
 export default function Home() {
@@ -111,12 +111,10 @@ function Hero() {
         <div className="min-w-0">
           <a
             href={MARKETPLACE_URL}
-            target="_blank"
-            rel="noreferrer"
             className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3.5 py-1.5 text-[12px] text-text-mute transition-colors hover:border-[rgba(124,255,168,0.4)] hover:text-text"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-mint" />
-            Now on the VS Code Marketplace
+            A VS Code extension
           </a>
 
           <h1 className="font-mono text-[38px] font-semibold leading-[1.08] tracking-tight md:text-[52px]">
@@ -278,7 +276,7 @@ const PILLARS = [
   {
     k: 'coverage',
     title: 'Lives in your editor, drives any dev server',
-    body: 'Install once from the VS Code Marketplace — no bundler plugin, no config in your app. The extension drives your real dev server over CDP whatever you build with: Vite, Next.js, Nuxt, Astro, webpack. Define test accounts per environment and just say @account in chat — the agent logs in for you.',
+    body: 'Install the VS Code extension once — no bundler plugin, no config in your app. The extension drives your real dev server over CDP whatever you build with: Vite, Next.js, Nuxt, Astro, webpack. Define test accounts per environment and just say @account in chat — the agent logs in for you.',
   },
 ];
 
@@ -609,8 +607,8 @@ function CTA() {
             Stop hand-writing the tests AI could explore for you.
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-text-mute">
-            Install the extension from the VS Code Marketplace. Keep the
-            deterministic Playwright files forever.
+            Install the VS Code extension. Keep the deterministic Playwright
+            files forever.
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <InstallButton />
@@ -646,11 +644,9 @@ function Footer() {
           </a>
           <a
             href={MARKETPLACE_URL}
-            target="_blank"
-            rel="noreferrer"
             className="transition-colors hover:text-text"
           >
-            Marketplace
+            Install
           </a>
         </div>
       </div>

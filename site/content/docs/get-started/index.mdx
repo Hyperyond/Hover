@@ -1,6 +1,6 @@
 # Introduction
 
-Hover is a **VS Code extension** (`hover-dev`) that puts an AI chat in your editor. You type — or [speak](/docs/features/voice-mode) — a natural-language instruction like *"test the login flow"*. Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex), which drives your *actual* dev Chrome over CDP, narrates each step, and crystallizes the verified session into a standard Playwright spec under `__vibe_tests__/`.
+Hover is a **VS Code extension** (`hover-dev`) that puts an AI chat in your editor. You type a natural-language instruction like *"test the login flow"*. Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex), which drives your *actual* dev Chrome over CDP, narrates each step, and crystallizes the verified session into a standard Playwright spec under `__vibe_tests__/`.
 
 The differentiator vs. Stagehand / Midscene / Playwright codegen is the **AI exploration → deterministic script** workflow: AI authors the test, but the saved artifact is plain `@playwright/test` code that runs in CI without an agent in the loop.
 
@@ -9,7 +9,7 @@ Nothing changes in your app, your bundler config, or your dependencies — the e
 ## What's inside this section
 
 - [Quick start](/docs/get-started/quick-start) — Install the extension and send your first prompt. 60 seconds.
-- [Install](/docs/get-started/install) — Get it from the VS Code Marketplace; install one coding-agent CLI.
+- [Install](/docs/get-started/install) — Install the extension from the VS Code Marketplace; add one coding-agent CLI.
 - [Your first session](/docs/get-started/first-session) — A guided walkthrough of the chat and every view.
 - [Pick an agent](/docs/get-started/agents) — six agents wired today: Claude (hard sandbox) plus Codex, cursor-agent, aider, gemini-cli, and qwen-code (soft sandbox). One-file registry to add more.
 
@@ -28,8 +28,8 @@ Building Hover itself? See **[Development](/docs/development)** for the monorepo
 - **Local-first.** The engine (`@hover-dev/core`) binds to `127.0.0.1` only, has no telemetry, and no upload path. Cookies and localStorage never transit it.
 - **One artefact, plain Playwright.** Save the verified session as a `@playwright/test` spec that checks into git and runs in CI with zero AI, no tokens, no key.
 
-<Callout type="note" title="The bundler-plugin path is frozen">
+<Callout type="note" title="No bundler plugin to install">
 
-Hover's original surface was an in-page widget injected via bundler plugins (`vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, and `npx @hover-dev/cli setup`). That path is **frozen** — still installable, still works, still documented — but the VS Code extension is the going-forward way to use Hover. `@hover-dev/core` (the engine) is not frozen.
+Hover's original surface was an in-page widget injected via bundler plugins. That path has been removed — the VS Code extension drives any dev server over CDP with nothing to add to your project. `@hover-dev/core` lives on as the extension's engine.
 
 </Callout>

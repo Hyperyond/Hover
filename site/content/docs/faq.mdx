@@ -12,7 +12,7 @@ Hover generates `getByRole / getByLabel / getByTestId` semantic selectors — ne
 
 You have three options, listed from cheapest to most explicit:
 
-- **Re-record it.** Open the **Specs** view and click **⟳ Re-record** (or from a terminal: `hover re-record <spec>`). The agent reads the spec's JSDoc `Original prompt:` header ("log in then add a todo") and replays it against the *current* UI, then overwrites the `.spec.ts` with new selectors. About 30 seconds, about $0.10 per spec. Review the `git diff` before committing. See the [Re-record a spec](/docs/features/re-record) page for the full walkthrough.
+- **Re-record it.** Open the **Specs** view and click **⟳ Re-record**. The agent reads the spec's JSDoc `Original prompt:` header ("log in then add a todo") and replays it against the *current* UI, then overwrites the `.spec.ts` with new selectors. About 30 seconds, about $0.10 per spec. Review the `git diff` before committing. See the [Re-record a spec](/docs/features/re-record) page for the full walkthrough.
 - **Edit by hand.** The spec is plain `@playwright/test` — `getByRole('button', { name: 'Submit' })` → `'Sign in'`. Faster if you know exactly what changed.
 - **Treat it as a regression.** If the test fails because the *flow* broke (not just the selector), that's the test catching a real bug — fix the app, not the spec.
 
@@ -98,9 +98,9 @@ No. `@hover-dev/core` launches one isolated debug Chrome under `<tmpdir>/hover-c
 
 No. Hover spawns the coding-agent CLI on your local `PATH` (`claude`, `codex`, `cursor-agent`, etc.) and that CLI talks to its own provider (Anthropic, OpenAI, Cursor). `@hover-dev/core` itself has no LLM SDK code, no telemetry, no upload path. The Node service binds to `127.0.0.1` only and refuses connections from any other interface.
 
-## Why doesn't the widget show up in `astro build` / `next build` / `vite build` output?
+## Does Hover inject anything into my app's build output?
 
-(Applies to the [frozen bundler-plugin path](/docs/get-started/install#frozen-bundler-plugin-path). The VS Code extension never injects anything into your page in the first place — its chat is a webview.) All bundler integrations are dev-only (`apply: 'serve'` for Vite, `command === 'dev'` for Astro, `nuxt.options.dev` for Nuxt, etc.). Production builds are no-ops by design. The Shadow-DOM widget is also marked `data-hover="true"` so any Playwright run against production HTML can filter it out with one selector.
+No. Hover is a VS Code extension whose chat lives in a webview, entirely outside your page — it injects nothing into the page under test, in dev or in a production build. The agent drives your app over CDP in an isolated debug Chrome; your app's bundle is unchanged.
 
 ## Can I run Hover in CI to author new tests automatically?
 

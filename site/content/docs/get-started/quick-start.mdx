@@ -19,7 +19,7 @@ Either works. You can switch from the chat header or Settings any time.
 
 ## Install the extension
 
-Open the Extensions view (`⇧⌘X` / `Ctrl+Shift+X`), search **"Hover — AI E2E Testing & Security"**, and click Install — or grab it from the **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)**.
+Install **[Hover from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** — Extensions view (`⇧⌘X` / `Ctrl+Shift+X`), search `hover-dev`, **Install** (or `code --install-extension hyperyond.hover-dev`). See [Install](/docs/get-started/install) for details.
 
 The extension ships the engine inside it. There's nothing to install into your project: no plugin, no bundler-config edit, no new dependency.
 
@@ -71,14 +71,8 @@ npx playwright test __vibe_tests__
 
 Point it at any environment with `BASE_URL` (and the `HOVER_<LABEL>_*` account secrets); the same spec runs against local, staging, or a PR preview. Hover can generate a GitHub Actions workflow that runs them on every PR.
 
-## Other surfaces
-
-- **`hover run "<prompt>"`** — author a spec from the terminal, no editor needed. A living secondary surface; see [CLI](/docs/reference/cli).
-- **Bundler plugins (frozen)** — the original in-page widget (`vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, wired by `npx @hover-dev/cli setup`). Still works, still documented, but no longer the recommended path — see [Install → Frozen bundler-plugin path](/docs/get-started/install#frozen-bundler-plugin-path).
-
 ## What's next
 
 - [Your first session](/docs/get-started/first-session) — A guided walkthrough of the chat and every view on a real flow.
 - [Pick an agent](/docs/get-started/agents) — Differences between Claude and Codex, and how to add others.
 - [Security testing](/docs/features/security) — Probe your dev app for authz / authn / parameter-tampering issues, then crystallize findings as regression specs.
-- [Voice mode](/docs/features/voice-mode) — Push-to-talk speech in 中文 / English, browser-native, no API keys.

@@ -1,17 +1,20 @@
 /**
- * Primary install affordance — Hover ships as a VS Code extension, so the CTA
- * is "Install on VS Code Marketplace", not a shell command. (The old
- * CopyCommand / `npx @hover-dev/cli setup` button belonged to the now-frozen
- * bundler-plugin path.) `variant` switches between the solid mint primary and a
- * lower-key outline for secondary placements.
+ * Primary install affordance — Hover ships as a VS Code extension, live on the
+ * Marketplace, so the CTA points straight at the listing. `variant` switches
+ * between the solid mint primary and a lower-key outline for secondary
+ * placements.
  */
 
+/** The VS Code Marketplace listing — the primary install affordance. */
 export const MARKETPLACE_URL =
   'https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev';
 
+/** The install docs page (details / build-from-source). */
+export const INSTALL_URL = '/docs/get-started/install';
+
 export function InstallButton({
   variant = 'primary',
-  label = 'Install on VS Code Marketplace',
+  label = 'Install the VS Code extension',
 }: {
   variant?: 'primary' | 'outline';
   label?: string;
@@ -24,7 +27,7 @@ export function InstallButton({
       : `${base} border border-line bg-bg-2 text-text-mute hover:border-line-2 hover:text-text`;
 
   return (
-    <a href={MARKETPLACE_URL} target="_blank" rel="noreferrer" className={cls}>
+    <a href={MARKETPLACE_URL} target="_blank" rel="noopener noreferrer" className={cls}>
       <VSCodeGlyph />
       {label}
     </a>

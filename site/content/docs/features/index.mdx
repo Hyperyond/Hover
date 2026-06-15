@@ -16,16 +16,7 @@ What Hover does today, in the VS Code extension and its living surfaces.
 - **[Save as Spec](/docs/features/save-as-spec)** — `__vibe_tests__/<slug>.spec.ts` using `getByRole / getByLabel / getByTestId`. Runs in CI without Hover. Every interaction is wrapped in a visibility prelude so UI drift fails in ~3 s with `Locator expected to be visible` instead of a 30 s actionability timeout.
 - **[Save as Security spec](/docs/features/security-spec)** — `__vibe_tests__/<slug>.security.spec.ts` using Playwright's `request` fixture. Crystallises authz / IDOR / parameter-tampering probes into CI-runnable regression specs.
 - **[Findings cards](/docs/features/findings-cards)** — bugs and observations the agent flagged, severity-coloured. First-class output, not buried in narration.
-- **[Structured spec output](/docs/features/structured-output)** — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, a `.hover/<slug>.json` sidecar, and Page Objects + fixtures lifted from flows repeated across specs (`npx hover extract`).
-- **[Optimize a spec](/docs/features/optimization-pass)** — an optional, off-by-default AI pass polishes a deterministic draft into a diff-reviewed candidate: adds the assertions the run observed, flags buggy behaviour `// KNOWN BUG`, always keeps the original. From the Specs view's ✨ Optimize, or `npx hover optimize <spec>`.
+- **[Structured spec output](/docs/features/structured-output)** — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, a `.hover/<slug>.json` sidecar, and Page Objects + fixtures lifted from flows repeated across specs.
+- **[Optimize a spec](/docs/features/optimization-pass)** — an optional, off-by-default AI pass polishes a deterministic draft into a diff-reviewed candidate: adds the assertions the run observed, flags buggy behaviour `// KNOWN BUG`, always keeps the original. Run it from the Specs view's ✨ Optimize.
 - **[Re-record](/docs/features/re-record)** — when a saved spec breaks because the UI changed, replay its original prompt against the current UI and overwrite the file.
-- **[Seed library](/docs/features/seed-library)** — teach the optimization pass new patterns by dropping a worked example in `.hover/rules/` — no fork, no plugin code.
-
-## Frozen — in-page widget only
-
-These were features of the original in-page widget (the [frozen bundler-plugin path](/docs/get-started/install#frozen-bundler-plugin-path)). They are **not** exposed by the VS Code extension chat:
-
-- **[Record mode](/docs/features/record-mode)** — record your own clicks / fills / selects as Playwright steps, with built-in Exists / Says / Equals assertion sub-modes.
-- **[Fix prompt](/docs/features/fix-prompt)** — click any element on the page, type what to change, get a precise prompt (source line:col + ancestor chain + Playwright selector) on your clipboard. Depends on the widget's `data-hover-source` stamping.
-- **[Save as Jira case](/docs/features/save-as-jira-case)** — `.case.csv`, imports straight into Jira / Xray / Zephyr. Still in `@hover-dev/core`, not surfaced by the extension.
-- **[Voice mode](/docs/features/voice-mode)** — push-to-talk speech input + spoken step narration. 中文 / English autodetect, browser-native, no API keys.
+- **[Seed library](/docs/features/seed-library)** — teach the optimization pass new patterns from the built-in probe catalogue.

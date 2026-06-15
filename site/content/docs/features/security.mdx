@@ -141,8 +141,6 @@ For contributors who want to extend the plugin or write a similar one (`@hover-d
 - `packages/security/src/mcp/server.ts` — the stdio MCP server using `@modelcontextprotocol/sdk`. Tool descriptions explicitly mention IDOR / authz-bypass / parameter-tampering use cases so the agent picks the right one.
 - `packages/security/src/index.ts` — the plugin manifest itself.
 
-See [Reference → Plugin API](/docs/reference/plugin-api) for the manifest shape `@hover-dev/security` is built on.
-
 ## Limitations (honest)
 
 - **Service workers** — Playwright's `page.route()` historically can't see SW-mediated requests. The MITM proxy bypasses this (it's at the network layer, not the renderer layer), so capture works fine. But if your saved spec relies on observing a SW-routed request, you'll need to express it as `page.request.fetch()` (which goes around the SW) rather than `page.route()`.

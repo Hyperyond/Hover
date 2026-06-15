@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
  * /api/waitlist (server route → Resend). No third-party form UI, so the modal
  * matches the dark site exactly.
  *
- * The install path is fully public (the VS Code Marketplace), so this is NOT a
+ * The install path is open (sideload the VS Code extension), so this is NOT a
  * "request a demo" gate — it's a waitlist for the future hosted Cloud product.
  * Copy stays honest: open-source ready *today*, Cloud "coming" with no date.
  */
@@ -47,8 +47,8 @@ export function Waitlist() {
               <span className="text-mint">Cloud is coming.</span>
             </h2>
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-text-mute">
-              Everything on this page works right now — install the extension
-              from the <span className="text-mint">VS Code Marketplace</span>.
+              Everything on this page works right now — install the{' '}
+              <span className="text-mint">VS Code extension</span>.
               Cloud keeps the specs you author locally alive with AI — it
               re-records the ones UI drift breaks and flags the ones that have
               gone stale:
@@ -189,8 +189,8 @@ function WaitlistModal({ onClose }: { onClose: () => void }) {
             <p className="text-[15px] font-semibold text-text">You&rsquo;re on the list.</p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-text-mute">
               We&rsquo;ll email you when Hover Cloud opens. Meanwhile it&rsquo;s
-              ready right now — install the extension from the{' '}
-              <span className="text-mint">VS Code Marketplace</span>.
+              ready right now — install the{' '}
+              <span className="text-mint">VS Code extension</span>.
             </p>
           </div>
         ) : (

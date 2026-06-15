@@ -2,23 +2,15 @@
 
 Pushing a `v*` tag triggers `.github/workflows/publish.yml`, which publishes the npm packages and creates a matching GitHub Release.
 
-The **VS Code extension** (`hover-dev`) is the going-forward distribution; it is built, engine-staged, and packaged separately with `pnpm --filter hover-dev package` (→ a `.vsix`) and published to the Marketplace under the `hyperyond` publisher — not part of the npm tag-push workflow below.
+The **VS Code extension** (`hover-dev`) is the distribution. It is built, engine-staged, and packaged with `pnpm --filter hover-dev package` (→ a `.vsix`), then published to the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev) (publisher `hyperyond`) — a local `.vsix` is sideloaded for dev testing. It is not part of the npm tag-push workflow below.
 
 ## What ships per release (npm)
 
 | Package | npm |
 |---|---|
 | `@hover-dev/core` | [https://www.npmjs.com/package/@hover-dev/core](https://www.npmjs.com/package/@hover-dev/core) |
-| `@hover-dev/widget-bootstrap` | [https://www.npmjs.com/package/@hover-dev/widget-bootstrap](https://www.npmjs.com/package/@hover-dev/widget-bootstrap) |
-| `vite-plugin-hover` | [https://www.npmjs.com/package/vite-plugin-hover](https://www.npmjs.com/package/vite-plugin-hover) |
-| `@hover-dev/astro` | [https://www.npmjs.com/package/@hover-dev/astro](https://www.npmjs.com/package/@hover-dev/astro) |
-| `@hover-dev/nuxt` | [https://www.npmjs.com/package/@hover-dev/nuxt](https://www.npmjs.com/package/@hover-dev/nuxt) |
-| `@hover-dev/next` | [https://www.npmjs.com/package/@hover-dev/next](https://www.npmjs.com/package/@hover-dev/next) |
-| `webpack-plugin-hover` | [https://www.npmjs.com/package/webpack-plugin-hover](https://www.npmjs.com/package/webpack-plugin-hover) |
-| `@hover-dev/cli` | [https://www.npmjs.com/package/@hover-dev/cli](https://www.npmjs.com/package/@hover-dev/cli) |
-| `@hover-dev/security` | [https://www.npmjs.com/package/@hover-dev/security](https://www.npmjs.com/package/@hover-dev/security) |
 
-All scoped packages publish under the `@hover-dev` npm org (public access). Unscoped packages follow the community `vite-plugin-*` / `webpack-*-plugin` convention.
+`@hover-dev/core` is the only package this repo still publishes to npm — it's the extension's engine. (The old bundler-plugin packages were removed; previously published versions remain on the registry as historical artifacts.) `@hover-dev/security` and `@hover-dev/pentest` are staged into the extension's bundled engine rather than published. All scoped packages live under the `@hover-dev` npm org (public access).
 
 ## Cutting a release
 
@@ -62,7 +54,7 @@ Pre-1.0 we use **thematic patches**: `v0.6.x` = Voice mode, `v0.7.x` = Security 
 
 The workflow uses:
 
-- `NPM_TOKEN` — granular automation token with read+write on `@hover-dev/*` and `vite-plugin-hover` / `webpack-plugin-hover`. Set in repo secrets.
+- `NPM_TOKEN` — granular automation token with read+write on `@hover-dev/*`. Set in repo secrets.
 - `GITHUB_TOKEN` — auto-injected, used by `softprops/action-gh-release` to create the Release.
 
 Never `--no-verify`, never `git config` changes, never force-push to `main`. Hooks must stay green.

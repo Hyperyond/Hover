@@ -1,6 +1,6 @@
 # Contributing to Hover
 
-Hover is a Vite plugin that injects a floating chat widget into your dev server. The developer types a natural-language instruction; an agent (the user's own local `claude` CLI today) drives the user's Chrome via Playwright MCP; the session can be one-click crystallised into a standard `@playwright/test` file.
+Hover is a VS Code extension with a chat panel in the editor. The developer types a natural-language instruction; an agent (the user's own local `claude` / `codex` CLI) drives the user's Chrome via Playwright MCP; the session can be one-click crystallised into a standard `@playwright/test` file.
 
 Read [CLAUDE.md](./CLAUDE.md) first — it is the project's design + boundary brief. This file covers contributor-facing workflow only.
 
@@ -27,24 +27,22 @@ pnpm typecheck       # fans out to every package
 Two things must be running for end-to-end testing. Once Chrome and Vite are up, they stay running across many smoke loops:
 
 ```bash
-# Terminal 1 — start an example app + the Hover service. Examples in this
-# repo pass `autoLaunchChrome: true`, so this ALSO spawns an isolated debug
-# Chrome (--remote-debugging-port=9222, profile under <tmpdir>/hover-chrome)
-# navigated to the dev URL. Idempotent: reuses an existing debug Chrome if
-# 9222 is already alive.
+# Terminal 1 — start an example app (a plain Vite dev server; nothing
+# Hover-related is installed in it — the extension drives it over CDP).
 pnpm dev:example:basic-app          # http://localhost:5173 — minimal: login + counter + todos
 pnpm dev:example:e-commerce         # http://localhost:5174 — Amazon-style storefront
 pnpm dev:example:stock-registration # http://localhost:5175 — IBKR-style account-opening wizard
 pnpm dev:example:canvas-paint       # http://localhost:5176 — drawing app + DOM toolbar
-pnpm dev:example:payment-provider   # http://localhost:5177 — third-party popup (NO widget)
+pnpm dev:example:payment-provider   # http://localhost:5177 — third-party popup origin
 
-# Terminal 2 — command-line agent smoke (alternate to using the widget in-browser).
+# Terminal 2 — debug Chrome + a command-line agent smoke.
+pnpm smoke:chrome                   # isolated debug Chrome on --remote-debugging-port=9222
 pnpm smoke "test the login flow"
 ```
 
-Need a debug Chrome without starting any example? `pnpm smoke:chrome` (or `pnpm exec hover-chrome`) spawns one standalone, same profile, idempotent.
+`pnpm smoke:chrome` spawns an isolated debug Chrome (profile under `<tmpdir>/hover-chrome`), idempotent — reuses an existing one if 9222 is already alive.
 
-The Hover service listens on `127.0.0.1:51789`; the widget connects there over WebSocket.
+The Hover engine listens on `127.0.0.1` (ports 51789+); the extension's WS client connects there.
 
 ## Validation harness
 
@@ -53,36 +51,35 @@ Each layer has its own quick check so debugging is layer-by-layer:
 | Command | Layer it exercises | Cost |
 |---|---|---|
 | `pnpm typecheck` | All `tsc --noEmit`. Fastest. | free |
-| `pnpm verify-widget` | Playwright DOM checks against the injected widget (host/shadow/launcher/panel toggle). | free |
-| `pnpm verify-skill` | Unit test for `writeSkill` — fabricates a session, writes SKILL.md, prints it, cleans up. | free |
-| `pnpm ws-smoke "<prompt>"` | Bypasses the browser. Connects to the service over WS, fires a command, prints events. Tests service ↔ agent. | ~$0.05–0.30 |
-| `pnpm smoke "<prompt>"` | Bypasses the service. Direct call to `invokeAgent`. Tests agent ↔ Playwright MCP ↔ Chrome. | ~$0.05–0.30 |
-| In-browser widget | Full chain through WebSocket. | ~$0.05–0.30 |
+| `pnpm ws-smoke "<prompt>"` | Connects to the engine over WS, fires a command, prints events. Tests engine ↔ agent. | ~$0.05–0.30 |
+| `pnpm smoke "<prompt>"` | Direct call to `invokeAgent`. Tests agent ↔ Playwright MCP ↔ Chrome. | ~$0.05–0.30 |
+| Extension chat panel | Full chain through WebSocket. | ~$0.05–0.30 |
 
-If something fails, climb the ladder: typecheck → verify-widget → ws-smoke → smoke → widget.
+If something fails, climb the ladder: typecheck → ws-smoke → smoke → extension chat panel.
 
 ## Project layout
 
 ```
 packages/
-├── core/                   @hover-dev/core
+├── core/                   @hover-dev/core — the Node engine
 │   ├── src/agents/         Local CLI Agent First — types, registry, detect, argv, invoke, claude.ts
 │   ├── src/playwright/     CDP preflight (lightweight HTTP probe + playwright-core handshake)
 │   ├── src/skills/         writeSkill, listSkills (write/read .claude/skills/<slug>/SKILL.md)
-│   ├── src/service.ts      WebSocket bridge (widget ↔ agent)
+│   ├── src/service.ts      WebSocket bridge (extension ↔ agent)
 │   ├── src/smoke.ts        Command-line agent smoke
-│   └── src/scripts/        start-chrome.ts, ws-smoke.ts, verify-widget.ts, verify-skill.ts, detect-cli.ts
-├── vite-plugin/            vite-plugin-hover
-│   └── src/index.ts        configureServer (boot service) + transformIndexHtml (inject widget)
-│   └── src/widget.js       Vanilla JS Shadow-DOM widget — no React, no transpilation
-└── …
+│   └── src/scripts/        start-chrome.ts, ws-smoke.ts, detect-cli.ts
+├── probe-engine/           private shared probe engine (security + pentest)
+├── security/               @hover-dev/security — 🟠 security mode plugin
+├── pentest/                @hover-dev/pentest — 🔴 pentest mode plugin
+└── vscode-ext/             hover-dev — the VS Code extension (primary surface)
 
 examples/                   Each app stands alone, has its own aesthetic + Vite port.
+                            Plain Vite + React — nothing Hover-related installed.
 ├── basic-app/              5173 — login + counter + todos
 ├── e-commerce/             5174 — Amazon-style storefront
 ├── stock-registration/     5175 — IBKR-style wizard
 ├── canvas-paint/           5176 — drawing app + DOM toolbar
-└── payment-provider/       5177 — third-party popup, NO widget
+└── payment-provider/       5177 — third-party popup origin
 ```
 
 ## Adding a new agent
@@ -98,7 +95,7 @@ The whole point of "Local CLI Agent First" is that a contributor can add a new a
 2. Register it in `packages/core/src/agents/registry.ts`.
 3. Run `pnpm detect` to confirm Hover finds your binary; then `pnpm ws-smoke "list the open tabs"` to confirm the end-to-end loop works with your descriptor.
 
-No changes are needed in `service.ts`, the widget, or any example.
+No changes are needed in `service.ts`, the extension, or any example.
 
 ## Adding a new example
 
@@ -115,7 +112,7 @@ Copy `package.json`, `tsconfig.json`, `vite.config.ts`, `index.html`, `src/main.
 - `vite.config.ts` `server.port` to a free port (5178+).
 - `index.html` `<title>` to `my-example · Hover`.
 
-The plugin is already pulled in via `vite-plugin-hover: workspace:*` — running `pnpm install` will link it.
+Nothing Hover-related needs to be added to the example — it's a plain Vite app the extension drives over CDP.
 
 Add a root script:
 
@@ -138,21 +135,21 @@ Each example commits to a distinct visual direction — no two share fonts, pale
 ```
 
 - **type**: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `perf`, `style`, `revert`.
-- **scope**: `core`, `vite-plugin`, `widget`, `examples`, `agents`, `playwright`, `mcp`, `ci`, `deps`, the specific example name (`basic-app`, `e-commerce`, …), or omit if cross-cutting.
+- **scope**: `core`, `vscode-ext`, `security`, `pentest`, `probe-engine`, `examples`, `agents`, `playwright`, `mcp`, `ci`, `deps`, the specific example name (`basic-app`, `e-commerce`, …), or omit if cross-cutting.
 - **description**: imperative, ≤72 characters, no trailing period.
 
 Body is optional but encouraged for non-trivial commits — describe *what changed and why*, not the mechanical *how*. Wrap at ~72.
 
 ```
-feat(core,widget): in-flight cancel + skill name collision handling
+feat(core,vscode-ext): in-flight cancel + skill name collision handling
 
 Two reliability nits exposed by real use of the Save-as-Skill loop.
 
 Cancel:
-- Widget: Send button turns red 'Stop' while running. Click sends
+- Extension: Send button turns red 'Stop' while running. Click sends
   {type:'cancel'} via WS.
 - Service: cancel() aborts the in-flight AbortController and emits a
-  synthetic session_end so the widget resets to idle immediately.
+  synthetic session_end so the chat panel resets to idle immediately.
 ...
 ```
 
@@ -167,7 +164,7 @@ For a fresh machine: `pnpm --filter basic-app exec playwright install chromium`.
 
 ## Code style
 
-- TypeScript everywhere except the injected widget (plain ES2022 JS for size + no transpilation in dev).
+- TypeScript everywhere.
 - Strict mode, `noImplicitAny`, etc. — all enabled via `tsconfig.base.json`.
 - No formatter committed yet (intentional — pick when it matters).
 - File header comments are welcome when the file's purpose is non-obvious; per-line comments only when the *why* is not derivable from the code.
@@ -178,7 +175,7 @@ For a fresh machine: `pnpm --filter basic-app exec playwright install chromium`.
 Open a GitHub issue. Please include:
 
 - Reproduction steps in one of the five `examples/` apps if relevant.
-- `pnpm typecheck`, `pnpm verify-widget`, and `pnpm ws-smoke "<your prompt>"` output (the cost is pennies and the output is invaluable for triage).
+- `pnpm typecheck` and `pnpm ws-smoke "<your prompt>"` output (the cost is pennies and the output is invaluable for triage).
 - claude CLI version (`claude --version`), Node version (`node --version`), Chrome version, OS.
 
 Welcome aboard.

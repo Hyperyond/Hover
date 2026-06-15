@@ -32,63 +32,12 @@ The spec's JSDoc header has always carried the **`Original prompt:`** line:
 
 Re-record uses that line. The agent receives the natural-language prompt verbatim, drives the **current** UI to satisfy the intent, and Hover overwrites the file with the new selectors that emerged. The JSDoc header is regenerated alongside.
 
-## Two ways to trigger
-
-### 1. From the extension
+## How to trigger it
 
 1. Open the **Specs** view in the `hover` container.
 2. Click **⟳ Re-record** next to the spec you want to refresh.
 
-The agent starts driving, and the result lands as a normal run. When the agent finishes successfully, the file is overwritten and the **Specs** list refreshes.
-
-### 2. From the terminal
-
-```bash
-pnpm hover re-record <spec>
-```
-
-Either an absolute path, a path relative to `cwd`, or a bare slug all work:
-
-```bash
-pnpm hover re-record __vibe_tests__/login.spec.ts
-pnpm hover re-record login.spec.ts          # from inside __vibe_tests__/
-pnpm hover re-record login                   # bare slug — Hover finds it
-```
-
-The CLI boots a one-shot `@hover-dev/core` service in the background, replays the prompt, prints the resulting `git diff`, and tells you the accept / reject commands:
-
-```bash
-$ pnpm hover re-record login
-
-ℹ Spec: /…/__vibe_tests__/login.spec.ts
-ℹ Original prompt: log in then add a todo
-ℹ Booting a temporary Hover service on port 51789 (auto-bumps if busy)…
-ℹ Connected. Replaying prompt against the current UI…
-………………
-✓ Spec overwritten: /…/__vibe_tests__/login.spec.ts
-ℹ Review the change:
-
-diff --git a/__vibe_tests__/login.spec.ts b/__vibe_tests__/login.spec.ts
-- await page.getByRole('button', { name: 'Submit' }).click();
-+ await page.getByRole('button', { name: 'Sign in' }).click();
-
-ℹ Accept: git add __vibe_tests__/login.spec.ts && git commit
-ℹ Reject: git checkout -- __vibe_tests__/login.spec.ts
-```
-
-### Flags
-
-- `--dry-run` — run the agent end-to-end, **do not write the file**. Use to preview cost / behaviour. The CLI prints the agent's summary and exits clean.
-- `--cwd <path>` — target a workspace inside a monorepo.
-- `--port <n>` — service port (default 51789; auto-bumps if busy).
-
-### Environment
-
-The CLI picks up the same env vars `pnpm smoke` honours:
-
-- `HOVER_AGENT` — `claude` (default), `codex`, `cursor-agent`, etc.
-- `HOVER_MODEL` — `sonnet` (default), `opus`.
-- `HOVER_CDP` — debug Chrome URL (default `http://localhost:9222`).
+The agent starts driving, and the result lands as a normal run. When the agent finishes successfully, the file is overwritten and the **Specs** list refreshes. Review the diff before committing.
 
 ## Caveats
 

@@ -2,11 +2,18 @@
 
 **English** · [简体中文](./README.zh-CN.md)
 
+[![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/hyperyond.hover-dev?label=VS%20Marketplace&color=1f9cf0&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/hyperyond.hover-dev?label=installs&color=1f9cf0)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
+[![Rating](https://img.shields.io/visual-studio-marketplace/stars/hyperyond.hover-dev?label=rating)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev&ssr=false#review-details)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
+[![Playwright](https://img.shields.io/badge/output-%40playwright%2Ftest-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+
 **Local-first, open-source AI testing for the web — as a VS Code extension.** Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex) to drive your real Chrome via Playwright MCP, then crystallizes clean runs into plain `@playwright/test` specs that pass CI with **zero AI**. ✦ optimize pass · 🟠 security (IDOR / authz) · 🔴 pentest (offensive, white-box).
 
 ## Install
 
-Get it on the **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** — or open the Extensions view and search **“Hover — AI E2E Testing & Security”**.
+Install **[Hover from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** — open the Extensions view, search **`hover-dev`**, and click Install (or run `code --install-extension hyperyond.hover-dev`).
 
 You also need **one coding-agent CLI** on your `PATH`: [Claude Code](https://claude.com/claude-code) (`npm i -g @anthropic-ai/claude-code`) or [OpenAI Codex](https://github.com/openai/codex) (`npm i -g @openai/codex`), signed in with your subscription or your own API key. That's the only thing to configure — Hover ships no model SDK and no keys of its own.
 
@@ -54,10 +61,6 @@ Point them at any environment with `BASE_URL` (and the `HOVER_<LABEL>_*` account
 | 🔴 **Pentest** | Offensive — SQLi / XSS / SSTI / SSRF / IDOR on your **own** dev app → a findings report |
 
 Both run off a built-in **probe catalogue** — small recipes covering 8 access-control + 9 vulnerability classes, curated and shipped with Hover.
-
-## Other surfaces
-
-Prefer the terminal or your own dev page? `hover run "<prompt>"` authors a spec from the CLI, and the original in-page widget still ships as bundler plugins (Vite / Astro / Nuxt / Next.js / webpack) under [`packages/`](./packages/) — both **frozen** now; the VS Code extension is the going-forward surface.
 
 ## Examples
 

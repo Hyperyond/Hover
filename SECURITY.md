@@ -9,7 +9,7 @@ This document covers two distinct things:
 
 ## Reporting a vulnerability
 
-Found a security issue in Hover (the project — the `@hover-dev/*` npm packages, the bundler-plugin shims, or the documentation)?
+Found a security issue in Hover (the project — the VS Code extension, the `@hover-dev/*` packages, or the documentation)?
 
 **Email: <oliver@hyperyond.com>**
 
@@ -17,7 +17,7 @@ Please include:
 
 - A clear description of the issue.
 - A reproduction — minimal code or steps.
-- The version(s) affected (`@hover-dev/core` version, the bundler-plugin version, and Node major).
+- The version(s) affected (the `hover-dev` extension version and/or `@hover-dev/core` version, and Node major).
 - Your suggested severity (Critical / High / Medium / Low) and impact assessment.
 
 What to expect:
@@ -32,8 +32,7 @@ Please **do not** open public GitHub issues for security reports. GitHub Securit
 
 In scope:
 
-- `@hover-dev/core`, `@hover-dev/widget-bootstrap`, `@hover-dev/security`, and the bundler shims (`vite-plugin-hover`, `@hover-dev/astro`, `@hover-dev/nuxt`, `@hover-dev/next`, `webpack-plugin-hover`, `@hover-dev/cli`) — published from this repository.
-- The widget code that gets injected into user dev pages.
+- The `hover-dev` VS Code extension, `@hover-dev/core`, `@hover-dev/security`, and `@hover-dev/pentest` — built from this repository.
 - Documentation that, if followed, would create a security issue for the reader.
 
 Out of scope:
@@ -46,7 +45,7 @@ Out of scope:
 
 ## Acceptable use — Security testing mode
 
-Hover ships an optional plugin, `@hover-dev/security`, that turns the dev-time chat widget into an aided security-testing tool. When the mode is active the agent gets MCP tools to inspect, replay, and mutate captured API calls on whichever browser session it's driving.
+Hover ships an optional plugin, `@hover-dev/security`, that turns the extension's chat into an aided security-testing tool. When the mode is active the agent gets MCP tools to inspect, replay, and mutate captured API calls on whichever browser session it's driving.
 
 **You must only point this at systems you own, or systems you have explicit written authorisation to test.**
 

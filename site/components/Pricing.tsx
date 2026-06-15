@@ -70,7 +70,7 @@ export function Pricing() {
               href="#install"
               className="mt-8 block rounded-md border border-[rgba(124,255,168,0.5)] bg-mint px-5 py-3 text-center text-[14px] font-semibold text-bg transition-all hover:bg-[#5cf094]"
             >
-              Install from the Marketplace →
+              Install the extension →
             </a>
           </div>
         </article>

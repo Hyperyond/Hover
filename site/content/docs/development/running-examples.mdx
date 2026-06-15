@@ -1,6 +1,6 @@
 # Running examples
 
-Each example app under `examples/*` is a testing-surface target the extension (or `pnpm smoke` / `hover run`) drives over CDP. Run any of them after `pnpm install`:
+Each example app under `examples/*` is a testing-surface target the extension (or `pnpm smoke`) drives over CDP. Run any of them after `pnpm install`:
 
 ```bash
 pnpm dev:example:basic-app           # http://localhost:5173 — login + counter + todos
@@ -10,9 +10,9 @@ pnpm dev:example:canvas-paint        # http://localhost:5176 — canvas + DOM to
 pnpm dev:example:payment-provider    # http://localhost:5177 — third-party popup target
 ```
 
-The bundler-dogfood examples (`astro-app` / `nuxt-app` / `next-app` / `webpack-app` / `rn-web-app`) and `turbo-monorepo` were removed when the bundler-plugin path was frozen.
+The bundler-dogfood examples (`astro-app` / `nuxt-app` / `next-app` / `webpack-app` / `rn-web-app`) and `turbo-monorepo` were removed along with the bundler-plugin path.
 
-The widget-bearing examples set `autoLaunchChrome: true` so a debug Chrome opens on `:9222` pointed at the dev URL on first run; the profile dir under `<tmpdir>/hover-chrome` reuses session state across runs. With the VS Code extension you don't need the in-page widget at all — the extension drives any dev server over CDP regardless. `payment-provider` has no widget by design.
+The examples install nothing Hover-related — they're plain Vite + React dev servers; the VS Code extension drives any of them over CDP. Launch the isolated debug Chrome with `pnpm smoke:chrome` (port `:9222`, profile under `<tmpdir>/hover-chrome`, which reuses session state across runs).
 
 ## Auxiliary commands
 
@@ -26,9 +26,9 @@ pnpm bench-ttfb       # time the LLM-driven loop's first tool_use latency
 
 ## Multiple examples at once
 
-Each example's bundler shim starts its own Hover service. The first to boot binds `127.0.0.1:51789`; subsequent ones auto-bump (`:51790`, `:51791`, …, up to `:51798`). The injected widget reads `window.__HOVER_PORT__` so each example's widget connects only to its own service.
+The examples are independent dev servers, so running several at once is fine — each binds its own Vite port. The extension's engine binds `127.0.0.1:51789` and auto-bumps (`:51790`, …, up to `:51798`) if that port is busy.
 
-Running e-commerce + payment-provider together is supported; the e-commerce example's *Pay with PayHover* popup opens the payment-provider tab on `:5177`. Payment-provider has no Hover widget by design — it simulates a third-party origin.
+Running e-commerce + payment-provider together is supported; the e-commerce example's *Pay with PayHover* popup opens the payment-provider tab on `:5177`. Payment-provider simulates a third-party origin.
 
 ## Common environment overrides
 

@@ -23,16 +23,12 @@ export const DOCS_NAV: DocSection[] = [
     items: [
       { text: 'Overview', href: '/docs/features' },
       { text: 'Security testing', href: '/docs/features/security' },
-      { text: 'Voice mode', href: '/docs/features/voice-mode' },
       { text: 'Save as Spec', href: '/docs/features/save-as-spec' },
       { text: 'Structured spec output', href: '/docs/features/structured-output' },
       { text: 'Optimize a spec', href: '/docs/features/optimization-pass' },
       { text: 'Seed library', href: '/docs/features/seed-library' },
       { text: 'Re-record a spec', href: '/docs/features/re-record' },
       { text: 'Save as Security spec', href: '/docs/features/security-spec' },
-      { text: 'Save as Jira case', href: '/docs/features/save-as-jira-case' },
-      { text: 'Record mode', href: '/docs/features/record-mode' },
-      { text: 'Fix prompt', href: '/docs/features/fix-prompt' },
       { text: 'Findings cards', href: '/docs/features/findings-cards' },
     ],
   },
@@ -40,18 +36,10 @@ export const DOCS_NAV: DocSection[] = [
     title: 'Reference',
     items: [
       { text: 'Overview', href: '/docs/reference' },
-      { text: 'CLI (hover run)', href: '/docs/reference/cli' },
       { text: 'Agent registry', href: '/docs/reference/agent-registry' },
       { text: 'WebSocket protocol', href: '/docs/reference/websocket-protocol' },
       { text: 'Architecture', href: '/docs/reference/architecture' },
       { text: 'Roadmap', href: '/docs/reference/roadmap' },
-    ],
-  },
-  {
-    title: 'Bundler plugins (frozen)',
-    items: [
-      { text: 'Plugin options', href: '/docs/reference/plugin-options' },
-      { text: 'Plugin API', href: '/docs/reference/plugin-api' },
     ],
   },
   {

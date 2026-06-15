@@ -4,7 +4,7 @@ Pages in this section are for **contributors and integrators** working *on* Hove
 
 ## What's inside
 
-- [Monorepo layout](/docs/development/monorepo-layout) — `packages/*` and `examples/*` overview, who depends on whom, the going-forward `packages/vscode-ext` and the frozen bundler-plugin packages.
+- [Monorepo layout](/docs/development/monorepo-layout) — `packages/*` and `examples/*` overview, who depends on whom, and the `packages/vscode-ext` extension.
 - [Running examples](/docs/development/running-examples) — `pnpm dev:example:basic-app` / `e-commerce` / `stock-registration` / `canvas-paint` / `payment-provider` — the testing-surface targets the extension drives.
 - [Smoke tests](/docs/development/smoke-tests) — `pnpm smoke` (end-to-end agent in the loop), `pnpm ws-smoke`, per-package `pnpm test`.
 - [Releasing](/docs/development/releasing) — How a `v*` tag push triggers `.github/workflows/publish.yml` to publish the npm packages, and how the VS Code extension is staged + packaged.
@@ -30,12 +30,10 @@ pnpm test
 pnpm dev:example:basic-app
 ```
 
-The going-forward surface is the VS Code extension (`packages/vscode-ext`, published as `hover-dev`). Build and sideload it with:
+The surface is the VS Code extension (`packages/vscode-ext`, packaged as `hover-dev`). Build and sideload it with:
 
 ```bash
 pnpm --filter hover-dev package    # build + stage engine + vsce package → hover-dev-<v>.vsix
 ```
 
-The extension consumes `@hover-dev/core` as local source — its `stage-engine` step `npm pack`s the local `packages/core` and flat-installs it into the staged engine, so editing `core/src` during extension dev needs a `pnpm --filter @hover-dev/core build` (or a `dev` watch terminal) and a re-package to pick it up.
-
-For the frozen bundler-plugin path: editing source under `packages/*` while an example dev server is running HMR-reloads the in-page widget for you. For `@hover-dev/core` and `@hover-dev/widget-bootstrap` — the two packages that point `main` at `dist/` rather than `src/` — see [Monorepo layout § `dist`-entry packages](/docs/development/monorepo-layout#dist-entry-packages-hover-devcore--hover-devwidget-bootstrap) for why.
+The extension consumes `@hover-dev/core` as local source — its `stage-engine` step `npm pack`s the local `packages/core` and flat-installs it into the staged engine, so editing `core/src` during extension dev needs a `pnpm --filter @hover-dev/core build` (or a `dev` watch terminal) and a re-package to pick it up. `@hover-dev/core` points `main` at `dist/` rather than `src/` for this reason — see [Monorepo layout § `dist`-entry package](/docs/development/monorepo-layout#dist-entry-package-hover-devcore).

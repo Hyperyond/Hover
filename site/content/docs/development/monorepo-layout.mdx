@@ -4,20 +4,13 @@ Hover is a single pnpm workspace. `packages/*` ship to npm; `examples/*` are smo
 
 ## Packages
 
-The **going-forward surface** is the VS Code extension; the bundler-plugin / in-page-widget packages are **frozen** (still build and publish, no new investment). `@hover-dev/core` is **not** frozen — it's the shared engine.
+The surface is the VS Code extension; `@hover-dev/core` is the shared engine. (The old bundler-plugin / in-page-widget packages — `vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`, `@hover-dev/transform-source` — have been removed; their integration notes live only in git history.)
 
-| Package | Status | What it does |
-|---|---|---|
-| `hover-dev` (`packages/vscode-ext`) | Going-forward | The VS Code extension. Chat webview + Specs / Sessions / Environments tree views + Settings; ships the engine inside the `.vsix` (`scripts/stage-engine.mjs` `npm pack`s local `packages/core`) and spawns it under VS Code's own Node. Publisher `hyperyond`. |
-| `@hover-dev/core` | Engine (not frozen) | The Node engine: agent CLI invocation, Playwright CDP preflight, WebSocket bridge between the client and the agent. Owns the plugin API ([Reference → Plugin API](/docs/reference/plugin-api)). |
-| `@hover-dev/security` / `@hover-dev/pentest` | Engine plugins | 🟠 Security (MITM HTTPS proxy + flow inspector + MCP) and 🔴 Pentest modes, built on the shared private `packages/probe-engine`. Never published (probe seeds inlined at build). See [Features → Security testing](/docs/features/security). |
-| `@hover-dev/widget-bootstrap` | Frozen | The in-page widget — HTML template, CSS, vanilla JS. Builds a script bundle every bundler-plugin re-uses byte-identically. |
-| `vite-plugin-hover` | Frozen | The Vite dev-server shim. `apply: 'serve'` so it's a no-op in production builds. |
-| `@hover-dev/astro` | Frozen | Astro integration. Astro's HTML pipeline bypasses Vite's `transformIndexHtml`, so this package wraps the core engine + widget bundle behind Astro's `injectScript('page', …)`. |
-| `@hover-dev/nuxt` | Frozen | Nuxt module. Nuxt renders HTML through Nitro, not Vite, so we push the widget into `nuxt.options.app.head.script`. |
-| `@hover-dev/next` | Frozen | Next.js (App Router, Turbopack) integration. Three pieces: `withHover` config wrapper, `register()` from `@hover-dev/next/instrumentation`, and the `<HoverScript />` Server Component. |
-| `webpack-plugin-hover` | Frozen | Webpack 5 plugin — vanilla `webpack-dev-server`, Rspack / Rsbuild, legacy CRA / Vue CLI. Hooks `HtmlWebpackPlugin.alterAssetTagGroups`. Does NOT cover Next 16+ (Turbopack default). |
-| `@hover-dev/cli` | `hover run` lives; `setup` frozen | `hover run` is terminal-native authoring; `hover setup` is the frozen bundler wirer that AST-mutates a project's bundler config via [magicast](https://github.com/unjs/magicast). |
+| Package | What it does |
+|---|---|
+| `hover-dev` (`packages/vscode-ext`) | The VS Code extension. Chat webview + Specs / Sessions / Environments tree views + Settings; ships the engine inside the `.vsix` (`scripts/stage-engine.mjs` `npm pack`s local `packages/core`) and spawns it under VS Code's own Node. Publisher `hyperyond`. |
+| `@hover-dev/core` | The Node engine: agent CLI invocation, Playwright CDP preflight, WebSocket bridge between the client and the agent. Owns the plugin API. |
+| `@hover-dev/security` / `@hover-dev/pentest` | 🟠 Security (MITM HTTPS proxy + flow inspector + MCP) and 🔴 Pentest modes, built on the shared private `packages/probe-engine`. Never published (probe seeds inlined at build). See [Features → Security testing](/docs/features/security). |
 
 ## Examples
 
@@ -31,17 +24,15 @@ Each example runs on its own port. They are the testing-surface targets the exte
 | `canvas-paint` | 5176 | Canvas drawing + DOM toolbar (canvas pixels are opaque to Playwright snapshots) |
 | `payment-provider` | 5177 | Deliberately unintegrated third-party payment page; popup target for e-commerce |
 
-The bundler-dogfood examples (`astro-app` / `nuxt-app` / `next-app` / `webpack-app` / `rn-web-app`) and `turbo-monorepo` were removed when the bundler-plugin path was frozen — the remaining examples are single-URL state-machine SPAs the extension drives.
+The bundler-dogfood examples (`astro-app` / `nuxt-app` / `next-app` / `webpack-app` / `rn-web-app`) and `turbo-monorepo` were removed along with the bundler-plugin path — the remaining examples are single-URL state-machine SPAs the extension drives. None install anything Hover-related; they're plain Vite + React apps.
 
-Concurrent examples are supported. The Hover engine auto-bumps from `127.0.0.1:51789` up through `:51798`; each remaining widget-bearing example reads `window.__HOVER_PORT__` and connects only to its own engine.
-
-## `dist`-entry packages (`@hover-dev/core` + `@hover-dev/widget-bootstrap`)
+## `dist`-entry package (`@hover-dev/core`)
 
 Most packages set `main` / `exports` directly to `src/*.ts`, so consumers' transpilers see TypeScript source with zero build step.
 
-**Two exceptions: `@hover-dev/core` and `@hover-dev/widget-bootstrap`** point `main` / `exports` at `dist/*.js`. The current reason is the VS Code extension's staged engine: `engine/host.mjs` imports `@hover-dev/core/service`, so core must build to `dist`. (Historically this also let the frozen `@hover-dev/next` `await import(…)` core under Turbopack — vercel/next.js#82945.)
+**The exception, `@hover-dev/core`,** points `main` / `exports` at `dist/*.js`. The reason is the VS Code extension's staged engine: `engine/host.mjs` imports `@hover-dev/core/service`, so core must build to `dist`.
 
 Practical implications:
 
-- A root `postinstall` hook builds both after every `pnpm install`. Fresh clones get usable `dist/` artefacts immediately.
+- A root `postinstall` hook builds core (plus the security / pentest plugins) after every `pnpm install`. Fresh clones get usable `dist/` artefacts immediately.
 - Editing `core/src` during extension dev needs a `pnpm --filter @hover-dev/core build` (or a `dev` watch terminal) so the staged engine picks it up; `pnpm --filter hover-dev package` re-packs core fresh into the `.vsix`.
