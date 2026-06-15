@@ -445,7 +445,8 @@
     "build": "tsup",
     "watch": "tsup --watch",
     "stage:engine": "node scripts/stage-engine.mjs",
-    "package": "pnpm run build && pnpm run stage:engine && pnpm dlx @vscode/vsce package --no-dependencies",
+    "clean:vsix": "node -e \"const fs=require('node:fs');for(const f of fs.readdirSync('.'))if(f.endsWith('.vsix'))fs.rmSync(f)\"",
+    "package": "pnpm run clean:vsix && pnpm run build && pnpm run stage:engine && pnpm dlx @vscode/vsce package --no-dependencies",
     "publish": "pnpm run build && pnpm run stage:engine && pnpm dlx @vscode/vsce publish --no-dependencies",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc --noEmit -p tsconfig.json"
