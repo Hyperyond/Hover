@@ -14,7 +14,7 @@ import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Project } from 'ts-morph';
 import { readSidecar, type SpecSidecar } from './sidecar.js';
-import { readSeeds, relevantSeeds, type SeedRule } from './seeds.js';
+import { BUILTIN_SEEDS, relevantSeeds, type SeedRule } from './seeds.js';
 import { softBatch } from './softBatch.js';
 
 export class OptimizeError extends Error {
@@ -58,7 +58,7 @@ export async function optimizeSpec(
       .filter(s => s.kind === 'step' && s.tool)
       .map(s => s.tool as string),
   );
-  const seeds = relevantSeeds(await readSeeds(devRoot), specTools);
+  const seeds = relevantSeeds(BUILTIN_SEEDS, specTools);
   const raw = await runCodegen(buildOptimizePrompt(draft, sidecar, seeds));
   const llmCode = extractCode(raw);
   const check = validateSpecCode(llmCode);

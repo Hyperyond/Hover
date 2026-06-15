@@ -17,8 +17,6 @@ import { stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { countOptimizableMarkers } from './writeSpec.js';
-import { readSeeds, relevantSeeds } from './seeds.js';
-import { optimizationSuggestion, type OptimizationSuggestion } from './optimizationSuggestion.js';
 import { readSidecar } from './sidecar.js';
 
 export interface SpecSummary {
@@ -41,12 +39,9 @@ export interface SpecSummary {
    *  no observed feedback for the LLM to add assertions from. */
   hasSidecar: boolean;
   /** Count of `// hover:optimizable` markers the deterministic translator left
-   *  — interactions it couldn't fully translate single-step. >0 is a strong
-   *  signal to run the optimization pass (or add a seed). */
+   *  — interactions it couldn't fully translate single-step. Informational; the
+   *  user decides whether to run the manual optimization pass. */
   optimizableCount: number;
-  /** The default-off "review optimization?" nudge (F7/D10): suggested + reasons,
-   *  derived from optimizable markers + relevant seeds. */
-  optimization: OptimizationSuggestion;
 }
 
 export interface SpecHeader {
@@ -130,9 +125,6 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
     return [];
   }
 
-  // Seeds are devRoot-wide; read once and reuse for every spec's suggestion.
-  const seeds = await readSeeds(devRoot);
-
   const summaries: SpecSummary[] = [];
   for (const entry of entries) {
     if (!entry.endsWith('.spec.ts')) continue;
@@ -154,15 +146,6 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
     const hasSidecar = sidecar !== null;
     const optimizableCount = countOptimizableMarkers(content);
 
-    // Which seeds could plausibly apply, from the sidecar's captured tools.
-    let relevantSeedNames: string[] = [];
-    if (sidecar && seeds.length > 0) {
-      const tools = new Set(
-        (sidecar.steps ?? []).filter(s => s.kind === 'step' && s.tool).map(s => s.tool as string),
-      );
-      relevantSeedNames = relevantSeeds(seeds, tools).map(s => s.name);
-    }
-
     summaries.push({
       slug,
       path,
@@ -172,7 +155,6 @@ export async function listSpecs(devRoot: string): Promise<SpecSummary[]> {
       mtimeMs,
       hasSidecar,
       optimizableCount,
-      optimization: optimizationSuggestion({ hasSidecar, optimizableCount, relevantSeedNames }),
     });
   }
   summaries.sort((a, b) => b.mtimeMs - a.mtimeMs);

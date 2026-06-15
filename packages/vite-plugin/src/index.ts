@@ -31,12 +31,6 @@ export interface HoverOptions {
    *  location. Dev-only; serve-mode plugin is a no-op in production anyway.
    *  Default true. Set false to disable if it conflicts with another tool. */
   sourceAttribution?: boolean;
-  /** How the optional AI optimization pass surfaces (F7). Default `'suggest'`.
-   *  - `'off'`     — never nudge; the Optimize action stays available manually.
-   *  - `'suggest'` — show a ✦ hint on specs the pass could improve (default).
-   *  - `'on'`      — auto-run the pass after every Save-as-spec (one LLM call
-   *                  per save — opt in deliberately; the original is always kept). */
-  optimize?: 'off' | 'suggest' | 'on';
   /** Opt-in: give the agent READ-ONLY, fenced access to your project source via
    *  a `read_source` / `list_source` MCP server (alongside Playwright MCP), in
    *  every mode. It can then write tests against your real selectors/routes and
@@ -60,7 +54,6 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
   // Pass an explicit number here to reinstate a hard ceiling.
   const maxBudgetUsd = opts.maxBudgetUsd;
   const sourceAttribution = opts.sourceAttribution ?? true;
-  const optimizeMode = opts.optimize ?? 'suggest';
 
   let enabled = true;
   let service: ServiceHandle | null = null;
@@ -109,7 +102,6 @@ export function hover(options?: HoverOptions, ...plugins: HoverPluginManifest[])
           agentId,
           model,
           maxBudgetUsd,
-          optimizeMode,
           cdpUrl: `http://localhost:${chromeDebugPort}`,
           // The Vite project root is where the agent runs (cwd) and where
           // saved specs (`__vibe_tests__/`) + sidecars/seeds (`.hover/`) land.

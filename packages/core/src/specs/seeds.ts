@@ -1,24 +1,17 @@
 /**
- * Translation seeds (Stage 6, approach A): human-written worked examples that
- * teach the optimization pass (F7) a pattern by few-shot, NOT by deterministic
+ * Translation seeds: human-written worked examples that teach the optimization
+ * pass (F7) a multi-step Playwright pattern by few-shot — NOT by deterministic
  * match+template. A seed is a rough `signature` (tool names, used only to pick
  * relevant seeds) + a concrete `example` (input steps → output code) the LLM
  * generalizes from.
  *
- * Two sources, merged:
- *   1. Built-in seeds shipped inside Hover — JSON files in this package's
- *      `seeds/optimization/` directory (loaded by `readBuiltinSeeds`).
- *   2. The project's own `<projectRoot>/.hover/rules/*.json`.
- *
- * Adding a built-in pattern = dropping a JSON in `packages/core/seeds/
- * optimization/`; adding a project pattern = dropping one in `.hover/rules/`.
- * No core code change either way. The full catalogue ships with Hover so users
- * never have to fetch seeds from a second repo — a user who wants to suppress a
- * built-in lists its name under `disabled` in `<projectRoot>/.hover/seeds.json`.
+ * These ship inlined as the `BUILTIN_SEEDS` constant below. They used to be
+ * JSON files under `packages/core/seeds/optimization/` plus a `.hover/rules/`
+ * "author your own seed" mechanism and a `.hover/seeds.json` opt-out — all
+ * removed: that user-facing surface added burden for a small curated catalogue
+ * that feeds an optional, manually-invoked pass. To add a pattern, append a
+ * `SeedRule` here.
  */
-import { readFile, readdir } from 'node:fs/promises';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 export interface SeedRule {
   /** Identifier, e.g. `download`. */
@@ -32,81 +25,92 @@ export interface SeedRule {
   example: { steps: unknown[]; code: string };
 }
 
-/** True when `o` is a structurally-valid optimization seed. */
-function isSeedRule(o: unknown): o is SeedRule {
-  const s = o as SeedRule | null;
-  return !!s && typeof s.name === 'string' && Array.isArray(s.signature) && !!s.example?.code;
-}
-
-/** Directory of bundled built-in seed JSONs, resolved relative to this module
- *  so it works from both `src/` (tests) and `dist/` (published) — both are two
- *  levels below the package root where `seeds/` lives. */
-const BUILTIN_SEEDS_DIR = new URL('../../seeds/optimization/', import.meta.url);
-
 /**
- * Built-in seeds ship with Hover and feed EVERY project's optimization pass.
- * Loaded synchronously at module init from the bundled `seeds/optimization/`
- * directory so the export stays a plain constant (the optimize prompt builder
- * and the `list-seeds` handler consume it synchronously). A missing or
- * malformed file is skipped rather than failing the read.
+ * Built-in optimization seeds, inlined. They feed EVERY project's optimization
+ * pass (the prompt builder and the relevance filter consume this directly).
  */
-function readBuiltinSeeds(): SeedRule[] {
-  const out: SeedRule[] = [];
-  try {
-    for (const f of readdirSync(BUILTIN_SEEDS_DIR)) {
-      if (!f.endsWith('.json')) continue;
-      try {
-        const s: unknown = JSON.parse(readFileSync(new URL(f, BUILTIN_SEEDS_DIR), 'utf-8'));
-        if (isSeedRule(s)) out.push(s);
-      } catch {
-        /* skip malformed built-in seed file */
-      }
-    }
-  } catch {
-    /* no bundled seeds directory (should not happen in a published package) */
-  }
-  return out;
-}
-
-export const BUILTIN_SEEDS: SeedRule[] = readBuiltinSeeds();
-
-/** Names a project disabled via `<projectRoot>/.hover/seeds.json`
- *  (`{ "disabled": ["oauth-popup", …] }`). Best-effort; absent file → none. */
-async function readDisabledSeeds(projectRoot: string): Promise<Set<string>> {
-  try {
-    const raw = await readFile(join(projectRoot, '.hover', 'seeds.json'), 'utf-8');
-    const cfg = JSON.parse(raw) as { disabled?: unknown };
-    if (Array.isArray(cfg.disabled)) {
-      return new Set(cfg.disabled.filter((n): n is string => typeof n === 'string'));
-    }
-  } catch {
-    /* no .hover/seeds.json, or malformed — disable nothing */
-  }
-  return new Set();
-}
-
-/** Built-in seeds + any in `<projectRoot>/.hover/rules/*.json`, minus any name
- *  the project disabled in `.hover/seeds.json`. Malformed files are skipped
- *  rather than failing the whole read. */
-export async function readSeeds(projectRoot: string): Promise<SeedRule[]> {
-  const out: SeedRule[] = [...BUILTIN_SEEDS];
-  try {
-    const dir = join(projectRoot, '.hover', 'rules');
-    for (const f of await readdir(dir)) {
-      if (!f.endsWith('.json')) continue;
-      try {
-        const s = JSON.parse(await readFile(join(dir, f), 'utf-8')) as SeedRule;
-        if (isSeedRule(s)) out.push(s);
-      } catch {
-        /* skip malformed seed file */
-      }
-    }
-  } catch {
-    /* no .hover/rules/ directory */
-  }
-  const disabled = await readDisabledSeeds(projectRoot);
-  return disabled.size ? out.filter(s => !disabled.has(s.name)) : out;
-}
+export const BUILTIN_SEEDS: SeedRule[] = [
+  {
+    name: 'download',
+    signature: ['browser_click'],
+    note: 'A click that triggers a file download — pair it with waitForEvent(\'download\') so the listener is registered before the click fires.',
+    example: {
+      steps: [{ tool: 'browser_click', element: 'Export CSV button' }],
+      code: `const [download] = await Promise.all([
+  page.waitForEvent('download'),
+  page.getByRole('button', { name: 'Export CSV' }).click(),
+]);
+expect(await download.suggestedFilename()).toContain('.csv');`,
+    },
+  },
+  {
+    name: 'file-upload',
+    signature: ['browser_file_upload'],
+    note: 'Set a file on a (often hidden) <input type=file>. The file chooser opens synchronously on click, so register waitForEvent(\'filechooser\') before the click — same race as download.',
+    example: {
+      steps: [
+        { tool: 'browser_click', element: 'Upload avatar button' },
+        { tool: 'browser_file_upload', paths: ['avatar.png'] },
+      ],
+      code: `const [chooser] = await Promise.all([
+  page.waitForEvent('filechooser'),
+  page.getByRole('button', { name: 'Upload avatar' }).click(),
+]);
+await chooser.setFiles('tests/fixtures/avatar.png');
+await expect(page.getByText('avatar.png')).toBeVisible();`,
+    },
+  },
+  {
+    name: 'dialog',
+    signature: ['browser_handle_dialog'],
+    note: 'A click that triggers a native dialog (alert/confirm/prompt). Register the page \'dialog\' handler BEFORE the click that fires it — otherwise Playwright auto-dismisses it and the assertion is wrong.',
+    example: {
+      steps: [
+        { tool: 'browser_click', element: 'Delete account button' },
+        { tool: 'browser_handle_dialog', action: 'accept' },
+      ],
+      code: `page.once('dialog', dialog => dialog.accept());
+await page.getByRole('button', { name: 'Delete account' }).click();
+await expect(page.getByText('Account deleted')).toBeVisible();`,
+    },
+  },
+  {
+    name: 'oauth-popup',
+    signature: ['browser_click', 'browser_tabs:select'],
+    note: 'Sign in through a provider popup that opens a new tab. Pair the opener click with context.waitForEvent(\'page\'), then drive the returned popup page.',
+    example: {
+      steps: [
+        { tool: 'browser_click', element: 'Sign in with Google button' },
+        { tool: 'browser_tabs', action: 'select', idx: 1 },
+      ],
+      code: `const [popup] = await Promise.all([
+  context.waitForEvent('page'),
+  page.getByRole('button', { name: 'Sign in with Google' }).click(),
+]);
+await popup.getByLabel('Email').fill('user@example.com');
+await popup.getByRole('button', { name: 'Next' }).click();
+await popup.waitForEvent('close');
+await expect(page.getByText('Signed in')).toBeVisible();`,
+    },
+  },
+  {
+    name: 'network-gated-assertion',
+    signature: ['browser_click', 'browser_wait_for'],
+    note: 'A click fires an XHR/fetch and the result is asserted. Pair the click with page.waitForResponse so the test waits for the real request to settle, instead of a guessed timeout or a race.',
+    example: {
+      steps: [
+        { tool: 'browser_click', element: 'Place order button' },
+        { tool: 'browser_wait_for', text: 'Order confirmed' },
+      ],
+      code: `const [res] = await Promise.all([
+  page.waitForResponse(r => r.url().includes('/api/orders') && r.request().method() === 'POST'),
+  page.getByRole('button', { name: 'Place order' }).click(),
+]);
+expect(res.ok()).toBeTruthy();
+await expect(page.getByText('Order confirmed')).toBeVisible();`,
+    },
+  },
+];
 
 /** Pick seeds whose signature's base tool appears in the spec — a cheap
  *  relevance filter so the prompt only carries plausibly-applicable examples. */

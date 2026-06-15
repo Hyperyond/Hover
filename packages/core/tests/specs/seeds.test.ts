@@ -1,54 +1,13 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { BUILTIN_SEEDS, readSeeds, relevantSeeds } from '../../src/specs/seeds.js';
+import { describe, test, expect } from 'vitest';
+import { BUILTIN_SEEDS, relevantSeeds } from '../../src/specs/seeds.js';
 import { buildOptimizePrompt } from '../../src/specs/optimizeSpec.js';
 
-describe('readSeeds', () => {
-  let tmp: string;
-
-  beforeEach(() => {
-    tmp = mkdtempSync(join(tmpdir(), 'hover-seeds-'));
-  });
-
-  afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true });
-  });
-
-  test('returns built-in seeds when no .hover/rules/ exists', async () => {
-    const seeds = await readSeeds(tmp);
-    expect(seeds).toEqual(BUILTIN_SEEDS);
-  });
-
-  test('appends valid project seeds from .hover/rules/*.json', async () => {
-    mkdirSync(join(tmp, '.hover', 'rules'), { recursive: true });
-    writeFileSync(
-      join(tmp, '.hover', 'rules', 'oauth.json'),
-      JSON.stringify({
-        name: 'oauth-popup',
-        signature: ['browser_click', 'browser_tabs:select'],
-        note: 'sign in via a provider popup',
-        example: { steps: [{ tool: 'browser_click', element: 'Sign in with Google' }], code: '// ...' },
-      }),
-    );
-
-    const seeds = await readSeeds(tmp);
-    expect(seeds.length).toBe(BUILTIN_SEEDS.length + 1);
-    expect(seeds.some(s => s.name === 'oauth-popup')).toBe(true);
-  });
-
-  test('skips malformed / incomplete seed files without throwing', async () => {
-    mkdirSync(join(tmp, '.hover', 'rules'), { recursive: true });
-    writeFileSync(join(tmp, '.hover', 'rules', 'broken.json'), '{ not json');
-    writeFileSync(
-      join(tmp, '.hover', 'rules', 'incomplete.json'),
-      JSON.stringify({ name: 'no-example', signature: ['x'] }), // missing example.code
-    );
-    writeFileSync(join(tmp, '.hover', 'rules', 'notes.txt'), 'ignored — not .json');
-
-    const seeds = await readSeeds(tmp);
-    expect(seeds).toEqual(BUILTIN_SEEDS);
+describe('BUILTIN_SEEDS (inlined catalogue)', () => {
+  test('ships a non-empty catalogue of well-formed seeds with unique names', () => {
+    expect(BUILTIN_SEEDS.length).toBeGreaterThan(0);
+    expect(BUILTIN_SEEDS.every(s => s.name && Array.isArray(s.signature) && !!s.example?.code)).toBe(true);
+    const names = BUILTIN_SEEDS.map(s => s.name);
+    expect(new Set(names).size).toBe(names.length);
   });
 });
 

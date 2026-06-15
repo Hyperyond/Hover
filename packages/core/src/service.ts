@@ -11,7 +11,6 @@
  *     { type: 'event',           payload: InvokeEvent }              // see agents/types.ts
  *     { type: 'cdp-status',      payload: { state, reason?, matchingTabUrl?, browser?, launching? } }
  *     { type: 'specs-list',      payload: { specs: SpecSummary[] } }
- *     { type: 'seeds-list',      payload: { seeds: { name, note, signature, code, source }[] } }
  *     { type: 'spec-saved',      payload: { name, path } }
  *     { type: 'spec-exists',     payload: { slug, existingPath } }
  *     { type: 'case-csv-saved',  payload: { name, path } }
@@ -32,7 +31,6 @@
  *     { type: 'save-spec',     payload: { name, description, steps, assertions?, overwrite? } }
  *     { type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
  *     { type: 'list-specs' }                                            // ask for every spec under __vibe_tests__/, with parsed JSDoc headers
- *     { type: 'list-seeds' }                                            // ask for built-in + .hover/rules/ translation seeds (read-only)
  *     { type: 'list-agents' }                                          // ask for the full agent registry + install status
  *     { type: 'switch-agent',  payload: { agentId } }                  // set the service's current agent; broadcasts to all connections
  *     { type: 'reveal-source', payload: { source } }                   // relay a data-hover-source value to other clients (F2 page→editor)
@@ -66,7 +64,6 @@ import { resolveMcpConfig, mcpToolPrefix } from './playwright/resolveMcpConfig.j
 import { launchDebugChrome } from './playwright/launchChrome.js';
 import { listSpecs } from './specs/listSpecs.js';
 import { writeSessionRecord, parseFindings, tallyTools } from './sessions/sessions.js';
-import { readSeeds, BUILTIN_SEEDS } from './specs/seeds.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
 import {
@@ -101,9 +98,6 @@ export interface ServiceOptions {
   agentId?: string;
   model?: string;
   maxBudgetUsd?: number;
-  /** How the optimization pass (F7) surfaces in the widget. Default 'suggest'.
-   *  'off' = no nudge, 'suggest' = ✦ hint, 'on' = auto-run after Save-as-spec. */
-  optimizeMode?: 'off' | 'suggest' | 'on';
   mcpConfig?: string;
   /** CDP URL to preflight before each command (default http://localhost:9222). */
   cdpUrl?: string;
@@ -246,7 +240,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   // so the user can hit Stop when they've seen enough. Pass maxBudgetUsd
   // explicitly (or via the Vite plugin option) if a hard ceiling is needed.
   const maxBudgetUsd = opts.maxBudgetUsd;
-  const optimizeMode = opts.optimizeMode ?? 'suggest';
   const cdpUrl = opts.cdpUrl ?? 'http://localhost:9222';
   const devRoot = opts.devRoot ?? process.cwd();
 
@@ -572,7 +565,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   wss.on('connection', ws => {
     send(ws, {
       type: 'hello',
-      payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION, optimizeMode },
+      payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION },
     });
     // Send the agent list as a follow-up event so the widget can render the
     // dropdown immediately on connect / reconnect (e.g. after HMR). The
@@ -798,7 +791,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           return;
         }
         model = wanted;
-        send(ws, { type: 'hello', payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION, optimizeMode } });
+        send(ws, { type: 'hello', payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION } });
         return;
       }
       if (msg.type === 'set-api-key') {
@@ -818,21 +811,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // so the Re-record button can resubmit it as a normal command.
         const specs = await listSpecs(devRoot);
         send(ws, { type: 'specs-list', payload: { specs } });
-        return;
-      }
-      if (msg.type === 'list-seeds') {
-        // Widget's Seeds tab: show which translation seeds Hover sees — the
-        // built-in set + whatever the user dropped in <devRoot>/.hover/rules/.
-        // Read-only; users add seeds by hand (no download path).
-        const builtinNames = new Set(BUILTIN_SEEDS.map(s => s.name));
-        const seeds = (await readSeeds(devRoot)).map(s => ({
-          name: s.name,
-          note: s.note ?? '',
-          signature: s.signature,
-          code: s.example?.code ?? '',
-          source: builtinNames.has(s.name) ? 'builtin' : 'project',
-        }));
-        send(ws, { type: 'seeds-list', payload: { seeds } });
         return;
       }
       if (msg.type === 'save-spec') {
