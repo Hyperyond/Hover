@@ -91,8 +91,8 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
     <label class="switch"><input type="checkbox" id="speech" /><span class="slider"></span></label>
   </div>
   <div class="row">
-    <div class="label">Browser<span class="sub">Silent = headless (no window); Visible = shown Chrome</span></div>
-    <select id="browser"><option value="silent">Silent</option><option value="visible">Visible</option></select>
+    <div class="label">Browser<span class="sub">Headless = no window; Normal = shown Chrome</span></div>
+    <select id="browser"><option value="silent">Headless</option><option value="visible">Normal</option></select>
   </div>
   <div class="row cloud">
     <div class="label">Hover Cloud<span class="sub">Cross-machine sync, team-shared environments, run dashboards — coming soon.</span></div>

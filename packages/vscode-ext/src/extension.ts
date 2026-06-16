@@ -798,7 +798,7 @@ async function startApp(): Promise<void> {
   if (active && active.id !== LOCAL_ENV_ID) {
     const silent = isSilent();
     if (pool?.launchChrome(active.url, silent, false, enginePort)) {
-      chatProvider?.pushSystem(`Browser ${silent ? 'running silently (headless)' : 'opened'} at ${active.name} (${active.url}).`);
+      chatProvider?.pushSystem(`Browser ${silent ? 'running headless (no window)' : 'opened'} at ${active.name} (${active.url}).`);
     } else {
       chatProvider?.pushSystem('Could not launch the browser — the engine may still be starting.');
     }
@@ -825,7 +825,7 @@ async function startApp(): Promise<void> {
 
   const silent = isSilent();
   if (pool?.launchChrome(url, silent, false, enginePort)) {
-    chatProvider?.pushSystem(`Browser ${silent ? 'running silently (headless)' : 'opened'} at ${url}.`);
+    chatProvider?.pushSystem(`Browser ${silent ? 'running headless (no window)' : 'opened'} at ${url}.`);
   } else {
     chatProvider?.pushSystem('Could not launch the browser — the engine may still be starting.');
   }
@@ -843,7 +843,7 @@ async function toggleBrowser(): Promise<void> {
   // headless↔visible switch would no-op (the old-mode Chrome keeps running and
   // a "visible" window never appears). force closes + relaunches in the new mode.
   if (url && pool?.launchChrome(url, next === 'silent', true, activeEnginePort())) {
-    chatProvider?.pushSystem(`Browser mode: ${next === 'silent' ? 'silent (headless)' : 'visible'} — relaunched at ${url}.`);
+    chatProvider?.pushSystem(`Browser mode: ${next === 'silent' ? 'Headless' : 'Normal'} — relaunched at ${url}.`);
   } else {
     void vscode.window.showInformationMessage(`Hover browser mode: ${next}. Takes effect on the next launch.`);
   }
@@ -859,7 +859,7 @@ async function reopenBrowser(): Promise<void> {
     return;
   }
   if (pool?.launchChrome(url, isSilent(), true, activeEnginePort())) {
-    chatProvider?.pushSystem(`Browser ${isSilent() ? 'running silently (headless)' : 'reopened'} at ${url}.`);
+    chatProvider?.pushSystem(`Browser ${isSilent() ? 'running headless (no window)' : 'reopened'} at ${url}.`);
   } else {
     void vscode.window.showWarningMessage('Hover: could not reach the engine to reopen the browser.');
   }

@@ -157,7 +157,7 @@
       },
       {
         "command": "hover.toggleBrowser",
-        "title": "Toggle Browser (Silent / Visible)",
+        "title": "Toggle Browser (Headless / Normal)",
         "category": "Hover",
         "icon": "$(eye)"
       },
@@ -318,10 +318,10 @@
           ],
           "enumDescriptions": [
             "Headless — no browser window; runs stream into the chat",
-            "Visible — show the debug Chrome window"
+            "Normal — show the debug Chrome window"
           ],
           "default": "silent",
-          "description": "How Hover runs the browser. Silent = headless (default); Visible = a shown Chrome window you can watch."
+          "description": "How Hover runs the browser. Headless = no window (default); Normal = a shown Chrome window you can watch."
         },
         "hover.speech": {
           "type": "boolean",
