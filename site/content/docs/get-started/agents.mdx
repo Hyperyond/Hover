@@ -1,6 +1,6 @@
 # Pick an agent
 
-Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for. Six agents are wired today: `claude` (hard sandbox, recommended) and `codex` / `cursor-agent` / `aider` / `gemini-cli` / `qwen-code` (soft sandbox). More are one file in [the registry](/docs/reference/agent-registry).
+Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for. Six agents are wired today: `claude` (hard sandbox, recommended) and `codex` / `cursor-agent` / `aider` / `gemini-cli` / `qwen-code` (soft sandbox). More are one file in [the registry](/docs/reference/agent-registry/).
 
 ## Supported today
 
@@ -43,7 +43,7 @@ Click the agent pill (or pick one in **Settings**). No restart required — the 
 
 ## Adding your own agent
 
-Write an `AgentDescriptor` and register it in [`packages/core/src/agents/registry.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/agents/registry.ts). See [Agent registry](/docs/reference/agent-registry) for the full interface.
+Write an `AgentDescriptor` and register it in [`packages/core/src/agents/registry.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/agents/registry.ts). See [Agent registry](/docs/reference/agent-registry/) for the full interface.
 
 Candidates not yet wired: `cline`, `continue`, `kilo` (see the comment in `registry.ts`).
 

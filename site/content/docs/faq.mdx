@@ -15,7 +15,7 @@ You have two local options:
 - **Edit by hand.** The spec is plain `@playwright/test` — `getByRole('button', { name: 'Submit' })` → `'Sign in'`. Fast if you know exactly what changed, and the file is yours to own.
 - **Treat it as a regression.** If the test fails because the *flow* broke (not just the selector), that's the test catching a real bug — fix the app, not the spec.
 
-Automatic, on-failure healing — the agent replaying a spec's intent against the current UI and proposing a diff — is planned as part of **[Hover Cloud](/docs/reference/roadmap)**, not a local feature. The local extension is purely author + run; it ships no re-record command.
+Automatic, on-failure healing — the agent replaying a spec's intent against the current UI and proposing a diff — is planned as part of **[Hover Cloud](/docs/reference/roadmap/)**, not a local feature. The local extension is purely author + run; it ships no re-record command.
 
 ### 3. Why we don't auto-heal at CI time
 

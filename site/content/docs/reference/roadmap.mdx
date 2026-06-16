@@ -30,6 +30,6 @@ What's shipped, what's in flight.
 ## Beyond v0.15.x
 
 - **Voice mode Pro** (opt-in) — Deepgram Nova-3 streaming STT + ElevenLabs Flash / Cartesia Sonic TTS as an env-var-gated upgrade for users who want sub-100ms TTFA or higher-fidelity 中文 recognition. LLM stays on the user's local CLI agent — only the I/O adapters are cloud. Brings new privacy boundary (audio leaves the browser); will be opt-in, never default.
-- **AI-compiled spec output** — ✅ **shipped** as the off-by-default [optimization pass](/docs/features/optimization-pass): the deterministic translator always emits the spec, and an optional LLM pass polishes it into a diff-reviewed candidate (original always kept). The AI is an authoring-time aid, never a CI dependency.
+- **AI-compiled spec output** — ✅ **shipped** as the off-by-default [optimization pass](/docs/features/optimization-pass/): the deterministic translator always emits the spec, and an optional LLM pass polishes it into a diff-reviewed candidate (original always kept). The AI is an authoring-time aid, never a CI dependency.
 
 For real-time tracking, see [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues).

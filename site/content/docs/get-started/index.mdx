@@ -8,22 +8,22 @@ Nothing changes in your app, your bundler config, or your dependencies — the e
 
 ## What's inside this section
 
-- [Quick start](/docs/get-started/quick-start) — Install the extension and send your first prompt. 60 seconds.
-- [Install](/docs/get-started/install) — Install the extension from the VS Code Marketplace; add one coding-agent CLI.
-- [Your first session](/docs/get-started/first-session) — A guided walkthrough of the chat and every view.
-- [Pick an agent](/docs/get-started/agents) — six agents wired today: Claude (hard sandbox) plus Codex, cursor-agent, aider, gemini-cli, and qwen-code (soft sandbox). One-file registry to add more.
+- [Quick start](/docs/get-started/quick-start/) — Install the extension and send your first prompt. 60 seconds.
+- [Install](/docs/get-started/install/) — Install the extension from the VS Code Marketplace; add one coding-agent CLI.
+- [Your first session](/docs/get-started/first-session/) — A guided walkthrough of the chat and every view.
+- [Pick an agent](/docs/get-started/agents/) — six agents wired today: Claude (hard sandbox) plus Codex, cursor-agent, aider, gemini-cli, and qwen-code (soft sandbox). One-file registry to add more.
 
 
 
-Hover also covers **application security testing** in the same chat — flip into 🟠 **[Security](/docs/features/security)** mode (IDOR / broken authorization / parameter-tampering, via a local HTTPS MITM) or 🔴 **Pentest** mode (offensive SQLi / XSS / SSTI / SSRF / IDOR against your **own** dev app). Confirmed findings crystallize into `.security.spec.ts` CI gates or a findings report.
+Hover also covers **application security testing** in the same chat — flip into 🟠 **[Security](/docs/features/security/)** mode (IDOR / broken authorization / parameter-tampering, via a local HTTPS MITM) or 🔴 **Pentest** mode (offensive SQLi / XSS / SSTI / SSRF / IDOR against your **own** dev app). Confirmed findings crystallize into `.security.spec.ts` CI gates or a findings report.
 
-Building Hover itself? See **[Development](/docs/development)** for the monorepo workflow.
+Building Hover itself? See **[Development](/docs/development/)** for the monorepo workflow.
 
 
 
 ## At a glance
 
-- **No API key required.** Hover spawns the coding-agent CLI you already have on PATH (`claude`, `codex`, …) and reuses the subscription you already pay for — or [set a model API key](/docs/get-started/api-key) if you'd rather.
+- **No API key required.** Hover spawns the coding-agent CLI you already have on PATH (`claude`, `codex`, …) and reuses the subscription you already pay for — or [set a model API key](/docs/get-started/api-key/) if you'd rather.
 - **Nothing to wire into your app.** The extension drives your existing dev server over CDP — no plugin, no config edit, no new dependency. Works with any framework.
 - **Local-first.** The engine (`@hover-dev/core`) binds to `127.0.0.1` only, has no telemetry, and no upload path. Cookies and localStorage never transit it.
 - **One artefact, plain Playwright.** Save the verified session as a `@playwright/test` spec that checks into git and runs in CI with zero AI, no tokens, no key.

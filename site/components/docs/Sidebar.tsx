@@ -19,7 +19,7 @@ export function Sidebar() {
           </div>
           <ul className="space-y-0.5">
             {section.items.map((item) => {
-              const active = here === item.href;
+              const active = here === item.href.replace(/\/$/, '');
               return (
                 <li key={item.href}>
                   <Link

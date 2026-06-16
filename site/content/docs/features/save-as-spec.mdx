@@ -70,7 +70,7 @@ Why the block-scoped `{ const el = …; await expect(el).toBeVisible(); await el
 
 Asserting visibility before each interaction surfaces the drift as a clean `Locator expected to be visible` failure with the offending selector in the message. Applied uniformly to `click` / `dblclick` / `hover` / `fill` / `selectOption`.
 
-Originally pointed out as a gap in the role-only approach by an external contributor on X — fixed in the emit table at [`packages/core/src/specs/writeSpec.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/specs/writeSpec.ts). The [FAQ entry](/docs/faq#my-button-is-still-in-the-dom-but-moved-behind-a-kebab-menu-does-the-spec-catch-that) goes deeper into the failure modes the prelude does and doesn't catch.
+Originally pointed out as a gap in the role-only approach by an external contributor on X — fixed in the emit table at [`packages/core/src/specs/writeSpec.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/specs/writeSpec.ts). The [FAQ entry](/docs/faq/#my-button-is-still-in-the-dom-but-moved-behind-a-kebab-menu-does-the-spec-catch-that) goes deeper into the failure modes the prelude does and doesn't catch.
 
 ## Selector strategy
 
@@ -93,9 +93,9 @@ Sometimes the UI changes enough that the semantic selector itself goes stale —
 1. **Hand-edit** — open the `.spec.ts`, change the selector. The file is plain `@playwright/test` and yours to own; fast if you know exactly what changed.
 2. **Treat as a regression** — the flow itself may have legitimately changed; update the test by hand or delete and start fresh.
 
-Automatic, on-failure healing — replaying the spec's recorded intent against the current UI and proposing a diff — is the planned path for **[Hover Cloud](/docs/reference/roadmap)**, not a local feature. The local extension is purely author + run.
+Automatic, on-failure healing — replaying the spec's recorded intent against the current UI and proposing a diff — is the planned path for **[Hover Cloud](/docs/reference/roadmap/)**, not a local feature. The local extension is purely author + run.
 
-The [FAQ](/docs/faq#my-ui-changed-and-my-saved-spec-breaks-what-now) covers the trade-offs in depth.
+The [FAQ](/docs/faq/#my-ui-changed-and-my-saved-spec-breaks-what-now) covers the trade-offs in depth.
 
 ## CI is plain Playwright
 

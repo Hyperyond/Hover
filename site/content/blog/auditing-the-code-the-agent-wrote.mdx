@@ -16,7 +16,7 @@ The findings worth writing about weren't the obvious ones.
 
 ## The bug was in the safety code
 
-The sharpest one sat inside the part of the codebase whose entire job is safety. Hover strips credentials out of a recorded request before it [writes the request into a committed spec](/blog/secrets-in-committed-playwright-specs). Cookies, bearer tokens, an SSN in a JSON body: all of it gets dropped or masked on the way to disk.
+The sharpest one sat inside the part of the codebase whose entire job is safety. Hover strips credentials out of a recorded request before it [writes the request into a committed spec](/blog/secrets-in-committed-playwright-specs/). Cookies, bearer tokens, an SSN in a JSON body: all of it gets dropped or masked on the way to disk.
 
 The sanitizer kept two lists of credential names, one for URL query params and one for JSON body fields. They were supposed to match. They didn't. `auth` and `apikey` were in the URL list and missing from the body list, so a query-string `?auth=...` got masked while a body field literally named `auth` went straight through into the committed file. Two lists that are "supposed to stay in sync" are a bug with a delay on it.
 
@@ -34,4 +34,4 @@ The quieter wins were deletions. An unused `assert` import, seed definitions not
 
 The point of the exercise isn't that AI writes buggy code. People write buggy code. The point is that speed without a verification pass is just an unaudited diff, and the verification pass is the part you can't skip and stay honest.
 
-That's the same discipline Hover sells. The [optimize pass](/blog/playwright-page-object-model-auto-extract) re-reads a saved spec instead of trusting the first draft. [Security and pentest modes](/blog/pentest-mode-attack-your-own-app) attack the running app instead of trusting that the happy path means the code is sound. Running an audit over our own source was the same move, aimed at ourselves. If we wouldn't ship Hover's output without a verification step, we shouldn't ship Hover without one either.
+That's the same discipline Hover sells. The [optimize pass](/blog/playwright-page-object-model-auto-extract/) re-reads a saved spec instead of trusting the first draft. [Security and pentest modes](/blog/pentest-mode-attack-your-own-app/) attack the running app instead of trusting that the happy path means the code is sound. Running an audit over our own source was the same move, aimed at ourselves. If we wouldn't ship Hover's output without a verification step, we shouldn't ship Hover without one either.

@@ -35,7 +35,7 @@ always kept and never auto-promoted.
 ## Why it doesn't dent the moat
 
 The pass is a code-generation helper issued by the local service — its input is
-data the service already holds (the draft, the [sidecar](/docs/features/structured-output),
+data the service already holds (the draft, the [sidecar](/docs/features/structured-output/),
 the built-in seeds), never live page content. It runs through the same validator as the
 deterministic path (no XPath, no `waitForTimeout`, must parse). And it never
 becomes the spec without a human diff. CI still runs plain Playwright, zero

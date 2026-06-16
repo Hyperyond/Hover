@@ -90,7 +90,7 @@ const JSON_LD = {
       url: 'https://gethover.dev',
       downloadUrl:
         'https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev',
-      softwareHelp: 'https://gethover.dev/docs',
+      softwareHelp: 'https://gethover.dev/docs/',
       license: 'https://www.apache.org/licenses/LICENSE-2.0',
       author: { '@type': 'Organization', name: 'Hyperyond' },
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },

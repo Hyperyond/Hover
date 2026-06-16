@@ -36,6 +36,6 @@ instead of inventing a brittle CSS path from the rendered class soup. When you c
 
 ## White-box security
 
-The bigger win is on the security side. Black-box security testing finds a symptom: a request that returns data it shouldn't. It can't tell you which handler skipped the check. With source access, the agent reads your route table, finds the endpoint that takes an ID straight from the path, and probes that one on purpose instead of fuzzing blind. The [security mode](/blog/test-idor-broken-access-control) gets sharper, and so does [pentest mode](/blog/pentest-mode-attack-your-own-app): both read the code to aim, then attack the running app to confirm.
+The bigger win is on the security side. Black-box security testing finds a symptom: a request that returns data it shouldn't. It can't tell you which handler skipped the check. With source access, the agent reads your route table, finds the endpoint that takes an ID straight from the path, and probes that one on purpose instead of fuzzing blind. The [security mode](/blog/test-idor-broken-access-control/) gets sharper, and so does [pentest mode](/blog/pentest-mode-attack-your-own-app/): both read the code to aim, then attack the running app to confirm.
 
 `codeContext` works in every mode, so you opt in once and the agent stays white-box whether it's writing a checkout test or hunting an IDOR. Read-only, fenced, off by default. Turn it on when you want the agent to test what you wrote, not just what it saw.

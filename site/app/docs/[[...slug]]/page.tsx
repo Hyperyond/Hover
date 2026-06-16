@@ -15,8 +15,10 @@ export function generateStaticParams() {
   return [{ slug: undefined }, ...allDocSlugs().map((slug) => ({ slug }))];
 }
 
+// Trailing slash to match trailingSlash:true — keeps the canonical and the
+// prev/next links pointing at the real URL, not its 308 redirect.
 function hrefFor(slug?: string[]): string {
-  return '/docs' + (slug && slug.length ? '/' + slug.join('/') : '');
+  return slug && slug.length ? '/docs/' + slug.join('/') + '/' : '/docs/';
 }
 
 export async function generateMetadata(

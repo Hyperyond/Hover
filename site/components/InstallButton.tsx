@@ -10,7 +10,7 @@ export const MARKETPLACE_URL =
   'https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev';
 
 /** The install docs page (details / build-from-source). */
-export const INSTALL_URL = '/docs/get-started/install';
+export const INSTALL_URL = '/docs/get-started/install/';
 
 export function InstallButton({
   variant = 'primary',

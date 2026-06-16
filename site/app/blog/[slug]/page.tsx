@@ -79,7 +79,7 @@ export default async function BlogPost(
       />
 
       <Link
-        href="/blog"
+        href="/blog/"
         className="inline-block text-[13px] text-text-dim transition-colors hover:text-text"
       >
         ← All posts

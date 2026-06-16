@@ -38,7 +38,7 @@ The CA private key persists under `<your-project>/.hover/ca/ca.key`. The shipped
 
    The agent uses `mcp__hover_dev_security_flows__list_flows` to enumerate the API surface, `get_flow` to inspect specific requests, and `replay_flow` to test mutations.
 
-5. When findings show up in the Result + Findings cards, click **Save as → Security spec** to crystallise the recorded `replay_flow` checks into a `__vibe_tests__/<slug>.security.spec.ts` regression test that runs in CI with vanilla `@playwright/test`. See [Save as Security spec](/docs/features/security-spec).
+5. When findings show up in the Result + Findings cards, click **Save as → Security spec** to crystallise the recorded `replay_flow` checks into a `__vibe_tests__/<slug>.security.spec.ts` regression test that runs in CI with vanilla `@playwright/test`. See [Save as Security spec](/docs/features/security-spec/).
 
 ## What the agent looks for
 
@@ -146,4 +146,4 @@ For contributors who want to extend the plugin or write a similar one (`@hover-d
 - **Service workers** — Playwright's `page.route()` historically can't see SW-mediated requests. The MITM proxy bypasses this (it's at the network layer, not the renderer layer), so capture works fine. But if your saved spec relies on observing a SW-routed request, you'll need to express it as `page.request.fetch()` (which goes around the SW) rather than `page.route()`.
 - **HTTP/3 / QUIC** — Chrome will quietly downgrade through the proxy. Not visible as h3 in the captured flow list.
 - **Cross-origin iframes** — captured, but the flow list is currently flattened; correlating which iframe a flow came from is future work.
-- **Session recording for security sessions** — click→spec semantics don't apply to a network-probing session. Instead, the agent calls `replay_flow({ intent, expectStatus })` to record security checks, and **Save as → Security spec** crystallises them into a Playwright regression spec. See [Save as Security spec](/docs/features/security-spec).
+- **Session recording for security sessions** — click→spec semantics don't apply to a network-probing session. Instead, the agent calls `replay_flow({ intent, expectStatus })` to record security checks, and **Save as → Security spec** crystallises them into a Playwright regression spec. See [Save as Security spec](/docs/features/security-spec/).

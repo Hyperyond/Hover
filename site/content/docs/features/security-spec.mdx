@@ -66,7 +66,7 @@ test.describe('security: orders-idor', () => {
 
 ## Caveats
 
-- **Auth state.** The agent recorded the requests with cookies from your logged-in debug Chrome. CI is a fresh process — you need Playwright's `storageState` mechanic to round-trip auth. The spec emits a TODO header pointing at the FAQ. See [FAQ: Security spec auth setup](/docs/faq#security-spec-auth-setup-how-do-i-run-a-security-spec-in-ci-when-the-auth-cookies-live-in-my-debug-chrome).
+- **Auth state.** The agent recorded the requests with cookies from your logged-in debug Chrome. CI is a fresh process — you need Playwright's `storageState` mechanic to round-trip auth. The spec emits a TODO header pointing at the FAQ. See [FAQ: Security spec auth setup](/docs/faq/#security-spec-auth-setup-how-do-i-run-a-security-spec-in-ci-when-the-auth-cookies-live-in-my-debug-chrome).
 - **PII-leak guard is coarse.** For 4xx expectations, the spec checks `body.length < 500` as a proxy for "this is a real deny page, not a leak masquerading as 403". Tighten by hand for high-value endpoints.
 - **Both parameters required to record.** Missing `intent` or `expectStatus` → the replay still works, but isn't recorded. The MCP server's response includes a `_(Not recorded as a check — both intent and expectStatus are required together.)_` hint when one is supplied and the other isn't.
 - **Auth header replay.** Cookies / auth headers from the source flow are replayed verbatim by default. To test "what if the attacker drops the auth header", pass `headers: { authorization: null }` along with `intent` and `expectStatus`.

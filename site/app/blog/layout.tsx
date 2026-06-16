@@ -15,7 +15,7 @@ export default function BlogLayout({ children }: { children: React.ReactNode }) 
             </span>
             <span className="text-[14px] font-semibold tracking-tight">Hover</span>
             <span className="text-text-dim">/</span>
-            <Link href="/blog" className="text-[13px] text-text-mute transition-colors hover:text-text">
+            <Link href="/blog/" className="text-[13px] text-text-mute transition-colors hover:text-text">
               blog
             </Link>
           </Link>
