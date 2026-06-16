@@ -77,6 +77,9 @@ export interface ServiceClientPool {
   run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean;
   /** Reply to a source-read approval request from the engine's source MCP. */
   sendSourceApproval(approvalId: string, allow: boolean): void;
+  /** Reply to an ask_user prompt from the engine's control MCP — the user's
+   *  answer (a chosen option label or typed text), or cancelled. */
+  sendAskUserResponse(askId: string, value: string | null): void;
   /** Cancel the active run. */
   cancel(): void;
   /** Crystallize the accumulated steps into a spec. `redactions` parameterize
@@ -153,6 +156,7 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'optimize-result' ||
         msg.type === 'optimize-failed' ||
         msg.type === 'source-approval-request' ||
+        msg.type === 'ask-user-request' ||
         (typeof msg.type === 'string' && msg.type.endsWith(':saved'))
       ) {
         handlers.onServerMessage?.(msg as ServerMessage);
@@ -202,6 +206,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
     sendSourceApproval(approvalId: string, allow: boolean): void {
       const ws = firstOpen();
       if (ws) ws.send(JSON.stringify({ type: 'source-approval-response', payload: { approvalId, allow } }));
+    },
+    sendAskUserResponse(askId: string, value: string | null): void {
+      const ws = firstOpen();
+      if (ws) ws.send(JSON.stringify({ type: 'ask-user-response', payload: value == null ? { askId, cancelled: true } : { askId, value } }));
     },
     cancel(): void {
       for (const ws of sockets.values()) {

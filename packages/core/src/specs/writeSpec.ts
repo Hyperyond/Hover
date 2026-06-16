@@ -57,13 +57,13 @@ function bareTool(rawTool: string): string {
   return rawTool.replace(/^mcp__[a-z0-9_-]+?__/, '');
 }
 
-/** Read-only exploration the agent does to understand the page/code — never a
- *  user action, so it must not appear in the crystallized spec. (browser_* read
- *  tools are dropped inside translateStep; these Hover-MCP source reads are
- *  dropped at the filter so they don't even reach prose.) */
+/** Tools that never belong in a crystallized spec: read-only exploration the
+ *  agent does to understand the page/code, and meta interactions like asking
+ *  the user a question. Dropped at the filter so they don't reach the body or
+ *  the prose. (browser_* read tools are also dropped inside translateStep.) */
 function isExploratoryTool(rawTool: string): boolean {
   const tool = bareTool(rawTool);
-  return tool === 'list_source' || tool === 'read_source';
+  return tool === 'list_source' || tool === 'read_source' || tool === 'ask_user';
 }
 
 /**
@@ -521,8 +521,12 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
     case 'check_control': {
       const role = String(input.role ?? 'radio');
       const name = String(input.name ?? '');
-      const action = input.checked === false ? 'uncheck()' : 'check()';
-      return [`await ${pageVar}.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)} }).${action}`];
+      const action = input.checked === false ? 'uncheck' : 'check';
+      // { force: true } mirrors what check_control did at record time — these
+      // are sr-only inputs behind a styled label, so a normal .check() fails
+      // the actionability hit-test ("<span> intercepts pointer events"). Force
+      // skips it, the way a label click forwards to the hidden input.
+      return [`await ${pageVar}.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)}, exact: true }).${action}({ force: true });`];
     }
     case 'click_control':
       return emitInteraction(groundedSelector(input, pageVar), 'click()');
@@ -532,6 +536,20 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
       // A <select> is role 'combobox'; default it so a name-only step resolves.
       const withRole = input.role ? input : { ...input, role: input.name ? 'combobox' : undefined };
       return emitInteraction(groundedSelector(withRole, pageVar), `selectOption(${JSON.stringify(String(input.value ?? ''))})`);
+    }
+    case 'upload_file': {
+      // Engine-side upload → the robust filechooser pairing. placeholder mode
+      // references the stable committed fixture the engine wrote; otherwise the
+      // path the user supplied.
+      const sel = groundedSelector(input, pageVar);
+      const rel = input.placeholder ? '__vibe_tests__/fixtures/hover-placeholder.png' : String(input.path ?? '');
+      return [
+        `const [chooser] = await Promise.all([`,
+        `  ${pageVar}.waitForEvent('filechooser'),`,
+        `  ${sel}.click(),`,
+        `]);`,
+        `await chooser.setFiles(${JSON.stringify(rel)});`,
+      ];
     }
     case 'browser_navigate': {
       const url = String(input.url ?? '');
@@ -675,10 +693,20 @@ function groundedSelector(input: Record<string, unknown>, pageVar = 'page'): str
   const name = typeof input.name === 'string' ? input.name : '';
   const testId = typeof input.testId === 'string' ? input.testId : '';
   const text = typeof input.text === 'string' ? input.text : '';
-  if (role && name) return `${pageVar}.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)} })`;
-  if (testId) return `${pageVar}.getByTestId(${JSON.stringify(testId)})`;
-  if (text) return `${pageVar}.getByText(${JSON.stringify(text)})`;
-  return `${pageVar}.locator('body')`;
+  // `within` scopes to a container first (e.g. getByRole('radiogroup', { name:
+  // 'pep' })) so a repeated option label / a display:none input resolves to one
+  // match inside the right group. Mirrors locate() in mcp/actuateServer.ts.
+  const w = input.within as { role?: unknown; name?: unknown } | undefined;
+  const base = w && typeof w.role === 'string' && typeof w.name === 'string'
+    ? `${pageVar}.getByRole(${JSON.stringify(w.role)}, { name: ${JSON.stringify(w.name)}, exact: true })`
+    : pageVar;
+  // exact: true — the agent passed the exact accessible name from the snapshot,
+  // so match it exactly. Without it, getByRole's default substring match makes
+  // "street" also resolve "previous street" → strict-mode violation on replay.
+  if (role && name) return `${base}.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)}, exact: true })`;
+  if (testId) return `${base}.getByTestId(${JSON.stringify(testId)})`;
+  if (text) return `${base}.getByText(${JSON.stringify(text)})`;
+  return `${base}.locator('body')`;
 }
 
 /**

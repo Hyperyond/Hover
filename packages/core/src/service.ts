@@ -81,11 +81,16 @@ import {
 /** The source-reader MCP server (codeContext). Id → the `mcp__hover_source`
  *  tool prefix; script path resolved relative to this module so it works from
  *  dist/. Spawned only when codeContext is enabled. */
-const SOURCE_MCP_ID = 'hover-source';
+const SOURCE_MCP_ID = 'hoversource'; // no hyphen — see CONTROL_MCP_ID note below
 const SOURCE_MCP_SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), 'mcp', 'sourceServer.js');
 /** The control-actuation MCP server (always on) — force-toggles sr-only hidden
  *  radios/checkboxes the locked-down Playwright `browser_click` can't actuate. */
-const CONTROL_MCP_ID = 'hover-control';
+// NOTE: no hyphen. Claude forms MCP tool names as `mcp__<config-id>__<tool>`
+// keeping the id verbatim, but our allow-list prefix sanitizes non-alphanumerics
+// to `_` (mcpToolPrefix). A hyphenated id ('hover-control') yields allow
+// `mcp__hover_control` which does NOT prefix-match the tool `mcp__hover-control__*`,
+// so every actuation call gets denied by the hard sandbox. Keep it alphanumeric.
+const CONTROL_MCP_ID = 'hovercontrol';
 const CONTROL_MCP_SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), 'mcp', 'actuateServer.js');
 
 export interface ServiceOptions {
@@ -171,10 +176,14 @@ const GROUNDED_ACTUATION_DENY = [
   'mcp__playwright__browser_type',
   'mcp__playwright__browser_fill_form',
   'mcp__playwright__browser_select_option',
+  // Uploads go through mcp__hovercontrol__upload_file (which crystallizes to a
+  // real filechooser + setFiles); Playwright's browser_file_upload would only
+  // leave an untranslatable optimizable marker.
+  'mcp__playwright__browser_file_upload',
 ];
 const GROUNDED_ACTUATION_DIRECTIVE =
   'INTERACTING WITH THE PAGE — IMPORTANT: You interact with the page ONLY through ' +
-  'the Hover control tools: mcp__hover-control__click_control, fill_control, ' +
+  'the Hover control tools: mcp__hovercontrol__click_control, fill_control, ' +
   'select_control, check_control. You ALREADY HAVE FULL PERMISSION to use them — ' +
   'NEVER ask the user to grant permissions, never stop to request access, never ' +
   'narrate a permission request. Just call the tools and keep going until the task ' +
@@ -186,7 +195,33 @@ const GROUNDED_ACTUATION_DIRECTIVE =
   'browser_type / browser_fill_form / browser_select_option are intentionally not ' +
   'available — the control tools fully replace them; this keeps the saved spec\'s ' +
   'selectors grounded.) browser_navigate / browser_snapshot / browser_wait_for / ' +
-  'browser_tabs / browser_press_key remain available.';
+  'browser_tabs / browser_press_key remain available.\n\n' +
+  'WHEN A TARGET ISN\'T UNIQUELY ADDRESSABLE — narrow it, don\'t give up. Two ' +
+  'common reasons and the one principle that solves both: (a) its accessible ' +
+  'name/label repeats elsewhere on the page, or (b) its real input is hidden so ' +
+  'it isn\'t in the snapshot as a control and getByRole/check_control would time ' +
+  'out — in which case act on the element you CAN see (its visible label text). ' +
+  'Principle: scope to the smallest container in the snapshot that uniquely ' +
+  'holds your target by passing `within` = that container\'s role + accessible ' +
+  'name, then identify the target inside it (by text when its own name isn\'t ' +
+  'unique). To choose the right container and approach, read the snapshot tree, ' +
+  'take a browser_take_screenshot to SEE the real visual layout (the ' +
+  'accessibility tree omits display:none inputs, canvas, and can\'t convey ' +
+  'spatial grouping — the screenshot shows what the user actually sees), and ' +
+  'read the component source if you\'re unsure how it\'s built. Perceive with the ' +
+  'screenshot; ACT through the grounded *_control tools. This is routine; work it ' +
+  'out and keep going rather than reporting it as a limitation.\n\n' +
+  'WHEN YOU ARE TRULY BLOCKED — ASK, DON\'T STOP: only after you\'ve tried to ' +
+  'work it out yourself (re-read the snapshot, scope with `within`, read the ' +
+  'component source), if something genuinely needs the user — credentials you ' +
+  'don\'t have, a file only they can provide, a choice only they can make — call ' +
+  'mcp__hovercontrol__ask_user. Propose 2-4 concrete options you could actually ' +
+  'carry out (not a vague question), act on the choice, and ask a follow-up ' +
+  'ask_user if you need more detail. Available engine helpers when relevant: ' +
+  'mcp__hovercontrol__upload_file (path or placeholder) is how you set a file on ' +
+  'an upload control, since you have no filesystem access yourself. NEVER ' +
+  'silently stop and report a limitation when working it out — or asking — could ' +
+  'unblock you.';
 
 /**
  * Try to bind a WebSocketServer to <host>:<port>. Resolves with the wss on
@@ -333,7 +368,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       id: CONTROL_MCP_ID,
       command: process.execPath,
       args: [CONTROL_MCP_SCRIPT],
-      env: { HOVER_CDP_URL: cdpUrl, HOVER_DEV_URL: opts.devUrl ?? cdpUrl },
+      // HOVER_APPROVAL_PORT: the control MCP's ask_user tool reaches the editor
+      // over the service WS. HOVER_PROJECT_ROOT: where upload_file writes its
+      // placeholder fixture and resolves relative paths.
+      env: { HOVER_CDP_URL: cdpUrl, HOVER_DEV_URL: opts.devUrl ?? cdpUrl, HOVER_APPROVAL_PORT: String(port), HOVER_PROJECT_ROOT: devRoot },
     });
     // Single-Chrome model: the Playwright MCP always points at the one debug
     // Chrome on the normal cdpUrl. (Pre-single-Chrome this branched to a
@@ -419,6 +457,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   /** In-flight source-read approval requests: correlation id → the source-MCP
    *  socket that asked, so the editor's response can be routed back to it. */
   const pendingApprovals = new Map<string, WebSocket>();
+  /** In-flight ask_user prompts: correlation id → the control-MCP socket that
+   *  asked, so the editor's answer routes back to the waiting agent. */
+  const pendingAsks = new Map<string, WebSocket>();
   /** Send a run event to whichever ws is currently attached (survives reconnect). */
   const emitToRun = (msg: { type: string; payload?: unknown }): void => {
     const c = activeRun?.client;
@@ -720,6 +761,37 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         const asker = pendingApprovals.get(id);
         pendingApprovals.delete(id);
         if (asker) sendIfOpen(asker, { type: 'source-approval-response', payload: { approvalId: id, allow: msg.payload?.allow === true } });
+        return;
+      }
+      // ask_user: the control MCP asks the human a question mid-run; relay to
+      // the editor and route the answer back (no editor attached → cancel, so
+      // the agent continues rather than hanging on a 5-min timeout).
+      if (msg.type === 'ask-user-request') {
+        const id = msg.payload?.askId;
+        if (typeof id !== 'string') return;
+        const editor = activeRun?.client;
+        if (editor && editor.readyState === WebSocket.OPEN) {
+          pendingAsks.set(id, ws);
+          send(editor, {
+            type: 'ask-user-request',
+            payload: {
+              askId: id,
+              question: msg.payload?.question,
+              options: msg.payload?.options,
+              allowFreeText: msg.payload?.allowFreeText,
+            },
+          });
+        } else {
+          sendIfOpen(ws, { type: 'ask-user-response', payload: { askId: id, cancelled: true } });
+        }
+        return;
+      }
+      if (msg.type === 'ask-user-response') {
+        const id = msg.payload?.askId;
+        if (typeof id !== 'string') return;
+        const asker = pendingAsks.get(id);
+        pendingAsks.delete(id);
+        if (asker) sendIfOpen(asker, { type: 'ask-user-response', payload: msg.payload });
         return;
       }
       if (msg.type === 'list-modes') {
@@ -1097,7 +1169,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // authoring; white-box confirmation when probing) instead of only
         // guessing from the rendered DOM.
         if (opts.codeContext) {
-          appendSystemPrompt = `${appendSystemPrompt}\n\nYou also have read-only access to this project's source via mcp__hover_source (read_source / list_source), fenced to the repo (secrets, keys, .env, .git, node_modules and build output are refused). Use it to read the actual component / route / API code — write tests against the real selectors and, when probing for security issues, confirm a finding against the server code (the query, the authz check) rather than guessing from the page alone.\n\nIMPORTANT — when you get stuck or confused, READ THE CODE before concluding anything: a control you can't operate (a click that does nothing, a field that won't take input), validation that blocks you with no visible reason, a conditional section that won't appear. Use list_source / read_source to open that component's source and look at the real markup, CSS (e.g. visually-hidden / sr-only inputs), event handlers, and state wiring. Base your diagnosis and your next action on what the code actually does — never assert a framework / state / onChange bug you have not seen in the source. Reading source may require the user's one-click approval; if a read is declined or unavailable, just continue from what you can observe on the page and report honestly — do not retry the read in a loop, and do not fall back to guessing an unseen cause.`;
+          appendSystemPrompt = `${appendSystemPrompt}\n\nYou also have read-only access to this project's source via mcp__hoversource (read_source / list_source), fenced to the repo (secrets, keys, .env, .git, node_modules and build output are refused). Use it to read the actual component / route / API code — write tests against the real selectors and, when probing for security issues, confirm a finding against the server code (the query, the authz check) rather than guessing from the page alone.\n\nIMPORTANT — when you get stuck or confused, READ THE CODE before concluding anything: a control you can't operate (a click that does nothing, a field that won't take input), validation that blocks you with no visible reason, a conditional section that won't appear. Use list_source / read_source to open that component's source and look at the real markup, CSS (e.g. visually-hidden / sr-only inputs), event handlers, and state wiring. Base your diagnosis and your next action on what the code actually does — never assert a framework / state / onChange bug you have not seen in the source. Reading source may require the user's one-click approval; if a read is declined or unavailable, just continue from what you can observe on the page and report honestly — do not retry the read in a loop, and do not fall back to guessing an unseen cause.`;
         }
 
         // Test accounts the prompt referenced via @label (resolved by the editor

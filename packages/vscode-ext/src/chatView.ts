@@ -20,6 +20,7 @@ type Inbound =
   | { type: 'command'; id: string }
   | { type: 'setMode'; modeId: string | null }
   | { type: 'setModel'; value: string }
+  | { type: 'askUserAnswer'; askId: string; value: string | null }
   | { type: 'ready' };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -33,6 +34,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Set by the extension: the user picked a mode (null = normal) / a model. */
   modeHandler?: (modeId: string | null) => void;
   modelHandler?: (value: string) => void;
+  /** Set by the extension: the user answered an in-chat ask_user card (value
+   *  null = dismissed). */
+  askAnswerHandler?: (askId: string, value: string | null) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -48,6 +52,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       else if (msg.type === 'command' && typeof msg.id === 'string') void vscode.commands.executeCommand(msg.id);
       else if (msg.type === 'setMode') this.modeHandler?.(msg.modeId);
       else if (msg.type === 'setModel' && typeof msg.value === 'string') this.modelHandler?.(msg.value);
+      else if (msg.type === 'askUserAnswer' && typeof msg.askId === 'string') this.askAnswerHandler?.(msg.askId, msg.value ?? null);
       else if (msg.type === 'ready') this.onReady?.();
     });
   }
@@ -108,6 +113,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
   pushSystem(text: string): void {
     this.post({ type: 'system', text });
+  }
+  /** Render an in-chat prompt card (question + options, plus an always-present
+   *  "Other" free-text row unless `other:false` — permission cards omit it).
+   *  The webview posts back `askUserAnswer` → askAnswerHandler. */
+  askUser(req: { askId: string; question: string; options: { label: string; description?: string }[]; other?: boolean }): void {
+    this.post({ type: 'askUser', ...req });
   }
   pushResult(verdict: string, summary: string, steps?: number, cost?: number, tokens?: number): void {
     this.post({ type: 'result', verdict, summary, steps, cost, tokens });
@@ -265,6 +276,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .md hr { border: none; border-top: 1px solid var(--line); margin: 9px 0; }
   .saveas { align-self: flex-start; padding: 6px 11px; border: 1px solid var(--accent); border-radius: 7px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
   .saveas:hover { background: var(--accent); color: var(--accent-ink); }
+  .ask { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--bg-2); padding: 13px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .ask.resolved { border: 1px solid var(--line); border-left: 2px solid var(--accent); background: var(--bg-2); padding: 7px 11px; gap: 2px; }
+  .ask.resolved .ask-r-q { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ask.resolved .ask-r-a { font-size: 12.5px; color: var(--accent); font-weight: 600; display: flex; align-items: center; gap: 5px; }
+  .ask .ask-q { font-weight: 600; color: var(--text); font-size: 13px; line-height: 1.4; }
+  .ask .ask-opts { display: flex; flex-direction: column; gap: 6px; }
+  .ask .ask-opt { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; font: inherit; }
+  .ask .ask-opt:hover { border-color: var(--accent); }
+  .ask .ask-opt small { color: var(--text-dim); font-size: 11px; }
+  .ask .ask-other { color: var(--text-dim); }
+  .ask .ask-other-row { display: flex; gap: 6px; }
+  .ask .ask-other-row input { flex: 1; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; }
+  .ask .ask-send { padding: 7px 12px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: var(--accent-ink); cursor: pointer; font: inherit; font-weight: 600; }
   .findings { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 12px; background: var(--bg-2); padding: 13px 14px; display: flex; flex-direction: column; gap: 9px; }
   .findings .fhead { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--warn); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
   .finding { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; }
@@ -514,6 +538,56 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     log.appendChild(card);
     if (parsed.findings) renderFindings(parsed.findings);
     speak((m.verdict || 'Pass') + '. ' + parsed.main.replace(/[#*\`|>_-]+/g, ' '));
+    scroll();
+  }
+  // In-chat ask_user card: the agent is blocked and needs a human decision.
+  // Renders the question + option buttons + an always-present "Other" free-text
+  // row; posts the answer back and locks the card.
+  function addAskCard(m) {
+    fresh();
+    var card = document.createElement('div'); card.className = 'ask';
+    var h = document.createElement('div'); h.className = 'ask-q'; h.textContent = m.question || 'Hover needs your input'; card.appendChild(h);
+    var opts = document.createElement('div'); opts.className = 'ask-opts'; card.appendChild(opts);
+    var done = false;
+    function answer(val) {
+      if (done) return; done = true;
+      // Collapse the whole prompt (question + options + Other + input) into one
+      // compact record — like Claude Code's AskUserQuestion: pick, and the card
+      // folds to just "question → ✓ your choice". The full prompt does not linger.
+      card.innerHTML = '';
+      card.className = 'ask resolved';
+      var q = document.createElement('div'); q.className = 'ask-r-q'; q.title = m.question || ''; q.textContent = m.question || 'Hover asked'; card.appendChild(q);
+      var a = document.createElement('div'); a.className = 'ask-r-a';
+      var ck = document.createElement('span'); ck.textContent = '✓'; a.appendChild(ck);
+      var av = document.createElement('span'); av.textContent = (val == null ? 'dismissed' : val); a.appendChild(av);
+      card.appendChild(a);
+      vscode.postMessage({ type: 'askUserAnswer', askId: m.askId, value: val });
+      scroll();
+    }
+    (Array.isArray(m.options) ? m.options : []).forEach(function(o){
+      if (!o || !o.label) return;
+      var b = document.createElement('button'); b.className = 'ask-opt';
+      var t = document.createElement('span'); t.textContent = o.label; b.appendChild(t);
+      if (o.description) { var d = document.createElement('small'); d.textContent = o.description; b.appendChild(d); }
+      b.addEventListener('click', function(){ answer(o.label); });
+      opts.appendChild(b);
+    });
+    // "Other" free-text — always present for ask_user; omitted for permission
+    // cards (m.other === false), where a typed instruction makes no sense.
+    if (m.other !== false) {
+      var other = document.createElement('button'); other.className = 'ask-opt ask-other';
+      var ot = document.createElement('span'); ot.textContent = '✎ Other — type your own instruction…'; other.appendChild(ot);
+      opts.appendChild(other);
+      var row = document.createElement('div'); row.className = 'ask-other-row'; row.hidden = true;
+      var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Type what you want the agent to do…';
+      var snd = document.createElement('button'); snd.className = 'ask-send'; snd.textContent = 'Send';
+      row.appendChild(inp); row.appendChild(snd); card.appendChild(row);
+      var submitOther = function(){ var v = inp.value.trim(); if (v) answer(v); };
+      other.addEventListener('click', function(){ if (done) return; row.hidden = false; inp.focus(); });
+      snd.addEventListener('click', submitOther);
+      inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); submitOther(); } });
+    }
+    log.appendChild(card);
     scroll();
   }
   function sevClass(s) {
@@ -766,6 +840,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   window.addEventListener('message', function(e){
     var m = e.data; if (!m) return;
     if (m.type==='user'||m.type==='system'||m.type==='assistant') addMessage(m.type, m.text);
+    else if (m.type==='askUser') addAskCard(m);
     else if (m.type==='narration') addNarration(m.text);
     else if (m.type==='step') addStep(m);
     else if (m.type==='usage') { if (curGroup && typeof m.tokens === 'number') { if (typeof curGroup.tokStart !== 'number') curGroup.tokStart = m.tokens; if (m.tokens >= curGroup.tokStart) { curGroup.tokEnd = m.tokens; setGroupMeta(curGroup, undefined, true); } } }

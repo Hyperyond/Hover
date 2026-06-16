@@ -163,6 +163,10 @@ let runTokens = 0;
 /** In-run source-read grant from "Allow once" / "Deny" (reset each run). The
  *  persistent "Always allow" lives in workspaceState ('hover.sourceAlways'). */
 let runSourceGrant: 'allow' | 'deny' | null = null;
+/** Pending in-chat prompt cards (ask_user + source-approval): card id → the
+ *  resolver to run with the user's answer. Lets several prompt kinds share the
+ *  one card UI + the one askUserAnswer round-trip. */
+const pendingCards = new Map<string, (value: string | null) => void>();
 /** Accounts resolved from @-mentions in the current run's prompt — kept so
  *  "Save as spec" can redact their credentials into process.env refs. */
 let lastRunAccounts: ResolvedAccount[] = [];
@@ -272,31 +276,55 @@ function sourceAccessForRun(): 'always' | 'ask' {
 
 /** Decide a source-read approval request from the engine: honor a standing
  *  grant, else pop the Always / Once / Deny prompt. */
-async function handleSourceApproval(msg: ServerMessage): Promise<void> {
+function handleSourceApproval(msg: ServerMessage): void {
   const id = typeof msg.payload?.approvalId === 'string' ? msg.payload.approvalId : undefined;
   if (!id) return;
   const path = typeof msg.payload?.sourcePath === 'string' ? msg.payload.sourcePath : 'source';
   if (sourceAccessForRun() === 'always' || runSourceGrant === 'allow') { pool?.sendSourceApproval(id, true); return; }
   if (runSourceGrant === 'deny') { pool?.sendSourceApproval(id, false); return; }
-  const choice = await vscode.window.showWarningMessage(
-    `Hover wants to read ${path} to understand the page (read-only, fenced — secrets / .env / .git / node_modules are blocked).`,
-    'Always allow',
-    'Allow once',
-    'Deny',
-  );
-  if (choice === 'Always allow') {
-    await extContext?.workspaceState.update('hover.sourceAlways', true);
-    runSourceGrant = 'allow';
-    pool?.sendSourceApproval(id, true);
-  } else if (choice === 'Allow once') {
-    runSourceGrant = 'allow'; // allow the rest of this run
-    pool?.sendSourceApproval(id, true);
-  } else if (choice === 'Deny') {
-    runSourceGrant = 'deny'; // refuse the rest of this run
-    pool?.sendSourceApproval(id, false);
-  } else {
-    pool?.sendSourceApproval(id, false); // dismissed → deny this one, ask again next
-  }
+  // Render as an in-chat permission card (no "Other" free-text). It WAITS for
+  // the user — no timeout — so a prompt you haven't seen yet never auto-decides;
+  // the engine fail-opens only when no editor is attached at all.
+  void chatProvider?.reveal();
+  pendingCards.set(`src:${id}`, (choice) => {
+    if (choice === 'Always allow') {
+      void extContext?.workspaceState.update('hover.sourceAlways', true);
+      runSourceGrant = 'allow';
+      pool?.sendSourceApproval(id, true);
+    } else if (choice === 'Allow once') {
+      runSourceGrant = 'allow';
+      pool?.sendSourceApproval(id, true);
+    } else if (choice === 'Deny') {
+      runSourceGrant = 'deny';
+      pool?.sendSourceApproval(id, false);
+    } else {
+      pool?.sendSourceApproval(id, false); // dismissed → deny this one, ask again next
+    }
+  });
+  chatProvider?.askUser({
+    askId: `src:${id}`,
+    question: `Hover wants to read ${path} to understand the page (read-only, fenced — secrets / .env / .git / node_modules are blocked).`,
+    options: [{ label: 'Always allow' }, { label: 'Allow once' }, { label: 'Deny' }],
+    other: false,
+  });
+}
+
+/** Human-in-the-loop: the agent (control MCP `ask_user`) is blocked and needs a
+ *  decision/input. Render an in-chat card (question + options + always-present
+ *  "Other" free-text); the webview posts the answer back via askAnswerHandler,
+ *  which relays it to the engine so the agent continues instead of stopping. */
+function handleAskUser(msg: ServerMessage): void {
+  const id = typeof msg.payload?.askId === 'string' ? msg.payload.askId : undefined;
+  if (!id) return;
+  const question = typeof msg.payload?.question === 'string' ? msg.payload.question : 'Hover needs your input';
+  const rawOptions = Array.isArray(msg.payload?.options) ? (msg.payload.options as { label?: string; description?: string }[]) : [];
+  const options = rawOptions.filter((o): o is { label: string; description?: string } => !!o && typeof o.label === 'string');
+  void chatProvider?.reveal();
+  pendingCards.set(id, (value) => {
+    chatProvider?.pushSystem(value == null ? 'Dismissed Hover’s question.' : `Answered: ${value}`);
+    pool?.sendAskUserResponse(id, value);
+  });
+  chatProvider?.askUser({ askId: id, question, options });
 }
 
 /** Translate a streamed engine event into chat updates + transcript. */
@@ -307,7 +335,11 @@ function handleServerMessage(msg: ServerMessage): void {
     return;
   }
   if (msg.type === 'source-approval-request') {
-    void handleSourceApproval(msg);
+    handleSourceApproval(msg);
+    return;
+  }
+  if (msg.type === 'ask-user-request') {
+    handleAskUser(msg);
     return;
   }
   if (msg.type === 'spec-saved') {
@@ -765,6 +797,13 @@ export function activate(context: vscode.ExtensionContext): void {
   const chat = registerChatView(context.extensionUri);
   chatProvider = chat.provider;
   chatProvider.runHandler = (prompt) => void runPrompt(prompt);
+  // The user answered an in-chat prompt card → run that card's resolver
+  // (ask_user → relay to engine; source-approval → allow/deny).
+  chatProvider.askAnswerHandler = (askId, value) => {
+    const cb = pendingCards.get(askId);
+    pendingCards.delete(askId);
+    if (cb) cb(value);
+  };
   // Mode picked from the chat popup → apply (same as the QuickPick path).
   chatProvider.modeHandler = (modeId) => {
     currentMode = modeId;

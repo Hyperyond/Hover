@@ -74,6 +74,14 @@ export interface ClientMessage {
     sourcePath?: string;
     sourceKind?: string;
     allow?: boolean;
+    /** ask-user-request (from the control MCP) / -response (from the editor):
+     *  a correlation id, the question + offered choices, and the user's answer. */
+    askId?: string;
+    question?: string;
+    options?: { label: string; description?: string }[];
+    allowFreeText?: boolean;
+    value?: string;
+    cancelled?: boolean;
   };
 }
 

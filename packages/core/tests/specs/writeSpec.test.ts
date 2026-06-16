@@ -143,7 +143,7 @@ describe('writeSpec — control actuation (check_control)', () => {
       ],
     });
     const src = readFileSync(r.path, 'utf-8');
-    expect(src).toContain(`await page.getByRole("radio", { name: "sex male" }).check()`);
+    expect(src).toContain(`await page.getByRole("radio", { name: "sex male", exact: true }).check({ force: true })`);
     expect(countOptimizableMarkers(src)).toBe(0); // it IS translatable
   });
 
@@ -157,7 +157,7 @@ describe('writeSpec — control actuation (check_control)', () => {
         { kind: 'done', summary: 'Cleared.' },
       ],
     });
-    expect(readFileSync(r.path, 'utf-8')).toContain(`getByRole("checkbox", { name: "newsletter" }).uncheck()`);
+    expect(readFileSync(r.path, 'utf-8')).toContain(`getByRole("checkbox", { name: "newsletter", exact: true }).uncheck({ force: true })`);
   });
 });
 
@@ -173,7 +173,7 @@ describe('writeSpec — grounded actuation (click/fill/select_control)', () => {
       ],
     });
     const src = readFileSync(r.path, 'utf-8');
-    expect(src).toContain(`page.getByRole("button", { name: "Continue" })`);
+    expect(src).toContain(`page.getByRole("button", { name: "Continue", exact: true })`);
     expect(src).toContain('el.click()');
     expect(countOptimizableMarkers(src)).toBe(0);
   });
@@ -187,7 +187,7 @@ describe('writeSpec — grounded actuation (click/fill/select_control)', () => {
       ],
     });
     const src = readFileSync(r.path, 'utf-8');
-    expect(src).toContain(`page.getByRole("textbox", { name: "email" })`);
+    expect(src).toContain(`page.getByRole("textbox", { name: "email", exact: true })`);
     expect(src).toContain(`el.fill("a@b.co")`);
   });
 
@@ -200,8 +200,43 @@ describe('writeSpec — grounded actuation (click/fill/select_control)', () => {
       ],
     });
     const src = readFileSync(r.path, 'utf-8');
-    expect(src).toContain(`page.getByRole("combobox", { name: "state" })`);
+    expect(src).toContain(`page.getByRole("combobox", { name: "state", exact: true })`);
     expect(src).toContain(`el.selectOption("CA")`);
+  });
+
+  it('upload_file → filechooser pairing + setFiles (placeholder → committed fixture)', async () => {
+    const ph = await writeSpec({
+      devRoot, name: 'upload placeholder',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+        { kind: 'step', tool: 'mcp__hover-control__upload_file', input: { role: 'button', name: 'government id upload', placeholder: true } },
+      ],
+    });
+    const src = readFileSync(ph.path, 'utf-8');
+    expect(src).toContain(`page.waitForEvent('filechooser')`);
+    expect(src).toContain(`page.getByRole("button", { name: "government id upload", exact: true }).click()`);
+    expect(src).toContain(`chooser.setFiles("__vibe_tests__/fixtures/hover-placeholder.png")`);
+
+    const real = await writeSpec({
+      devRoot, name: 'upload real', overwrite: true,
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+        { kind: 'step', tool: 'mcp__hover-control__upload_file', input: { role: 'button', name: 'avatar', path: 'tests/fixtures/id.png' } },
+      ],
+    });
+    expect(readFileSync(real.path, 'utf-8')).toContain(`chooser.setFiles("tests/fixtures/id.png")`);
+  });
+
+  it('click_control with `within` scopes to the group (repeated Yes/No / hidden input)', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'disclosure no',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { within: { role: 'radiogroup', name: 'pep' }, text: 'No' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByRole("radiogroup", { name: "pep", exact: true }).getByText("No")`);
   });
 
   it('click_control falls back to testId, then text', async () => {
@@ -645,7 +680,7 @@ describe('writeSpec — hyphenated Hover-MCP tool names (bug B)', () => {
     ];
     const r = await writeSpec({ devRoot, name: 'radio check', steps });
     const src = readFileSync(r.path, 'utf-8');
-    expect(src).toContain(`getByRole("radio", { name: "sex male" }).check()`);
+    expect(src).toContain(`getByRole("radio", { name: "sex male", exact: true }).check({ force: true })`);
     expect(countOptimizableMarkers(src)).toBe(0);
     expect(src).not.toContain(OPTIMIZABLE_MARKER);
   });
@@ -686,7 +721,7 @@ describe('writeSpec — dirty-recording cleanup', () => {
     const r = await writeSpec({ devRoot, name: 'clean flow', steps: dirtySession });
     const src = readFileSync(r.path, 'utf-8');
     // Kept: the working actions.
-    expect(src).toContain(`getByRole("radio", { name: "Female" }).check()`);
+    expect(src).toContain(`getByRole("radio", { name: "Female", exact: true }).check({ force: true })`);
     expect(src).toContain(`getByRole('button', { name: "Continue" })`);
     // Dropped: the failed flailing and the source read.
     expect(src).not.toContain('sex female label');

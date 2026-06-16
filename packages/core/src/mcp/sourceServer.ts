@@ -68,8 +68,13 @@ function ensureApprovalWs(): WebSocket | null {
         }
       } catch { /* ignore malformed */ }
     });
-    sock.on('error', () => { /* fail open per-call */ });
-    sock.on('close', () => { if (approvalWs === sock) approvalWs = null; });
+    // Channel lost → fail OPEN for every waiting read (the reader is fenced +
+    // read-only; the gate is consent UX, not a security boundary, so never hang
+    // a run on a dead channel). The user taking their time is NOT a loss — only
+    // a closed/errored socket settles here.
+    const drain = (): void => { for (const s of [...pendingApprovals.values()]) s(true); };
+    sock.on('error', () => { drain(); });
+    sock.on('close', () => { if (approvalWs === sock) approvalWs = null; drain(); });
     approvalWs = sock;
   } catch {
     approvalWs = null;
@@ -83,14 +88,14 @@ async function approve(path: string, kind: 'read' | 'list'): Promise<boolean> {
   if (!sock) return true; // no channel → fail open
   const id = `a${++approvalSeq}`;
   return new Promise<boolean>((resolve) => {
-    let timer: ReturnType<typeof setTimeout>;
+    // NO timeout: the consent prompt waits for the user (they may not see it for
+    // a while — that must never auto-allow). It settles only on their answer, or
+    // when the channel drops (drain() above → fail open), or run cancel.
     const settle = (allow: boolean): void => {
       if (!pendingApprovals.has(id)) return;
       pendingApprovals.delete(id);
-      clearTimeout(timer);
       resolve(allow);
     };
-    timer = setTimeout(() => settle(true), 30_000); // fail open on no response
     pendingApprovals.set(id, settle);
     const req = (): void => sock.send(JSON.stringify({ type: 'source-approval-request', payload: { approvalId: id, sourcePath: path, sourceKind: kind } }));
     if (sock.readyState === WebSocket.OPEN) req();
