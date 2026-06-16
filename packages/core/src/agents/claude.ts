@@ -156,6 +156,9 @@ export const claudeAgent: AgentDescriptor = {
     if (opts.model) {
       args.push('--model', opts.model);
     }
+    if (opts.effort) {
+      args.push('--effort', opts.effort);
+    }
     if (opts.sessionId) {
       args.push('--resume', opts.sessionId);
     }

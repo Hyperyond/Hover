@@ -97,6 +97,8 @@ export interface ServiceOptions {
   port: number;
   agentId?: string;
   model?: string;
+  /** Initial reasoning-effort level (set-effort overrides at runtime). */
+  effort?: string;
   maxBudgetUsd?: number;
   mcpConfig?: string;
   /** CDP URL to preflight before each command (default http://localhost:9222). */
@@ -328,6 +330,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     );
   }
   let model = opts.model ?? 'sonnet';
+  // Reasoning-effort level for runs (set via set-effort; undefined = agent/model
+  // default). Threaded into invokeAgent alongside model.
+  let currentEffort: string | undefined = opts.effort;
   // No default budget cap — long real-world flows (form filling, multi-step
   // checkouts) routinely run past the old $0.50 ceiling and got cut off
   // mid-run. The widget shows the running $ counter in the header instead,
@@ -929,6 +934,21 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         send(ws, { type: 'hello', payload: { agentId: currentAgentId, model, version: PROTOCOL_VERSION } });
         return;
       }
+      if (msg.type === 'set-effort') {
+        // Reasoning-effort level for subsequent runs (empty string clears it →
+        // the agent/model default). Refused mid-run, like set-model.
+        const wanted = msg.payload?.effort;
+        if (typeof wanted !== 'string') {
+          send(ws, { type: 'error', payload: { message: 'set-effort: effort is required' } });
+          return;
+        }
+        if (activeRun) {
+          send(ws, { type: 'error', payload: { message: 'set-effort: a command is already running; stop it first' } });
+          return;
+        }
+        currentEffort = wanted || undefined;
+        return;
+      }
       if (msg.type === 'set-api-key') {
         // The widget supplies (or clears) a model API key. Stored in memory
         // only and injected into the spawned CLI's env at invoke time — never
@@ -1296,6 +1316,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             disallowedToolsExtra: groundedActuation ? GROUNDED_ACTUATION_DENY : undefined,
             maxBudgetUsd,
             model,
+            effort: currentEffort,
             apiKey: currentApiKey,
             signal: run.abort.signal,
           },

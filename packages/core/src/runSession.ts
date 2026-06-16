@@ -29,6 +29,9 @@ export interface RunSessionOptions {
    *  is supplied (the service passes a pre-built config; the CLI passes this). */
   cdpUrl?: string;
   model?: string;
+  /** Reasoning-effort level forwarded to the agent (claude --effort / codex
+   *  -c model_reasoning_effort). Undefined = agent/model default. */
+  effort?: string;
   maxBudgetUsd?: number;
   /** Optional model API key, injected into the spawned CLI's env. */
   apiKey?: string;
@@ -117,6 +120,7 @@ export async function runSession(
       : undefined,
     maxBudgetUsd: opts.maxBudgetUsd,
     model: opts.model,
+    effort: opts.effort,
     apiKey: opts.apiKey,
     signal: opts.signal,
   })) {

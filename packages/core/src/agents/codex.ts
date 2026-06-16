@@ -204,6 +204,11 @@ export const codexAgent: AgentDescriptor = {
     if (opts.model) {
       args.push('--model', opts.model);
     }
+    // Reasoning effort → the API's reasoning_effort, set via the `-c` TOML
+    // override (no stable long flag exists). Sits alongside the other -c keys.
+    if (opts.effort) {
+      args.push('-c', `model_reasoning_effort=${opts.effort}`);
+    }
 
     // System-prompt injection. Codex has no --append-system-prompt; we route
     // through `-c developer_instructions='...'`. Concatenate the standing

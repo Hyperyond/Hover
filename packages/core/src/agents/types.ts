@@ -42,6 +42,11 @@ export interface InvokeOptions {
   disallowedTools?: string[];
   maxBudgetUsd?: number;
   model?: string;
+  /** Reasoning-effort level for the run. claude → `--effort <level>` (low /
+   *  medium / high / xhigh / max); codex → `-c model_reasoning_effort=<level>`
+   *  (minimal / low / medium / high / xhigh). The caller is responsible for
+   *  passing a level the chosen model actually supports. */
+  effort?: string;
   cwd?: string;
   sessionId?: string;
   /** Extra text appended to the agent's system prompt (claude: via
