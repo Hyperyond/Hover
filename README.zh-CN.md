@@ -1,4 +1,4 @@
-# Hover — AI 端到端测试 & 安全
+# Hover — Vibe 测你的应用，沉淀真正的 Playwright spec
 
 [English](./README.md) · **简体中文**
 
@@ -6,7 +6,7 @@
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/hyperyond.hover-dev?label=installs&color=1f9cf0)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 
-**本地优先、开源的 Web AI 测试 —— 一个 VS Code 插件。** Hover 调用你本机已有的编码 Agent CLI(Claude Code / OpenAI Codex),通过 Playwright MCP 操作你真实的 Chrome,再把跑通的流程结晶成纯 `@playwright/test` 用例 —— **CI 里零 AI** 就能跑。✦ 优化 pass · 🟠 安全测试(IDOR / 越权)· 🔴 渗透测试(攻击性、白盒)。
+**Vibe 测你的应用，沉淀真正的 Playwright spec —— 一个本地优先、开源的 VS Code 插件。** Hover 调用你本机已有的编码 Agent CLI(Claude Code / OpenAI Codex),通过 Playwright MCP 操作你真实的 Chrome,再把跑通的流程结晶成纯 `@playwright/test` 用例 —— **CI 里零 AI** 就能跑。✦ 优化 pass · 🟠 安全测试(IDOR / 越权)· 🔴 渗透测试(攻击性、白盒)。
 
 ## 安装
 

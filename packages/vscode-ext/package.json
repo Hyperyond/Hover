@@ -1,11 +1,14 @@
 {
   "name": "hover-dev",
   "version": "0.14.5",
-  "displayName": "Hover — AI E2E Testing & Security",
-  "description": "Local-first AI testing for the web. Chat → plain @playwright/test specs that pass CI with zero AI, using your own Claude Code / Codex CLI. 🟠 security · 🔴 pentest.",
+  "displayName": "Hover — AI Vibe Testing",
+  "description": "Vibe-test your app, ship real Playwright specs — local-first, using your own Claude Code / Codex CLI. 🟠 security · 🔴 pentest.",
   "keywords": [
     "ai",
     "ai-testing",
+    "vibe-testing",
+    "vibe-coding",
+    "vibe-test",
     "testing",
     "e2e",
     "end-to-end",

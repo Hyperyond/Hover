@@ -1,6 +1,6 @@
-# Hover — AI E2E Testing & Security
+# Hover — Vibe-test your app, ship real Playwright specs.
 
-**Test your web app at the speed of conversation.** Describe a flow in plain English, watch AI drive your real browser, and save it as a Playwright spec that runs in CI forever — no agent, no model, no keys.
+**Vibe-test your app, ship real Playwright specs.** Describe a flow in plain English, watch AI drive your real browser, and save it as a Playwright spec that runs in CI forever — no agent, no model, no keys.
 
 Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex), drives your real Chrome via Playwright, and crystallizes the verified run into plain `@playwright/test` code. The AI's job ends at "save" — CI stays pure Playwright, with zero tokens.
 

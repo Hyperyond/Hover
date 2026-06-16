@@ -118,7 +118,7 @@ function Hero() {
           </a>
 
           <h1 className="font-mono text-[38px] font-semibold leading-[1.08] tracking-tight md:text-[52px]">
-            AI authors the test.
+            Vibe-test your app.
             <br />
             <span className="text-mint">CI runs plain Playwright.</span>
           </h1>

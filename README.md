@@ -1,4 +1,4 @@
-# Hover — AI E2E Testing & Security
+# Hover — Vibe-test your app, ship real Playwright specs.
 
 **English** · [简体中文](./README.zh-CN.md)
 
@@ -9,7 +9,7 @@
 [![Playwright](https://img.shields.io/badge/output-%40playwright%2Ftest-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-**Local-first, open-source AI testing for the web — as a VS Code extension.** Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex) to drive your real Chrome via Playwright MCP, then crystallizes clean runs into plain `@playwright/test` specs that pass CI with **zero AI**. ✦ optimize pass · 🟠 security (IDOR / authz) · 🔴 pentest (offensive, white-box).
+**Vibe-test your app, ship real Playwright specs — a local-first, open-source VS Code extension.** Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex) to drive your real Chrome via Playwright MCP, then crystallizes clean runs into plain `@playwright/test` specs that pass CI with **zero AI**. ✦ optimize pass · 🟠 security (IDOR / authz) · 🔴 pentest (offensive, white-box).
 
 ## Install
 
