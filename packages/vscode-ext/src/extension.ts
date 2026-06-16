@@ -24,7 +24,6 @@ import {
   type ServiceClientPool,
 } from './serviceClient.js';
 import { SpecLensProvider } from './specLens.js';
-import { registerSpecsView } from './specsView.js';
 import { registerDashboardView } from './dashboardView.js';
 import { registerConversationsView, type ConversationsViewProvider } from './conversationsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
@@ -1093,7 +1092,6 @@ export function activate(context: vscode.ExtensionContext): void {
     chat.disposable,
     settings.disposable,
     ...registerDashboardView(),
-    ...registerSpecsView(),
     ...conversations.disposables,
     ...registerEnvironmentsView(envStore, () => {
       void pollAppStatus();

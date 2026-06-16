@@ -183,12 +183,6 @@
         "icon": "$(github-action)"
       },
       {
-        "command": "hover.refreshSpecs",
-        "title": "Refresh Specs",
-        "category": "Hover",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "hover.refreshEnvironments",
         "title": "Refresh Environments",
         "category": "Hover",
@@ -272,12 +266,6 @@
           "name": "Dashboard",
           "type": "webview",
           "icon": "$(dashboard)",
-          "contextualTitle": "Hover"
-        },
-        {
-          "id": "hover.specs",
-          "name": "Specs",
-          "icon": "$(beaker)",
           "contextualTitle": "Hover"
         },
         {
@@ -365,34 +353,19 @@
       ],
       "view/title": [
         {
-          "command": "hover.runAllSpecs",
-          "when": "view == hover.specs",
-          "group": "navigation@0"
-        },
-        {
           "command": "hover.switchMode",
-          "when": "view == hover.specs",
+          "when": "view == hover.dashboard",
           "group": "navigation@1"
         },
         {
           "command": "hover.addCiWorkflow",
-          "when": "view == hover.specs",
-          "group": "navigation@2"
-        },
-        {
-          "command": "hover.refreshSpecs",
-          "when": "view == hover.specs",
-          "group": "navigation@3"
-        },
-        {
-          "command": "hover.runAllSpecs",
           "when": "view == hover.dashboard",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "hover.refreshDashboard",
           "when": "view == hover.dashboard",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "hover.newSession",
@@ -450,45 +423,9 @@
           "command": "hover.env.removeAccount",
           "when": "view == hover.environments && viewItem == hoverAccount",
           "group": "inline@2"
-        },
-        {
-          "command": "hover.runSpec",
-          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
-          "group": "inline@1"
-        },
-        {
-          "command": "hover.optimizeSpec",
-          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
-          "group": "inline@2"
-        },
-        {
-          "command": "hover.runFolderSpecs",
-          "when": "view == hover.specs && viewItem == hoverFolder",
-          "group": "inline@1"
-        },
-        {
-          "command": "hover.optimizeSpec",
-          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
-          "group": "1_hover@1"
-        },
-        {
-          "command": "hover.reviewOptimizationCandidate",
-          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
-          "group": "1_hover@3"
-        },
-        {
-          "command": "hover.runSpec",
-          "when": "view == hover.specs && viewItem =~ /hover(Security)?Spec/",
-          "group": "1_hover@4"
         }
       ]
-    },
-    "viewsWelcome": [
-      {
-        "view": "hover.specs",
-        "contents": "No specs yet.\n\nDrive your app with Hover to crystallize a test or security check into a Playwright spec, then it shows up here."
-      }
-    ]
+    }
   },
   "scripts": {
     "build": "tsup",
