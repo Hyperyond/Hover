@@ -1,8 +1,6 @@
 import type { AgentDescriptor } from './types.js';
 import { claudeAgent } from './claude.js';
 import { codexAgent } from './codex.js';
-import { cursorAgent } from './cursor.js';
-import { aiderAgent } from './aider.js';
 import { geminiAgent } from './gemini.js';
 import { qwenAgent } from './qwen.js';
 
@@ -22,8 +20,6 @@ import { qwenAgent } from './qwen.js';
 export const AGENTS: Record<string, AgentDescriptor> = {
   [claudeAgent.id]: claudeAgent,
   [codexAgent.id]: codexAgent,
-  [cursorAgent.id]: cursorAgent,
-  [aiderAgent.id]: aiderAgent,
   [geminiAgent.id]: geminiAgent,
   [qwenAgent.id]: qwenAgent,
 };

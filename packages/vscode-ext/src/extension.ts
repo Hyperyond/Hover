@@ -140,6 +140,14 @@ const MODEL_LISTS: Record<string, ModelEntry[]> = {
     { value: 'gpt-5.4', label: 'GPT-5.4', desc: 'Flagship reasoning', efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'], effortDefault: 'medium' },
     { value: 'gpt-5.4-mini', label: 'GPT-5.4-mini', desc: 'Fast & cheap', efforts: ['minimal', 'low', 'medium', 'high'], effortDefault: 'medium' },
   ],
+  gemini: [
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Most capable', efforts: [] },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Fast & cheap', efforts: [] },
+    { value: 'auto', label: 'Auto', desc: 'Let Gemini route the request', efforts: [] },
+  ],
+  // Qwen Code is a model-agnostic OpenAI-compatible CLI; it runs on whatever
+  // model its endpoint serves (`value: ''` = pass no --model override).
+  qwen: [{ value: '', label: 'Default', desc: "Qwen Code's configured model", efforts: [] }],
 };
 function activeAgentId(): string {
   return currentAgent ?? (vscode.workspace.getConfiguration('hover').get<string>('agent') || 'claude');
