@@ -119,6 +119,23 @@ function agentLabel(id: string | null): string {
   return AGENT_LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
 }
 
+/** `config.update` that never throws. VS Code rejects writes to an unregistered
+ *  key (or a read-only target); that rejection used to abort whatever ran after
+ *  it (e.g. the model-list refresh), so a stale build or missing key would
+ *  silently freeze the UI. Persisting is best-effort — in-memory state + engine
+ *  sync proceed regardless. */
+async function safeUpdate(
+  key: string,
+  value: unknown,
+  target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Workspace,
+): Promise<void> {
+  try {
+    await vscode.workspace.getConfiguration('hover').update(key, value, target);
+  } catch (e) {
+    console.error(`[hover] config write failed for hover.${key}:`, e instanceof Error ? e.message : e);
+  }
+}
+
 /** Model picker lists per agent — the `--model` value the CLI accepts + a
  *  display label. Current as of 2026-06; trim deprecated tiers. The chat model
  *  picker reads the list for the active agent (chosen in Settings). */
@@ -175,7 +192,9 @@ async function pushModels(): Promise<void> {
   if (agent === 'qwen') {
     const lm = cfg.get<string>('localModel', '');
     pool?.setModel(lm);
-    chatProvider?.updateModels([{ value: lm, label: lm || 'Local model — set in Settings' }], lm, { options: [], current: '' });
+    // Locked: the local model is configured in Settings, not picked here — the
+    // chat model button shows it but doesn't open a picker.
+    chatProvider?.updateModels([{ value: lm, label: lm || 'Local model — set in Settings' }], lm, { options: [], current: '' }, true);
     return;
   }
   const list = modelsForAgent(agent);
@@ -183,7 +202,7 @@ async function pushModels(): Promise<void> {
   let model = cfg.get<string>('model', '');
   if (!selectable.some((m) => m.value === model)) {
     model = (selectable[0] ?? list[0]).value;
-    await cfg.update('model', model, vscode.ConfigurationTarget.Workspace);
+    await safeUpdate('model', model);
     pool?.setModel(model);
   }
   // Reconcile the effort level to what the selected model supports (a model
@@ -193,14 +212,14 @@ async function pushModels(): Promise<void> {
   const effDefault = list.find((m) => m.value === model)?.effortDefault ?? efforts[efforts.length - 1] ?? '';
   let effort = cfg.get<string>('effort', '');
   const want = efforts.length ? (efforts.includes(effort) ? effort : effDefault) : '';
-  if (want !== effort) { effort = want; await cfg.update('effort', effort, vscode.ConfigurationTarget.Workspace); }
+  if (want !== effort) { effort = want; await safeUpdate('effort', effort); }
   pool?.setEffort(effort);
   chatProvider?.updateModels(list, model, { options: efforts, current: effort });
 }
 
 /** Apply a reasoning-effort pick from the chat model menu. */
 async function setEffort(value: string): Promise<void> {
-  await vscode.workspace.getConfiguration('hover').update('effort', value, vscode.ConfigurationTarget.Workspace);
+  await safeUpdate('effort', value);
   if (connectedServices > 0) pool?.setEffort(value);
   await pushModels();
 }
@@ -1012,7 +1031,7 @@ export function activate(context: vscode.ExtensionContext): void {
     void (async () => {
       const entry = modelsForAgent(activeAgentId()).find((m) => m.value === value);
       if (!entry || entry.disabled) return;
-      await vscode.workspace.getConfiguration('hover').update('model', value, vscode.ConfigurationTarget.Workspace);
+      await safeUpdate('model', value);
       pool?.setModel(value);
       await pushModels();
     })();
@@ -1038,19 +1057,19 @@ export function activate(context: vscode.ExtensionContext): void {
     onChange: async (change) => {
       const cfg = vscode.workspace.getConfiguration('hover');
       if (typeof change.agent === 'string') await setAgent(change.agent);
-      if (typeof change.speech === 'boolean') await cfg.update('speech', change.speech, vscode.ConfigurationTarget.Global);
-      if (typeof change.browser === 'string') await cfg.update('browser', change.browser, vscode.ConfigurationTarget.Workspace);
+      if (typeof change.speech === 'boolean') await safeUpdate('speech', change.speech, vscode.ConfigurationTarget.Global);
+      if (typeof change.browser === 'string') await safeUpdate('browser', change.browser);
       if (typeof change.model === 'string') {
-        await cfg.update('model', change.model, vscode.ConfigurationTarget.Workspace);
+        await safeUpdate('model', change.model);
         pool?.setModel(change.model);
         await pushModels(); // keep the chat model button in sync
       }
       if (typeof change.localBaseUrl === 'string') {
-        await cfg.update('localBaseUrl', change.localBaseUrl, vscode.ConfigurationTarget.Workspace);
+        await safeUpdate('localBaseUrl', change.localBaseUrl);
         pool?.setLocalEndpoint(change.localBaseUrl);
       }
       if (typeof change.localModel === 'string') {
-        await cfg.update('localModel', change.localModel, vscode.ConfigurationTarget.Workspace);
+        await safeUpdate('localModel', change.localModel);
         await pushModels(); // pushes the local model to the engine when qwen is active
       }
       if (typeof change.apiKey === 'string') {
@@ -1235,7 +1254,7 @@ async function switchAgent(): Promise<void> {
 /** Persist + apply the coding agent (used by the command + the Settings panel). */
 async function setAgent(agentId: string): Promise<void> {
   currentAgent = agentId;
-  await vscode.workspace.getConfiguration('hover').update('agent', agentId, vscode.ConfigurationTarget.Workspace);
+  await safeUpdate('agent', agentId);
   if (connectedServices > 0) pool?.switchAgent(agentId);
   settingsProvider?.refresh();
   await pushModels(); // new agent → new model list (+ reset model if incompatible)

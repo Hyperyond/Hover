@@ -114,8 +114,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     models: { value: string; label: string; desc?: string; disabled?: boolean }[],
     current: string,
     effort?: { options: string[]; current: string },
+    locked?: boolean,
   ): void {
-    this.post({ type: 'models', models, current, effort });
+    this.post({ type: 'models', models, current, effort, locked });
   }
 
   // Streamed run rendering (called by the extension as engine events arrive).
@@ -373,6 +374,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
      no chrome, subtle hover. */
   .barebtn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: none; background: none; color: var(--text-mute); cursor: pointer; font: inherit; font-size: 12px; border-radius: 7px; }
   .barebtn:hover { color: var(--text); background: var(--bg-2); }
+  /* Model button when locked (Local LLM — model lives in Settings): shown but not interactive. */
+  #model-btn.locked { opacity: .6; cursor: default; }
+  #model-btn.locked:hover { background: none; color: var(--text-mute); }
   .barebtn .caret { color: var(--text-dim); font-size: 10px; }
   .barebtn svg { opacity: .9; }
   #mode-icon { display: inline-flex; align-items: center; }
@@ -918,7 +922,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // Model menu: the model rows (a disabled one greys out + can't be picked),
   // then a reasoning-effort chip row for the current model (hidden when the
   // model has no effort control, e.g. Haiku).
-  var effortOpts = [], curEffort = '';
+  var effortOpts = [], curEffort = '', modelLocked = false;
   function renderModelMenu(){
     var html = '<div class="p-hdr">Model</div>' + models.map(function(x){
       return '<div class="p-item'+(x.value===currentModel?' active':'')+(x.disabled?' disabled':'')+'" data-v="'+esc(x.value)+'"'+(x.disabled?' data-disabled="1"':'')+'>'
@@ -934,6 +938,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     modelMenu.innerHTML = html;
   }
   function toggleModelMenu(){
+    if (modelLocked) return; // Local LLM: model is set in Settings, not here
     if (!modelMenu.hidden) { modelMenu.hidden = true; return; }
     if (!models.length) return;
     closePickers();
@@ -1040,8 +1045,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       currentModel = m.current || '';
       effortOpts = (m.effort && Array.isArray(m.effort.options)) ? m.effort.options : [];
       curEffort = (m.effort && m.effort.current) || '';
+      modelLocked = !!m.locked;
       var found = models.filter(function(x){ return x.value===currentModel; })[0];
       document.getElementById('model-label').textContent = (found && found.label) || currentModel || 'Model';
+      var mb = document.getElementById('model-btn'); mb.classList.toggle('locked', modelLocked); mb.title = modelLocked ? 'Local LLM — model is set in Settings' : 'Model — click to switch';
+      if (modelLocked) modelMenu.hidden = true;
       if (!modelMenu.hidden) renderModelMenu();
     }
     else if (m.type==='appstatus') {
