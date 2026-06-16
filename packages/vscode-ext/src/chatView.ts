@@ -76,7 +76,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Push the conversation list + active id to the top-bar switcher. */
-  setSessions(list: { id: string; name: string }[], activeId: string): void {
+  setSessions(list: { id: string; name: string; running?: boolean }[], activeId: string): void {
     this.post({ type: 'sessions', list, activeId });
   }
   /** Re-render the chat with a switched conversation's transcript. */
@@ -209,6 +209,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); position: relative; }
   #session { max-width: 230px; }
   #session #session-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #session-run { color: #3fb950; font-size: 9px; margin-right: 3px; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
   .popup.sess { top: calc(100% - 2px); bottom: auto; left: 10px; max-height: 60vh; overflow: auto; }
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text); cursor: pointer; font: inherit; }
   .pill:hover { border-color: var(--accent); }
@@ -386,7 +388,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     <button class="iconbtn" id="new" type="button" title="New session">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
     </button>
-    <button class="barebtn" id="session" type="button" title="Switch conversation"><span id="session-label">New session</span><span class="caret">▾</span></button>
+    <button class="barebtn" id="session" type="button" title="Switch conversation"><span id="session-run" hidden title="A run is active in another conversation">●</span><span id="session-label">New session</span><span class="caret">▾</span></button>
     <span class="spacer"></span>
     <button class="appstatus" id="appstatus" type="button" title="App URL — click to set / start">
       <span class="dot offline" id="app-dot"></span><span id="app-label">detecting…</span>
@@ -806,12 +808,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }).join('');
   }
   function closePickers(){ modeMenu.hidden = true; modelMenu.hidden = true; sessionMenu.hidden = true; }
+  // Each conversation as a picker row; a running one (incl. background) shows a
+  // "running…" subtitle so parallel runs are visible at a glance.
+  function sessionItems(){
+    var items = sessionList.map(function(s){ return { value:s.id, title:s.name, desc: s.running ? 'running…' : undefined }; });
+    items.push({ value:'__new__', title:'＋ New session' });
+    return items;
+  }
   function toggleSessionMenu(){
     if (!sessionMenu.hidden) { sessionMenu.hidden = true; return; }
     closePickers();
-    var items = sessionList.map(function(s){ return { value:s.id, title:s.name }; });
-    items.push({ value:'__new__', title:'＋ New session' });
-    renderPicker(sessionMenu, 'Conversations', items, activeSess);
+    renderPicker(sessionMenu, 'Conversations', sessionItems(), activeSess);
     sessionMenu.hidden = false;
   }
   sessionMenu.addEventListener('mousedown', function(e){
@@ -900,7 +907,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       sessionList = Array.isArray(m.list) ? m.list : []; activeSess = m.activeId || '';
       var a = sessionList.find(function(s){ return s.id===activeSess; });
       document.getElementById('session-label').textContent = (a && a.name) || 'New session';
-      if (!sessionMenu.hidden) { var its = sessionList.map(function(s){ return { value:s.id, title:s.name }; }); its.push({ value:'__new__', title:'＋ New session' }); renderPicker(sessionMenu, 'Conversations', its, activeSess); }
+      // Pulsing dot on the collapsed button when a run is active in ANOTHER conversation.
+      var bg = sessionList.some(function(s){ return s.running && s.id !== activeSess; });
+      document.getElementById('session-run').hidden = !bg;
+      if (!sessionMenu.hidden) renderPicker(sessionMenu, 'Conversations', sessionItems(), activeSess);
     }
     else if (m.type==='loadSession') loadSession(m.transcript);
     else if (m.type==='narration') addNarration(m.text);

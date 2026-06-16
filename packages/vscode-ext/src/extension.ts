@@ -32,7 +32,7 @@ import { registerSettingsView, type SettingsViewProvider } from './settingsView.
 import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar, type ResolvedAccount } from './environments.js';
 import { registerEnvironmentsView } from './environmentsView.js';
 import { buildWorkflowYaml } from './ciWorkflow.js';
-import { acquireEngine, releaseSession, portForSession, stopEngine } from './engine.js';
+import { acquireEngine, releaseSession, portForSession, sessionForPort, stopEngine } from './engine.js';
 import { candidateUri, uriExists } from './optimized.js';
 
 let pool: ServiceClientPool | undefined;
@@ -167,43 +167,47 @@ interface ChatSession {
   transcript: SpecMsg[];
   agentSessionId?: string;
   createdAt: number;
+  // Runtime-only (not persisted): the host serving this session + its live run
+  // counters. True parallel — several sessions can run at once, each on its own
+  // host; events route to the owning session by source port, not the active one.
   enginePort?: number;
+  running?: boolean;
+  stepCount?: number;
+  runCost?: number;
+  runTokens?: number;
+  /** Per-run source-read grant ("Allow once" / "Deny"); reset each run. Per
+   *  session so one session's grant never auto-allows another's reads. */
+  sourceGrant?: 'allow' | 'deny';
+  /** @-mention accounts for THIS session's run — kept so "Save as spec" can
+   *  redact their creds into process.env refs (per session: parallel runs). */
+  lastAccounts?: ResolvedAccount[];
 }
 let sessions: ChatSession[] = [];
 let activeSessionId = '';
-/** `transcript` and `runSessionId` always mirror the ACTIVE session, so the
- *  existing run/event code keeps working on it; switching re-points them. */
-let transcript: SpecMsg[] = [];
-let runSessionId: string | undefined;
-/** True while an engine run is in flight. Sequential model: events stream into
- * the active session's transcript, so switching is blocked until it ends. The
- * session that owns the in-flight run (never evicted from the host pool while
- * running). True simultaneous parallel routing arrives in the next pass. */
-let runActive = false;
-let runningSessionId: string | undefined;
-function setRunningState(on: boolean): void {
-  runActive = on;
-  if (!on) runningSessionId = undefined;
-  chatProvider?.setRunning(on);
+
+function sessionById(id: string | undefined): ChatSession | undefined {
+  return id ? sessions.find((s) => s.id === id) : undefined;
+}
+/** Sessions with a run in flight — never evicted from the host pool. */
+function busySessions(): Set<string> {
+  return new Set(sessions.filter((s) => s.running).map((s) => s.id));
+}
+/** Toggle a session's run state: drive the chat spinner only when it's the
+ *  visible session, and refresh the switcher's running badges either way. */
+function setSessionRunning(sess: ChatSession, on: boolean): void {
+  sess.running = on;
+  if (sess.id === activeSessionId) chatProvider?.setRunning(on);
+  pushSessionList();
 }
 /** The engine host serving the active session (multi-host model). Run-scoped
  *  messages (run / launch-chrome / cancel / approvals) target this port. */
 function activeEnginePort(): number | undefined {
   return portForSession(activeSessionId);
 }
-let stepCount = 0;
-let runCost = 0;
-let runTokens = 0;
-/** In-run source-read grant from "Allow once" / "Deny" (reset each run). The
- *  persistent "Always allow" lives in workspaceState ('hover.sourceAlways'). */
-let runSourceGrant: 'allow' | 'deny' | null = null;
 /** Pending in-chat prompt cards (ask_user + source-approval): card id → the
  *  resolver to run with the user's answer. Lets several prompt kinds share the
  *  one card UI + the one askUserAnswer round-trip. */
 const pendingCards = new Map<string, (value: string | null) => void>();
-/** Accounts resolved from @-mentions in the current run's prompt — kept so
- *  "Save as spec" can redact their credentials into process.env refs. */
-let lastRunAccounts: ResolvedAccount[] = [];
 /** Most recent reachable dev URL (configured or auto-detected). */
 let detectedUrl: string | null = null;
 /** Test-environment + account store (Local + configured domains). */
@@ -218,8 +222,10 @@ async function resolveTargetUrl(): Promise<string | null> {
   }
   return active.url;
 }
-/** Resolver for an in-flight ensureBrowser() handshake. */
-let pendingBrowser: ((ok: boolean) => void) | undefined;
+/** In-flight ensureBrowser() handshakes, keyed by the host's engine port, so
+ *  several sessions can launch their browsers in parallel without clobbering
+ *  each other's wait. Key 0 = "no specific host" (single-host fallback). */
+const pendingBrowserByPort = new Map<number, (ok: boolean) => void>();
 /** Spec being optimized, so we can auto-open the diff when the candidate lands. */
 let pendingOptimizeUri: vscode.Uri | undefined;
 /** Watchdog so a hung optimize doesn't leave the spinner spinning forever. */
@@ -236,20 +242,22 @@ function endOptimize(): void {
  *  both first-launches and relaunches a browser that went away. */
 function ensureBrowser(url: string, enginePort?: number): Promise<boolean> {
   if (!pool) return Promise.resolve(false);
+  const port = enginePort ?? activeEnginePort();
+  const key = port ?? 0;
   return new Promise((resolve) => {
-    pendingBrowser?.(false); // supersede any prior wait
+    pendingBrowserByPort.get(key)?.(false); // supersede any prior wait for this host
     let timer: ReturnType<typeof setTimeout>;
     const done = (ok: boolean): void => {
-      if (pendingBrowser !== done) return;
+      if (pendingBrowserByPort.get(key) !== done) return;
       clearTimeout(timer);
-      pendingBrowser = undefined;
+      pendingBrowserByPort.delete(key);
       resolve(ok);
     };
-    pendingBrowser = done;
+    pendingBrowserByPort.set(key, done);
     timer = setTimeout(() => done(false), 25_000);
     // Target the session's own host so it launches THAT session's browser
     // (its own profile / login). Falls back to the first host when unset.
-    pool?.launchChrome(url, isSilent(), false, enginePort ?? activeEnginePort());
+    pool?.launchChrome(url, isSilent(), false, port);
   });
 }
 
@@ -259,36 +267,40 @@ async function runPrompt(prompt: string): Promise<void> {
     chatProvider?.pushSystem('Engine not connected yet — give it a moment after opening the project, or run "Hover: Start Engine".');
     return;
   }
+  // Capture the session the prompt was typed into. The user may switch away
+  // while this run is in flight (parallel model); everything below operates on
+  // `sess`, never the moving active session.
+  const sess = activeChat();
   nameSessionFromPrompt(prompt);
-  transcript.push({ kind: 'user', text: prompt });
-  stepCount = 0;
-  runCost = 0;
-  runTokens = 0;
-  runningSessionId = activeSessionId;
-  setRunningState(true);
+  sess.transcript.push({ kind: 'user', text: prompt });
+  sess.stepCount = 0;
+  sess.runCost = 0;
+  sess.runTokens = 0;
+  sess.sourceGrant = undefined; // fresh per run
+  setSessionRunning(sess, true);
 
   // Multi-host: ensure THIS session has its own engine host (its own browser),
   // spawning it if needed. Busy sessions (a run in flight) are never evicted.
-  const enginePort = await ensureSessionEngine(activeSessionId);
+  const enginePort = await ensureSessionEngine(sess.id);
   if (enginePort == null) {
-    setRunningState(false);
-    chatProvider?.pushSystem(`Couldn't start an engine for this session (max ${4} browsers in use — finish a run first).`);
+    setSessionRunning(sess, false);
+    pushToSession(sess, 'system', `Couldn't start an engine for this session (max 4 browsers in use — finish a run first).`);
     return;
   }
 
   // Resolve @account mentions → creds for the agent to log in with; remembered
-  // so "Save as spec" redacts those creds into process.env refs.
-  lastRunAccounts = (await envStore?.resolveMentions(prompt)) ?? [];
-  const accounts = lastRunAccounts.map((a) => ({ label: a.label, username: a.username, password: a.password, role: a.role }));
-  const missing = lastRunAccounts.filter((a) => !a.password).map((a) => a.label);
+  // on the session so "Save as spec" redacts those creds into process.env refs.
+  sess.lastAccounts = (await envStore?.resolveMentions(prompt)) ?? [];
+  const accounts = sess.lastAccounts.map((a) => ({ label: a.label, username: a.username, password: a.password, role: a.role }));
+  const missing = sess.lastAccounts.filter((a) => !a.password).map((a) => a.label);
   if (missing.length) {
-    chatProvider?.pushSystem(`Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the agent can log in.`);
+    pushToSession(sess, 'system', `Heads up: @${missing.join(', @')} has no stored password — set one in Environments (🔑) so the agent can log in.`);
   }
 
   const url = await resolveTargetUrl();
   if (!url) {
-    setRunningState(false);
-    chatProvider?.pushSystem('No target URL — start your dev server, then click "▶ Start App" (or set a local URL).');
+    setSessionRunning(sess, false);
+    pushToSession(sess, 'system', 'No target URL — start your dev server, then click "▶ Start App" (or set a local URL).');
     return;
   }
   // Real reachability gate. A matching Chrome tab is NOT proof the server is up:
@@ -296,22 +308,30 @@ async function runPrompt(prompt: string): Promise<void> {
   // CDP "same-window" check passes even when nothing is serving. Probe HTTP first
   // so the agent never runs against a dead page.
   if (!(await probeUrl(url, 4000))) {
-    setRunningState(false);
-    chatProvider?.pushSystem(`Couldn't reach ${url} — the dev server isn't responding. Start it, then click "▶ Start App".`);
+    setSessionRunning(sess, false);
+    pushToSession(sess, 'system', `Couldn't reach ${url} — the dev server isn't responding. Start it, then click "▶ Start App".`);
     return;
   }
   const ready = await ensureBrowser(url, enginePort);
   if (!ready) {
-    setRunningState(false);
-    chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Click "▶ Start App".`);
+    setSessionRunning(sess, false);
+    pushToSession(sess, 'system', `Couldn't reach a browser at ${url}. Click "▶ Start App".`);
     return;
   }
   const activeEnv = await envStore?.getActive();
-  runSourceGrant = null; // fresh per run
-  if (!pool?.run(prompt, runSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort)) {
-    setRunningState(false);
-    chatProvider?.pushSystem('Could not reach the engine.');
+  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort)) {
+    setSessionRunning(sess, false);
+    pushToSession(sess, 'system', 'Could not reach the engine.');
   }
+}
+
+/** Append a system/assistant line to a session: render to chat only if it's the
+ *  visible one, but always keep it in that session's transcript. */
+function pushToSession(sess: ChatSession, kind: 'system' | 'assistant', text: string): void {
+  if (kind === 'system') sess.transcript.push({ kind: 'system', text });
+  if (sess.id !== activeSessionId) return;
+  if (kind === 'system') chatProvider?.pushSystem(text);
+  else chatProvider?.pushAssistant(text);
 }
 
 /** Ensure `sessionId` has its own connected engine host; return its port (or
@@ -320,8 +340,7 @@ async function ensureSessionEngine(sessionId: string): Promise<number | undefine
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!root || !extContext || !pool) return undefined;
   try {
-    const busy = new Set<string>(runningSessionId ? [runningSessionId] : []);
-    const info = await acquireEngine(extContext, root, sessionId, { busy });
+    const info = await acquireEngine(extContext, root, sessionId, { busy: busySessions() });
     const s = sessions.find((x) => x.id === sessionId);
     if (s) s.enginePort = info.enginePort;
     pool.ensureConnected(info.enginePort);
@@ -352,8 +371,11 @@ function handleSourceApproval(msg: ServerMessage, enginePort?: number): void {
   const id = typeof msg.payload?.approvalId === 'string' ? msg.payload.approvalId : undefined;
   if (!id) return;
   const path = typeof msg.payload?.sourcePath === 'string' ? msg.payload.sourcePath : 'source';
-  if (sourceAccessForRun() === 'always' || runSourceGrant === 'allow') { pool?.sendSourceApproval(id, true, enginePort); return; }
-  if (runSourceGrant === 'deny') { pool?.sendSourceApproval(id, false, enginePort); return; }
+  // The grant is per-session (the requesting host's session), so one session's
+  // "Allow once" never auto-approves another's reads during a parallel run.
+  const owner = sessionById(sessionForPort(enginePort ?? -1));
+  if (sourceAccessForRun() === 'always' || owner?.sourceGrant === 'allow') { pool?.sendSourceApproval(id, true, enginePort); return; }
+  if (owner?.sourceGrant === 'deny') { pool?.sendSourceApproval(id, false, enginePort); return; }
   // Render as an in-chat permission card (no "Other" free-text). It WAITS for
   // the user — no timeout — so a prompt you haven't seen yet never auto-decides;
   // the engine fail-opens only when no editor is attached at all.
@@ -361,13 +383,13 @@ function handleSourceApproval(msg: ServerMessage, enginePort?: number): void {
   pendingCards.set(`src:${id}`, (choice) => {
     if (choice === 'Always allow') {
       void extContext?.workspaceState.update('hover.sourceAlways', true);
-      runSourceGrant = 'allow';
+      if (owner) owner.sourceGrant = 'allow';
       pool?.sendSourceApproval(id, true, enginePort);
     } else if (choice === 'Allow once') {
-      runSourceGrant = 'allow';
+      if (owner) owner.sourceGrant = 'allow';
       pool?.sendSourceApproval(id, true, enginePort);
     } else if (choice === 'Deny') {
-      runSourceGrant = 'deny';
+      if (owner) owner.sourceGrant = 'deny';
       pool?.sendSourceApproval(id, false, enginePort);
     } else {
       pool?.sendSourceApproval(id, false, enginePort); // dismissed → deny this one, ask again next
@@ -399,11 +421,19 @@ function handleAskUser(msg: ServerMessage, enginePort?: number): void {
   chatProvider?.askUser({ askId: id, question, options });
 }
 
-/** Translate a streamed engine event into chat updates + transcript. */
+/** Translate a streamed engine event into chat updates + transcript. Routes by
+ *  the message's SOURCE host port to the owning session, so parallel runs never
+ *  bleed into each other; the chat UI only renders the visible session's events
+ *  (`live`), background sessions accumulate silently in their own transcript. */
 function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
+  // The session whose host emitted this message (multi-host); falls back to the
+  // active one for host-agnostic replies (spec-saved / optimize).
+  const owner = sessionById(sessionForPort(enginePort ?? -1)) ?? activeChat();
+  const live = owner.id === activeSessionId;
+
   if (msg.type === 'error') {
-    setRunningState(false);
-    chatProvider?.pushSystem(String(msg.payload?.message ?? 'error'));
+    setSessionRunning(owner, false);
+    if (live) chatProvider?.pushSystem(String(msg.payload?.message ?? 'error'));
     return;
   }
   if (msg.type === 'source-approval-request') {
@@ -428,12 +458,12 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
     return;
   }
   if (msg.type === 'run-active') {
-    setRunningState(true);
+    setSessionRunning(owner, true);
     return;
   }
   if (msg.type === 'cdp-status') {
     const p = (msg.payload ?? {}) as { state?: string; launching?: boolean };
-    if (!p.launching && pendingBrowser) pendingBrowser(p.state === 'same-window' || p.state === 'wrong-window');
+    if (!p.launching) pendingBrowserByPort.get(enginePort ?? 0)?.(p.state === 'same-window' || p.state === 'wrong-window');
     return;
   }
   if (msg.type === 'optimize-result') {
@@ -455,14 +485,15 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
   const ev = msg.payload as { kind?: string; [k: string]: unknown } | undefined;
   switch (ev?.kind) {
     case 'session_start':
-      if (typeof ev.sessionId === 'string') { runSessionId = ev.sessionId; activeChat().agentSessionId = ev.sessionId; persistSessions(); }
-      setRunningState(true);
+      if (typeof ev.sessionId === 'string') { owner.agentSessionId = ev.sessionId; persistSessions(); }
+      setSessionRunning(owner, true);
       break;
     case 'tool_use': {
-      transcript.push({ kind: 'step', tool: ev.tool, input: ev.input });
-      stepCount++;
-      if (typeof ev.costUsdSnapshot === 'number') runCost = ev.costUsdSnapshot;
-      if (typeof ev.tokensSnapshot === 'number') runTokens = ev.tokensSnapshot;
+      owner.transcript.push({ kind: 'step', tool: ev.tool, input: ev.input });
+      owner.stepCount = (owner.stepCount ?? 0) + 1;
+      if (typeof ev.costUsdSnapshot === 'number') owner.runCost = ev.costUsdSnapshot;
+      if (typeof ev.tokensSnapshot === 'number') owner.runTokens = ev.tokensSnapshot;
+      if (!live) break;
       let detail = '';
       try {
         detail = ev.input == null ? '{}' : JSON.stringify(ev.input);
@@ -485,28 +516,36 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       // runSession's steps, so without this the dirty-recording filter is inert
       // on the extension's primary path).
       if (ev.isError) {
-        for (let i = transcript.length - 1; i >= 0; i--) {
-          if (transcript[i].kind === 'step') { transcript[i].isError = true; break; }
+        for (let i = owner.transcript.length - 1; i >= 0; i--) {
+          if (owner.transcript[i].kind === 'step') { owner.transcript[i].isError = true; break; }
         }
       }
       break;
     }
     case 'usage':
-      if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
-      if (typeof ev.tokens === 'number') { runTokens = ev.tokens; chatProvider?.pushUsage(ev.tokens); }
+      if (typeof ev.costUsd === 'number') owner.runCost = ev.costUsd;
+      if (typeof ev.tokens === 'number') { owner.runTokens = ev.tokens; if (live) chatProvider?.pushUsage(ev.tokens); }
       break;
     case 'text':
       if (typeof ev.text === 'string' && ev.text.trim()) {
-        transcript.push({ kind: 'ai', text: ev.text });
-        chatProvider?.pushNarration(ev.text);
+        owner.transcript.push({ kind: 'ai', text: ev.text });
+        if (live) chatProvider?.pushNarration(ev.text);
       }
       break;
-    case 'session_end':
-      transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
+    case 'session_end': {
+      owner.transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
       persistSessions();
-      if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
-      if (typeof ev.tokens === 'number') runTokens = ev.tokens;
-      setRunningState(false);
+      if (typeof ev.costUsd === 'number') owner.runCost = ev.costUsd;
+      if (typeof ev.tokens === 'number') owner.runTokens = ev.tokens;
+      setSessionRunning(owner, false);
+      const steps = owner.stepCount ?? 0;
+      if (!live) {
+        // Background session finished — a quiet toast so the user knows to look,
+        // without disturbing the conversation they're watching.
+        if (ev.isError) void vscode.window.showWarningMessage(`Hover: session "${owner.name}" ended with an error.`);
+        else void vscode.window.showInformationMessage(`Hover: session "${owner.name}" finished.`);
+        break;
+      }
       if (ev.cancelled) {
         chatProvider?.pushSystem('Run cancelled.');
       } else if (ev.isError) {
@@ -515,7 +554,7 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
         if (/cdp|chrome|debug|9222|connect|browser/i.test(summary)) {
           chatProvider?.pushSystem('No app browser detected — click "▶ Start App" (in the chat) to start your dev server + browser.');
         }
-      } else if (stepCount === 0) {
+      } else if (steps === 0) {
         // No browser actions — the agent just replied (e.g. a vague prompt).
         // Don't fake a PASS; show it as a plain reply.
         chatProvider?.pushAssistant(String(ev.summary ?? 'Done.'));
@@ -523,9 +562,10 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
         // "Done" not "PASS": the run finished and here's the summary — it is
         // not a test-pass assertion (the agent may have logged real bugs in
         // ## Findings). PASS read as a green light even when issues existed.
-        chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), stepCount, runCost, runTokens);
+        chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), steps, owner.runCost ?? 0, owner.runTokens ?? 0);
       }
       break;
+    }
   }
 }
 
@@ -778,9 +818,11 @@ async function reopenBrowser(): Promise<void> {
 }
 
 async function saveSpec(): Promise<void> {
+  // Save crystallizes the VISIBLE session's last run.
+  const tx = activeChat().transcript;
   let idx = -1;
-  for (let i = transcript.length - 1; i >= 0; i--) if (transcript[i].kind === 'user') { idx = i; break; }
-  const steps = idx === -1 ? transcript.slice() : transcript.slice(idx);
+  for (let i = tx.length - 1; i >= 0; i--) if (tx[i].kind === 'user') { idx = i; break; }
+  const steps = idx === -1 ? tx.slice() : tx.slice(idx);
   if (!steps.some((m) => m.kind === 'step')) {
     void vscode.window.showWarningMessage('Hover: nothing to save — no steps in the last run.');
     return;
@@ -799,7 +841,7 @@ async function saveSpec(): Promise<void> {
   // Parameterize any @-mentioned account credentials this run used into
   // process.env refs so the saved spec never holds the literal secret.
   const redactions: { value: string; envVar: string }[] = [];
-  for (const a of lastRunAccounts) {
+  for (const a of activeChat().lastAccounts ?? []) {
     if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
     if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
   }
@@ -835,7 +877,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.runAllSpecs', () => runAllSpecs()),
     vscode.commands.registerCommand('hover.resetSourceAccess', async () => {
       await extContext?.workspaceState.update('hover.sourceAlways', false);
-      runSourceGrant = null;
+      for (const s of sessions) s.sourceGrant = undefined;
       void vscode.window.showInformationMessage('Hover: source-read permission reset — you\'ll be asked again next time.');
     }),
     vscode.commands.registerCommand('hover.switchMode', () => switchMode()),
@@ -1119,11 +1161,11 @@ function activeChat(): ChatSession {
   }
   return s;
 }
-/** Point the live `transcript` / `runSessionId` at the active session. */
+/** Reflect the (newly) active session's run state in the chat spinner/border.
+ *  Each session owns its own transcript + agentSessionId now, so there's no
+ *  global mirror to repoint — only the visible run indicator to re-sync. */
 function bindActive(): void {
-  const s = activeChat();
-  transcript = s.transcript;
-  runSessionId = s.agentSessionId;
+  chatProvider?.setRunning(activeChat().running ?? false);
 }
 function persistSessions(): void {
   // Keep the store bounded: newest 20 sessions (never dropping the active or a
@@ -1132,10 +1174,10 @@ function persistSessions(): void {
   if (sessions.length > 20) {
     const keep = sessions.slice(-20);
     for (const s of sessions) {
-      if (keep.includes(s) || s.id === activeSessionId || s.id === runningSessionId) continue;
+      if (keep.includes(s) || s.id === activeSessionId || s.running) continue;
       releaseSession(s.id);
     }
-    sessions = sessions.filter((s) => keep.includes(s) || s.id === activeSessionId || s.id === runningSessionId);
+    sessions = sessions.filter((s) => keep.includes(s) || s.id === activeSessionId || s.running);
   }
   const persisted = sessions.map((s) => ({
     id: s.id, name: s.name, agentSessionId: s.agentSessionId, createdAt: s.createdAt,
@@ -1144,9 +1186,10 @@ function persistSessions(): void {
   void extContext?.workspaceState.update('hover.chatSessions', persisted);
   void extContext?.workspaceState.update('hover.activeChat', activeSessionId);
 }
-/** Push the session list + active id to the chat top-bar switcher. */
+/** Push the session list (+ per-session running badges) + active id to the
+ *  chat top-bar switcher. */
 function pushSessionList(): void {
-  chatProvider?.setSessions(sessions.map((s) => ({ id: s.id, name: s.name })), activeSessionId);
+  chatProvider?.setSessions(sessions.map((s) => ({ id: s.id, name: s.name, running: !!s.running })), activeSessionId);
 }
 function loadSessions(): void {
   const stored = extContext?.workspaceState.get<ChatSession[]>('hover.chatSessions');
@@ -1158,35 +1201,27 @@ function loadSessions(): void {
 }
 
 async function newSession(): Promise<void> {
-  if (runActive) {
-    chatProvider?.pushSystem('A run is in progress — wait for it to finish before starting a new conversation.');
-    return;
-  }
+  // Parallel model: a run in another session keeps going on its own host — no
+  // need to block starting/switching conversations.
   const s: ChatSession = { id: newChatId(), name: 'New session', transcript: [], createdAt: Date.now() };
   sessions.push(s);
   activeSessionId = s.id;
-  bindActive();
-  stepCount = 0;
   persistSessions();
   await chatProvider?.reveal();
   chatProvider?.newSession();
+  bindActive(); // fresh session → spinner off
   pushSessionList();
 }
 
-/** Switch the active conversation: re-point state and re-render the transcript. */
+/** Switch the active conversation: re-render its transcript + re-sync the run
+ *  indicator. A run in the session we're leaving keeps streaming into its own
+ *  transcript (parallel model) — we'll see it again when we switch back. */
 function switchSession(id: string): void {
   if (!sessions.some((s) => s.id === id) || id === activeSessionId) return;
-  if (runActive) {
-    // Sequential model: live events stream into the active session's transcript.
-    // Repointing it mid-run would corrupt both sessions — block until this ends.
-    chatProvider?.pushSystem('A run is in progress — wait for it to finish before switching conversations.');
-    return;
-  }
   activeSessionId = id;
-  bindActive();
-  stepCount = 0;
   persistSessions();
   chatProvider?.loadSession(activeChat().transcript);
+  bindActive(); // reflect the now-active session's running state
   pushSessionList();
 }
 

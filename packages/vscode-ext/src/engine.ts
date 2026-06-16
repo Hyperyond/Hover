@@ -70,8 +70,11 @@ export function liveEngineCount(): number {
 }
 
 /** Pick a free slot, or evict the LRU idle host (one not in `busy`) to free one.
- *  Returns null when every slot is held by a busy session. */
-function allocSlot(busy: Set<string>): number | null {
+ *  Returns null when every slot is held by a busy session. Async because evicting
+ *  AWAITS the old host's exit — its shutdown closes the slot's Chrome (same CDP
+ *  port + profile the reused slot will relaunch), so without the wait a parallel
+ *  spawn could attach to the previous session's logged-in browser. */
+async function allocSlot(busy: Set<string>): Promise<number | null> {
   for (let s = 0; s < MAX_HOSTS; s++) if (!hosts.has(s)) return s;
   // Full — evict the least-recently-used host whose session isn't running.
   let victim: Host | undefined;
@@ -81,7 +84,7 @@ function allocSlot(busy: Set<string>): number | null {
   }
   if (!victim) return null;
   const slot = victim.slot;
-  killHost(slot);
+  await killHostAndWait(slot);
   return slot;
 }
 
@@ -90,6 +93,22 @@ function killHost(slot: number): void {
   if (!h) return;
   hosts.delete(slot);
   try { h.child.kill(); } catch { /* already gone */ }
+}
+
+/** Kill a host and wait for it to actually exit (its Chrome closes on the way
+ *  out), so the slot's CDP port + profile are free before reuse. Bounded so a
+ *  wedged child can't stall a new run forever. */
+function killHostAndWait(slot: number, timeoutMs = 6000): Promise<void> {
+  const h = hosts.get(slot);
+  if (!h) return Promise.resolve();
+  hosts.delete(slot);
+  return new Promise<void>((resolve) => {
+    let done = false;
+    const finish = (): void => { if (done) return; done = true; clearTimeout(t); resolve(); };
+    const t = setTimeout(finish, timeoutMs);
+    h.child.once('exit', finish);
+    try { h.child.kill(); } catch { finish(); }
+  });
 }
 
 /** Get (or lazily spawn) the engine host serving `sessionId`. Reuses the
@@ -110,60 +129,64 @@ export function acquireEngine(
   const inFlight = starting.get(sessionId);
   if (inFlight) return inFlight;
 
-  const slot = allocSlot(opts.busy ?? new Set());
-  if (slot == null) {
-    return Promise.reject(new Error(`All ${MAX_HOSTS} browsers are busy — wait for a run to finish before starting another session.`));
-  }
+  // Register the in-flight spawn SYNCHRONOUSLY (before the first await in the
+  // IIFE) so concurrent acquires for the same session dedupe onto this promise.
+  const p = (async (): Promise<EngineInfo> => {
+    const slot = await allocSlot(opts.busy ?? new Set());
+    if (slot == null) {
+      throw new Error(`All ${MAX_HOSTS} browsers are busy — wait for a run to finish before starting another session.`);
+    }
+    const cdpUrl = `http://localhost:${BASE_CDP_PORT + slot}`;
+    const userDataDir = join(tmpdir(), `hover-chrome-${slot}`);
+    const host = ctx.asAbsolutePath('engine/host.mjs');
 
-  const cdpUrl = `http://localhost:${BASE_CDP_PORT + slot}`;
-  const userDataDir = join(tmpdir(), `hover-chrome-${slot}`);
-  const host = ctx.asAbsolutePath('engine/host.mjs');
-
-  const p = new Promise<EngineInfo>((resolve, reject) => {
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const fail = (err: Error): void => {
-      if (timer) { clearTimeout(timer); timer = undefined; }
-      if (settled) return;
-      settled = true;
-      starting.delete(sessionId);
-      reject(err);
-    };
-
-    const cp = spawn(process.execPath, [host], {
-      cwd: devRoot,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        HOVER_DEV_ROOT: devRoot,
-        HOVER_PORT: String(BASE_WS_PORT + slot),
-        HOVER_CDP_URL: cdpUrl,
-        HOVER_USER_DATA_DIR: userDataDir,
-      },
-    });
-
-    cp.stdout?.on('data', (buf: Buffer) => {
-      const m = /HOVER_ENGINE_PORT=(\d+)/.exec(buf.toString());
-      if (m && !settled) {
-        settled = true;
+    return await new Promise<EngineInfo>((resolve, reject) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const fail = (err: Error): void => {
         if (timer) { clearTimeout(timer); timer = undefined; }
-        const enginePort = Number(m[1]);
-        hosts.set(slot, { slot, child: cp, enginePort, cdpUrl, sessionId, lastUsed: ++monotonic });
-        starting.delete(sessionId);
-        resolve({ enginePort, cdpUrl, slot });
-      }
-    });
-    cp.stderr?.on('data', (buf: Buffer) => console.error(`[hover-engine:${slot}]`, buf.toString().trimEnd()));
-    cp.on('error', (e) => fail(e instanceof Error ? e : new Error(String(e))));
-    cp.on('exit', (code) => {
-      // Drop the (possibly already-registered) host so the next acquire respawns.
-      if (hosts.get(slot)?.child === cp) hosts.delete(slot);
-      fail(new Error(`engine exited (code ${code ?? 'null'})`));
-    });
+        if (settled) return;
+        settled = true;
+        reject(err);
+      };
 
-    timer = setTimeout(() => fail(new Error('engine start timed out')), START_TIMEOUT_MS);
-  });
+      const cp = spawn(process.execPath, [host], {
+        cwd: devRoot,
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1',
+          HOVER_DEV_ROOT: devRoot,
+          HOVER_PORT: String(BASE_WS_PORT + slot),
+          HOVER_CDP_URL: cdpUrl,
+          HOVER_USER_DATA_DIR: userDataDir,
+        },
+      });
+
+      cp.stdout?.on('data', (buf: Buffer) => {
+        const m = /HOVER_ENGINE_PORT=(\d+)/.exec(buf.toString());
+        if (m && !settled) {
+          settled = true;
+          if (timer) { clearTimeout(timer); timer = undefined; }
+          const enginePort = Number(m[1]);
+          hosts.set(slot, { slot, child: cp, enginePort, cdpUrl, sessionId, lastUsed: ++monotonic });
+          resolve({ enginePort, cdpUrl, slot });
+        }
+      });
+      cp.stderr?.on('data', (buf: Buffer) => console.error(`[hover-engine:${slot}]`, buf.toString().trimEnd()));
+      cp.on('error', (e) => fail(e instanceof Error ? e : new Error(String(e))));
+      cp.on('exit', (code) => {
+        // Drop the (possibly already-registered) host so the next acquire respawns.
+        if (hosts.get(slot)?.child === cp) hosts.delete(slot);
+        fail(new Error(`engine exited (code ${code ?? 'null'})`));
+      });
+
+      timer = setTimeout(() => fail(new Error('engine start timed out')), START_TIMEOUT_MS);
+    });
+  })();
+
   starting.set(sessionId, p);
+  // Clear the in-flight entry however it settles, so a later acquire respawns.
+  void p.catch(() => {}).finally(() => { if (starting.get(sessionId) === p) starting.delete(sessionId); });
   return p;
 }
 
