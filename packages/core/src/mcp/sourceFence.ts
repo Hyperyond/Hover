@@ -17,6 +17,10 @@ import { resolve, relative, isAbsolute, sep } from 'node:path';
  *  path (so `\` on Windows is normalised first). */
 const SECRET_PATTERNS: RegExp[] = [
   /(^|\/)\.env(\.[^/]*)?$/i, //              .env, .env.local, .env.production
+  /\.env$/i, //                             any *.env dotenv file (prod.env, local.env)
+  /(^|\/)\.envrc$/i, //                      direnv (holds exported env / secrets)
+  /\.tfvars(\.json)?$/i, //                  terraform variable files (often secrets)
+  /(^|\/)\.htpasswd$/i, //                   http basic-auth credentials
   /(^|\/)\.git(\/|$)/, //                    the git dir
   /(^|\/)node_modules(\/|$)/, //             dependency tree
   /(^|\/)\.(next|nuxt|svelte-kit|astro|turbo|cache|output|vercel)(\/|$)/, // build caches
