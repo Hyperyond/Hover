@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generatePageObject } from '../../src/specs/generatePageObject.js';
-import type { SkillStep } from '../../src/skills/writeSkill.js';
+import type { SkillStep } from '../../src/specs/specStep.js';
 
 const loginFlow: SkillStep[] = [
   { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/login' } },

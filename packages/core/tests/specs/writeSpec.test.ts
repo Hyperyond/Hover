@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeSpec, countOptimizableMarkers, OPTIMIZABLE_MARKER } from '../../src/specs/writeSpec.js';
 import { writePageObjectManifest } from '../../src/specs/pageObjectManifest.js';
-import type { SkillStep } from '../../src/skills/writeSkill.js';
+import type { SkillStep } from '../../src/specs/specStep.js';
 
 let devRoot: string;
 beforeEach(() => { devRoot = mkdtempSync(join(tmpdir(), 'hover-spec-')); });

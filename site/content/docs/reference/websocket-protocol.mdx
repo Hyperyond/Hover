@@ -9,13 +9,10 @@ The client (the extension chat) and the engine (`@hover-dev/core`) communicate o
 { type: 'event',           payload: InvokeEvent }              // see agents/types.ts
 { type: 'cdp-status',      payload: { state, reason?, matchingTabUrl?, browser?, launching? } }
 { type: 'specs-list',      payload: { specs: SpecSummary[] } }
-{ type: 'seeds-list',      payload: { seeds: { name, note, signature, code, source }[] } }
 { type: 'modes',           payload: { current: string|null, available: ModeEntry[] } }
 { type: '<plugin-namespaced>', payload: <plugin-specific> }   // plugin-broadcast events (e.g. security:flow:*)
 { type: 'spec-saved',      payload: { name, path } }
 { type: 'spec-exists',     payload: { slug, existingPath } }
-{ type: 'case-csv-saved',  payload: { name, path } }
-{ type: 'case-csv-exists', payload: { slug, existingPath } }
 { type: 'agents',          payload: { current: string, available: AgentAvailability[] } }
 { type: 'error',           payload: { message } }
 ```
@@ -29,9 +26,6 @@ The client (the extension chat) and the engine (`@hover-dev/core`) communicate o
 { type: 'launch-chrome', payload: { pageUrl } }                 // start debug Chrome, navigate to pageUrl
 { type: 'focus-debug',   payload: { pageUrl } }                 // bringToFront the matching tab in debug Chrome
 { type: 'save-spec',     payload: { name, description, steps, assertions?, overwrite? } }
-{ type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
-{ type: 'list-specs' }                                            // ask for every spec under __vibe_tests__/, with parsed JSDoc headers
-{ type: 'list-seeds' }                                            // built-in + .hover/rules/ translation seeds (read-only)
 { type: 'list-agents' }
 { type: 'switch-agent',  payload: { agentId } }
 { type: 'set-mode',      payload: { modeId: string|null } }   // null = exit moded operation

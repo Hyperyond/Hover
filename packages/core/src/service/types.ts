@@ -11,7 +11,7 @@
  */
 
 import { WebSocket } from 'ws';
-import type { SkillStep } from '../skills/writeSkill.js';
+import type { SkillStep } from '../specs/specStep.js';
 import type { SpecAssertion } from '../specs/writeSpec.js';
 
 export interface ClientMessage {
@@ -31,10 +31,6 @@ export interface ClientMessage {
      *  into the agent's system prompt (ephemeral, not the saved transcript) so
      *  it can log in; the recorded fill values get redacted on save. */
     accounts?: { label: string; username?: string; password?: string; role?: string }[];
-    /** save-case-csv only — passed through to writeCaseCsv as extra
-     *  fields on the test case's Labels column. */
-    jiraProjectKey?: string;
-    labels?: string;
     /** check-cdp / launch-chrome / focus-debug — the widget's
      *  window.location.href so service can compare origins or navigate the
      *  newly-launched debug Chrome to the same URL. */

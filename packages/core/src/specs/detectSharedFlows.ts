@@ -21,7 +21,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sidecarDir, legacySidecarDir, parseSidecarFile, type SpecSidecar } from './sidecar.js';
 import { humanStep } from './humanSteps.js';
-import type { SkillStep } from '../skills/writeSkill.js';
+import type { SkillStep } from '../specs/specStep.js';
 
 export interface SharedFlow {
   /** The shared signature prefix, one entry per step. */

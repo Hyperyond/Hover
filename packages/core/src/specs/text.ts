@@ -1,9 +1,8 @@
 /**
- * Small text helpers shared across the spec/CSV emitters.
+ * Small text helpers for the spec emitter.
  *
- * Hoisted here so the two crystallization outputs (writeSpec's JSDoc header and
- * writeCaseCsv's Xray rows) derive a slug and a one-sentence "Expected" line the
- * same way — they used to carry byte-identical copies of this logic.
+ * Hoisted here so writeSpec's JSDoc header derives a slug and a one-sentence
+ * "Expected" line through one shared implementation.
  */
 
 /** Lowercase, hyphenate, and trim a display name into a filesystem-safe slug. */

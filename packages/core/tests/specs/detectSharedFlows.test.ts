@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeSidecar } from '../../src/specs/sidecar.js';
 import { detectSharedFlows, stepSignature } from '../../src/specs/detectSharedFlows.js';
-import type { SkillStep } from '../../src/skills/writeSkill.js';
+import type { SkillStep } from '../../src/specs/specStep.js';
 
 let devRoot: string;
 beforeEach(() => { devRoot = mkdtempSync(join(tmpdir(), 'hover-detect-')); });

@@ -19,7 +19,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { SkillStep } from '../skills/writeSkill.js';
+import type { SkillStep } from '../specs/specStep.js';
 import { humanSteps, humanStep } from './humanSteps.js';
 import { writeSidecar } from './sidecar.js';
 import {
@@ -273,9 +273,7 @@ function renderSpec(
   const doneMsg = [...steps].reverse().find(s => s.kind === 'done');
 
   // Plain-English step + expected blocks for the JSDoc header. QA / PMs
-  // can read these without grokking Playwright API; the same prose also
-  // populates the Step column when the user exports the session to Xray
-  // CSV via writeCaseCsv.
+  // can read these without grokking the Playwright API.
   const proseSteps = humanSteps(steps);
   const expectedLines = collectExpected(assertions, doneMsg?.summary);
 

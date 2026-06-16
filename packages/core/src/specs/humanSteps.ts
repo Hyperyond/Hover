@@ -1,18 +1,14 @@
 /**
  * Translate the captured `browser_*` tool calls into plain English.
  *
- * Used by:
- *   - writeSpec.ts — to enrich the generated `.spec.ts` JSDoc with a
- *     numbered "Steps:" block that QA / PMs can read without grokking
- *     `getByRole(...)`.
- *   - writeCaseCsv.ts — to populate the Step column of an
- *     Xray-compatible test case CSV, so the same prose travels into
- *     Jira / Xray / Zephyr.
+ * Used by writeSpec.ts to enrich the generated `.spec.ts` JSDoc with a
+ * numbered "Steps:" block that QA / PMs can read without grokking
+ * `getByRole(...)`.
  *
  * Mirrors the tool dispatch table in writeSpec.ts:translateStep — when
  * a new replayable browser action is added there, add it here too.
  */
-import type { SkillStep } from '../skills/writeSkill.js';
+import type { SkillStep } from '../specs/specStep.js';
 
 /** A single human-readable line for one tool call, or null to skip. */
 export function humanStep(tool: string, rawInput: unknown): string | null {

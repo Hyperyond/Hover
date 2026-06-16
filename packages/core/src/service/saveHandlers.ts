@@ -10,9 +10,8 @@
  */
 
 import type { WebSocket } from 'ws';
-import { type SkillStep } from '../skills/writeSkill.js';
+import { type SkillStep } from '../specs/specStep.js';
 import { writeSpec, SpecExistsError, type SpecAssertion } from '../specs/writeSpec.js';
-import { writeCaseCsv, CaseCsvExistsError } from '../specs/writeCaseCsv.js';
 import { send, type ClientMessage } from './types.js';
 
 interface SaveArtifactConfig<TWriteResult extends { slug: string; path: string }> {
@@ -97,16 +96,3 @@ export const SPEC_CONFIG: SaveArtifactConfig<Awaited<ReturnType<typeof writeSpec
     writeSpec({ devRoot, name, description, steps, assertions, overwrite, redactions: payload.redactions }),
 };
 
-export const CASE_CSV_CONFIG: SaveArtifactConfig<Awaited<ReturnType<typeof writeCaseCsv>>> = {
-  requestName: 'save-case-csv',
-  savedType: 'case-csv-saved',
-  existsType: 'case-csv-exists',
-  ExistsError: CaseCsvExistsError,
-  write: ({ devRoot, name, description, steps, assertions, payload, overwrite }) =>
-    writeCaseCsv({
-      devRoot, name, description, steps, assertions,
-      jiraProjectKey: payload.jiraProjectKey,
-      labels: payload.labels,
-      overwrite,
-    }),
-};

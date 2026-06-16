@@ -17,7 +17,7 @@
  */
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { SkillStep } from '../skills/writeSkill.js';
+import type { SkillStep } from '../specs/specStep.js';
 import type { SpecAssertion } from './writeSpec.js';
 
 /** Current sidecar schema version. Bump when the shape changes so readers

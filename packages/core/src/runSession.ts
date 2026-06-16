@@ -19,7 +19,7 @@
 import { invokeAgent } from './agents/invoke.js';
 import { getAgent } from './agents/registry.js';
 import type { InvokeEvent } from './agents/types.js';
-import type { SkillStep } from './skills/writeSkill.js';
+import type { SkillStep } from './specs/specStep.js';
 import { resolveMcpConfig } from './playwright/resolveMcpConfig.js';
 
 export interface RunSessionOptions {

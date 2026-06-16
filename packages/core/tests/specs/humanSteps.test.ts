@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { humanStep, humanSteps } from '../../src/specs/humanSteps.js';
-import type { SkillStep } from '../../src/skills/writeSkill.js';
+import type { SkillStep } from '../../src/specs/specStep.js';
 
 describe('humanStep', () => {
   it('translates browser_navigate to Open <url>', () => {

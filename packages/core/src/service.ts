@@ -10,23 +10,15 @@
  *     { type: 'hello',           payload: { agentId, model, version } }
  *     { type: 'event',           payload: InvokeEvent }              // see agents/types.ts
  *     { type: 'cdp-status',      payload: { state, reason?, matchingTabUrl?, browser?, launching? } }
- *     { type: 'specs-list',      payload: { specs: SpecSummary[] } }
  *     { type: 'spec-saved',      payload: { name, path } }
  *     { type: 'spec-exists',     payload: { slug, existingPath } }
- *     { type: 'case-csv-saved',  payload: { name, path } }
- *     { type: 'case-csv-exists', payload: { slug, existingPath } }
  *     { type: 'error',           payload: { message } }
  *
  *   client → server
  *     { type: 'command',       payload: { text, sessionId? } }
  *     { type: 'cancel' }
- *     { type: 'check-cdp',     payload: { pageUrl } }                 // "is this widget in the debug Chrome?"
  *     { type: 'launch-chrome', payload: { pageUrl } }                 // start debug Chrome, navigate to pageUrl
- *     { type: 'focus-debug',   payload: { pageUrl } }                 // bringToFront the matching tab in debug Chrome
  *     { type: 'save-spec',     payload: { name, description, steps, assertions?, overwrite? } }
- *     { type: 'save-case-csv', payload: { name, description, steps, assertions?, jiraProjectKey?, labels?, overwrite? } }
- *     { type: 'list-specs' }                                            // ask for every spec under __vibe_tests__/, with parsed JSDoc headers
- *     { type: 'list-agents' }                                          // ask for the full agent registry + install status
  *     { type: 'switch-agent',  payload: { agentId } }                  // set the service's current agent; broadcasts to all connections
  *     { type: 'reveal-source', payload: { source } }                   // relay a data-hover-source value to other clients (F2 page→editor)
  *
@@ -38,7 +30,6 @@
  *
  *   client → server (plugin-aware additions):
  *     { type: 'set-mode',      payload: { modeId: string|null } }   // null = exit moded operation
- *     { type: 'list-modes' }
  */
 import { WebSocketServer, WebSocket } from 'ws';
 import { fileURLToPath } from 'node:url';
@@ -46,7 +37,6 @@ import { dirname, resolve } from 'node:path';
 import { runSession } from './runSession.js';
 import { readConventions } from './service/conventions.js';
 import { optimizeSpecWithAgent } from './specs/optimizeSpecWithAgent.js';
-import { promoteOptimized, discardOptimized } from './specs/optimizeSpec.js';
 import {
   listAgentAvailability,
   pickPrimaryAgent,
@@ -57,20 +47,16 @@ import type { InvokeEvent } from './agents/types.js';
 import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
 import { resolveMcpConfig, mcpToolPrefix } from './playwright/resolveMcpConfig.js';
 import { launchDebugChrome, closeDebugChrome } from './playwright/launchChrome.js';
-import { listSpecs } from './specs/listSpecs.js';
 import { writeSessionRecord, parseFindings, tallyTools } from './sessions/sessions.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
 import {
-  handleCheckCdp,
   handleLaunchChrome,
-  handleFocusDebug,
   type LaunchExtras,
 } from './service/cdpHandlers.js';
 import {
   handleSaveArtifact,
   SPEC_CONFIG,
-  CASE_CSV_CONFIG,
 } from './service/saveHandlers.js';
 import {
   CURRENT_API_VERSION,
@@ -853,10 +839,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (asker) sendIfOpen(asker, { type: 'ask-user-response', payload: msg.payload });
         return;
       }
-      if (msg.type === 'list-modes') {
-        broadcastModes(ws);
-        return;
-      }
       if (msg.type === 'set-mode') {
         if (activeRun) {
           send(ws, {
@@ -890,13 +872,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             },
           });
         }
-        return;
-      }
-      if (msg.type === 'list-agents') {
-        // Force a refresh — the user may have just installed a new CLI
-        // and clicked the dropdown to see the change.
-        const available = await getAvailability(true);
-        send(ws, { type: 'agents', payload: { current: currentAgentId, available } });
         return;
       }
       if (msg.type === 'switch-agent') {
@@ -987,20 +962,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         send(ws, { type: 'api-key-status', payload: { hasKey: !!currentApiKey, envVar } });
         return;
       }
-      if (msg.type === 'list-specs') {
-        // The extension asks for every spec under <devRoot>/__vibe_tests__/ to
-        // render the Specs view. Each summary carries `originalPrompt` (parsed
-        // from the JSDoc header) as provenance — what the spec verifies.
-        const specs = await listSpecs(devRoot);
-        send(ws, { type: 'specs-list', payload: { specs } });
-        return;
-      }
       if (msg.type === 'save-spec') {
         await handleSaveArtifact(ws, msg, devRoot, SPEC_CONFIG);
-        return;
-      }
-      if (msg.type === 'save-case-csv') {
-        await handleSaveArtifact(ws, msg, devRoot, CASE_CSV_CONFIG);
         return;
       }
       // Stage 7 (F7) widget flow: optimize a saved spec, then promote/discard
@@ -1022,32 +985,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           const reason = err instanceof Error ? err.message : String(err);
           send(ws, { type: 'optimize-failed', payload: { slug, reason } });
         }
-        return;
-      }
-      if (msg.type === 'promote-optimized') {
-        const slug = msg.payload?.slug;
-        if (typeof slug !== 'string' || !slug) {
-          send(ws, { type: 'error', payload: { message: 'promote-optimized: slug is required' } });
-          return;
-        }
-        try {
-          const path = await promoteOptimized(devRoot, slug);
-          send(ws, { type: 'optimized-promoted', payload: { slug, path } });
-          send(ws, { type: 'specs-list', payload: { specs: await listSpecs(devRoot) } });
-        } catch (err) {
-          const m = err instanceof Error ? err.message : String(err);
-          send(ws, { type: 'error', payload: { message: `promote-optimized: ${m}` } });
-        }
-        return;
-      }
-      if (msg.type === 'discard-optimized') {
-        const slug = msg.payload?.slug;
-        if (typeof slug !== 'string' || !slug) {
-          send(ws, { type: 'error', payload: { message: 'discard-optimized: slug is required' } });
-          return;
-        }
-        await discardOptimized(devRoot, slug);
-        send(ws, { type: 'optimized-discarded', payload: { slug } });
         return;
       }
       // v0.12 — plugin-contributed save handlers. Lookup is O(plugins),
@@ -1081,16 +1018,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         });
         return;
       }
-      if (msg.type === 'check-cdp') {
-        await handleCheckCdp(ws, msg, cdpUrl, effectiveLaunchExtras());
-        return;
-      }
       if (msg.type === 'launch-chrome') {
         await handleLaunchChrome(ws, msg, cdpUrl, effectiveLaunchExtras());
-        return;
-      }
-      if (msg.type === 'focus-debug') {
-        await handleFocusDebug(ws, msg, cdpUrl, effectiveLaunchExtras());
         return;
       }
       if (msg.type !== 'command') return;

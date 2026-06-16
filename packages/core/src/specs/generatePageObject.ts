@@ -11,7 +11,7 @@
  * emitters with a `this.page` page variable, so a Page Object's selectors match
  * the crystallized specs exactly.
  */
-import type { SkillStep } from '../skills/writeSkill.js';
+import type { SkillStep } from '../specs/specStep.js';
 import {
   selectorFromDescription,
   selectorForFormField,
