@@ -143,8 +143,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   askUser(req: { askId: string; question: string; options: { label: string; description?: string }[]; other?: boolean }): void {
     this.post({ type: 'askUser', ...req });
   }
-  pushResult(verdict: string, summary: string, steps?: number, cost?: number, tokens?: number): void {
-    this.post({ type: 'result', verdict, summary, steps, cost, tokens });
+  pushResult(verdict: string, summary: string, steps?: number, cost?: number, tokens?: number, findings?: unknown[]): void {
+    this.post({ type: 'result', verdict, summary, steps, cost, tokens, findings });
   }
   setRunning(running: boolean): void {
     this.post({ type: 'running', running });
@@ -578,7 +578,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   function addResult(m) {
     fresh();
     finalizeGroup(typeof m.tokens === 'number' ? m.tokens : undefined);
-    var parsed = splitFindings(m.summary || '');
+    // Structured-first: if the engine handed us parsed findings (from the
+    // agent's JSON block), render the card from data and keep the summary whole.
+    // Only fall back to scraping Markdown when no structured findings arrived.
+    var struct = Array.isArray(m.findings) ? m.findings : null;
+    var parsed = struct ? { main: m.summary || '', findings: null } : splitFindings(m.summary || '');
     var card = document.createElement('div'); card.className = 'result';
     var h = document.createElement('div'); h.className = 'head';
     var chk = document.createElement('span'); chk.className = 'rcheck'; chk.textContent = '✓'; h.appendChild(chk);
@@ -597,7 +601,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     save.addEventListener('click', function () { vscode.postMessage({ type: 'command', id: isPentest ? 'hover.saveFindingsReport' : 'hover.saveSpec' }); });
     card.appendChild(h); card.appendChild(body); card.appendChild(save);
     log.appendChild(card);
-    if (parsed.findings) renderFindings(parsed.findings);
+    if (struct && struct.length) renderStructuredFindings(struct);
+    else if (parsed.findings) renderFindings(parsed.findings);
     speak((m.verdict || 'Pass') + '. ' + parsed.main.replace(/[#*\`|>_-]+/g, ' '));
     scroll();
   }
@@ -673,7 +678,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       else if (m.kind==='ai' || m.kind==='assistant') addNarration(m.text || '');
       else if (m.kind==='system') { if (m.text) addMessage('system', m.text); }
       else if (m.kind==='step') addStep({ tool: m.tool, label: m.label || m.tool, detail: m.input != null ? JSON.stringify(m.input) : '', isError: m.isError });
-      else if (m.kind==='done') addResult({ verdict: 'Done', summary: m.summary || '' });
+      else if (m.kind==='done') addResult({ verdict: 'Done', summary: m.summary || '', findings: m.findings });
     });
     if (curGroup) finalizeGroup();
     replaying = false;
@@ -694,15 +699,41 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (m.length <= 12 && !/\\s.*\\s/.test(m)) return m; // ≤12 chars, at most one space
     return null;
   }
+  // Render the Findings card from STRUCTURED data (the agent's JSON block,
+  // parsed by the engine): severity badge + optional bold title + detail. No
+  // Markdown scraping.
+  function renderStructuredFindings(arr) {
+    var real = arr.filter(function (f) { return f && (f.text || f.title); });
+    if (!real.length) return;
+    var card = document.createElement('div'); card.className = 'findings';
+    var h = document.createElement('div'); h.className = 'fhead'; h.textContent = '⚠ Findings'; card.appendChild(h);
+    real.forEach(function (f) {
+      var row = document.createElement('div'); row.className = 'finding';
+      var word = badgeWord(f.severity);
+      if (word) { var b = document.createElement('span'); b.className = 'badge ' + sevClass(word); b.textContent = word; row.appendChild(b); }
+      var span = document.createElement('span');
+      var body = (f.title && f.title !== f.text) ? '**' + f.title + '** — ' + (f.text || '') : (f.text || f.title || '');
+      var ep = f.method || f.endpoint ? ' \`' + [f.method, f.endpoint].filter(Boolean).join(' ') + '\`' : '';
+      span.innerHTML = inline(body + ep);
+      row.appendChild(span);
+      card.appendChild(row);
+    });
+    log.appendChild(card);
+  }
   function renderFindings(text) {
     var card = document.createElement('div'); card.className = 'findings';
     var h = document.createElement('div'); h.className = 'fhead'; h.textContent = '⚠ Findings'; card.appendChild(h);
     text.split('\\n').forEach(function (line) {
-      // Match "- **Marker** — rest"  OR a plain "- rest" bullet. Don't blindly
+      if (!line.trim()) return;
+      var marker = null, rest = null;
+      // A leading severity word ("Bug — …", "- **Minor** — …", "Critical: …").
+      var sv = line.match(/^\\s*(?:[-*]\\s*)?\\**\\s*(critical|high|medium|low|bug|major|minor|issue|warning|vuln(?:erability)?|security|note|info)\\b\\s*\\**\\s*[—–:\\-]\\s*([\\s\\S]+)$/i);
+      // Else "- **Marker** — rest" OR a plain "- rest" bullet. Don't blindly
       // strip leading '*' (that would eat the opening ** of a bold marker).
-      var m = line.match(/^\\s*[-*]\\s+(?:\\*\\*\\s*([^*]+?)\\s*\\*\\*\\s*[—–:\\-]?\\s*)?([\\s\\S]+)$/);
-      if (!m) { var tt = line.trim(); if (!tt) return; m = [null, null, tt]; }
-      var marker = m[1], rest = m[2];
+      var b = line.match(/^\\s*[-*]\\s+(?:\\*\\*\\s*([^*]+?)\\s*\\*\\*\\s*[—–:\\-]?\\s*)?([\\s\\S]+)$/);
+      if (sv) { marker = sv[1]; rest = sv[2]; }
+      else if (b) { marker = b[1]; rest = b[2]; }
+      else { rest = line.trim(); }
       var word = badgeWord(marker);
       var row = document.createElement('div'); row.className = 'finding';
       if (word) { var b = document.createElement('span'); b.className = 'badge ' + sevClass(word); b.textContent = word; row.appendChild(b); }
@@ -717,14 +748,33 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // results table that may follow Findings) stays in main so it renders as a
   // proper markdown block — not line-by-line.
   function splitFindings(s) {
-    var lines = s.split('\\n'); var hi = -1;
+    var lines = s.split('\\n');
+    // A finding line: optional bullet/bold, a severity word, then a dash/colon
+    // (matches "- **Bug** — …", "Bug — …", "Minor: …", "Critical — …").
+    var SEV = /^\\s*(?:[-*]\\s*)?\\**\\s*(critical|high|medium|low|bug|major|minor|issue|warning|vuln(?:erability)?|security|note|info)\\b\\s*\\**\\s*[—–:\\-]/i;
+    // 1) An explicit "## Findings" heading → the bullet / severity lines under it.
+    var hi = -1;
     for (var i = 0; i < lines.length; i++) { var t = lines[i].trim(); if (/^#{1,6}\\s*(findings|bugs|issues)\\b/i.test(t) || /^findings\\s*:/i.test(t)) { hi = i; break; } }
-    if (hi < 0) return { main: s, findings: null };
-    var j = hi + 1; while (j < lines.length && lines[j].trim() === '') j++;
-    var start = j; while (j < lines.length && /^\\s*[-*]\\s+/.test(lines[j])) j++;
-    var bullets = lines.slice(start, j);
-    var main = lines.slice(0, hi).concat(lines.slice(j)).join('\\n').replace(/\\n{3,}/g, '\\n\\n').trim();
-    return { main: main, findings: bullets.length ? bullets.join('\\n') : null };
+    if (hi >= 0) {
+      var j = hi + 1; while (j < lines.length && lines[j].trim() === '') j++;
+      var start = j; while (j < lines.length && (lines[j].trim() === '' || /^\\s*[-*]\\s+/.test(lines[j]) || SEV.test(lines[j]))) j++;
+      var block = lines.slice(start, j).filter(function (l) { return l.trim() !== ''; });
+      var main = lines.slice(0, hi).concat(lines.slice(j)).join('\\n').replace(/\\n{3,}/g, '\\n\\n').trim();
+      return { main: main, findings: block.length ? block.join('\\n') : null };
+    }
+    // 2) No heading — pull the contiguous run of severity-prefixed lines (the
+    //    free-form "Bug — … / Minor — …" report style the agent often emits),
+    //    leaving the intro prose + any results table in main.
+    var fs = -1;
+    for (var k = 0; k < lines.length; k++) { if (SEV.test(lines[k])) { fs = k; break; } }
+    if (fs < 0) return { main: s, findings: null };
+    var e = fs, block2 = [];
+    while (e < lines.length) {
+      if (lines[e].trim() === '') { var n = e + 1; while (n < lines.length && lines[n].trim() === '') n++; if (n < lines.length && SEV.test(lines[n])) { e = n; continue; } break; }
+      if (SEV.test(lines[e])) { block2.push(lines[e]); e++; } else break;
+    }
+    var main2 = lines.slice(0, fs).concat(lines.slice(e)).join('\\n').replace(/\\n{3,}/g, '\\n\\n').trim();
+    return { main: main2, findings: block2.length ? block2.join('\\n') : null };
   }
   // Minimal, safe markdown → HTML (escape first, then a few constructs).
   function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -844,7 +894,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   };
   var MODES = [
     { value:'normal',   icon:MODE_ICONS.normal,   title:'Frontend', desc:'AI drives your app & saves a Playwright spec' },
-    { value:'security', icon:MODE_ICONS.security, title:'Security', tag:'Experimental', desc:'Business logic & authz — IDOR / BOLA → security spec' },
+    { value:'security', icon:MODE_ICONS.security, title:'API testing', tag:'Experimental', desc:'Drive & verify your API — auth, status codes, access control' },
     { value:'pentest',  icon:MODE_ICONS.pentest,  title:'Pentest',  tag:'Experimental', desc:'Offensive scan of your OWN app → findings report' },
   ];
   document.getElementById('mode-icon').innerHTML = MODE_ICONS[currentModeId || 'normal'];

@@ -80,7 +80,7 @@ async function pushEngineConfig(): Promise<void> {
  *  mode is the extension's own state (the engine, once hosted here, reads it).
  *  A connected service's reported modes are merged on top. */
 const BUILTIN_MODES: ModeEntry[] = [
-  { id: 'security', label: 'Security testing', description: 'business / authorization — orange' },
+  { id: 'security', label: 'API testing', description: 'drive & verify your API — auth, status, access control' },
   { id: 'pentest', label: 'Pentest', description: 'offensive vuln hunting — red' },
 ];
 
@@ -92,6 +92,10 @@ function allModes(): ModeEntry[] {
 }
 
 function modeLabel(id: string): string {
+  // 'security' is surfaced to users as "API testing" (its real-world use); the
+  // internal id + plugin stay 'security'. Force it so an engine-reported label
+  // can't override the display name.
+  if (id === 'security') return 'API testing';
   return allModes().find((m) => m.id === id)?.label ?? id;
 }
 
@@ -632,7 +636,7 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       }
       break;
     case 'session_end': {
-      owner.transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
+      owner.transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError, findings: ev.findings });
       persistSessions();
       if (typeof ev.costUsd === 'number') owner.runCost = ev.costUsd;
       if (typeof ev.tokens === 'number') owner.runTokens = ev.tokens;
@@ -661,7 +665,7 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
         // "Done" not "PASS": the run finished and here's the summary — it is
         // not a test-pass assertion (the agent may have logged real bugs in
         // ## Findings). PASS read as a green light even when issues existed.
-        chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), steps, owner.runCost ?? 0, owner.runTokens ?? 0);
+        chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), steps, owner.runCost ?? 0, owner.runTokens ?? 0, Array.isArray(ev.findings) ? ev.findings : undefined);
       }
       break;
     }
