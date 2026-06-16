@@ -328,10 +328,20 @@
           "default": false,
           "description": "Speak the agent's steps and final summary aloud while it runs."
         },
+        "hover.agent": {
+          "type": "string",
+          "default": "",
+          "description": "Coding-agent CLI to drive runs (e.g. claude / codex). Empty = auto-detect the first installed agent. Switchable from Settings."
+        },
         "hover.model": {
           "type": "string",
           "default": "sonnet",
           "description": "Model for runs, switchable from the chat toolbar. Values depend on the active agent (Claude: sonnet / opus / haiku / claude-fable-5; Codex: gpt-5.5 / gpt-5.4 / gpt-5.4-mini)."
+        },
+        "hover.effort": {
+          "type": "string",
+          "default": "",
+          "description": "Reasoning-effort level for runs, set from the chat model menu. Options depend on the model (Claude: low / medium / high / xhigh / max; Codex: minimal / low / medium / high / xhigh). Empty = the model's default."
         }
       }
     },
