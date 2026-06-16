@@ -1,6 +1,6 @@
 # Hover
 
-> Open-source VS Code extension where AI drives your real browser to author end-to-end tests, then crystallises the session into a plain @playwright/test spec that runs in CI with zero AI and zero API keys.
+> Open-source VS Code extension for AI vibe-testing: AI drives your real browser to author end-to-end tests, then crystallises the session into a plain @playwright/test spec that runs in CI with zero AI and zero API keys. Slogan: "Vibe-test your app, ship real Playwright specs."
 
 Hover is a VS Code extension that puts a chat in your editor. You describe a flow in plain English ("log in, then add a todo"); an AI agent drives your actual Chrome over the Chrome DevTools Protocol (CDP) via Playwright. When the run is verified, one click saves it as a standard `@playwright/test` spec under `__vibe_tests__/`. The saved spec runs in CI like any Playwright test — no agent, no model, no API key, no per-token billing. The extension drives your existing dev server over CDP, so nothing changes in your app or bundler config.
 
@@ -12,11 +12,11 @@ Hover is a VS Code extension that puts a chat in your editor. You describe a flo
 
 ## Install
 
-Install the **Hover — AI E2E Testing & Security** extension from the VS Code Marketplace:
+Install the **Hover — AI Vibe Testing** extension from the VS Code Marketplace:
 
     https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev
 
-Or open the Extensions view in VS Code and search "Hover — AI E2E Testing & Security". You also need one coding-agent CLI on your PATH — Claude Code (`npm i -g @anthropic-ai/claude-code`) or OpenAI Codex (`npm i -g @openai/codex`) — signed in with your subscription or your own API key. The extension drives your existing dev server over CDP, so it works with any framework (Vite, Next.js, Nuxt, Astro, webpack); native iOS / Android is out of scope.
+Or open the Extensions view in VS Code and search "Hover — AI Vibe Testing". You also need one coding-agent CLI on your PATH — Claude Code (`npm i -g @anthropic-ai/claude-code`) or OpenAI Codex (`npm i -g @openai/codex`) — signed in with your subscription or your own API key. The extension drives your existing dev server over CDP, so it works with any framework (Vite, Next.js, Nuxt, Astro, webpack); native iOS / Android is out of scope.
 
 ## Key features
 
@@ -31,9 +31,16 @@ Or open the Extensions view in VS Code and search "Hover — AI E2E Testing & Se
 
 A future hosted service for running the specs you author locally: parallel hosted runs, scheduled monitoring with alerts, a dashboard with flakiness detection, PR checks, plus AI that works on results that already ran — self-healing re-record (regenerate selectors and open a PR when a spec breaks) and failure diagnosis. CI still runs plain Playwright; the AI only acts on what already broke, never on a green build. Authoring stays local and free. No launch date yet.
 
+## Reading
+
+- Vibe coding vs. vibe testing: https://gethover.dev/blog/vibe-coding-vs-vibe-testing/
+- AI-authored Playwright tests (why no AI in CI): https://gethover.dev/blog/ai-authored-playwright-tests/
+- Bring your own CLI, no API key: https://gethover.dev/blog/bring-your-own-cli-no-api-key/
+- What's new in the extension: https://gethover.dev/blog/whats-new-in-the-hover-vscode-extension/
+
 ## Links
 
 - Website: https://gethover.dev
-- Documentation: https://gethover.dev/docs
+- Documentation: https://gethover.dev/docs/
 - VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev
 - Source (Apache-2.0): https://github.com/Hyperyond/Hover

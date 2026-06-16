@@ -80,9 +80,18 @@ const JSON_LD = {
   '@context': 'https://schema.org',
   '@graph': [
     {
+      '@type': 'Organization',
+      '@id': 'https://gethover.dev/#org',
+      name: 'Hyperyond',
+      url: 'https://gethover.dev',
+      logo: 'https://gethover.dev/favicon.svg',
+      sameAs: ['https://github.com/Hyperyond/Hover'],
+    },
+    {
       '@type': 'SoftwareApplication',
       name: 'Hover',
       alternateName: 'Hover — AI Vibe Testing',
+      publisher: { '@id': 'https://gethover.dev/#org' },
       applicationCategory: 'DeveloperApplication',
       operatingSystem: 'macOS, Windows, Linux',
       description:

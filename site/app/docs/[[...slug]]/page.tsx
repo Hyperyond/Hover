@@ -69,8 +69,40 @@ export default async function DocPage(
   const href = hrefFor(slug);
   const { prev, next } = neighbours(href);
 
+  // BreadcrumbList JSON-LD — helps search + AI engines place the page in the
+  // docs hierarchy. Home > Docs > section(s) > page.
+  const crumbs = [
+    { name: 'Home', url: 'https://gethover.dev/' },
+    { name: 'Docs', url: 'https://gethover.dev/docs/' },
+  ];
+  let acc = '/docs';
+  slug.forEach((seg, i) => {
+    acc += `/${seg}`;
+    const leaf = i === slug.length - 1;
+    crumbs.push({
+      name: leaf
+        ? docTitle(source)
+        : seg.replace(/-/g, ' ').replace(/^\w/, (c) => c.toUpperCase()),
+      url: `https://gethover.dev${acc}/`,
+    });
+  });
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: crumbs.map((c, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: c.name,
+      item: c.url,
+    })),
+  };
+
   return (
     <article>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
       <div className="prose-docs">
         <MDXRemote
           source={source}
