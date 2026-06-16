@@ -12,9 +12,9 @@ import { randomBytes } from 'node:crypto';
 export interface SettingsHandlers {
   /** apiKey is read from / written to SecretStorage by the extension. */
   getApiKey(): Promise<string>;
-  /** Coding agents the user can pick + the current one. */
-  getAgents(): { current: string; list: string[] };
-  onChange(change: { agent?: string; speech?: boolean; browser?: string; model?: string; apiKey?: string }): void | Promise<void>;
+  /** Coding agents the user can pick (id + display label) + the current one. */
+  getAgents(): { current: string; list: { id: string; label: string }[] };
+  onChange(change: { agent?: string; speech?: boolean; browser?: string; model?: string; apiKey?: string; localBaseUrl?: string; localModel?: string }): void | Promise<void>;
 }
 
 export class SettingsViewProvider implements vscode.WebviewViewProvider {
@@ -43,6 +43,8 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
       speech: cfg.get<boolean>('speech', false),
       browser: cfg.get<string>('browser', 'silent'),
       model: cfg.get<string>('model', 'sonnet'),
+      localBaseUrl: cfg.get<string>('localBaseUrl', ''),
+      localModel: cfg.get<string>('localModel', ''),
       apiKey: await this.handlers.getApiKey(),
     });
   }
@@ -80,11 +82,20 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   .switch input:checked + .slider:before { transform:translateX(16px); }
   .cloud .label { opacity:.65; }
   .cloudbtn { flex:none; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; background:var(--bg-3); color:var(--mute); border:1px solid var(--line); border-radius:6px; padding:6px 12px; font:inherit; font-size:12px; opacity:.6; cursor:not-allowed; }
+  .field { display:flex; flex-direction:column; gap:6px; padding:10px 0; border-top:1px solid var(--line); }
+  .txtin { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--bg-3); color:var(--text); font:inherit; font-size:12px; }
+  .txtin::placeholder { color:var(--dim); }
+  .txtin:focus { outline:none; border-color:#3a3a3d; }
 </style>
 </head><body>
   <div class="row">
     <div class="label">Agent<span class="sub">The coding agent that drives the browser</span></div>
     <select id="agent"></select>
+  </div>
+  <div class="field" id="local-row" hidden>
+    <div class="label">Local endpoint<span class="sub">Your self-hosted OpenAI-compatible server (Ollama / LM Studio / vLLM), driven via qwen-code</span></div>
+    <input class="txtin" id="local-url" type="text" placeholder="Base URL — http://localhost:11434/v1" />
+    <input class="txtin" id="local-model" type="text" placeholder="Model — e.g. qwen2.5-coder" />
   </div>
   <div class="row">
     <div class="label">Speech narration<span class="sub">Speak tool calls + the summary aloud</span></div>
@@ -101,14 +112,20 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
 <script nonce="${nonce}">
   var vscode = acquireVsCodeApi();
   var agent=document.getElementById('agent'), speech=document.getElementById('speech'), browser=document.getElementById('browser');
-  function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+  var localRow=document.getElementById('local-row'), localUrl=document.getElementById('local-url'), localModel=document.getElementById('local-model');
   function change(patch){ vscode.postMessage(Object.assign({type:'change'}, patch)); }
-  agent.addEventListener('change', function(){ change({agent: agent.value}); });
+  // The Local-endpoint fields only apply to the qwen-hosted "Local LLM" agent.
+  function syncLocal(){ localRow.hidden = agent.value !== 'qwen'; }
+  agent.addEventListener('change', function(){ change({agent: agent.value}); syncLocal(); });
   speech.addEventListener('change', function(){ change({speech: speech.checked}); });
   browser.addEventListener('change', function(){ change({browser: browser.value}); });
+  localUrl.addEventListener('change', function(){ change({localBaseUrl: localUrl.value.trim()}); });
+  localModel.addEventListener('change', function(){ change({localModel: localModel.value.trim()}); });
   window.addEventListener('message', function(e){ var m=e.data; if(m && m.type==='state'){
-    var list=m.agents||['claude']; agent.innerHTML=''; list.forEach(function(id){ var o=document.createElement('option'); o.value=id; o.textContent=cap(id); agent.appendChild(o); }); agent.value=m.agent||'claude';
+    var list=m.agents||[]; agent.innerHTML=''; list.forEach(function(a){ var o=document.createElement('option'); o.value=a.id; o.textContent=a.label; agent.appendChild(o); }); agent.value=m.agent||'claude';
     speech.checked=!!m.speech; browser.value=m.browser||'silent';
+    localUrl.value=m.localBaseUrl||''; localModel.value=m.localModel||'';
+    syncLocal();
   } });
   vscode.postMessage({type:'ready'});
 </script>

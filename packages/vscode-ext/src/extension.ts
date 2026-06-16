@@ -70,6 +70,7 @@ async function pushEngineConfig(): Promise<void> {
   if (model) pool.setModel(model);
   const effort = cfg.get<string>('effort', '');
   pool.setEffort(effort);
+  pool.setLocalEndpoint(cfg.get<string>('localBaseUrl', ''));
   const key = await extContext?.secrets.get('hover.apiKey');
   if (key) pool.setApiKey(key);
 }
@@ -106,9 +107,16 @@ function allAgents(): AgentEntry[] {
   return [...byId.values()];
 }
 
+const AGENT_LABELS: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  gemini: 'Gemini',
+  // qwen-code is the OpenAI-compatible host for a user's self-hosted model.
+  qwen: 'Local LLM',
+};
 function agentLabel(id: string | null): string {
   if (!id) return 'Claude';
-  return id.charAt(0).toUpperCase() + id.slice(1);
+  return AGENT_LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
 }
 
 /** Model picker lists per agent — the `--model` value the CLI accepts + a
@@ -160,9 +168,18 @@ function modelsForAgent(agent: string): ModelEntry[] {
  *  fall back to that agent's default and persist it. */
 async function pushModels(): Promise<void> {
   const agent = activeAgentId();
+  const cfg = vscode.workspace.getConfiguration('hover');
+  // Local LLM (qwen host): the model is a free-text id configured in Settings
+  // (its own hover.localModel, kept separate from the curated hover.model), so
+  // there's no list to reconcile — just hand the engine that model + show it.
+  if (agent === 'qwen') {
+    const lm = cfg.get<string>('localModel', '');
+    pool?.setModel(lm);
+    chatProvider?.updateModels([{ value: lm, label: lm || 'Local model — set in Settings' }], lm, { options: [], current: '' });
+    return;
+  }
   const list = modelsForAgent(agent);
   const selectable = list.filter((m) => !m.disabled);
-  const cfg = vscode.workspace.getConfiguration('hover');
   let model = cfg.get<string>('model', '');
   if (!selectable.some((m) => m.value === model)) {
     model = (selectable[0] ?? list[0]).value;
@@ -1017,7 +1034,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const settings = registerSettingsView({
     getApiKey: async () => (await context.secrets.get('hover.apiKey')) ?? '',
-    getAgents: () => ({ current: currentAgent ?? (vscode.workspace.getConfiguration('hover').get<string>('agent') || 'claude'), list: allAgents().map((a) => a.id) }),
+    getAgents: () => ({ current: currentAgent ?? (vscode.workspace.getConfiguration('hover').get<string>('agent') || 'claude'), list: allAgents().map((a) => ({ id: a.id, label: agentLabel(a.id) })) }),
     onChange: async (change) => {
       const cfg = vscode.workspace.getConfiguration('hover');
       if (typeof change.agent === 'string') await setAgent(change.agent);
@@ -1026,6 +1043,15 @@ export function activate(context: vscode.ExtensionContext): void {
       if (typeof change.model === 'string') {
         await cfg.update('model', change.model, vscode.ConfigurationTarget.Workspace);
         pool?.setModel(change.model);
+        await pushModels(); // keep the chat model button in sync
+      }
+      if (typeof change.localBaseUrl === 'string') {
+        await cfg.update('localBaseUrl', change.localBaseUrl, vscode.ConfigurationTarget.Workspace);
+        pool?.setLocalEndpoint(change.localBaseUrl);
+      }
+      if (typeof change.localModel === 'string') {
+        await cfg.update('localModel', change.localModel, vscode.ConfigurationTarget.Workspace);
+        await pushModels(); // pushes the local model to the engine when qwen is active
       }
       if (typeof change.apiKey === 'string') {
         await context.secrets.store('hover.apiKey', change.apiKey);

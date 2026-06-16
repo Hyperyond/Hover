@@ -73,6 +73,8 @@ export interface ServiceClientPool {
   setModel(model: string): void;
   /** Set the reasoning-effort level for subsequent runs ('' clears it). */
   setEffort(effort: string): void;
+  /** Set the Local LLM endpoint base URL ('' clears it) for the qwen host. */
+  setLocalEndpoint(baseUrl: string): void;
   /** Set (or clear) the model API key — held in memory by the service only. */
   setApiKey(key: string): void;
   /** Start a run (prompt) on the engine. `accounts` are the @-mentioned test
@@ -291,6 +293,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
     },
     setEffort(effort: string): void {
       const body = JSON.stringify({ type: 'set-effort', payload: { effort } });
+      for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
+    },
+    setLocalEndpoint(baseUrl: string): void {
+      const body = JSON.stringify({ type: 'set-local-endpoint', payload: { baseUrl } });
       for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
     },
     setApiKey(key: string): void {

@@ -342,6 +342,16 @@
           "type": "string",
           "default": "",
           "description": "Reasoning-effort level for runs, set from the chat model menu. Options depend on the model (Claude: low / medium / high / xhigh / max; Codex: minimal / low / medium / high / xhigh). Empty = the model's default."
+        },
+        "hover.localBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL of your self-hosted OpenAI-compatible endpoint (Ollama / LM Studio / vLLM) for the Local LLM agent, e.g. http://localhost:11434/v1. Used only when the agent is Local LLM."
+        },
+        "hover.localModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model id served by your local endpoint (e.g. qwen2.5-coder), used by the Local LLM agent."
         }
       }
     },
