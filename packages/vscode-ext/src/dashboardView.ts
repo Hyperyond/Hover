@@ -5,8 +5,7 @@
  *
  *   - `.hover/runs/*.json`  — Playwright spec-run results (json reporter), written
  *     by the ▶ Run commands. → the spec × recent-run pass/fail matrix + flakiness.
- *   - `.hover/sessions/*.json` — agent authoring runs (v2). → 7-day spend + the
- *     recent-findings list.
+ *   - `.hover/sessions/*.json` — agent authoring runs (v2). → 7-day token spend.
  *   - the spec catalogue (spec files under __vibe_tests__). → spec count + rows
  *     for specs that exist but haven't been run yet.
  *
@@ -24,10 +23,9 @@ type Status = 'pass' | 'fail' | 'flaky';
 
 interface DashboardData {
   hasRuns: boolean;
-  tiles: { specs: number; passRate: number | null; flaky: number; tokens7d: number; findings: number };
+  tiles: { specs: number; passRate: number | null; flaky: number; tokens7d: number };
   runs: { id: string; ts: string }[];
   rows: { spec: string; cells: (Status | null)[] }[];
-  findings: { severity: string; text: string; prompt?: string }[];
 }
 
 const MAX_RUNS = 14;
@@ -103,31 +101,24 @@ async function gather(): Promise<DashboardData> {
     if (vals.length) passRate = Math.round((vals.filter((s) => s === 'pass').length / vals.length) * 100);
   }
 
-  // Sessions → 7-day spend + recent findings.
+  // Sessions → 7-day token spend.
   const sessUris = (await vscode.workspace.findFiles('**/.hover/sessions/*.json', '**/node_modules/**'))
     .sort((a, b) => b.path.localeCompare(a.path))
     .slice(0, 40);
   const weekAgo = Date.now() - 7 * 864e5;
   let tokens7d = 0;
-  const findings: { severity: string; text: string; prompt?: string }[] = [];
   for (const uri of sessUris) {
-    const s = (await readJson(uri)) as
-      | { tokensUsed?: number; startedAt?: string; findings?: { severity?: string; text?: string }[]; prompt?: string }
-      | null;
+    const s = (await readJson(uri)) as { tokensUsed?: number; startedAt?: string } | null;
     if (!s) continue;
     const started = s.startedAt ? Date.parse(s.startedAt) : NaN;
     if (typeof s.tokensUsed === 'number' && (Number.isNaN(started) || started >= weekAgo)) tokens7d += s.tokensUsed;
-    for (const f of s.findings ?? []) {
-      if (findings.length < 8) findings.push({ severity: f.severity ?? 'note', text: f.text ?? '', prompt: s.prompt });
-    }
   }
 
   return {
     hasRuns: runs.length > 0,
-    tiles: { specs: catalogue.size, passRate, flaky, tokens7d, findings: findings.length },
+    tiles: { specs: catalogue.size, passRate, flaky, tokens7d },
     runs: runs.map((r) => ({ id: r.id, ts: r.ts })),
     rows,
-    findings,
   };
 }
 
@@ -191,10 +182,6 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
   .legend { display:flex; gap:12px; color:var(--dim); font-size:10.5px; margin-top:9px; }
   .legend span { display:inline-flex; align-items:center; gap:4px; }
   .legend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
-  .find { display:flex; gap:7px; align-items:flex-start; padding:5px 0; line-height:1.4; border-bottom:1px solid var(--line); }
-  .find:last-child { border-bottom:none; }
-  .badge { font-size:9px; font-weight:700; padding:1px 5px; border-radius:4px; flex:none; text-transform:uppercase; }
-  .badge.bug { background:var(--fail); color:#240808; } .badge.minor { background:var(--flaky); color:#241805; } .badge.info { background:var(--line); color:var(--text); }
   .empty { color:var(--dim); text-align:center; padding:18px 6px; line-height:1.5; }
   button { font:inherit; font-size:12px; cursor:pointer; border-radius:7px; }
   .runall { width:100%; margin-top:14px; padding:7px; border:none; background:var(--pass); color:#0c2417; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
@@ -206,7 +193,6 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 <script nonce="${nonce}">
   var vscode = acquireVsCodeApi();
   function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function sev(s){ s=(s||'').toLowerCase(); return (s==='bug'||s==='major'||s==='high'||s==='critical')?'bug':(s==='info'||s==='note'?'info':'minor'); }
   function fmtTok(n){ n=n||0; if(n<1000) return n+''; if(n<1e6) return (n/1000).toFixed(n<1e4?1:0)+'k'; return (n/1e6).toFixed(1)+'M'; }
   function tile(n, k, cls){ return '<div class="tile"><div class="n '+(cls||'')+'">'+esc(n)+'</div><div class="k">'+esc(k)+'</div></div>'; }
   function render(d){
@@ -238,12 +224,6 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       + '<span><i style="background:var(--flaky)"></i>flaky</span>'
       + '<span><i style="background:var(--line)"></i>not run</span></div>';
 
-    if (d.findings.length) {
-      html += '<h3>Recent findings</h3>';
-      d.findings.forEach(function(f){
-        html += '<div class="find"><span class="badge '+sev(f.severity)+'">'+esc(f.severity)+'</span><span>'+esc(f.text)+'</span></div>';
-      });
-    }
     html += '<button class="runall" id="runall">▶ Run all specs</button>';
     root.innerHTML = html; wire();
   }
