@@ -62,6 +62,9 @@ export interface PoolHandlers {
    *  `enginePort` is the host the message came from, so the extension can route
    *  it to the chat session driving that host (multi-host model). */
   onServerMessage?: (msg: ServerMessage, enginePort: number) => void;
+  /** Captured MITM flows from the security runtime (security:flow:added /
+   *  :updated / security:flows:cleared) — feeds the Network view. */
+  onFlow?: (msg: ServerMessage) => void;
 }
 
 export interface ServiceClientPool {
@@ -169,6 +172,8 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         const current = typeof msg.payload?.current === 'string' ? msg.payload.current : null;
         const available = Array.isArray(msg.payload?.available) ? (msg.payload!.available as AgentEntry[]) : [];
         handlers.onAgents(current, available);
+      } else if (typeof msg.type === 'string' && (msg.type === 'security:flow:added' || msg.type === 'security:flow:updated' || msg.type === 'security:flows:cleared')) {
+        handlers.onFlow?.(msg as ServerMessage);
       } else if (
         msg.type === 'event' ||
         msg.type === 'error' ||

@@ -25,6 +25,7 @@ import {
 } from './serviceClient.js';
 import { SpecLensProvider } from './specLens.js';
 import { registerDashboardView } from './dashboardView.js';
+import { registerTrafficView, type TrafficViewProvider, type Flow } from './trafficView.js';
 import { registerConversationsView, type ConversationsViewProvider } from './conversationsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
 import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
@@ -42,6 +43,7 @@ let modeStatus: vscode.StatusBarItem;
 let chatProvider: ChatViewProvider | undefined;
 let settingsProvider: SettingsViewProvider | undefined;
 let conversationsProvider: ConversationsViewProvider | undefined;
+let trafficProvider: TrafficViewProvider | undefined;
 
 let extContext: vscode.ExtensionContext | undefined;
 
@@ -510,6 +512,12 @@ function handleAskUser(msg: ServerMessage, enginePort?: number): void {
     pool?.sendAskUserResponse(id, value, enginePort);
   });
   presentAsk(ownerId, { askId: id, question, options });
+}
+
+/** Route a captured MITM flow (security/pentest mode) into the Network view. */
+function handleFlow(msg: ServerMessage): void {
+  if (msg.type === 'security:flows:cleared') { trafficProvider?.clear(); return; }
+  if (msg.payload && typeof msg.payload === 'object') trafficProvider?.upsert(msg.payload as unknown as Flow);
 }
 
 /** Translate a streamed engine event into chat updates + transcript. Routes by
@@ -1088,11 +1096,14 @@ export function activate(context: vscode.ExtensionContext): void {
     onDelete: (id) => void deleteSession(id),
   });
   conversationsProvider = conversations.provider;
+  const traffic = registerTrafficView();
+  trafficProvider = traffic.provider;
   context.subscriptions.push(
     chat.disposable,
     settings.disposable,
     ...registerDashboardView(),
     ...conversations.disposables,
+    ...traffic.disposables,
     ...registerEnvironmentsView(envStore, () => {
       void pollAppStatus();
       void pushAccounts();
@@ -1129,6 +1140,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void pushModels(); // agent may have changed → re-push the right model list
     },
     onServerMessage: (msg, port) => handleServerMessage(msg, port),
+    onFlow: (msg) => handleFlow(msg),
   });
   context.subscriptions.push({ dispose: () => pool?.dispose() });
 
@@ -1193,6 +1205,9 @@ async function bootEngine(ctx: vscode.ExtensionContext, announce: boolean): Prom
 }
 
 function renderModeStatus(): void {
+  // Gate the Network view: only security / pentest (currentMode != null) run the
+  // MITM proxy, so the view is shown only then (package.json `when`).
+  void vscode.commands.executeCommand('setContext', 'hover.modeActive', currentMode !== null);
   if (!modeStatus) return;
   const label = currentMode ? modeLabel(currentMode) : null;
   const disconnected = connectedServices === 0;

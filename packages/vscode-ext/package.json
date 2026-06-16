@@ -276,6 +276,14 @@
           "contextualTitle": "Hover"
         },
         {
+          "id": "hover.traffic",
+          "name": "Network",
+          "type": "webview",
+          "icon": "$(radio-tower)",
+          "contextualTitle": "Hover",
+          "when": "hover.modeActive"
+        },
+        {
           "id": "hover.environments",
           "name": "Environments",
           "icon": "$(globe)",
