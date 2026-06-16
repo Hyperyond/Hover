@@ -155,8 +155,31 @@ interface SpecMsg {
   kind: string;
   [k: string]: unknown;
 }
+/** A live chat conversation: its transcript + the agent session id used to
+ *  --resume follow-up turns. Multiple coexist; one is active. Persisted to
+ *  workspaceState so they survive reload. (2a — sequential: one runs at a time,
+ *  you switch between them; per-session browsers / true parallel are 2b/2c.) */
+interface ChatSession {
+  id: string;
+  name: string;
+  transcript: SpecMsg[];
+  agentSessionId?: string;
+  createdAt: number;
+}
+let sessions: ChatSession[] = [];
+let activeSessionId = '';
+/** `transcript` and `runSessionId` always mirror the ACTIVE session, so the
+ *  existing run/event code keeps working on it; switching re-points them. */
 let transcript: SpecMsg[] = [];
 let runSessionId: string | undefined;
+/** True while an engine run is in flight. Sequential model (2a): events stream
+ * into the active session's transcript, so switching is blocked until it ends.
+ * True per-session parallel routing arrives in the parallel pass. */
+let runActive = false;
+function setRunningState(on: boolean): void {
+  runActive = on;
+  chatProvider?.setRunning(on);
+}
 let stepCount = 0;
 let runCost = 0;
 let runTokens = 0;
@@ -223,11 +246,12 @@ async function runPrompt(prompt: string): Promise<void> {
     chatProvider?.pushSystem('Engine not connected yet — give it a moment after opening the project, or run "Hover: Start Engine".');
     return;
   }
+  nameSessionFromPrompt(prompt);
   transcript.push({ kind: 'user', text: prompt });
   stepCount = 0;
   runCost = 0;
   runTokens = 0;
-  chatProvider?.setRunning(true);
+  setRunningState(true);
 
   // Resolve @account mentions → creds for the agent to log in with; remembered
   // so "Save as spec" redacts those creds into process.env refs.
@@ -240,7 +264,7 @@ async function runPrompt(prompt: string): Promise<void> {
 
   const url = await resolveTargetUrl();
   if (!url) {
-    chatProvider?.setRunning(false);
+    setRunningState(false);
     chatProvider?.pushSystem('No target URL — start your dev server, then click "▶ Start App" (or set a local URL).');
     return;
   }
@@ -249,20 +273,20 @@ async function runPrompt(prompt: string): Promise<void> {
   // CDP "same-window" check passes even when nothing is serving. Probe HTTP first
   // so the agent never runs against a dead page.
   if (!(await probeUrl(url, 4000))) {
-    chatProvider?.setRunning(false);
+    setRunningState(false);
     chatProvider?.pushSystem(`Couldn't reach ${url} — the dev server isn't responding. Start it, then click "▶ Start App".`);
     return;
   }
   const ready = await ensureBrowser(url);
   if (!ready) {
-    chatProvider?.setRunning(false);
+    setRunningState(false);
     chatProvider?.pushSystem(`Couldn't reach a browser at ${url}. Click "▶ Start App".`);
     return;
   }
   const activeEnv = await envStore?.getActive();
   runSourceGrant = null; // fresh per run
   if (!pool?.run(prompt, runSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun())) {
-    chatProvider?.setRunning(false);
+    setRunningState(false);
     chatProvider?.pushSystem('Could not reach the engine.');
   }
 }
@@ -330,7 +354,7 @@ function handleAskUser(msg: ServerMessage): void {
 /** Translate a streamed engine event into chat updates + transcript. */
 function handleServerMessage(msg: ServerMessage): void {
   if (msg.type === 'error') {
-    chatProvider?.setRunning(false);
+    setRunningState(false);
     chatProvider?.pushSystem(String(msg.payload?.message ?? 'error'));
     return;
   }
@@ -356,7 +380,7 @@ function handleServerMessage(msg: ServerMessage): void {
     return;
   }
   if (msg.type === 'run-active') {
-    chatProvider?.setRunning(true);
+    setRunningState(true);
     return;
   }
   if (msg.type === 'cdp-status') {
@@ -383,8 +407,8 @@ function handleServerMessage(msg: ServerMessage): void {
   const ev = msg.payload as { kind?: string; [k: string]: unknown } | undefined;
   switch (ev?.kind) {
     case 'session_start':
-      if (typeof ev.sessionId === 'string') runSessionId = ev.sessionId;
-      chatProvider?.setRunning(true);
+      if (typeof ev.sessionId === 'string') { runSessionId = ev.sessionId; activeChat().agentSessionId = ev.sessionId; persistSessions(); }
+      setRunningState(true);
       break;
     case 'tool_use': {
       transcript.push({ kind: 'step', tool: ev.tool, input: ev.input });
@@ -431,9 +455,10 @@ function handleServerMessage(msg: ServerMessage): void {
       break;
     case 'session_end':
       transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError });
+      persistSessions();
       if (typeof ev.costUsd === 'number') runCost = ev.costUsd;
       if (typeof ev.tokens === 'number') runTokens = ev.tokens;
-      chatProvider?.setRunning(false);
+      setRunningState(false);
       if (ev.cancelled) {
         chatProvider?.pushSystem('Run cancelled.');
       } else if (ev.isError) {
@@ -796,7 +821,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // native tree views.
   const chat = registerChatView(context.extensionUri);
   chatProvider = chat.provider;
+  loadSessions(); // restore persisted conversations (or seed one)
   chatProvider.runHandler = (prompt) => void runPrompt(prompt);
+  // The user switched the active conversation from the top-bar switcher.
+  chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver
   // (ask_user → relay to engine; source-approval → allow/deny).
   chatProvider.askAnswerHandler = (askId, value) => {
@@ -829,6 +857,9 @@ export function activate(context: vscode.ExtensionContext): void {
     void pushModels();
     void pollAppStatus();
     if (currentMode) chatProvider?.updateMode(currentMode, modeLabel(currentMode));
+    // Restore the session switcher + the active conversation's transcript.
+    pushSessionList();
+    if (activeChat().transcript.length) chatProvider?.loadSession(activeChat().transcript);
   };
 
   const settings = registerSettingsView({
@@ -1020,12 +1051,85 @@ async function setAgent(agentId: string): Promise<void> {
   await pushModels(); // new agent → new model list (+ reset model if incompatible)
 }
 
+function newChatId(): string {
+  return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+function activeChat(): ChatSession {
+  let s = sessions.find((x) => x.id === activeSessionId);
+  if (!s) {
+    s = { id: newChatId(), name: 'New session', transcript: [], createdAt: Date.now() };
+    sessions.push(s);
+    activeSessionId = s.id;
+  }
+  return s;
+}
+/** Point the live `transcript` / `runSessionId` at the active session. */
+function bindActive(): void {
+  const s = activeChat();
+  transcript = s.transcript;
+  runSessionId = s.agentSessionId;
+}
+function persistSessions(): void {
+  // Keep the store bounded: newest 20 sessions, and cap each transcript so a
+  // long run can't bloat workspaceState.
+  const trimmed = sessions
+    .slice(-20)
+    .map((s) => ({ ...s, transcript: s.transcript.slice(-400) }));
+  void extContext?.workspaceState.update('hover.chatSessions', trimmed);
+  void extContext?.workspaceState.update('hover.activeChat', activeSessionId);
+}
+/** Push the session list + active id to the chat top-bar switcher. */
+function pushSessionList(): void {
+  chatProvider?.setSessions(sessions.map((s) => ({ id: s.id, name: s.name })), activeSessionId);
+}
+function loadSessions(): void {
+  const stored = extContext?.workspaceState.get<ChatSession[]>('hover.chatSessions');
+  sessions = Array.isArray(stored) && stored.length
+    ? stored.map((s) => ({ id: s.id, name: s.name, transcript: Array.isArray(s.transcript) ? s.transcript : [], agentSessionId: s.agentSessionId, createdAt: s.createdAt ?? 0 }))
+    : [];
+  activeSessionId = extContext?.workspaceState.get<string>('hover.activeChat') ?? sessions[sessions.length - 1]?.id ?? '';
+  bindActive();
+}
+
 async function newSession(): Promise<void> {
-  transcript = [];
-  runSessionId = undefined;
+  if (runActive) {
+    chatProvider?.pushSystem('A run is in progress — wait for it to finish before starting a new conversation.');
+    return;
+  }
+  const s: ChatSession = { id: newChatId(), name: 'New session', transcript: [], createdAt: Date.now() };
+  sessions.push(s);
+  activeSessionId = s.id;
+  bindActive();
   stepCount = 0;
+  persistSessions();
   await chatProvider?.reveal();
   chatProvider?.newSession();
+  pushSessionList();
+}
+
+/** Switch the active conversation: re-point state and re-render the transcript. */
+function switchSession(id: string): void {
+  if (!sessions.some((s) => s.id === id) || id === activeSessionId) return;
+  if (runActive) {
+    // Sequential model: live events stream into the active session's transcript.
+    // Repointing it mid-run would corrupt both sessions — block until this ends.
+    chatProvider?.pushSystem('A run is in progress — wait for it to finish before switching conversations.');
+    return;
+  }
+  activeSessionId = id;
+  bindActive();
+  stepCount = 0;
+  persistSessions();
+  chatProvider?.loadSession(activeChat().transcript);
+  pushSessionList();
+}
+
+/** First user prompt names the session (truncated), like Claude Code. */
+function nameSessionFromPrompt(prompt: string): void {
+  const s = activeChat();
+  if (s.name && s.name !== 'New session') return;
+  const name = prompt.trim().replace(/\s+/g, ' ').slice(0, 40);
+  if (name) { s.name = name; persistSessions(); pushSessionList(); }
 }
 
 /**

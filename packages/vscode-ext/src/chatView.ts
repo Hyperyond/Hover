@@ -21,6 +21,7 @@ type Inbound =
   | { type: 'setMode'; modeId: string | null }
   | { type: 'setModel'; value: string }
   | { type: 'askUserAnswer'; askId: string; value: string | null }
+  | { type: 'switchSession'; id: string }
   | { type: 'ready' };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -37,6 +38,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Set by the extension: the user answered an in-chat ask_user card (value
    *  null = dismissed). */
   askAnswerHandler?: (askId: string, value: string | null) => void;
+  /** Set by the extension: the user picked a conversation in the top-bar switcher. */
+  sessionSwitchHandler?: (id: string) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -53,6 +56,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       else if (msg.type === 'setMode') this.modeHandler?.(msg.modeId);
       else if (msg.type === 'setModel' && typeof msg.value === 'string') this.modelHandler?.(msg.value);
       else if (msg.type === 'askUserAnswer' && typeof msg.askId === 'string') this.askAnswerHandler?.(msg.askId, msg.value ?? null);
+      else if (msg.type === 'switchSession' && typeof msg.id === 'string') this.sessionSwitchHandler?.(msg.id);
       else if (msg.type === 'ready') this.onReady?.();
     });
   }
@@ -69,6 +73,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Clear the transcript for a new session. */
   newSession(): void {
     this.post({ type: 'reset' });
+  }
+
+  /** Push the conversation list + active id to the top-bar switcher. */
+  setSessions(list: { id: string; name: string }[], activeId: string): void {
+    this.post({ type: 'sessions', list, activeId });
+  }
+  /** Re-render the chat with a switched conversation's transcript. */
+  loadSession(transcript: { kind: string; [k: string]: unknown }[]): void {
+    this.post({ type: 'loadSession', transcript });
   }
 
   updateMode(id: string | null, label: string | null): void {
@@ -193,7 +206,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 
-  header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); position: relative; }
+  #session { max-width: 230px; }
+  #session #session-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .popup.sess { top: calc(100% - 2px); bottom: auto; left: 10px; max-height: 60vh; overflow: auto; }
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text); cursor: pointer; font: inherit; }
   .pill:hover { border-color: var(--accent); }
   .caret { color: var(--text-dim); }
@@ -370,10 +386,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     <button class="iconbtn" id="new" type="button" title="New session">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
     </button>
+    <button class="barebtn" id="session" type="button" title="Switch conversation"><span id="session-label">New session</span><span class="caret">▾</span></button>
     <span class="spacer"></span>
     <button class="appstatus" id="appstatus" type="button" title="App URL — click to set / start">
       <span class="dot offline" id="app-dot"></span><span id="app-label">detecting…</span>
     </button>
+    <div id="session-menu" class="popup sess" hidden></div>
   </header>
 
   <div id="log"></div>
@@ -410,8 +428,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   var sendBtn = document.getElementById('send');
   var cleared = false;
 
-  var speechOn = false, silentMode = false, currentModeId = null;
-  function speak(text) { if (!speechOn || !text) return; try { if (window.speechSynthesis) { window.speechSynthesis.speak(new SpeechSynthesisUtterance(String(text).slice(0, 300))); } } catch (e) {} }
+  var speechOn = false, silentMode = false, currentModeId = null, replaying = false;
+  function speak(text) { if (!speechOn || !text || replaying) return; try { if (window.speechSynthesis) { window.speechSynthesis.speak(new SpeechSynthesisUtterance(String(text).slice(0, 300))); } } catch (e) {} }
   // Running-border: pentest → red, security → orange, else silent → Chrome ring.
   function applyBorder() {
     var b = document.body;
@@ -590,6 +608,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     log.appendChild(card);
     scroll();
   }
+  // Re-render the chat from a switched conversation's saved transcript.
+  function loadSession(tx){
+    setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopTick();
+    workingEl=null; running=false; document.body.classList.remove('running');
+    log.innerHTML=''; curGroup=null; pendingTitle=null; cleared=true;
+    var arr = Array.isArray(tx) ? tx : [];
+    if (!arr.length) { cleared=false; log.appendChild(emptyEl()); syncSend(); return; }
+    replaying = true;
+    arr.forEach(function(m){
+      if (m.kind==='user') addMessage('user', m.text || '');
+      // Replayed agent text rendered muted + WITHOUT speaking (no TTS on switch).
+      else if (m.kind==='system' || m.kind==='ai' || m.kind==='assistant') { if (m.text) addMessage('system', m.text); }
+      else if (m.kind==='step') addStep({ tool: m.tool, label: m.tool, detail: m.input != null ? JSON.stringify(m.input) : '' });
+      else if (m.kind==='done') addResult({ verdict: 'Done', summary: m.summary || '' });
+    });
+    if (curGroup) finalizeGroup();
+    replaying = false;
+    syncSend(); scroll();
+  }
   function sevClass(s) {
     s = (s || '').toLowerCase();
     if (s === 'bug' || s === 'major' || s === 'high' || s === 'critical' || /严重|高危|高/.test(s)) return 'bug';
@@ -745,6 +782,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // ── Mode + model pickers (Claude-Code "Modes" style popups) ──────────────
   var modeMenu = document.getElementById('mode-menu');
   var modelMenu = document.getElementById('model-menu');
+  var sessionMenu = document.getElementById('session-menu');
+  var sessionList = [], activeSess = '';
   var models = [], currentModel = '';
   var MODE_ICONS = {
     normal:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2H11l-1 8.8 8.6-12.2H12.1L13 2z"/></svg>',
@@ -766,7 +805,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         + '</div><span class="p-check">✓</span></div>';
     }).join('');
   }
-  function closePickers(){ modeMenu.hidden = true; modelMenu.hidden = true; }
+  function closePickers(){ modeMenu.hidden = true; modelMenu.hidden = true; sessionMenu.hidden = true; }
+  function toggleSessionMenu(){
+    if (!sessionMenu.hidden) { sessionMenu.hidden = true; return; }
+    closePickers();
+    var items = sessionList.map(function(s){ return { value:s.id, title:s.name }; });
+    items.push({ value:'__new__', title:'＋ New session' });
+    renderPicker(sessionMenu, 'Conversations', items, activeSess);
+    sessionMenu.hidden = false;
+  }
+  sessionMenu.addEventListener('mousedown', function(e){
+    var r = e.target && e.target.closest ? e.target.closest('.p-item') : null; if (!r) return;
+    e.preventDefault(); var v = r.getAttribute('data-v'); sessionMenu.hidden = true;
+    if (v === '__new__') vscode.postMessage({ type:'command', id:'hover.newSession' });
+    else if (v !== activeSess) vscode.postMessage({ type:'switchSession', id:v });
+  });
   function toggleModeMenu(){
     if (!modeMenu.hidden) { modeMenu.hidden = true; return; }
     closePickers(); renderPicker(modeMenu, 'Mode', MODES, currentModeId || 'normal'); modeMenu.hidden = false;
@@ -790,6 +843,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   });
   document.getElementById('mode').addEventListener('click', function(e){ e.stopPropagation(); toggleModeMenu(); });
   document.getElementById('model-btn').addEventListener('click', function(e){ e.stopPropagation(); toggleModelMenu(); });
+  document.getElementById('session').addEventListener('click', function(e){ e.stopPropagation(); toggleSessionMenu(); });
   document.getElementById('browser-toggle').addEventListener('click', cmd('hover.toggleBrowser'));
   document.getElementById('history').addEventListener('click', cmd('hover.sessions.focus'));
   document.getElementById('new').addEventListener('click', cmd('hover.newSession'));
@@ -798,6 +852,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     var t = e.target;
     if (!t || !t.closest || !t.closest('#mode-menu,#mode')) modeMenu.hidden = true;
     if (!t || !t.closest || !t.closest('#model-menu,#model-btn')) modelMenu.hidden = true;
+    if (!t || !t.closest || !t.closest('#session-menu,#session')) sessionMenu.hidden = true;
   });
   document.addEventListener('keydown', function(e){ if (e.key==='Escape') closePickers(); });
   // Delegated: the splash buttons live inside the (re-rendered) empty state.
@@ -841,6 +896,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     var m = e.data; if (!m) return;
     if (m.type==='user'||m.type==='system'||m.type==='assistant') addMessage(m.type, m.text);
     else if (m.type==='askUser') addAskCard(m);
+    else if (m.type==='sessions') {
+      sessionList = Array.isArray(m.list) ? m.list : []; activeSess = m.activeId || '';
+      var a = sessionList.find(function(s){ return s.id===activeSess; });
+      document.getElementById('session-label').textContent = (a && a.name) || 'New session';
+      if (!sessionMenu.hidden) { var its = sessionList.map(function(s){ return { value:s.id, title:s.name }; }); its.push({ value:'__new__', title:'＋ New session' }); renderPicker(sessionMenu, 'Conversations', its, activeSess); }
+    }
+    else if (m.type==='loadSession') loadSession(m.transcript);
     else if (m.type==='narration') addNarration(m.text);
     else if (m.type==='step') addStep(m);
     else if (m.type==='usage') { if (curGroup && typeof m.tokens === 'number') { if (typeof curGroup.tokStart !== 'number') curGroup.tokStart = m.tokens; if (m.tokens >= curGroup.tokStart) { curGroup.tokEnd = m.tokens; setGroupMeta(curGroup, undefined, true); } } }
