@@ -82,8 +82,18 @@ async function pickPage(): Promise<{ page: Page; close: () => Promise<void> } | 
   const wantOrigin = originOf(DEV_URL);
   const pages: Page[] = browser.contexts().flatMap((c) => c.pages());
   if (pages.length === 0) { await close(); return null; }
-  const match = wantOrigin ? pages.find((p) => originOf(p.url()) === wantOrigin) : undefined;
-  return { page: match ?? pages[0], close };
+  const matches = wantOrigin ? pages.filter((p) => originOf(p.url()) === wantOrigin) : [];
+  const candidates = matches.length ? matches : pages;
+  // Multiple same-origin tabs (e.g. one opened to escape a dialog) → drive the
+  // FOREGROUND one, not whichever happens to be first, so steps don't split
+  // across tabs. Fall back to the last (most-recently-opened) match.
+  let chosen = candidates[candidates.length - 1];
+  for (const p of candidates) {
+    try {
+      if (await p.evaluate(() => document.visibilityState === 'visible')) { chosen = p; break; }
+    } catch { /* page busy/closed — skip */ }
+  }
+  return { page: chosen, close };
 }
 
 /**
@@ -107,8 +117,26 @@ function locate(
     : page;
   if (g.role && g.name) return base.getByRole(g.role as Parameters<Page['getByRole']>[0], { name: g.name, exact: true });
   if (g.testId) return base.getByTestId(g.testId);
-  if (g.text) return base.getByText(g.text);
+  // .first(): a label-wrapped control's text matches both the <label> and its
+  // inner <span> → strict-mode violation. Clicking either forwards to the
+  // control, so resolve to the first (the outer label).
+  if (g.text) return base.getByText(g.text).first();
   return null;
+}
+
+/** Locate a file <input> for upload_file: by its label (aria-label/associated
+ *  label), its testId, or — by default — the single file input on the page,
+ *  optionally scoped to a `within` container. Resolves hidden inputs too. */
+function fileInput(
+  page: Page,
+  g: { name?: string; testId?: string; within?: { role?: string; name?: string } },
+): ReturnType<Page['locator']> {
+  const base = g.within?.role && g.within?.name
+    ? page.getByRole(g.within.role as Parameters<Page['getByRole']>[0], { name: g.within.name, exact: true })
+    : page;
+  if (g.name) return base.getByLabel(g.name);
+  if (g.testId) return base.getByTestId(g.testId);
+  return base.locator('input[type="file"]');
 }
 
 /** Shared "where" schema for the grounded actuation tools. */
@@ -233,7 +261,7 @@ server.registerTool(
   'upload_file',
   {
     description:
-      "Upload a file to a file-input / upload control (located by role+name from the snapshot, or testId/text). This runs in the Hover engine (you have no filesystem access yourself): pass `path` to upload a real file the user gave you, OR `placeholder:true` to upload a generated placeholder image (use this only after the user approved it via ask_user). Crystallizes into a Playwright filechooser + setFiles step.",
+      "Upload a file to a file <input> by setting it DIRECTLY (no native file dialog is opened, so it never wedges the page). This runs in the Hover engine (you have no filesystem access yourself): pass `path` for a real file the user gave you, OR `placeholder:true` for a generated placeholder image (only after the user approved it via ask_user). Target the input by its `name` (its label/aria-label) or `testId`; if omitted, the single file input on the page is used. Crystallizes into locator.setInputFiles(...).",
     inputSchema: {
       ...GROUND,
       path: z.string().optional().describe('Path to a real file to upload (absolute, or relative to the project root).'),
@@ -245,8 +273,6 @@ server.registerTool(
     if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
     const { page, close } = picked;
     try {
-      const loc = locate(page, g);
-      if (!loc) return md(NEED_TARGET);
       let absPath: string;
       if (placeholder) {
         absPath = resolve(PROJECT_ROOT, PLACEHOLDER_REL);
@@ -257,14 +283,13 @@ server.registerTool(
       } else {
         return md('✗ pass `path` (a real file) or `placeholder:true`.');
       }
-      const [chooser] = await Promise.all([
-        page.waitForEvent('filechooser', { timeout: 5000 }),
-        loc.click({ timeout: 5000 }),
-      ]);
-      await chooser.setFiles(absPath);
-      return md(`✓ uploaded ${placeholder ? 'a placeholder image' : absPath} via ${describe(g)}`);
+      // setInputFiles on the file <input> directly — works even when the input
+      // is display:none, and (unlike clicking to open a chooser) leaves no
+      // dangling file-dialog state that would poison later browser_* calls.
+      await fileInput(page, g).setInputFiles(absPath, { timeout: 5000 });
+      return md(`✓ uploaded ${placeholder ? 'a placeholder image' : absPath}`);
     } catch (e) {
-      return md(`✗ could not upload via ${describe(g)}: ${errLine(e)}`);
+      return md(`✗ could not upload: ${errLine(e)}`);
     } finally {
       await close();
     }

@@ -78,7 +78,7 @@ import {
   type ModeActivateCtx,
 } from './plugin-api.js';
 
-/** The source-reader MCP server (codeContext). Id → the `mcp__hover_source`
+/** The source-reader MCP server (codeContext). Id → the `mcp__hoversource`
  *  tool prefix; script path resolved relative to this module so it works from
  *  dist/. Spawned only when codeContext is enabled. */
 const SOURCE_MCP_ID = 'hoversource'; // no hyphen — see CONTROL_MCP_ID note below
@@ -181,6 +181,20 @@ const GROUNDED_ACTUATION_DENY = [
   // leave an untranslatable optimizable marker.
   'mcp__playwright__browser_file_upload',
 ];
+const REPORTING_DIRECTIVE =
+  'YOUR REPORT IS ABOUT THE APP, NOT THE TOOLING. The final summary and any ' +
+  '## Findings are for the developer of the app under test — write them in plain ' +
+  'product terms about what the APP did: which user flows worked, and real ' +
+  'defects only (wrong validation, broken navigation, lost data, a genuinely ' +
+  'confusing UX). NEVER mention how you drove the page or any Hover/Playwright ' +
+  'mechanics: no tool names (click_control, check_control, getByRole, ' +
+  'browser_snapshot, upload_file, …), no selectors, no "strict mode", "grounded", ' +
+  '"display:none", "filechooser", "tab index", and no internal file names. ' +
+  'Trouble OPERATING a control (a hidden input, a label repeated across groups, a ' +
+  'lingering dialog, any tool quirk) is YOUR technique to work out — do it ' +
+  'silently; it is NOT an app bug and must never appear as a finding. NEVER ' +
+  'propose changes to Hover or its tools, and do not narrate your own environment, ' +
+  'capabilities, or memory. Report only what a user of the app would care about.';
 const GROUNDED_ACTUATION_DIRECTIVE =
   'INTERACTING WITH THE PAGE — IMPORTANT: You interact with the page ONLY through ' +
   'the Hover control tools: mcp__hovercontrol__click_control, fill_control, ' +
@@ -1200,6 +1214,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (CJK_RE.test(text)) {
           appendSystemPrompt = `${appendSystemPrompt}\n\n${ZH_OUTPUT_DIRECTIVE}`;
         }
+        // The report is about the app, never the tooling (all modes).
+        appendSystemPrompt = `${appendSystemPrompt}\n\n${REPORTING_DIRECTIVE}`;
 
         // Normal mode (no security/pentest plugin active): force grounded
         // actuation — the agent uses mcp__hover-control__* instead of the

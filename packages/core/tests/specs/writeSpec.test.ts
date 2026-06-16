@@ -204,27 +204,27 @@ describe('writeSpec — grounded actuation (click/fill/select_control)', () => {
     expect(src).toContain(`el.selectOption("CA")`);
   });
 
-  it('upload_file → filechooser pairing + setFiles (placeholder → committed fixture)', async () => {
+  it('upload_file → setInputFiles on the file input (no filechooser; placeholder → committed fixture)', async () => {
     const ph = await writeSpec({
       devRoot, name: 'upload placeholder',
       steps: [
         { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
-        { kind: 'step', tool: 'mcp__hover-control__upload_file', input: { role: 'button', name: 'government id upload', placeholder: true } },
+        { kind: 'step', tool: 'mcp__hover-control__upload_file', input: { name: 'government id', placeholder: true } },
       ],
     });
     const src = readFileSync(ph.path, 'utf-8');
-    expect(src).toContain(`page.waitForEvent('filechooser')`);
-    expect(src).toContain(`page.getByRole("button", { name: "government id upload", exact: true }).click()`);
-    expect(src).toContain(`chooser.setFiles("__vibe_tests__/fixtures/hover-placeholder.png")`);
+    expect(src).not.toContain('filechooser');
+    expect(src).toContain(`page.getByLabel("government id").setInputFiles("__vibe_tests__/fixtures/hover-placeholder.png")`);
 
     const real = await writeSpec({
       devRoot, name: 'upload real', overwrite: true,
       steps: [
         { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5175/' } },
-        { kind: 'step', tool: 'mcp__hover-control__upload_file', input: { role: 'button', name: 'avatar', path: 'tests/fixtures/id.png' } },
+        { kind: 'step', tool: 'mcp__hover-control__upload_file', input: { path: 'tests/fixtures/id.png' } },
       ],
     });
-    expect(readFileSync(real.path, 'utf-8')).toContain(`chooser.setFiles("tests/fixtures/id.png")`);
+    // No name/testId → the single file input on the page.
+    expect(readFileSync(real.path, 'utf-8')).toContain(`page.locator('input[type="file"]').setInputFiles("tests/fixtures/id.png")`);
   });
 
   it('click_control with `within` scopes to the group (repeated Yes/No / hidden input)', async () => {
@@ -236,7 +236,7 @@ describe('writeSpec — grounded actuation (click/fill/select_control)', () => {
       ],
     });
     const src = readFileSync(r.path, 'utf-8');
-    expect(src).toContain(`page.getByRole("radiogroup", { name: "pep", exact: true }).getByText("No")`);
+    expect(src).toContain(`page.getByRole("radiogroup", { name: "pep", exact: true }).getByText("No").first()`);
   });
 
   it('click_control falls back to testId, then text', async () => {
@@ -256,7 +256,7 @@ describe('writeSpec — grounded actuation (click/fill/select_control)', () => {
         { kind: 'step', tool: 'mcp__hover-control__click_control', input: { text: 'Learn more' } },
       ],
     });
-    expect(readFileSync(byText.path, 'utf-8')).toContain(`page.getByText("Learn more")`);
+    expect(readFileSync(byText.path, 'utf-8')).toContain(`page.getByText("Learn more").first()`);
   });
 });
 

@@ -87,7 +87,7 @@ export function buildCdpHint(tabs: Tab[]): string {
     `    A click on one can report "intercepts pointer events", time out, or leave`,
     `    it unchanged — that's the hidden input, NOT a broken control and NOT a`,
     `    framework/state bug. Toggle it with the check_control tool`,
-    `    (mcp__hover_control__check_control), passing the SAME role + name from the`,
+    `    (mcp__hovercontrol__check_control), passing the SAME role + name from the`,
     `    snapshot (e.g. role "radio", name "sex male"; pass checked:false to clear`,
     `    a checkbox). Report only what you observe, never a guessed state bug.`,
     ``,

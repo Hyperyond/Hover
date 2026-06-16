@@ -538,18 +538,12 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
       return emitInteraction(groundedSelector(withRole, pageVar), `selectOption(${JSON.stringify(String(input.value ?? ''))})`);
     }
     case 'upload_file': {
-      // Engine-side upload → the robust filechooser pairing. placeholder mode
-      // references the stable committed fixture the engine wrote; otherwise the
-      // path the user supplied.
-      const sel = groundedSelector(input, pageVar);
+      // setInputFiles directly on the file <input> (mirrors fileInput() in
+      // mcp/actuateServer.ts) — no filechooser dialog. placeholder mode
+      // references the committed fixture; otherwise the user-supplied path.
+      const sel = fileInputSelector(input, pageVar);
       const rel = input.placeholder ? '__vibe_tests__/fixtures/hover-placeholder.png' : String(input.path ?? '');
-      return [
-        `const [chooser] = await Promise.all([`,
-        `  ${pageVar}.waitForEvent('filechooser'),`,
-        `  ${sel}.click(),`,
-        `]);`,
-        `await chooser.setFiles(${JSON.stringify(rel)});`,
-      ];
+      return [`await ${sel}.setInputFiles(${JSON.stringify(rel)});`];
     }
     case 'browser_navigate': {
       const url = String(input.url ?? '');
@@ -705,8 +699,25 @@ function groundedSelector(input: Record<string, unknown>, pageVar = 'page'): str
   // "street" also resolve "previous street" → strict-mode violation on replay.
   if (role && name) return `${base}.getByRole(${JSON.stringify(role)}, { name: ${JSON.stringify(name)}, exact: true })`;
   if (testId) return `${base}.getByTestId(${JSON.stringify(testId)})`;
-  if (text) return `${base}.getByText(${JSON.stringify(text)})`;
+  // .first(): a label-wrapped control's text matches the <label> AND its inner
+  // <span> → strict-mode violation; the first (outer label) is clickable.
+  if (text) return `${base}.getByText(${JSON.stringify(text)}).first()`;
   return `${base}.locator('body')`;
+}
+
+/** Selector for upload_file's target file <input> — by label, testId, or the
+ *  single file input (optionally `within`-scoped). Mirrors fileInput() in
+ *  mcp/actuateServer.ts. */
+function fileInputSelector(input: Record<string, unknown>, pageVar = 'page'): string {
+  const name = typeof input.name === 'string' ? input.name : '';
+  const testId = typeof input.testId === 'string' ? input.testId : '';
+  const w = input.within as { role?: unknown; name?: unknown } | undefined;
+  const base = w && typeof w.role === 'string' && typeof w.name === 'string'
+    ? `${pageVar}.getByRole(${JSON.stringify(w.role)}, { name: ${JSON.stringify(w.name)}, exact: true })`
+    : pageVar;
+  if (name) return `${base}.getByLabel(${JSON.stringify(name)})`;
+  if (testId) return `${base}.getByTestId(${JSON.stringify(testId)})`;
+  return `${base}.locator('input[type="file"]')`;
 }
 
 /**
