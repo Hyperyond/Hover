@@ -10,7 +10,7 @@ tags: [playwright, flaky-tests, promise-all]
 
 A download test passes ten times, then goes red on the eleventh with `Timeout waiting for event "download"`. Nobody changed the app. The test is racing itself.
 
-This shows up on three flows every real app has: a button that downloads a file, a "Sign in with Google" popup, a file picker behind an upload control. Each one flakes for the same reason, and the fix is the same line of structure.
+This shows up on three common flows: a button that downloads a file, a "Sign in with Google" popup, a file picker behind an upload control. Each one flakes for the same reason, and the fix is the same line of structure.
 
 ## Why the listener loses the race
 
@@ -21,7 +21,7 @@ await page.getByRole('button', { name: 'Export CSV' }).click();
 const download = await page.waitForEvent('download');
 ```
 
-Click first, then wait. The trouble is timing. `click()` fires the download, and a fast download can resolve before the next line registers the listener. When that happens, `waitForEvent('download')` waits for an event that already fired, and you sit there until the 30-second timeout. On a slow CI box the order flips often enough to look random.
+Click first, then wait. The trouble is timing. `click()` fires the download, and a fast download can resolve before the next line registers the listener. When that happens, `waitForEvent('download')` waits for an event that already fired, and you sit there until the 30-second timeout. On a slow CI box the order flips often enough that the failure looks random.
 
 The popup and the file chooser have the identical shape. `click()` opens the popup, the `popup` event fires, and your `waitForEvent('popup')` arrives a beat too late.
 
@@ -36,7 +36,7 @@ const [download] = await Promise.all([
 ]);
 ```
 
-`Promise.all` starts the listener first, then fires the click. The event can't slip through, because something is already listening when it happens. The popup and the upload take the same pairing:
+`Promise.all` starts the listener first, then fires the click. The event can't slip through, because the listener is already running when it happens. The popup and the upload take the same pairing:
 
 ```ts
 const [popup] = await Promise.all([
@@ -53,8 +53,8 @@ await chooser.setFiles('avatar.png');
 
 ## Let Hover write the pairing
 
-You know the rule now, but you still have to remember it on every download, popup, and upload you ever test. Hover removes that step.
+You know the rule now, but you still have to remember it on every download, popup, and upload you test. Hover removes that step.
 
-When you crystallize a session, Hover's deterministic translator already emits popup and new-tab flows as `Promise.all` pairings. For a download or a file upload it leaves a `// hover:optimizable` marker on the spot, and the optional [optimization pass](/docs/features/optimization-pass/) fills it in, taking the exact pairing from Hover's built-in worked-example seeds. You read the diff and keep it. The spec that ships is plain Playwright with the race already designed out.
+When you crystallize a session, Hover's deterministic translator already emits popup and new-tab flows as `Promise.all` pairings. For a download or a file upload it leaves a `// hover:optimizable` marker on the spot, and the optional [optimization pass](/docs/features/optimization-pass/) fills it in, taking the exact pairing from Hover's built-in worked-example seeds. You read the diff and keep it. The spec that ships is plain Playwright with the race designed out.
 
 [See how Hover structures a spec →](/docs/features/structured-output/)

@@ -1,6 +1,6 @@
 ---
 title: "Playwright codegen vs. AI exploration: when each one wins"
-description: "Playwright's built-in recorder is free, local, and writes clean code, but it only transcribes clicks. Here is where codegen is the right tool and where authoring from intent changes the job."
+description: "Playwright's built-in recorder is free, local, and writes clean code, but it only transcribes clicks. Where codegen is the right tool, and where authoring from intent changes the job."
 date: 2026-05-22
 author: "Hover"
 tags: [playwright, codegen, comparison]
@@ -10,23 +10,25 @@ tags: [playwright, codegen, comparison]
 
 `npx playwright codegen` is one of the best free things in the testing ecosystem. It opens a browser, you click through your app, and it writes down every interaction as Playwright code with role- and text-based locators. No account, no model, no cost. If you have never run it, run it today.
 
-Recording your clicks and authoring a test are different jobs. That difference is the whole story.
+Recording your clicks and authoring a test are different jobs.
 
 ## What codegen does
 
 Codegen transcribes. It watches you and writes down what it saw. Click the "Sign in" button and it emits `page.getByRole('button', { name: 'Sign in' }).click()`. Fill a field and it emits a `.fill()`. It picks good locators, favouring roles and labels over CSS, and the output is clean Playwright you can read.
 
-It decides nothing. Codegen has no idea what you're trying to accomplish. You can't tell it "test the login flow" and walk away; you perform the login flow yourself, click by click. It adds an assertion only when you click the toolbar to record one. It can't tell which of your clicks mattered and which were you hunting for a menu. The raw output is a draft you then edit.
+It decides nothing.
 
-That isn't a gap in the tool. A stenographer faithfully writes down what was said. Codegen faithfully writes down what you did.
+Codegen has no idea what you're trying to accomplish. You can't tell it "test the login flow" and walk away; you perform the login flow yourself, click by click. It adds an assertion when you click the toolbar to record one. It can't tell which of your clicks mattered and which were you hunting for a menu. The raw output is a draft you then edit.
+
+That isn't a gap in the tool. A stenographer writes down what was said. Codegen writes down what you did.
 
 ## Where AI exploration is doing something else
 
-Hover starts from what you want, not from your clicks. You type a sentence, "log in, then add a todo named verify hover," and the agent works out the steps: it finds the email field, the password field, the submit button, types the todo, and adds an assertion that the todo shows up. You described the outcome. The agent found the path.
+Hover starts from what you want, not from your clicks. You type a sentence ("log in, then add a todo named verify hover") and the agent works out the steps. It finds the email field, the password field, the submit button, types the todo, and adds an assertion that the todo shows up. You described the outcome; the agent found the path.
 
-A few things change as a result. You author by saying what you want instead of performing it, which helps when the flow is long or when you're specifying a test for an app someone else built. Assertions come from the agent understanding the goal, so you don't have to remember to record the check that proves it worked. And the agent walks past small surprises, a cookie banner or an interstitial, that would interrupt a manual recording.
+Three things change as a result. You author by saying what you want instead of performing it, which helps when the flow is long or when you're specifying a test for an app someone else built. The agent infers assertions from the goal, so you don't have to remember to record the check that proves it worked. And the agent walks past a cookie banner or an interstitial that would interrupt a manual recording.
 
-Hover's output is the same kind of file codegen produces: a plain `@playwright/test` spec, semantic locators, runs in CI with no model. Hover spends the model while authoring and hands you ordinary Playwright. You don't trade codegen's clean, dependency-free output for a vendor format.
+Hover's output is the same kind of file codegen produces: a plain `@playwright/test` spec with semantic locators that runs in CI with no model. Hover spends the model while authoring and hands you ordinary Playwright. You don't trade codegen's clean, dependency-free output for a vendor format.
 
 ## Which one to reach for
 
@@ -36,6 +38,6 @@ Use AI exploration when you would rather describe the test than perform it, when
 
 ## The property worth protecting
 
-Both tools hand you standard Playwright code that runs in CI with no model. Guard that. A test you can read, diff, hand to a teammate, and run for free on any machine outlasts a test trapped in a vendor runtime, however it was written. Codegen gets you there by transcription. Hover gets you there by exploration. Pick the one that fits the flow in front of you.
+Both tools hand you standard Playwright code that runs in CI with no model. Guard that. A test you can read, diff, hand to a teammate, and run for free on any machine outlasts a test trapped in a vendor runtime, however you wrote it. Codegen gets you there by transcription, Hover by exploration. Pick the one that fits the flow in front of you.
 
 [Read the Hover record-mode docs →](/docs/features/record-mode/)

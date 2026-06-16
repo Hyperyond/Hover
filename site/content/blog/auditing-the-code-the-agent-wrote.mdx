@@ -8,30 +8,30 @@ tags: [engineering, code-review, ai, security]
 
 # We ran an audit pass over our own AI-built code
 
-Most of Hover got written fast, with a coding agent in the loop. That's the whole pitch of the product, so it would be strange to build it any other way. But fast-with-an-agent and correct are not the same property, and the gap between them is exactly the thing the agent is worst at noticing about its own output.
+Most of Hover got written fast, with a coding agent in the loop. That's the whole pitch of the product, so it would be strange to build it any other way. But fast-with-an-agent and correct are different properties, and the gap between them is the thing the agent is worst at noticing in its own output.
 
-So we stopped feature work for a session and audited the codebase in one deliberate pass. Find the dead code, the logic that can't be reached, the bugs that haven't fired yet. Fix them. It turned up around forty real issues, and we fixed all but one. The one we left is a factory that's genuinely unused today but cheap to keep for the shape it documents.
+So we stopped feature work for a session and audited the codebase in one pass: find the dead code, the logic that can't be reached, the bugs that haven't fired yet, and fix them. It turned up around forty real issues, and we fixed all but one. The one we left is a factory that's unused today but cheap to keep for the shape it documents.
 
 The findings worth writing about weren't the obvious ones.
 
 ## The bug was in the safety code
 
-The sharpest one sat inside the part of the codebase whose entire job is safety. Hover strips credentials out of a recorded request before it [writes the request into a committed spec](/blog/secrets-in-committed-playwright-specs/). Cookies, bearer tokens, an SSN in a JSON body: all of it gets dropped or masked on the way to disk.
+The sharpest one sat inside the part of the codebase whose job is safety. Hover strips credentials out of a recorded request before it [writes the request into a committed spec](/blog/secrets-in-committed-playwright-specs/). Cookies, bearer tokens, an SSN in a JSON body: all of it gets dropped or masked on the way to disk.
 
-The sanitizer kept two lists of credential names, one for URL query params and one for JSON body fields. They were supposed to match. They didn't. `auth` and `apikey` were in the URL list and missing from the body list, so a query-string `?auth=...` got masked while a body field literally named `auth` went straight through into the committed file. Two lists that are "supposed to stay in sync" are a bug with a delay on it.
+The sanitizer kept two lists of credential names, one for URL query params and one for JSON body fields. They were supposed to match. They didn't. `auth` and `apikey` were in the URL list and missing from the body list, so a query-string `?auth=...` got masked while a body field named `auth` went straight through into the committed file. Two lists that are "supposed to stay in sync" are a bug with a delay on it.
 
-The fix was to derive both matchers from one alternation, so adding a credential name once covers both passes and they can't drift again. While we were in there, we found the body matcher only caught string values. An SSN sent as a JSON number (`"ssn": 123456789`) slipped past it. That's fixed too. The lesson isn't "write better regexes." It's that the code most worth auditing is the code you trust the most, because nobody re-reads it.
+We fixed it by deriving both matchers from one alternation, so adding a credential name once covers both passes and they can't drift again. While we were in there, we found the body matcher only caught string values. An SSN sent as a JSON number (`"ssn": 123456789`) slipped past it. We fixed that too. The lesson isn't "write better regexes." It's that the code most worth auditing is the code you trust the most, because nobody re-reads it.
 
 ## A fix that was worse than the bug
 
-One finding was a regression we'd shipped ourselves. We'd recently made a run survive a widget reconnect, so a Vite HMR mid-session doesn't kill the agent. Good change. But the service's `close()` path stopped aborting that now-resilient run, so shutting the service down left an orphan agent process alive. We made the run harder to kill and then forgot one of the places it needed killing. The audit caught it; a user would have caught it as a zombie `claude` process eating tokens after they closed the tab.
+One finding was a regression we'd shipped ourselves. We'd made a run survive a dropped WebSocket, so the chat panel reconnecting mid-session doesn't kill the agent. Good change. But the engine's `close()` path stopped aborting that now-resilient run, so shutting the engine down left an orphan agent process alive. We made the run harder to kill and then forgot one of the places it needed killing. The audit caught it. A user would have caught it as a zombie `claude` process eating tokens after they closed the tab.
 
 ## Dead code lies to you
 
-The quieter wins were deletions. An unused `assert` import, seed definitions nothing referenced anymore, a control-character check that had been written as a regex but rendered as literal bytes in the source, so it matched nothing. Dead code isn't neutral. The control-char check looked like a guard and wasn't one. Reading the file, you'd assume that input was handled. It wasn't, until the audit rewrote the check as a real `charCodeAt` loop.
+The quieter wins were deletions. An unused `assert` import, seed definitions nothing referenced anymore, a control-character check written as a regex but rendered as literal bytes in the source, so it matched nothing. Dead code isn't neutral. The control-char check looked like a guard and wasn't one. Reading the file, you'd assume that input was handled. It wasn't, until we rewrote the check as a real `charCodeAt` loop.
 
 ## This is the product, pointed inward
 
-The point of the exercise isn't that AI writes buggy code. People write buggy code. The point is that speed without a verification pass is just an unaudited diff, and the verification pass is the part you can't skip and stay honest.
+The point of the exercise isn't that AI writes buggy code. You write buggy code too. The point is that speed without a verification pass is just an unaudited diff, and the verification pass is the part you skip only by giving up honesty.
 
-That's the same discipline Hover sells. The [optimize pass](/blog/playwright-page-object-model-auto-extract/) re-reads a saved spec instead of trusting the first draft. [Security and pentest modes](/blog/pentest-mode-attack-your-own-app/) attack the running app instead of trusting that the happy path means the code is sound. Running an audit over our own source was the same move, aimed at ourselves. If we wouldn't ship Hover's output without a verification step, we shouldn't ship Hover without one either.
+That's the same discipline Hover sells. The [optimize pass](/docs/features/optimization-pass/) re-reads a saved spec instead of trusting the first draft. [Security and pentest modes](/blog/pentest-mode-attack-your-own-app/) attack the running app instead of trusting that a green happy path means the code is sound. Running an audit over our own source was the same move, aimed at ourselves. If we wouldn't ship Hover's output without a verification step, we shouldn't ship Hover without one either.

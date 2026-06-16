@@ -4,7 +4,7 @@ import { MDXRemote } from 'next-mdx-remote/rsc';
 import remarkGfm from 'remark-gfm';
 import rehypeSlug from 'rehype-slug';
 import { mdxComponents } from '@/components/docs/mdx-components';
-import { allDocSlugs, readDoc, docTitle } from '@/lib/docs-content';
+import { allDocSlugs, readDoc, docTitle, docDescription } from '@/lib/docs-content';
 import { neighbours } from '@/lib/docs-nav';
 import { DocsOverview } from '@/components/docs/Overview';
 
@@ -36,9 +36,18 @@ export async function generateMetadata(
   }
   const source = readDoc(slug);
   const title = source ? docTitle(source) : 'Docs';
+  const description = source ? docDescription(source) : undefined;
+  const canonical = hrefFor(slug);
   return {
     title: { absolute: `${title} · Hover docs` },
-    alternates: { canonical: hrefFor(slug) },
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title: `${title} · Hover docs`,
+      description,
+      url: `https://gethover.dev${canonical}`,
+      type: 'article',
+    },
   };
 }
 

@@ -44,3 +44,26 @@ export function docTitle(source: string): string {
   const m = source.match(/^#\s+(.+)$/m);
   return m ? m[1].trim() : 'Docs';
 }
+
+/**
+ * First real paragraph of the doc, cleaned to plain text for the meta
+ * description. Without this every docs page would inherit the homepage
+ * description (duplicate, off-topic) and lose its own search snippet.
+ */
+export function docDescription(source: string): string | undefined {
+  const lines = source.split('\n');
+  for (const line of lines) {
+    const t = line.trim();
+    // skip the H1, sub-headings, blank lines, and block markup
+    if (!t || t.startsWith('#') || t.startsWith('|') || t.startsWith('```') ||
+        t.startsWith('-') || t.startsWith('>') || t.startsWith('<') ||
+        t.startsWith('![') || t.startsWith(':::')) continue;
+    const plain = t
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → text
+      .replace(/[*_`]/g, '')                    // bold/italic/code marks
+      .trim();
+    if (plain.length < 20) continue;
+    return plain.length > 155 ? plain.slice(0, 152).trimEnd() + '…' : plain;
+  }
+  return undefined;
+}

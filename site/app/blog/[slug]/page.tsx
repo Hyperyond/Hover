@@ -23,6 +23,7 @@ export async function generateMetadata(
   return {
     title: { absolute: `${post.title} · Hover` },
     description: post.description,
+    keywords: post.tags,
     alternates: { canonical: `/blog/${slug}/` },
     openGraph: {
       title: post.title,
@@ -68,6 +69,7 @@ export default async function BlogPost(
     publisher: { '@type': 'Organization', name: 'Hover', url: 'https://gethover.dev' },
     mainEntityOfPage: { '@type': 'WebPage', '@id': url },
     image: 'https://gethover.dev/og.png',
+    keywords: post.tags.join(', '),
     url,
   };
 

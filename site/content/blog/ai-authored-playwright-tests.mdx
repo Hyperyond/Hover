@@ -10,9 +10,9 @@ tags: [playwright, ai-testing, ci]
 
 When a tool says "AI testing," ask one question: is the model running when the test runs?
 
-Some tools answer yes. A language model reads the steps on every run, looks at the page, decides what to click, and recovers when something moved. The test is a prompt that re-resolves itself each time. Other tools, Hover among them, answer no. A model explores your app once, works out the flow, and writes ordinary test code. After that the model is gone, and a deterministic script runs the same way every time.
+Some tools answer yes. A language model reads the steps on every run, looks at the page, decides what to click, and recovers when something moved. The test is a prompt that re-resolves itself each time. Hover answers no. A model explores your app once, works out the flow, and writes ordinary test code. After that the model is gone, and a deterministic script runs the same way every time.
 
-That single yes-or-no decides what your test suite costs you for the rest of its life.
+That yes-or-no decides what your test suite costs you for the rest of its life.
 
 ## Runtime AI is a bill that arrives forever
 
@@ -20,11 +20,11 @@ Put a model on the path that runs when the test runs, and three things follow yo
 
 You pay on every run. Each PR, each nightly, each merge-queue retry makes LLM calls. A suite that runs hundreds of times a day across dozens of branches multiplies that bill, and it grows with how much you test. You wanted more coverage to be cheap; this makes it expensive.
 
-Runs get slower. A model looking at a screenshot and deciding what to click takes longer than a selector resolving against the DOM. Vision models take longer still.
+Runs get slower. A model that looks at a screenshot and decides what to click takes longer than a selector resolving against the DOM. Vision models take longer.
 
-Your green build now depends on someone else's uptime. A rate limit, a regional outage, or a model version your provider sunsets can turn a passing suite red without anyone touching your code.
+Your green build depends on someone else's uptime. A rate limit, a regional outage, or a model version your provider sunsets can turn a passing suite red while nobody touches your code.
 
-None of that is a worst case. It's what keeping inference on the hot path means.
+None of that is a worst case. That is what keeping inference on the hot path costs you.
 
 ## Authoring-time AI spends the model once
 
@@ -42,7 +42,7 @@ test('login then add todo', async ({ page }) => {
 });
 ```
 
-No agent lives in that file. It runs with `npx playwright test`, in your CI, with zero tokens and no call to any provider. The model did its work at the one moment intelligence helped: figuring out the flow. The artifact it left behind is ordinary Playwright.
+No agent lives in that file. It runs with `npx playwright test`, in your CI, with zero tokens and no call to any provider. The model did its work at the one moment intelligence helped, figuring out the flow. What it left behind is ordinary Playwright.
 
 ## "But selectors break when the UI changes"
 
@@ -52,9 +52,9 @@ Most churn never reaches the spec. Hover writes semantic locators (`getByRole`, 
 
 When a name changes, you re-record on purpose. One click replays the original prompt against the current UI and rewrites the file. Thirty seconds, ten cents, and you read the diff before committing.
 
-When the flow itself broke, the red build is the point. That's a regression the test caught. Fix the app.
+When the flow itself broke, the red build is the point. The test caught a regression. Fix the app.
 
-The difference from runtime self-healing is when you pay and how often. You pay once, on purpose, when something changed. You don't pay on every green run for the life of the suite.
+The difference from runtime self-healing is when you pay and how often. You pay once, on purpose, when something changed, not on every green run for the life of the suite.
 
 ## When you do want the model at runtime
 

@@ -10,7 +10,7 @@ tags: [playwright, maintenance, selectors]
 
 You ship a UI change. The next CI run goes red across a dozen specs. None of them found a bug; they found a renamed class. You spend the afternoon fixing tests instead of building.
 
-Every end-to-end suite hits this. The question is what it costs you each time. Some tools keep a model in the loop that re-resolves selectors while the test runs, so you pay for inference on every CI run forever. The approach below keeps your tests as plain Playwright and concentrates that cost at the one moment something changed. Five rules.
+Every end-to-end suite hits this. What it costs you each time is the question. Some tools keep a model in the loop that re-resolves selectors while the test runs, so you pay for inference on every CI run forever. The approach below keeps your tests as plain Playwright and concentrates that cost at the one moment something changed. Here are five rules.
 
 ## 1. Use semantic locators, never CSS or XPath
 
@@ -26,13 +26,13 @@ dies the moment a designer renames a class. A test written like this:
 await page.getByRole('button', { name: 'Sign in' }).click();
 ```
 
-survives almost any restyle, because "the button labelled Sign in" is a promise you make to your users, not an implementation detail you might refactor tomorrow.
+survives most restyles. "The button labelled Sign in" is a promise you make to your users, not an implementation detail you might refactor tomorrow.
 
-Hover writes `getByRole`, `getByLabel`, `getByText`, and `getByTestId` by default, and never CSS or XPath. Write your hand-authored tests the same way. That single habit decides whether your suite tolerates UI churn or fights it.
+Hover writes `getByRole`, `getByLabel`, `getByText`, and `getByTestId` by default, never CSS or XPath. Write your hand-authored tests the same way. That one habit decides whether your suite tolerates UI churn or fights it.
 
 ## 2. Add a visibility prelude so "moved behind a menu" fails fast
 
-A button that still exists in the DOM but now hides behind a kebab menu is a quiet trap. Playwright's `.click()` auto-waits for actionability, so it does eventually fail, after a 30-second timeout, with a message that reads like flaky infrastructure.
+A button that still exists in the DOM but now hides behind a kebab menu is a quiet trap. Playwright's `.click()` auto-waits for actionability, so it fails after a 30-second timeout, with a message that reads like flaky infrastructure.
 
 Three lines turn that into a fast, legible failure:
 
@@ -42,11 +42,11 @@ await expect(el).toBeVisible();
 await el.click();
 ```
 
-Now if the button drifts into a closed drawer, `toBeVisible()` fails in about five seconds with "Locator expected to be visible." An engineer reads that and knows it's a UI regression, not a network blip. Hover emits this prelude for you on `click`, `dblclick`, `hover`, `fill`, and `selectOption`.
+Now if the button drifts into a closed drawer, `toBeVisible()` fails in about five seconds with "Locator expected to be visible." You read that and know it's a UI regression, not a network blip. Hover emits this prelude for you on `click`, `dblclick`, `hover`, `fill`, and `selectOption`.
 
 ## 3. Re-record on purpose when the semantics shift
 
-Someone renames "Sign in" to "Log in." The selector breaks, and it should. The test was asserting a contract that changed. This is the suite working, not failing.
+Someone renames "Sign in" to "Log in." The selector breaks, and it should. The test was asserting a contract that changed. The suite is working.
 
 You have two ways to fix it. Edit the file by hand; it's plain Playwright, so it's a one-line change. Or click **⟳ Re-record** in the Hover extension: the agent reads the test's original prompt, runs it against the current app, and rewrites the file. About 30 seconds, about ten cents, and you read the `git diff` before you commit. You do this when you decide something changed, not as an automatic model call on every green run.
 
@@ -56,10 +56,10 @@ You will want a "re-record all" button. Skip it. Re-recording specs that passed 
 
 ## 5. Let real flow breaks fail
 
-Not every red test is a chore for you to clear. When a test fails because a step that used to work now doesn't, that test caught a regression. Fix the app. A suite that never goes red on a real break gives you nothing.
+Not every red test is a chore for you to clear. When a test fails because a step that used to work now doesn't, that test caught a regression. Fix the app. A suite that stays green through a real break gives you nothing.
 
 ## What you get
 
-Your suite stays plain Playwright: deterministic, fast, free to run, readable in a pull request, runnable on any laptop with no model present. You pay for maintenance the moment a contract changes, in a diff you reviewed, not as a standing tax on every build that was already green.
+Your suite stays plain Playwright: deterministic, fast, free to run, readable in a pull request, runnable on any laptop with no model present. You pay for maintenance the moment a contract changes, in a diff you reviewed, not as a standing tax on builds that were already green.
 
 [See how Hover handles a broken spec →](/docs/faq/#my-ui-changed-and-my-saved-spec-breaks-what-now)

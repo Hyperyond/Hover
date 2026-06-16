@@ -8,36 +8,34 @@ tags: [cdp, chrome, architecture]
 
 # Why Hover drives your real Chrome over CDP instead of a fresh headless context
 
-Build a tool that drives a browser and the easy path is obvious: spin up a fresh headless Chromium for every session. Clean, isolated, reproducible. It's also wrong for testing the app you're building, and the reason points straight at the path Hover took instead.
+Build a tool that drives a browser and the easy path is obvious: spin up a fresh headless Chromium for every session. Clean, isolated, reproducible. It's also wrong for testing the app you're building, and the reason points at the path Hover took instead.
 
 ## The trouble with a fresh headless context
 
-A brand-new headless browser starts empty. No session, no login, no localStorage, no cookies. For a marketing page that's fine. For the app you're building, the one behind a login, with a populated cart, a half-filled form, a feature flag flipped on, it's a blank slate that looks nothing like what's on your screen.
+A brand-new headless browser starts empty. No session, no login, no localStorage, no cookies. For a marketing page that's fine. For the app you're building (the one behind a login, with a populated cart, a half-filled form, a feature flag flipped on) it's a blank slate that looks nothing like what's on your screen.
 
 So you script your way back. Log in, seed the data, toggle the flags, every session, only to reach the state your dev browser was already sitting in. The agent ends up testing a synthetic environment you rebuilt by hand, not the app you're working on.
 
 ## Hover connects to a real, already-running Chrome
 
-Hover takes the other path. It connects over the Chrome DevTools Protocol to a Chrome that's already open, and lands on the tab whose URL matches your dev-server origin. The agent drives that tab, with its real state.
+Hover takes the other path. It connects over the Chrome DevTools Protocol to a Chrome that's already open, and lands on the tab whose URL matches your dev-server origin. The agent drives that tab in its real state.
 
-So you log in once and the session persists; the agent inherits it. The agent sees the DOM, the cookies, and the localStorage you see. Popups, payment-provider redirects, and new-tab callbacks work, because it's a real browser with real tabs and not an isolated context. The agent never launches its own Chromium. It attaches to what's running and works inside it.
+You log in once and the session persists; the agent inherits it. The agent sees the DOM, the cookies, and the localStorage you see. Popups, payment-provider redirects, and new-tab callbacks work, because it's a real browser with real tabs and not an isolated context. The agent never launches its own Chromium. It attaches to what's running and works inside it.
 
 ## Not your everyday Chrome
 
-One boundary matters here. The Chrome that Hover drives is not the browser you live in. Hover launches an isolated debug Chrome under a temporary user-data directory, with remote debugging on, pointed at your dev URL. It's a dedicated profile, reused across sessions, sitting apart from the Chrome that holds your email, your banking tabs, and fifty extensions.
+The Chrome that Hover drives is not the browser you live in. Hover launches an isolated debug Chrome under a temporary user-data directory, with remote debugging on, pointed at your dev URL. It's a dedicated profile, reused across sessions, sitting apart from the Chrome that holds your email, your banking tabs, and fifty extensions.
 
-Why not attach to your main browser? Because that would force you to relaunch your daily Chrome with a remote-debugging port, and it would hand the agent every tab, cookie, and extension on your main session. Hover makes the trade in the open: you log into your app once inside the debug Chrome, and from then on that profile keeps your session across commands and dev-server restarts, without ever putting your primary profile within reach.
+Why not attach to your main browser? That would force you to relaunch your daily Chrome with a remote-debugging port, and it would hand the agent every tab, cookie, and extension on your main session. Hover makes the trade in the open: you log into your app once inside the debug Chrome, and from then on that profile keeps your session across commands and dev-server restarts, without putting your primary profile within reach.
 
 ## What Hover tells you
 
-(The original surface that surfaced this was an in-page widget injected via bundler plugins — now the frozen path. The current way to use Hover is the VS Code extension, which does the same CDP detection from the editor.)
+The VS Code extension knows your dev-server origin. The engine behind it knows which Chrome it can reach over CDP, from `/json/list`. Compare the two and Hover answers a question you'd otherwise have to puzzle out: is a debug Chrome actually up and on your app?
 
-Hover knows your dev-server origin, and the service knows which Chrome it can reach over CDP, from `/json/list`. Compare the two and Hover answers a question you'd otherwise have to puzzle out: is a debug Chrome actually up and on your app?
-
-Three answers, three states. Same window means the origins match and the agent can drive that tab. Wrong window means a debug Chrome exists but isn't on your app; one click brings the right tab forward. No debug Chrome means none is running; one click launches it on your dev URL. You never reason about ports or protocols. Hover walks you to a working state.
+Three answers, three states. Same window means the origins match and the agent can drive that tab. Wrong window means a debug Chrome exists but isn't on your app; one click brings the right tab forward. No debug Chrome means none is running; one click launches it on your dev URL. You don't reason about ports or protocols, and you don't leave the editor. Hover walks you to a working state.
 
 ## The principle underneath
 
-An agent that tests your app should test the app you're building, in the state you're building it, in a real browser, the way a user would hit it. A real-but-isolated debug Chrome reached over CDP is how Hover does that without rebuilding synthetic environments and without touching the browser you live in.
+An agent that tests your app should test the app you're building, in the state you're building it, the way a user would hit it. A real-but-isolated debug Chrome reached over CDP is how Hover does that without rebuilding synthetic environments and without touching the browser you live in.
 
 [Read about Hover's Chrome lifecycle →](/docs/reference/architecture/)

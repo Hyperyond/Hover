@@ -8,11 +8,11 @@ tags: [security, idor, access-control]
 
 # Test for IDOR and broken access control from your dev browser
 
-Broken access control sits at the top of the OWASP Top 10, and it's the bug class your end-to-end suite almost never covers. Your tests log in as the right user and check that the right things happen. They don't log in as user A and try to read user B's invoice. That second test is the one that catches an IDOR, and writing it usually means leaving the browser for Burp or a stack of curl commands.
+Broken access control sits at the top of the OWASP Top 10, and your end-to-end suite rarely covers it. Your tests log in as the right user and check that the right things happen. They don't log in as user A and try to read user B's invoice. That second test catches an IDOR, and writing it usually means leaving the browser for Burp or a stack of curl commands.
 
 ## Why access-control bugs slip through
 
-An IDOR (insecure direct object reference) is simple: the server trusts an ID in the request instead of checking who's asking. `GET /api/invoices/1043` returns your invoice. Change `1043` to `1044` and it returns someone else's. The frontend never renders that URL, so a click-driven test never tries it. You find the hole only by taking a real request and tampering with it.
+An IDOR (insecure direct object reference) is simple: the server trusts an ID in the request instead of checking who's asking. `GET /api/invoices/1043` returns your invoice. Change `1043` to `1044` and it returns someone else's. The frontend never renders that URL, so a click-driven test never tries it. You find the hole by taking a real request and tampering with it.
 
 ## Replay your own requests, mutated
 
@@ -20,10 +20,10 @@ Switch the Hover VS Code extension into 🟠 Security mode and the orange bar co
 
 From there you point the agent at them: re-issue `GET /api/invoices/1043` with the next ID, drop the auth header, swap a tenant parameter. It checks whether the response leaks data it shouldn't, the probe a happy-path test never runs.
 
-It's a switch in the editor chat — no bundler plugin and no config; the extension drives whatever dev server you point it at over CDP.
+It's a switch in the editor chat. No config, and the extension drives whatever dev server you point it at over CDP.
 
 ## A finding becomes a regression test
 
-When the agent confirms a hole, you save it. Hover writes `__vibe_tests__/<slug>.security.spec.ts`: plain Playwright on the `request` fixture, one `test()` per check, recording the intent and the status code each one expects. It runs in CI with `npx playwright test`, no proxy and no agent, so the authz hole you found today stays closed tomorrow.
+When the agent confirms a hole, you save it. Hover writes `__vibe_tests__/<slug>.security.spec.ts`: plain Playwright on the `request` fixture, one `test()` per check, recording the intent and the status code each one expects. It runs in CI with `npx playwright test`, no proxy and no agent, so the authz hole you found today stays closed.
 
 [Read the security-testing docs →](/docs/features/security/) · [Save as Security spec →](/docs/features/security-spec/)

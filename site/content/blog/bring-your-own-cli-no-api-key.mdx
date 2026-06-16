@@ -8,9 +8,9 @@ tags: [architecture, byo-cli, pricing]
 
 # Bring your own CLI: AI testing with no API key and no token resale
 
-Most AI dev tools open with a text field that wants your API key. You paste it in, the tool calls the model for you, and someone bills you: the provider directly, or the tool with a margin stacked on top. That's the default, and the margin rarely shows up on the invoice as a line item.
+Most AI dev tools open with a text field that wants your API key. You paste it in, the tool calls the model for you, and someone bills you: the provider directly, or the tool with a margin stacked on top. That margin rarely shows up on the invoice as a line item.
 
-Hover skips the field, because Hover ships no model client. There's nothing inside it to hold a key. Instead it runs the coding-agent CLI you already installed.
+Hover skips the field. Hover ships no model client, so there's nothing inside it to hold a key. It runs the coding-agent CLI you already installed.
 
 ## How it works
 
@@ -22,6 +22,7 @@ When you ask Hover to drive your browser, it shells out to a binary on your `PAT
 
 That CLI talks to its own provider on your existing plan: the Claude Pro or Max or ChatGPT subscription you already pay for. Hover reads whatever the CLI streams back, normalises it into one event stream, and shows it in the editor chat. It never touches your key, because it never makes the call. The service detects which agents you have installed, picks one, shows it as the current agent, and lets you switch without editing an environment variable.
 
+
 ## Why build it this way
 
 You don't pay a margin on inference. The model cost is whatever your subscription already covers. On a flat Pro or Max plan, a browser-driving session costs you nothing at the margin.
@@ -30,11 +31,11 @@ You have no key to leak. Hover stores no credentials. There's no `.env` with a l
 
 Your code and DOM never route through a vendor. Hover's local service carries no LLM SDK and no telemetry. Your data goes from the CLI to that CLI's provider, the same path you already trust when you run `claude` in your terminal. The service binds to `127.0.0.1` and refuses connections from anywhere else.
 
-You stay free to switch models. The model is a binary on your PATH, so changing providers is changing binaries. The day a model gets cheaper or faster or better at browser work, you point Hover at it. No migration, no re-platforming.
+You stay free to switch models. The model is a binary on your PATH, so changing providers means changing binaries. The day a model gets cheaper or faster or better at browser work, you point Hover at it. No migration, no re-platforming.
 
 ## What it asks of you
 
-This design assumes you already have a coding-agent CLI installed and logged in. If you don't, installing one is a real first step that a hosted tool skips. Different CLIs sandbox the agent differently, too; Hover puts a badge on soft-sandbox agents so you know the tool surface is wider than the locked-down ones.
+This design assumes you already have a coding-agent CLI installed and logged in. If you don't, installing one is a real first step that a hosted tool skips. CLIs vary in how they sandbox the agent, so Hover puts a badge on soft-sandbox agents to tell you the tool surface is wider than the locked-down ones.
 
 For the growing number of developers who live in `claude` or `codex` all day, reusing the plan you already pay for beats pasting another API key and paying a margin on top of it.
 
