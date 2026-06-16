@@ -54,6 +54,10 @@ export interface InvokeOptions {
    *  "the user's current Chrome tab is already on http://localhost:5173/,
    *  don't browser_navigate there". */
   appendSystemPrompt?: string;
+  /** Extra environment variables for the spawned CLI (merged over process.env).
+   *  Used for the "Local LLM" path: qwen-code reads OPENAI_BASE_URL /
+   *  OPENAI_API_KEY to target a user's self-hosted OpenAI-compatible endpoint. */
+  env?: Record<string, string>;
   /** Optional model API key. Injected into the spawned CLI's environment under
    *  the descriptor's `apiKeyEnv` var (e.g. ANTHROPIC_API_KEY) so a user without
    *  a logged-in subscription can drive Hover with their own key. Never logged,

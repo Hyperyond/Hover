@@ -32,6 +32,8 @@ export interface RunSessionOptions {
   /** Reasoning-effort level forwarded to the agent (claude --effort / codex
    *  -c model_reasoning_effort). Undefined = agent/model default. */
   effort?: string;
+  /** Extra env for the spawned CLI (Local LLM: OPENAI_BASE_URL / _API_KEY). */
+  env?: Record<string, string>;
   maxBudgetUsd?: number;
   /** Optional model API key, injected into the spawned CLI's env. */
   apiKey?: string;
@@ -121,6 +123,7 @@ export async function runSession(
     maxBudgetUsd: opts.maxBudgetUsd,
     model: opts.model,
     effort: opts.effort,
+    env: opts.env,
     apiKey: opts.apiKey,
     signal: opts.signal,
   })) {

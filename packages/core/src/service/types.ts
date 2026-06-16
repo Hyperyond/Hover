@@ -46,6 +46,9 @@ export interface ClientMessage {
     /** set-effort only — reasoning-effort level for subsequent runs (empty
      *  string clears it → agent/model default). */
     effort?: string;
+    /** set-local-endpoint only — base URL of the user's self-hosted
+     *  OpenAI-compatible endpoint for the Local LLM agent. */
+    baseUrl?: string;
     /** set-mode only — id of the plugin-contributed mode to activate,
      *  or null to return to normal (unmoded) operation. */
     modeId?: string | null;

@@ -47,6 +47,7 @@ export async function* invokeAgent(opts: InvokeOptions): AsyncIterable<InvokeEve
       ...(opts.apiKey && descriptor.apiKeyEnv
         ? { [descriptor.apiKeyEnv]: opts.apiKey }
         : {}),
+      ...(opts.env ?? {}),
     },
   });
 

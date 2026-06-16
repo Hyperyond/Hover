@@ -333,6 +333,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   // Reasoning-effort level for runs (set via set-effort; undefined = agent/model
   // default). Threaded into invokeAgent alongside model.
   let currentEffort: string | undefined = opts.effort;
+  // Local LLM endpoint (set via set-local-endpoint): when the qwen agent is
+  // active, this OpenAI-compatible base URL is injected so qwen drives the
+  // user's self-hosted model instead of a hosted one.
+  let currentLocalBaseUrl: string | undefined;
   // No default budget cap — long real-world flows (form filling, multi-step
   // checkouts) routinely run past the old $0.50 ceiling and got cut off
   // mid-run. The widget shows the running $ counter in the header instead,
@@ -949,6 +953,17 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         currentEffort = wanted || undefined;
         return;
       }
+      if (msg.type === 'set-local-endpoint') {
+        // Base URL of the user's self-hosted OpenAI-compatible endpoint for the
+        // Local LLM agent (qwen-code as host). Empty string clears it.
+        const url = msg.payload?.baseUrl;
+        if (typeof url !== 'string') {
+          send(ws, { type: 'error', payload: { message: 'set-local-endpoint: baseUrl is required' } });
+          return;
+        }
+        currentLocalBaseUrl = url || undefined;
+        return;
+      }
       if (msg.type === 'set-api-key') {
         // The widget supplies (or clears) a model API key. Stored in memory
         // only and injected into the spawned CLI's env at invoke time — never
@@ -1317,6 +1332,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             maxBudgetUsd,
             model,
             effort: currentEffort,
+            // Local LLM (qwen host): point qwen at the user's OpenAI-compatible
+            // endpoint via env. Key is the user's (or a placeholder local one).
+            env:
+              invokedAgentId === 'qwen' && currentLocalBaseUrl
+                ? { OPENAI_BASE_URL: currentLocalBaseUrl, OPENAI_API_KEY: currentApiKey || 'local' }
+                : undefined,
             apiKey: currentApiKey,
             signal: run.abort.signal,
           },
