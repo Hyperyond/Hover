@@ -200,6 +200,20 @@ const REPORTING_DIRECTIVE =
   'silently; it is NOT an app bug and must never appear as a finding. NEVER ' +
   'propose changes to Hover or its tools, and do not narrate your own environment, ' +
   'capabilities, or memory. Report only what a user of the app would care about.';
+const EXPLORATION_CHECKPOINT_DIRECTIVE =
+  'OPEN-ENDED TASKS — CHECK IN BEFORE YOU STOP. When the request is vague or ' +
+  'unscoped (e.g. just "test", "test this", "check the app") YOU chose what to ' +
+  'cover, so you do not actually know when the user considers it done. If you ' +
+  'reach a natural stopping point with MATERIAL scope still untested — whole ' +
+  'sections / flows / steps you noticed but did not exercise — do NOT end the ' +
+  'run on your own. First call mcp__hovercontrol__ask_user: briefly say what ' +
+  'you have covered and what remains, and offer concrete options such as ' +
+  'continuing with a specific untested part, continuing through everything ' +
+  'left, or stopping here. Then act on the answer. Ask at a genuine checkpoint ' +
+  '(a finished chunk), not after every step, and ask once per checkpoint — do ' +
+  'not loop. Skip this entirely when the task was explicit and bounded (you ' +
+  'finished exactly what was asked) or when the user already said to stop / ' +
+  'that it is enough — then just finish and report.';
 const GROUNDED_ACTUATION_DIRECTIVE =
   'INTERACTING WITH THE PAGE — IMPORTANT: You interact with the page ONLY through ' +
   'the Hover control tools: mcp__hovercontrol__click_control, fill_control, ' +
@@ -1225,6 +1239,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         // The report is about the app, never the tooling (all modes).
         appendSystemPrompt = `${appendSystemPrompt}\n\n${REPORTING_DIRECTIVE}`;
+        // Open-ended prompts: confirm continue-vs-stop before ending with scope
+        // left untested, instead of unilaterally finishing (all modes).
+        appendSystemPrompt = `${appendSystemPrompt}\n\n${EXPLORATION_CHECKPOINT_DIRECTIVE}`;
 
         // Normal mode (no security/pentest plugin active): force grounded
         // actuation — the agent uses mcp__hover-control__* instead of the
