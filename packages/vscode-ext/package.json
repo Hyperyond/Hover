@@ -189,12 +189,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "hover.refreshSessions",
-        "title": "Refresh Sessions",
-        "category": "Hover",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "hover.refreshEnvironments",
         "title": "Refresh Environments",
         "category": "Hover",
@@ -288,8 +282,9 @@
         },
         {
           "id": "hover.sessions",
-          "name": "Sessions",
-          "icon": "$(history)",
+          "name": "Conversations",
+          "type": "webview",
+          "icon": "$(comment-discussion)",
           "contextualTitle": "Hover"
         },
         {
@@ -385,11 +380,6 @@
           "group": "navigation@1"
         },
         {
-          "command": "hover.refreshSessions",
-          "when": "view == hover.sessions",
-          "group": "navigation@2"
-        },
-        {
           "command": "hover.env.add",
           "when": "view == hover.environments",
           "group": "navigation@1"
@@ -477,10 +467,6 @@
       {
         "view": "hover.specs",
         "contents": "No specs yet.\n\nDrive your app with Hover to crystallize a test or security check into a Playwright spec, then it shows up here."
-      },
-      {
-        "view": "hover.sessions",
-        "contents": "No Hover runs recorded yet.\n\nStart a chat to drive your app — each run (model, cost, outcome) is logged here.\n\n[New Session](command:hover.newSession)"
       }
     ]
   },

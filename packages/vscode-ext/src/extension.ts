@@ -26,7 +26,7 @@ import {
 import { SpecLensProvider } from './specLens.js';
 import { registerSpecsView } from './specsView.js';
 import { registerDashboardView } from './dashboardView.js';
-import { registerSessionsView } from './sessionsView.js';
+import { registerConversationsView, type ConversationsViewProvider } from './conversationsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
 import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
 import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar, type ResolvedAccount } from './environments.js';
@@ -42,6 +42,7 @@ let connectedServices = 0;
 let modeStatus: vscode.StatusBarItem;
 let chatProvider: ChatViewProvider | undefined;
 let settingsProvider: SettingsViewProvider | undefined;
+let conversationsProvider: ConversationsViewProvider | undefined;
 
 let extContext: vscode.ExtensionContext | undefined;
 
@@ -167,6 +168,9 @@ interface ChatSession {
   transcript: SpecMsg[];
   agentSessionId?: string;
   createdAt: number;
+  /** Epoch ms of this conversation's most recent run start (for the sidebar's
+   *  "last run N ago"). Persisted. */
+  lastRunAt?: number;
   // Runtime-only (not persisted): the host serving this session + its live run
   // counters. True parallel — several sessions can run at once, each on its own
   // host; events route to the owning session by source port, not the active one.
@@ -276,6 +280,7 @@ async function runPrompt(prompt: string): Promise<void> {
   sess.stepCount = 0;
   sess.runCost = 0;
   sess.runTokens = 0;
+  sess.lastRunAt = Date.now(); // for the sidebar's "last run N ago"
   sess.sourceGrant = undefined; // fresh per run
   setSessionRunning(sess, true);
 
@@ -978,17 +983,25 @@ export function activate(context: vscode.ExtensionContext): void {
   settingsProvider = settings.provider;
   envStore = new EnvironmentStore(context);
   envStore.onDidChange(() => void pushAccounts());
+  const conversations = registerConversationsView({
+    onSwitch: (id) => switchSession(id),
+    onNew: () => void newSession(),
+    onRename: (id) => void renameSession(id),
+    onDelete: (id) => void deleteSession(id),
+  });
+  conversationsProvider = conversations.provider;
   context.subscriptions.push(
     chat.disposable,
     settings.disposable,
     ...registerDashboardView(),
     ...registerSpecsView(),
-    ...registerSessionsView(),
+    ...conversations.disposables,
     ...registerEnvironmentsView(envStore, () => {
       void pollAppStatus();
       void pushAccounts();
     }),
   );
+  pushSessionList(); // seed the chat switcher + Conversations sidebar
 
   // Status bar: current mode + service connection, click to switch mode.
   modeStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -1180,21 +1193,25 @@ function persistSessions(): void {
     sessions = sessions.filter((s) => keep.includes(s) || s.id === activeSessionId || s.running);
   }
   const persisted = sessions.map((s) => ({
-    id: s.id, name: s.name, agentSessionId: s.agentSessionId, createdAt: s.createdAt,
+    id: s.id, name: s.name, agentSessionId: s.agentSessionId, createdAt: s.createdAt, lastRunAt: s.lastRunAt,
     transcript: s.transcript.slice(-400),
   }));
   void extContext?.workspaceState.update('hover.chatSessions', persisted);
   void extContext?.workspaceState.update('hover.activeChat', activeSessionId);
 }
-/** Push the session list (+ per-session running badges) + active id to the
- *  chat top-bar switcher. */
+/** Push the session list (+ per-session running badges) to the chat top-bar
+ *  switcher AND the Conversations sidebar (newest-run first there). */
 function pushSessionList(): void {
   chatProvider?.setSessions(sessions.map((s) => ({ id: s.id, name: s.name, running: !!s.running })), activeSessionId);
+  const rows = sessions
+    .map((s) => ({ id: s.id, name: s.name, lastRunAt: s.lastRunAt, running: !!s.running }))
+    .sort((a, b) => (b.lastRunAt ?? 0) - (a.lastRunAt ?? 0));
+  conversationsProvider?.setConversations(rows, activeSessionId);
 }
 function loadSessions(): void {
   const stored = extContext?.workspaceState.get<ChatSession[]>('hover.chatSessions');
   sessions = Array.isArray(stored) && stored.length
-    ? stored.map((s) => ({ id: s.id, name: s.name, transcript: Array.isArray(s.transcript) ? s.transcript : [], agentSessionId: s.agentSessionId, createdAt: s.createdAt ?? 0 }))
+    ? stored.map((s) => ({ id: s.id, name: s.name, transcript: Array.isArray(s.transcript) ? s.transcript : [], agentSessionId: s.agentSessionId, createdAt: s.createdAt ?? 0, lastRunAt: s.lastRunAt }))
     : [];
   activeSessionId = extContext?.workspaceState.get<string>('hover.activeChat') ?? sessions[sessions.length - 1]?.id ?? '';
   bindActive();
@@ -1222,6 +1239,47 @@ function switchSession(id: string): void {
   persistSessions();
   chatProvider?.loadSession(activeChat().transcript);
   bindActive(); // reflect the now-active session's running state
+  pushSessionList();
+}
+
+/** Rename a conversation via a native input box (from the sidebar's ✎). */
+async function renameSession(id: string): Promise<void> {
+  const s = sessions.find((x) => x.id === id);
+  if (!s) return;
+  const name = await vscode.window.showInputBox({
+    title: 'Rename conversation',
+    value: s.name,
+    prompt: 'New name',
+  });
+  const trimmed = name?.trim();
+  if (!trimmed || trimmed === s.name) return;
+  s.name = trimmed.slice(0, 60);
+  persistSessions();
+  pushSessionList();
+  if (s.id === activeSessionId) chatProvider?.setSessions(sessions.map((x) => ({ id: x.id, name: x.name, running: !!x.running })), activeSessionId);
+}
+
+/** Delete a conversation (after confirm): cancel + tear down its host, drop it,
+ *  and fall back to another conversation (or a fresh one) if it was active. */
+async function deleteSession(id: string): Promise<void> {
+  const s = sessions.find((x) => x.id === id);
+  if (!s) return;
+  const pick = await vscode.window.showWarningMessage(
+    `Delete conversation "${s.name}"? This can't be undone.`,
+    { modal: true },
+    'Delete',
+  );
+  if (pick !== 'Delete') return;
+  if (s.running) { pool?.cancel(portForSession(id)); }
+  releaseSession(id); // kill its engine host + browser
+  sessions = sessions.filter((x) => x.id !== id);
+  if (activeSessionId === id) {
+    activeSessionId = sessions[sessions.length - 1]?.id ?? '';
+    const next = activeChat(); // seeds a fresh one if none remain
+    bindActive();
+    chatProvider?.loadSession(next.transcript);
+  }
+  persistSessions();
   pushSessionList();
 }
 

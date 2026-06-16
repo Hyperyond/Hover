@@ -382,9 +382,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <header>
-    <button class="iconbtn" id="history" type="button" title="Session history">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5"/></svg>
-    </button>
     <button class="iconbtn" id="new" type="button" title="New session">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
     </button>
@@ -855,7 +852,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   document.getElementById('model-btn').addEventListener('click', function(e){ e.stopPropagation(); toggleModelMenu(); });
   document.getElementById('session').addEventListener('click', function(e){ e.stopPropagation(); toggleSessionMenu(); });
   document.getElementById('browser-toggle').addEventListener('click', cmd('hover.toggleBrowser'));
-  document.getElementById('history').addEventListener('click', cmd('hover.sessions.focus'));
   document.getElementById('new').addEventListener('click', cmd('hover.newSession'));
   document.getElementById('appstatus').addEventListener('click', cmd('hover.appStatus'));
   document.addEventListener('mousedown', function(e){
