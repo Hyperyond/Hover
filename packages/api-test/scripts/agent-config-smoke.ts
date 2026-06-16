@@ -116,9 +116,9 @@ if (!config.mcpServers.playwright) {
 }
 console.log('[agent-cfg] ✓ playwright entry present');
 
-const securityEntry = config.mcpServers['@hover-dev/security:flows'];
+const securityEntry = config.mcpServers['@hover-dev/api-test:flows'];
 if (!securityEntry) {
-  console.log('[agent-cfg] FAIL ❌ @hover-dev/security:flows entry missing');
+  console.log('[agent-cfg] FAIL ❌ @hover-dev/api-test:flows entry missing');
   process.exit(1);
 }
 console.log('[agent-cfg] ✓ security MCP entry present');

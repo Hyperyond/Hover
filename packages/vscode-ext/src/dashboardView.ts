@@ -116,7 +116,7 @@ async function gather(): Promise<DashboardData> {
         name,
         path: uri ? uri.fsPath : null,
         group: uri ? specGroup(uri.fsPath) : '',
-        security: name.endsWith('.security.spec.ts'),
+        security: name.endsWith('.api-test.spec.ts'),
         cells: runs.map((r) => r.specs[name] ?? null) as (Status | null)[],
       };
     });

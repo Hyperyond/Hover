@@ -8,7 +8,7 @@
  *
  * Pure functions, zero I/O, zero consumer dependency — lives next to `gate.ts`
  * and `match.ts`. Producing the three responses is the replay path's job
- * (`@hover-dev/security`'s `replayFlow` + the storageState identity swap); this
+ * (`@hover-dev/api-test`'s `replayFlow` + the storageState identity swap); this
  * module only consumes them.
  *
  * Implements the three-way matrix from the security-direction design (§4.5):
@@ -22,7 +22,7 @@
  */
 
 /** A confidence-graded verdict. Only `confirmed` is allowed to crystallize into
- *  a `.security.spec.ts` CI gate (see `crystallizable`); everything else is
+ *  a `.api-test.spec.ts` CI gate (see `crystallizable`); everything else is
  *  report-only, so a false positive can never turn a build red. */
 export type AuthzVerdict =
   /** Unauthorized access proven: A read B's private data. → crystallize. */

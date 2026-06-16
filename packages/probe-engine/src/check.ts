@@ -1,7 +1,7 @@
 /**
  * The canonical "recorded security check" shape — one replay the agent did
  * with a stated intent + an expected status. Lives in the engine because it is
- * the shared data contract between the two consumers: `@hover-dev/security`
+ * the shared data contract between the two consumers: `@hover-dev/api-test`
  * (records checks, crystallizes them into a spec) and `@hover-dev/pentest`
  * (renders them into a findings report). Pure data — no runtime dependency.
  */
@@ -47,7 +47,7 @@ export interface SecurityCheckStep {
   /** The BOLA/authz judgment oracle's verdict for this check, when it was run
    *  (a cross-identity check the agent adjudicated via the three-way matrix —
    *  see `adjudicate` in oracle.ts). Drives crystallization: only a `confirmed`
-   *  verdict is allowed into a `.security.spec.ts` CI gate; `likely` /
+   *  verdict is allowed into a `.api-test.spec.ts` CI gate; `likely` /
    *  `uncertain` / `not-tested` stay report-only so a false positive can never
    *  turn a build red. Absent on checks that were never adjudicated (the
    *  status-only checks behave as before). */

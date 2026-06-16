@@ -1237,7 +1237,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Active mode's plugin-contributed MCP server ids — added to the
         // hard-sandbox allow list so Claude can actually call them. Claude
         // sanitises non-alphanumeric chars in the id when forming tool
-        // names (e.g. "@hover-dev/security:flows" → "mcp__hover_dev_security_flows"),
+        // names (e.g. "@hover-dev/api-test:flows" → "mcp__hover_dev_api_test_flows"),
         // and `--allowedTools mcp__foo` matches every tool under that
         // prefix. We pass the prefix `mcp__<sanitized>` so all of the
         // server's tools are reachable.

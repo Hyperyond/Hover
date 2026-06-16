@@ -27,7 +27,7 @@ export interface GateResult {
 }
 
 /**
- * Decide whether a finding becomes a `.security.spec.ts` regression test.
+ * Decide whether a finding becomes a `.api-test.spec.ts` regression test.
  * Adapted from Claude-BugHunter's 7-Question Gate, dropping the bug-bounty
  * questions (program scope / accepted-impact list). Deterministic.
  */

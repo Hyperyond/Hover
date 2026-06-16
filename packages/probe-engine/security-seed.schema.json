@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://hover.dev/schemas/security-seed.json",
   "title": "Hover security-probe seed",
-  "description": "A worked recipe that teaches the probe engine how to probe a CAPTURED REQUEST for an access-control or vulnerability bug class. Matched against captured MITM traffic, NOT against UI steps — a separate schema from the optimization (UI-translation) seed. Built-in recipes live as JSON files in packages/probe-engine/seeds/ and are inlined into @hover-dev/security / @hover-dev/pentest at build; users add their own under <projectRoot>/.hover/rules/.",
+  "description": "A worked recipe that teaches the probe engine how to probe a CAPTURED REQUEST for an access-control or vulnerability bug class. Matched against captured MITM traffic, NOT against UI steps — a separate schema from the optimization (UI-translation) seed. Built-in recipes live as JSON files in packages/probe-engine/seeds/ and are inlined into @hover-dev/api-test / @hover-dev/pentest at build; users add their own under <projectRoot>/.hover/rules/.",
   "type": "object",
   "required": ["name", "class", "match", "probe"],
   "additionalProperties": false,
@@ -46,6 +46,6 @@
         "signal": { "type": "string", "description": "What response differential indicates a real finding." }
       }
     },
-    "assert": { "type": "string", "description": "Optional Playwright request-fixture assertion for a crystallized `.security.spec.ts` regression test. Must not bake real cookies/tokens/PII inline — pull credentials from env/fixture." }
+    "assert": { "type": "string", "description": "Optional Playwright request-fixture assertion for a crystallized `.api-test.spec.ts` regression test. Must not bake real cookies/tokens/PII inline — pull credentials from env/fixture." }
   }
 }

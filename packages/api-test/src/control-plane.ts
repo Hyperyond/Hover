@@ -267,7 +267,7 @@ export async function startControlPlane(
       // replays) and POSTs their ids + B's identifying markers; we pull their
       // responses from the store and adjudicate. When `attachToCheckId` names a
       // recorded check, the verdict is attached to it — which gates whether that
-      // check crystallizes into a `.security.spec.ts` (only `confirmed` does).
+      // check crystallizes into a `.api-test.spec.ts` (only `confirmed` does).
       if (req.method === 'POST' && path === '/adjudicate') {
         const body = await readBody(req);
         let p: {

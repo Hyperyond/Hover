@@ -1583,7 +1583,7 @@ async function addCiWorkflow(): Promise<void> {
   }
 }
 
-/** Spec slug from a `<slug>.spec.ts` / `<slug>.security.spec.ts` URI. */
+/** Spec slug from a `<slug>.spec.ts` / `<slug>.api-test.spec.ts` URI. */
 function specSlug(uri: vscode.Uri): string {
   return path.basename(uri.fsPath).replace(/\.security\.spec\.ts$/, '').replace(/\.spec\.ts$/, '');
 }

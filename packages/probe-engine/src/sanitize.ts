@@ -33,7 +33,7 @@ export interface SanitizedRequest {
 
 /**
  * Strip credentials + obvious secrets from a captured request before it goes
- * into a COMMITTED `.security.spec.ts`. Real cookies/tokens/PII must never be
+ * into a COMMITTED `.api-test.spec.ts`. Real cookies/tokens/PII must never be
  * baked into a test file — CI auth comes from a Playwright `storageState`
  * fixture, not inline.
  */

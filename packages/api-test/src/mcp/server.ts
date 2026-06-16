@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @hover-dev/security MCP server.
+ * @hover-dev/api-test MCP server.
  *
  * Spawned by the agent (Claude Code / Codex) as a stdio subprocess when
  * security mode is active. Talks back to the plugin's control plane over

@@ -3,7 +3,7 @@
  *
  * v0.12 ships this alongside `@hover-dev/core`'s `writeSpec` (the regular UI
  * spec writer). The output file lands
- * under `<devRoot>/__vibe_tests__/<slug>.security.spec.ts` and is plain
+ * under `<devRoot>/__vibe_tests__/<slug>.api-test.spec.ts` and is plain
  * `@playwright/test` — no Hover runtime, no MITM proxy, no agent. CI
  * runs `pnpm exec playwright test` and gets a regression check every time.
  *
@@ -92,7 +92,7 @@ export async function writeSecuritySpec(
   }
 
   const dir = join(opts.devRoot, '__vibe_tests__');
-  const path = join(dir, `${slug}.security.spec.ts`);
+  const path = join(dir, `${slug}.api-test.spec.ts`);
   if (!opts.overwrite && existsSync(path)) {
     throw new SecuritySpecExistsError(slug, path);
   }

@@ -1,7 +1,7 @@
 /**
  * Plugin lifecycle end-to-end smoke.
  *
- * Boots a real Hover service with the @hover-dev/security plugin loaded,
+ * Boots a real Hover service with the @hover-dev/api-test plugin loaded,
  * connects a WebSocket client, drives mode toggle on/off via the wire
  * protocol, and asserts:
  *
@@ -17,7 +17,7 @@
  *   6. service.close() runs shutdown hooks idempotently
  *
  * This script does NOT touch a real Chrome — that's covered by
- * @hover-dev/security's own e2e-smoke. Here we only validate the
+ * @hover-dev/api-test's own e2e-smoke. Here we only validate the
  * core ↔ plugin protocol wire-up.
  */
 import { startService } from '@hover-dev/core/service';

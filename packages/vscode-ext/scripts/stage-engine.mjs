@@ -11,10 +11,10 @@
  *
  * We also stage both mode plugins so 🟠 security + 🔴 pentest work in the
  * extension (host.mjs loads them into startService({ plugins })):
- *   - @hover-dev/security — the orange mode; self-contained (public npm deps).
+ *   - @hover-dev/api-test — the orange mode; self-contained (public npm deps).
  *   - @hover-dev/pentest  — the red mode lives at its `./plugin` subpath and
  *     reaches the shared MITM via security's startSecurityRuntime. It depends
- *     on @hover-dev/security, so it's installed AFTER it (the already-present
+ *     on @hover-dev/api-test, so it's installed AFTER it (the already-present
  *     security satisfies the dep — no registry hit). `pnpm pack` rewrites
  *     pentest's `workspace:*` security dep to a concrete version.
  *
@@ -39,7 +39,7 @@ for (const f of readdirSync(engineDir)) if (f.endsWith('.tgz')) rmSync(join(engi
 
 // Build engine packages first, in dependency order, so the packed dists exist.
 console.log('[stage-engine] building core + security + pentest …');
-run('pnpm', ['--filter', '@hover-dev/core', '--filter', '@hover-dev/security', '--filter', '@hover-dev/pentest', 'build'], repoRoot);
+run('pnpm', ['--filter', '@hover-dev/core', '--filter', '@hover-dev/api-test', '--filter', '@hover-dev/pentest', 'build'], repoRoot);
 
 /** pnpm-pack a package into engineDir and return the new tarball's path. */
 function packInto(dir) {
@@ -62,7 +62,7 @@ const npmFlags = ['--no-save', '--omit=dev', '--no-audit', '--no-fund'];
 console.log('[stage-engine] installing core + security into engine/node_modules …');
 run('npm', ['install', coreTgz, securityTgz, ...npmFlags], engineDir);
 
-// pentest depends on @hover-dev/security, now present at the same version →
+// pentest depends on @hover-dev/api-test, now present at the same version →
 // satisfied without a registry hit. Best-effort: never block the .vsix on it.
 console.log('[stage-engine] installing pentest …');
 try {
@@ -77,7 +77,7 @@ for (const t of [coreTgz, securityTgz, pentestTgz]) rmSync(t, { force: true });
 // Verify the required dists landed.
 const must = [
   ['@hover-dev/core', 'dist/service.js'],
-  ['@hover-dev/security', 'dist/index.js'],
+  ['@hover-dev/api-test', 'dist/index.js'],
 ];
 for (const [pkg, rel] of must) {
   if (!existsSync(join(engineDir, 'node_modules', ...pkg.split('/'), ...rel.split('/')))) {

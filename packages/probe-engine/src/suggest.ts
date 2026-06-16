@@ -3,7 +3,7 @@ import type { SecurityClass, SecuritySeed, SeedCategory } from './seed.js';
 import { matchSeeds } from './match.js';
 import { builtinSecuritySeeds } from './builtins.js';
 
-/** A captured flow that carries an id (e.g. @hover-dev/security's Flow). */
+/** A captured flow that carries an id (e.g. @hover-dev/api-test's Flow). */
 export interface IdentifiedFlow extends ProbeFlow {
   id: string;
 }

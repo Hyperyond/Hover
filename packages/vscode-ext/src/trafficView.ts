@@ -11,7 +11,7 @@
  * normal mode, where no proxy runs.
  *
  * This is the visible surface; the durable value is turning a flow into a
- * crystallized `.security.spec.ts` regression — that "Crystallize" action lands
+ * crystallized `.api-test.spec.ts` regression — that "Crystallize" action lands
  * on these rows next.
  */
 import * as vscode from 'vscode';

@@ -32,11 +32,11 @@ const userDataDir = process.env.HOVER_USER_DATA_DIR || undefined;
 // degrades to "mode unavailable" — it must NEVER stop the engine from booting.
 async function loadPlugins() {
   const out = [];
-  // 🟠 security (default export of @hover-dev/security) and 🔴 pentest (the
+  // 🟠 security (default export of @hover-dev/api-test) and 🔴 pentest (the
   // `/plugin` subpath of @hover-dev/pentest — its main entry is a report lib,
   // not a manifest). pentest reaches the shared MITM via security's
   // startSecurityRuntime; the two modes are mutually exclusive (conflictsWith).
-  for (const spec of ['@hover-dev/security', '@hover-dev/pentest/plugin']) {
+  for (const spec of ['@hover-dev/api-test', '@hover-dev/pentest/plugin']) {
     try {
       const mod = await import(spec);
       const factory = mod.default;

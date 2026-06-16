@@ -35,7 +35,7 @@ export interface ExtraMcpServer {
 
 /** The `mcp__<id>` tool-name prefix Claude Code exposes a plugin MCP server's
  *  tools under: non-alphanumerics collapse to `_` and edges are trimmed (e.g.
- *  `@hover-dev/security:flows` → `mcp__hover_dev_security_flows`). Used to build
+ *  `@hover-dev/api-test:flows` → `mcp__hover_dev_api_test_flows`). Used to build
  *  the hard-sandbox allow-list. Single source so the service and the CLI scan
  *  command can't drift on how the prefix is derived. */
 export function mcpToolPrefix(serverId: string): string {

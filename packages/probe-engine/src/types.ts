@@ -1,7 +1,7 @@
 /**
  * The minimal captured-request shapes the probe engine reasons about.
  *
- * A richer captured-flow type (e.g. `@hover-dev/security`'s `Flow`) is
+ * A richer captured-flow type (e.g. `@hover-dev/api-test`'s `Flow`) is
  * structurally compatible — it simply carries extra fields — so consumers pass
  * their own flows without any adapter. The engine deliberately owns these
  * minimal types so it has ZERO dependency on any consumer package.

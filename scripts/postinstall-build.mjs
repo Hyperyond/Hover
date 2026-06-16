@@ -23,7 +23,7 @@ const PACKAGES = [
   // Security/pentest ship as `main: dist/...` packages: the VS Code extension's
   // staged engine resolves their compiled output, and a fresh-clone `pnpm
   // install` + `pnpm typecheck` must find the built `.d.ts`. Rebuild on stale.
-  { name: '@hover-dev/security', dir: join(ROOT, 'packages/security') },
+  { name: '@hover-dev/api-test', dir: join(ROOT, 'packages/security') },
   { name: '@hover-dev/pentest', dir: join(ROOT, 'packages/pentest') },
 ];
 

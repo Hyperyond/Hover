@@ -164,6 +164,40 @@ importers:
         specifier: ^7.0.0
         version: 7.3.3(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
 
+  packages/api-test:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
+      '@peculiar/asn1-schema':
+        specifier: 2.6.0
+        version: 2.6.0
+      mockttp:
+        specifier: ^4.4.2
+        version: 4.4.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@hover-dev/core':
+        specifier: workspace:*
+        version: link:../core
+      '@hover-dev/probe-engine':
+        specifier: workspace:*
+        version: link:../probe-engine
+      playwright-core:
+        specifier: ^1.50.0
+        version: 1.60.0
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
+      ws:
+        specifier: ^8.20.1
+        version: 8.20.1
+
   packages/core:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -200,9 +234,9 @@ importers:
 
   packages/pentest:
     dependencies:
-      '@hover-dev/security':
+      '@hover-dev/api-test':
         specifier: workspace:*
-        version: link:../security
+        version: link:../api-test
     devDependencies:
       '@hover-dev/core':
         specifier: workspace:*
@@ -222,40 +256,6 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
-
-  packages/security:
-    dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.29.0(zod@4.4.3)
-      '@peculiar/asn1-schema':
-        specifier: 2.6.0
-        version: 2.6.0
-      mockttp:
-        specifier: ^4.4.2
-        version: 4.4.2
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@hover-dev/core':
-        specifier: workspace:*
-        version: link:../core
-      '@hover-dev/probe-engine':
-        specifier: workspace:*
-        version: link:../probe-engine
-      playwright-core:
-        specifier: ^1.50.0
-        version: 1.60.0
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.4(@types/debug@4.1.13)(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0)
-      ws:
-        specifier: ^8.20.1
-        version: 8.20.1
 
   packages/vscode-ext:
     dependencies:

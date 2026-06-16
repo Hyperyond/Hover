@@ -1,5 +1,5 @@
 /**
- * Smoke test for @hover-dev/security mitm internals.
+ * Smoke test for @hover-dev/api-test mitm internals.
  *
  * - boots the proxy in a tmp devRoot, confirms it binds + emits the lifecycle
  * - manually pushes a synthetic request into the FlowStore, confirms events

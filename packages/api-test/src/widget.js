@@ -1,4 +1,4 @@
-// @hover-dev/security widget contribution — registers with the Hover widget
+// @hover-dev/api-test widget contribution — registers with the Hover widget
 // host when Security mode is engaged. Owns the network panel, the flow row
 // rendering, the security:flow:* WS handlers, and the orange theme.
 //
@@ -88,7 +88,7 @@ if (host) {
 
   host.registerPlugin({
     apiVersion: 1,
-    name: '@hover-dev/security',
+    name: '@hover-dev/api-test',
     modeId: 'security',
 
     // Orange theme. The mode bar uses the same translucent orange gradient
@@ -169,9 +169,9 @@ if (host) {
       tooltip: 'Captured network flows',
       // Two-arrow SVG (matches the prior hardcoded button's iconography).
       icon: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5h10l-2-2"/><path d="M14 11H4l2 2"/></svg>',
-      onClick: (api) => api.openOverlay('@hover-dev/security:network'),
+      onClick: (api) => api.openOverlay('@hover-dev/api-test:network'),
       badge: (api) => {
-        const flows = api.getState()['@hover-dev/security']?.flows ?? [];
+        const flows = api.getState()['@hover-dev/api-test']?.flows ?? [];
         return flows.length || null;
       },
     }],
@@ -179,11 +179,11 @@ if (host) {
     // v0.12 — Save dropdown contribution. Surfaces a "Security spec"
     // entry in the Result card's Save-as menu whenever security mode is
     // active. The service side reads the recorded SecurityCheckStep[]
-    // from the control plane closure and writes a `.security.spec.ts`.
+    // from the control plane closure and writes a `.api-test.spec.ts`.
     saveEntries: [{
       type: 'save:security:spec',
       label: 'Security spec',
-      sub: '__vibe_tests__/<slug>.security.spec.ts · CI regression for recorded checks',
+      sub: '__vibe_tests__/<slug>.api-test.spec.ts · CI regression for recorded checks',
       title: 'Save as Security spec',
       fields: [
         { id: 'name', label: 'Spec name', placeholder: 'orders-idor', required: true },
@@ -196,7 +196,7 @@ if (host) {
     }],
 
     overlays: [{
-      id: '@hover-dev/security:network',
+      id: '@hover-dev/api-test:network',
       title: 'Network',
       actions: [{
         icon: '⌧',
@@ -221,14 +221,14 @@ if (host) {
     onMessage: {
       'security:flow:added': (payload, api) => {
         if (!payload || typeof payload !== 'object') return;
-        const flows = api.getState()['@hover-dev/security']?.flows ?? [];
+        const flows = api.getState()['@hover-dev/api-test']?.flows ?? [];
         // Newest-first, FLOWS_CAP ceiling.
         const next = [payload, ...flows].slice(0, FLOWS_CAP);
         api.setState({ flows: next });
       },
       'security:flow:updated': (payload, api) => {
         if (!payload || typeof payload !== 'object' || !payload.id) return;
-        const flows = api.getState()['@hover-dev/security']?.flows ?? [];
+        const flows = api.getState()['@hover-dev/api-test']?.flows ?? [];
         const idx = flows.findIndex((f) => f.id === payload.id);
         if (idx < 0) {
           // Update arrived before added (shouldn't normally happen, but be
@@ -246,7 +246,7 @@ if (host) {
       // Save as Security spec. State key is `checks` (a SecurityCheckStep[]).
       'security:check:recorded': (payload, api) => {
         if (!payload || typeof payload !== 'object' || typeof payload.id !== 'number') return;
-        const checks = api.getState()['@hover-dev/security']?.checks ?? [];
+        const checks = api.getState()['@hover-dev/api-test']?.checks ?? [];
         api.setState({ checks: [...checks, payload] });
       },
       // The agent ran clear_flows (DELETE /flows) — the service wiped the

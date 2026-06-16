@@ -1,7 +1,7 @@
 /**
  * `@hover-dev/probe-engine` — the shared, deterministic foundation for
  * access-control probing. Private + never published; inlined into
- * `@hover-dev/security` (crystallize → spec) and the pentest plugin (sweep →
+ * `@hover-dev/api-test` (crystallize → spec) and the pentest plugin (sweep →
  * report) via each consumer's tsup `noExternal`. Zero external dependencies.
  */
 export type { ProbeRequest, ProbeFlow } from './types.js';

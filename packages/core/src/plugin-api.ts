@@ -56,7 +56,7 @@ export interface HoverPluginMode {
 }
 
 export interface HoverPluginMcpServer {
-  /** Stable, namespaced id (`@hover-dev/security:flows`). Host enforces
+  /** Stable, namespaced id (`@hover-dev/api-test:flows`). Host enforces
    *  uniqueness across all loaded plugins. */
   id: string;
   command: string;
@@ -248,7 +248,7 @@ export interface HoverPluginSaveHandler {
  *
  *   export default defineHoverPlugin<MyOpts>((opts) => ({
  *     apiVersion: 1,
- *     name: '@hover-dev/security',
+ *     name: '@hover-dev/api-test',
  *     mode: { id: 'security', label: 'Security testing' },
  *     ...
  *   }));

@@ -1,12 +1,12 @@
 import { defineConfig } from 'tsup';
 
 /**
- * Bundle config for `@hover-dev/security`.
+ * Bundle config for `@hover-dev/api-test`.
  *
  * Why tsup (not tsc): we depend on the private workspace package
  * `@hover-dev/probe-engine`, which is never published to npm. tsup with
  * `noExternal` inlines its compiled output into our own dist, so consumers
- * `pnpm add @hover-dev/security` and get a working plugin without ever seeing
+ * `pnpm add @hover-dev/api-test` and get a working plugin without ever seeing
  * the internal package — the same model as `@hover-dev/transform-source` in the
  * bundler shims.
  *

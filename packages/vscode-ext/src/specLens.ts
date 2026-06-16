@@ -2,7 +2,7 @@
  * F3 (slice) — spec-lifecycle CodeLens.
  *
  * Adds Hover-unique CodeLenses to the top of crystallized spec files
- * (`*.spec.ts` and `*.security.spec.ts`). It deliberately does NOT add a
+ * (`*.spec.ts` and `*.api-test.spec.ts`). It deliberately does NOT add a
  * Run/Debug lens — the official Playwright extension owns running specs, and
  * Hover coexists with it (design non-goal N1). What's Hover-specific:
  *

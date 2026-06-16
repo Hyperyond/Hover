@@ -2,7 +2,7 @@
   "name": "@hover-dev/probe-engine",
   "version": "0.0.0",
   "private": true,
-  "description": "Private, never-published probe engine shared by @hover-dev/security (crystallize) and the pentest plugin (report). Inlined into each consumer via tsup noExternal — never a runtime npm dependency.",
+  "description": "Private, never-published probe engine shared by @hover-dev/api-test (crystallize) and the pentest plugin (report). Inlined into each consumer via tsup noExternal — never a runtime npm dependency.",
   "license": "Apache-2.0",
   "author": "Hyperyond",
   "type": "module",

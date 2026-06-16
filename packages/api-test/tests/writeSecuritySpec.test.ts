@@ -48,14 +48,14 @@ describe('writeSecuritySpec', () => {
     ).rejects.toThrow(/at least one alphanumeric character/);
   });
 
-  test('writes to __vibe_tests__/<slug>.security.spec.ts', async () => {
+  test('writes to __vibe_tests__/<slug>.api-test.spec.ts', async () => {
     const result = await writeSecuritySpec({
       devRoot: tmp,
       name: 'Orders IDOR',
       checks: [buildCheck()],
     });
     expect(result.slug).toBe('orders-idor');
-    expect(result.path).toBe(join(tmp, '__vibe_tests__', 'orders-idor.security.spec.ts'));
+    expect(result.path).toBe(join(tmp, '__vibe_tests__', 'orders-idor.api-test.spec.ts'));
     const src = readFileSync(result.path, 'utf-8');
     expect(src).toContain("import { test, expect } from '@playwright/test';");
     expect(src).toContain("test.describe('security: Orders IDOR'");

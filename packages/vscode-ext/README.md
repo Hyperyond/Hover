@@ -1,14 +1,13 @@
 # Hover — Vibe-test your app, ship real Playwright specs.
 
-**Vibe-test your app, ship real Playwright specs.** Describe a flow in plain English, watch AI drive your real browser, and save it as a Playwright spec that runs in CI forever — no agent, no model, no keys.
+**Describe a flow in plain English; Hover's AI tests your app like a real teammate and hands you a real Playwright spec.** Hands-free, local-first, running on the Claude Code or Codex CLI you already have. The AI's job ends at "save", so CI stays pure Playwright with zero tokens.
 
-Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex), drives your real Chrome via Playwright, and crystallizes the verified run into plain `@playwright/test` code. The AI's job ends at "save" — CI stays pure Playwright, with zero tokens.
-
-- **Chat to a test file** — Describe what you want to verify; Hover drives your real app and saves the verified run as a plain `@playwright/test` spec. No recording by hand, no brittle selectors.
-- **Multi-environment accounts, handled** — Define test accounts per environment (local / staging / prod) once, then just mention `@account` in chat — the agent logs in for you. Credentials are parameterized into `process.env` references: never written into the spec, and the same names export to your CI secrets in one click.
-- **Uses your local AI — nothing to configure** — Runs on the Claude Code / Codex CLI already on your machine, on the subscription you already pay for. No model keys to wire, no SDK, nothing leaves your computer.
-- **Security & pentest in the same chat (experimental)** — Flip into 🟠 Security (IDOR / broken authorization / business-logic) or 🔴 Pentest (offensive, white-box) against your **own** app — confirmed findings become `.security.spec.ts` CI gates or a report. _Experimental: both modes are still stabilizing — try them, but expect rough edges._
-- **Self-healing tests (coming)** — When a spec breaks in CI, Hover Cloud will repair the UI drift with AI and surface it on a dashboard. Authoring always stays local and free.
+- **Chat to a real Playwright spec** — Describe what to verify; Hover drives your real Chrome and crystallizes the run into a plain `@playwright/test` spec with `getByRole` / `getByLabel` selectors. It runs in CI forever, with no AI and no keys.
+- **Tests like a real teammate** — When the agent hits something it can't safely decide (which account to use, an ambiguous step, a destructive action), it asks you right in the editor instead of guessing or stalling.
+- **Multi-environment accounts, `@`-mentionable** — Define test accounts per environment (local / staging / prod) once, then mention `@account` in chat and the agent logs in for you. Passwords live in VS Code SecretStorage, get parameterized into `process.env` in the spec, and export to your CI secrets in one click.
+- **Your model, local ones included** — Runs on the coding-agent CLI already on your machine: Claude Code, OpenAI Codex, Gemini, or Qwen, on your own subscription or key. Point it at a self-hosted endpoint to drive a local model. Nothing leaves your computer.
+- **Nothing new to learn** — The chat looks and works like Claude Code or Codex. Install it, open the panel, describe a flow. No setup in your app, no bundler plugin, no config.
+- **API testing and pentest modes** — Flip the same chat to 🟠 API testing (drive & verify your API — auth, status codes, access control, IDOR / broken authorization, via a local HTTPS MITM that replays captured calls with mutations) or 🔴 Pentest (offensive, white-box, your **own** app). Findings become regression specs (CI gates) or a report.
 
 ## Requirements
 

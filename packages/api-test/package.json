@@ -1,5 +1,5 @@
 {
-  "name": "@hover-dev/security",
+  "name": "@hover-dev/api-test",
   "version": "0.0.0",
   "description": "Hover plugin: HTTPS MITM proxy, captured-flow inspector, and replay/mutation primitives for AI-driven security testing.",
   "license": "Apache-2.0",

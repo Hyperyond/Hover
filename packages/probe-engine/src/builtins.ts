@@ -13,7 +13,7 @@ import { type SecuritySeed } from './seed.js';
  * catalogue that is curated, security-critical, and not meaningfully
  * end-user-tunable. The knowledge now lives here as code — self-contained, type
  * checked, and travelling with the bundle (this package is inlined into
- * `@hover-dev/security` / `@hover-dev/pentest`). To add a probe: append a
+ * `@hover-dev/api-test` / `@hover-dev/pentest`). To add a probe: append a
  * `SecuritySeed` to the array below.
  */
 export const builtinSecuritySeeds: SecuritySeed[] = [
