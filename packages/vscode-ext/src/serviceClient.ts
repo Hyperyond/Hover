@@ -71,6 +71,8 @@ export interface ServiceClientPool {
   switchAgent(agentId: string): void;
   /** Set the model (sonnet/opus/haiku/…) for subsequent runs. */
   setModel(model: string): void;
+  /** Set the reasoning-effort level for subsequent runs ('' clears it). */
+  setEffort(effort: string): void;
   /** Set (or clear) the model API key — held in memory by the service only. */
   setApiKey(key: string): void;
   /** Start a run (prompt) on the engine. `accounts` are the @-mentioned test
@@ -285,6 +287,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
     },
     setModel(model: string): void {
       const body = JSON.stringify({ type: 'set-model', payload: { model } });
+      for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
+    },
+    setEffort(effort: string): void {
+      const body = JSON.stringify({ type: 'set-effort', payload: { effort } });
       for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
     },
     setApiKey(key: string): void {

@@ -68,6 +68,8 @@ async function pushEngineConfig(): Promise<void> {
   if (agent) pool.switchAgent(agent);
   const model = cfg.get<string>('model', 'sonnet');
   if (model) pool.setModel(model);
+  const effort = cfg.get<string>('effort', '');
+  pool.setEffort(effort);
   const key = await extContext?.secrets.get('hover.apiKey');
   if (key) pool.setApiKey(key);
 }
@@ -112,18 +114,31 @@ function agentLabel(id: string | null): string {
 /** Model picker lists per agent — the `--model` value the CLI accepts + a
  *  display label. Current as of 2026-06; trim deprecated tiers. The chat model
  *  picker reads the list for the active agent (chosen in Settings). */
-interface ModelEntry { value: string; label: string; desc?: string }
+// `efforts` = the reasoning-effort levels THIS model accepts (empty = the model
+// has no effort control → the picker hides it). `effortDefault` = the level used
+// when none is chosen. Values verified against the current effort matrices:
+// Claude (low/medium/high/xhigh/max, gated by model), Codex (minimal/low/medium/
+// high/xhigh). `disabled` greys the row out (not yet selectable).
+interface ModelEntry {
+  value: string;
+  label: string;
+  desc?: string;
+  disabled?: boolean;
+  efforts?: string[];
+  effortDefault?: string;
+}
+const CLAUDE_EFFORTS_TOP = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MODEL_LISTS: Record<string, ModelEntry[]> = {
   claude: [
-    { value: 'sonnet', label: 'Sonnet 4.6', desc: 'Balanced — the default' },
-    { value: 'opus', label: 'Opus 4.8', desc: 'Most capable (~5× cost)' },
-    { value: 'haiku', label: 'Haiku 4.5', desc: 'Fast & cheap' },
-    { value: 'claude-fable-5', label: 'Fable 5', desc: 'Always-on deep reasoning' },
+    { value: 'sonnet', label: 'Sonnet 4.6', desc: 'Balanced — the default', efforts: ['low', 'medium', 'high', 'max'], effortDefault: 'high' },
+    { value: 'opus', label: 'Opus 4.8', desc: 'Most capable (~5× cost)', efforts: CLAUDE_EFFORTS_TOP, effortDefault: 'high' },
+    { value: 'haiku', label: 'Haiku 4.5', desc: 'Fast & cheap', efforts: [] },
+    { value: 'claude-fable-5', label: 'Fable 5', desc: 'Always-on deep reasoning', disabled: true, efforts: CLAUDE_EFFORTS_TOP, effortDefault: 'high' },
   ],
   codex: [
-    { value: 'gpt-5.5', label: 'GPT-5.5', desc: 'Strongest — the default' },
-    { value: 'gpt-5.4', label: 'GPT-5.4', desc: 'Flagship reasoning' },
-    { value: 'gpt-5.4-mini', label: 'GPT-5.4-mini', desc: 'Fast & cheap' },
+    { value: 'gpt-5.5', label: 'GPT-5.5', desc: 'Strongest — the default', efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'], effortDefault: 'medium' },
+    { value: 'gpt-5.4', label: 'GPT-5.4', desc: 'Flagship reasoning', efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'], effortDefault: 'medium' },
+    { value: 'gpt-5.4-mini', label: 'GPT-5.4-mini', desc: 'Fast & cheap', efforts: ['minimal', 'low', 'medium', 'high'], effortDefault: 'medium' },
   ],
 };
 function activeAgentId(): string {
@@ -138,14 +153,31 @@ function modelsForAgent(agent: string): ModelEntry[] {
 async function pushModels(): Promise<void> {
   const agent = activeAgentId();
   const list = modelsForAgent(agent);
+  const selectable = list.filter((m) => !m.disabled);
   const cfg = vscode.workspace.getConfiguration('hover');
-  let model = cfg.get<string>('model', list[0].value);
-  if (!list.some((m) => m.value === model)) {
-    model = list[0].value;
+  let model = cfg.get<string>('model', '');
+  if (!selectable.some((m) => m.value === model)) {
+    model = (selectable[0] ?? list[0]).value;
     await cfg.update('model', model, vscode.ConfigurationTarget.Workspace);
     pool?.setModel(model);
   }
-  chatProvider?.updateModels(list, model);
+  // Reconcile the effort level to what the selected model supports (a model
+  // with no effort control clears it; an incompatible level snaps to the
+  // model's default), then hand the engine the effective level.
+  const efforts = list.find((m) => m.value === model)?.efforts ?? [];
+  const effDefault = list.find((m) => m.value === model)?.effortDefault ?? efforts[efforts.length - 1] ?? '';
+  let effort = cfg.get<string>('effort', '');
+  const want = efforts.length ? (efforts.includes(effort) ? effort : effDefault) : '';
+  if (want !== effort) { effort = want; await cfg.update('effort', effort, vscode.ConfigurationTarget.Workspace); }
+  pool?.setEffort(effort);
+  chatProvider?.updateModels(list, model, { options: efforts, current: effort });
+}
+
+/** Apply a reasoning-effort pick from the chat model menu. */
+async function setEffort(value: string): Promise<void> {
+  await vscode.workspace.getConfiguration('hover').update('effort', value, vscode.ConfigurationTarget.Workspace);
+  if (connectedServices > 0) pool?.setEffort(value);
+  await pushModels();
 }
 
 // ── Run orchestration ─────────────────────────────────────────────────────
@@ -171,10 +203,10 @@ interface ChatSession {
   /** Epoch ms of this conversation's most recent run start (for the sidebar's
    *  "last run N ago"). Persisted. */
   lastRunAt?: number;
-  // Runtime-only (not persisted): the host serving this session + its live run
-  // counters. True parallel — several sessions can run at once, each on its own
-  // host; events route to the owning session by source port, not the active one.
-  enginePort?: number;
+  // Runtime-only (not persisted): live run state. True parallel — several
+  // sessions can run at once, each on its own host; events route to the owning
+  // session by source port (looked up live via portForSession), not the active
+  // one.
   running?: boolean;
   stepCount?: number;
   runCost?: number;
@@ -212,6 +244,11 @@ function activeEnginePort(): number | undefined {
  *  resolver to run with the user's answer. Lets several prompt kinds share the
  *  one card UI + the one askUserAnswer round-trip. */
 const pendingCards = new Map<string, (value: string | null) => void>();
+/** The prompt card awaiting an answer in each session, so a prompt from a
+ *  BACKGROUND session doesn't pop in the conversation you're watching — it's
+ *  rendered only when its session is active, and re-rendered on switch-back. */
+type AskReq = { askId: string; question: string; options: { label: string; description?: string }[]; other?: boolean };
+const pendingAsks = new Map<string, AskReq>();
 /** Most recent reachable dev URL (configured or auto-detected). */
 let detectedUrl: string | null = null;
 /** Test-environment + account store (Local + configured domains). */
@@ -346,8 +383,6 @@ async function ensureSessionEngine(sessionId: string): Promise<number | undefine
   if (!root || !extContext || !pool) return undefined;
   try {
     const info = await acquireEngine(extContext, root, sessionId, { busy: busySessions() });
-    const s = sessions.find((x) => x.id === sessionId);
-    if (s) s.enginePort = info.enginePort;
     pool.ensureConnected(info.enginePort);
     const ok = await pool.whenOpen(info.enginePort, 10_000);
     if (!ok) return undefined;
@@ -370,6 +405,14 @@ function sourceAccessForRun(): 'always' | 'ask' {
   return extContext?.workspaceState.get<boolean>('hover.sourceAlways') === true ? 'always' : 'ask';
 }
 
+/** Show a prompt card for the session that owns it: render now only if that
+ *  session is the visible one; otherwise hold it (re-rendered on switch-back by
+ *  switchSession) so a background run's prompt never pops in another chat. */
+function presentAsk(ownerId: string, req: AskReq): void {
+  pendingAsks.set(ownerId, req);
+  if (ownerId === activeSessionId) { void chatProvider?.reveal(); chatProvider?.askUser(req); }
+}
+
 /** Decide a source-read approval request from the engine: honor a standing
  *  grant, else pop the Always / Once / Deny prompt. */
 function handleSourceApproval(msg: ServerMessage, enginePort?: number): void {
@@ -379,13 +422,11 @@ function handleSourceApproval(msg: ServerMessage, enginePort?: number): void {
   // The grant is per-session (the requesting host's session), so one session's
   // "Allow once" never auto-approves another's reads during a parallel run.
   const owner = sessionById(sessionForPort(enginePort ?? -1));
+  const ownerId = owner?.id ?? activeSessionId;
   if (sourceAccessForRun() === 'always' || owner?.sourceGrant === 'allow') { pool?.sendSourceApproval(id, true, enginePort); return; }
   if (owner?.sourceGrant === 'deny') { pool?.sendSourceApproval(id, false, enginePort); return; }
-  // Render as an in-chat permission card (no "Other" free-text). It WAITS for
-  // the user — no timeout — so a prompt you haven't seen yet never auto-decides;
-  // the engine fail-opens only when no editor is attached at all.
-  void chatProvider?.reveal();
   pendingCards.set(`src:${id}`, (choice) => {
+    pendingAsks.delete(ownerId);
     if (choice === 'Always allow') {
       void extContext?.workspaceState.update('hover.sourceAlways', true);
       if (owner) owner.sourceGrant = 'allow';
@@ -400,7 +441,7 @@ function handleSourceApproval(msg: ServerMessage, enginePort?: number): void {
       pool?.sendSourceApproval(id, false, enginePort); // dismissed → deny this one, ask again next
     }
   });
-  chatProvider?.askUser({
+  presentAsk(ownerId, {
     askId: `src:${id}`,
     question: `Hover wants to read ${path} to understand the page (read-only, fenced — secrets / .env / .git / node_modules are blocked).`,
     options: [{ label: 'Always allow' }, { label: 'Allow once' }, { label: 'Deny' }],
@@ -418,12 +459,14 @@ function handleAskUser(msg: ServerMessage, enginePort?: number): void {
   const question = typeof msg.payload?.question === 'string' ? msg.payload.question : 'Hover needs your input';
   const rawOptions = Array.isArray(msg.payload?.options) ? (msg.payload.options as { label?: string; description?: string }[]) : [];
   const options = rawOptions.filter((o): o is { label: string; description?: string } => !!o && typeof o.label === 'string');
-  void chatProvider?.reveal();
+  const ownerId = sessionForPort(enginePort ?? -1) ?? activeSessionId;
   pendingCards.set(id, (value) => {
-    chatProvider?.pushSystem(value == null ? 'Dismissed Hover’s question.' : `Answered: ${value}`);
+    pendingAsks.delete(ownerId);
+    // No extra "Answered: …" line — the docked card collapses into the
+    // transcript as its own "question → ✓ choice" record.
     pool?.sendAskUserResponse(id, value, enginePort);
   });
-  chatProvider?.askUser({ askId: id, question, options });
+  presentAsk(ownerId, { askId: id, question, options });
 }
 
 /** Translate a streamed engine event into chat updates + transcript. Routes by
@@ -938,16 +981,19 @@ export function activate(context: vscode.ExtensionContext): void {
     chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
     if (connectedServices > 0) pool?.setMode(modeId);
   };
-  // Model picked from the chat popup → persist + push to the engine.
+  // Model picked from the chat popup → persist + push to the engine. Disabled
+  // models (e.g. Fable 5, not yet selectable) are ignored.
   chatProvider.modelHandler = (value) => {
     void (async () => {
-      const list = modelsForAgent(activeAgentId());
-      if (!list.some((m) => m.value === value)) return;
+      const entry = modelsForAgent(activeAgentId()).find((m) => m.value === value);
+      if (!entry || entry.disabled) return;
       await vscode.workspace.getConfiguration('hover').update('model', value, vscode.ConfigurationTarget.Workspace);
       pool?.setModel(value);
       await pushModels();
     })();
   };
+  // Reasoning-effort picked from the chat model menu → persist + push.
+  chatProvider.effortHandler = (value) => void setEffort(value);
   // Re-sync state whenever the chat webview (re)loads — otherwise the initial
   // pushes race the view's first resolve and get dropped.
   chatProvider.onReady = () => {
@@ -986,7 +1032,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const conversations = registerConversationsView({
     onSwitch: (id) => switchSession(id),
     onNew: () => void newSession(),
-    onRename: (id) => void renameSession(id),
+    onRename: (id, name) => renameSession(id, name),
     onDelete: (id) => void deleteSession(id),
   });
   conversationsProvider = conversations.provider;
@@ -1085,7 +1131,6 @@ async function bootEngine(ctx: vscode.ExtensionContext, announce: boolean): Prom
     // Boot the active session's host eagerly so modes / agents / status flow on
     // open (additional sessions spawn their own host lazily on first run).
     const info = await acquireEngine(ctx, root, activeChat().id);
-    activeChat().enginePort = info.enginePort;
     pool?.ensureConnected(info.enginePort);
     if (announce) void vscode.window.showInformationMessage(`Hover engine running on 127.0.0.1:${info.enginePort}.`);
   } catch (e) {
@@ -1239,24 +1284,22 @@ function switchSession(id: string): void {
   persistSessions();
   chatProvider?.loadSession(activeChat().transcript);
   bindActive(); // reflect the now-active session's running state
+  // If this conversation has a prompt waiting (its run asked while it was in the
+  // background), re-dock it now that it's visible.
+  const pend = pendingAsks.get(id);
+  if (pend) chatProvider?.askUser(pend);
   pushSessionList();
 }
 
-/** Rename a conversation via a native input box (from the sidebar's ✎). */
-async function renameSession(id: string): Promise<void> {
+/** Apply an inline rename (the sidebar edits the name in place and posts it). */
+function renameSession(id: string, name: string): void {
   const s = sessions.find((x) => x.id === id);
   if (!s) return;
-  const name = await vscode.window.showInputBox({
-    title: 'Rename conversation',
-    value: s.name,
-    prompt: 'New name',
-  });
-  const trimmed = name?.trim();
+  const trimmed = name.trim().slice(0, 60);
   if (!trimmed || trimmed === s.name) return;
-  s.name = trimmed.slice(0, 60);
+  s.name = trimmed;
   persistSessions();
   pushSessionList();
-  if (s.id === activeSessionId) chatProvider?.setSessions(sessions.map((x) => ({ id: x.id, name: x.name, running: !!x.running })), activeSessionId);
 }
 
 /** Delete a conversation (after confirm): cancel + tear down its host, drop it,

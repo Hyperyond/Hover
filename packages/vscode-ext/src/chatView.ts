@@ -20,6 +20,7 @@ type Inbound =
   | { type: 'command'; id: string }
   | { type: 'setMode'; modeId: string | null }
   | { type: 'setModel'; value: string }
+  | { type: 'setEffort'; value: string }
   | { type: 'askUserAnswer'; askId: string; value: string | null }
   | { type: 'switchSession'; id: string }
   | { type: 'ready' };
@@ -35,6 +36,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Set by the extension: the user picked a mode (null = normal) / a model. */
   modeHandler?: (modeId: string | null) => void;
   modelHandler?: (value: string) => void;
+  effortHandler?: (value: string) => void;
   /** Set by the extension: the user answered an in-chat ask_user card (value
    *  null = dismissed). */
   askAnswerHandler?: (askId: string, value: string | null) => void;
@@ -55,6 +57,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       else if (msg.type === 'command' && typeof msg.id === 'string') void vscode.commands.executeCommand(msg.id);
       else if (msg.type === 'setMode') this.modeHandler?.(msg.modeId);
       else if (msg.type === 'setModel' && typeof msg.value === 'string') this.modelHandler?.(msg.value);
+      else if (msg.type === 'setEffort' && typeof msg.value === 'string') this.effortHandler?.(msg.value);
       else if (msg.type === 'askUserAnswer' && typeof msg.askId === 'string') this.askAnswerHandler?.(msg.askId, msg.value ?? null);
       else if (msg.type === 'switchSession' && typeof msg.id === 'string') this.sessionSwitchHandler?.(msg.id);
       else if (msg.type === 'ready') this.onReady?.();
@@ -104,9 +107,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   updateConfig(speech: boolean, silent: boolean): void {
     this.post({ type: 'config', speech, silent });
   }
-  /** Push the model picker's list for the current agent + the active model. */
-  updateModels(models: { value: string; label: string; desc?: string }[], current: string): void {
-    this.post({ type: 'models', models, current });
+  /** Push the model picker's list for the current agent + the active model,
+   *  plus the reasoning-effort options for that model (empty = no effort
+   *  control → the picker hides the effort section). */
+  updateModels(
+    models: { value: string; label: string; desc?: string; disabled?: boolean }[],
+    current: string,
+    effort?: { options: string[]; current: string },
+  ): void {
+    this.post({ type: 'models', models, current, effort });
   }
 
   // Streamed run rendering (called by the extension as engine events arrive).
@@ -212,6 +221,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   #session-run { color: #3fb950; font-size: 9px; margin-right: 3px; animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
   .popup.sess { top: calc(100% - 2px); bottom: auto; left: 10px; max-height: 60vh; overflow: auto; }
+  .popup.sess .sess-tabs { display: flex; gap: 2px; margin: 2px 6px 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
+  .popup.sess .sess-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px; border-radius: 5px; color: var(--text-dim); cursor: pointer; font-size: 12px; user-select: none; }
+  .popup.sess .sess-tab.active { color: var(--text); background: var(--bg-2); }
+  .popup.sess .sess-tab.locked { cursor: default; }
+  .popup.sess .sess-tab svg { opacity: .8; }
+  .popup.sess .sess-search { margin: 0 6px 6px; position: relative; }
+  .popup.sess .sess-search input { width: 100%; padding: 6px 9px 6px 26px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; font-size: 12px; }
+  .popup.sess .sess-search input::placeholder { color: var(--text-dim); }
+  .popup.sess .sess-search input:focus { outline: none; border-color: #3a3a3d; }
+  .popup.sess .sess-search svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--text-dim); }
+  .popup.sess .sess-cloud { padding: 18px 12px; text-align: center; color: var(--text-dim); font-size: 11.5px; line-height: 1.5; }
+  .popup.sess .p-item .p-run { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); align-self: center; animation: pulse 1.4s ease-in-out infinite; }
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text); cursor: pointer; font: inherit; }
   .pill:hover { border-color: var(--accent); }
   .caret { color: var(--text-dim); }
@@ -316,6 +337,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .badge.info { background: var(--line); color: var(--text); }
 
   /* Claude-Code-style input box: one rounded container, toolbar row inside. */
+  /* Bottom ask "popup": while the agent is waiting on a human decision, its
+     question docks just above the composer — pinned, never scrolled away with
+     the transcript. On answer it collapses into the log as a record. */
+  #ask-dock { width: 100%; max-width: 768px; margin: 0 auto; padding: 10px 12px 0; }
+  #ask-dock .ask { box-shadow: 0 -2px 18px rgba(0,0,0,.35); max-height: 46vh; overflow-y: auto; animation: askpop .16s ease-out; }
+  @keyframes askpop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   #composer { padding: 10px 12px 12px; position: relative; width: 100%; max-width: 768px; margin: 0 auto; }
   .mentions { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 6px); z-index: 20;
     background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
@@ -371,6 +398,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .p-item .p-desc { color: var(--text-mute); font-size: 11px; line-height: 1.4; margin-top: 1px; }
   .p-item .p-check { flex: none; color: var(--accent); opacity: 0; }
   .p-item.active .p-check { opacity: 1; }
+  /* "Experimental" / "Soon" pill next to a picker title. */
+  .p-tag { font-size: 9px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
+  .p-item.disabled { opacity: .45; cursor: default; }
+  .p-item.disabled:hover { background: none; }
+  /* Reasoning-effort chips below the model list. */
+  .eff-hdr { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .eff-row { display: flex; flex-wrap: wrap; gap: 5px; padding: 2px 8px 6px; }
+  .eff-chip { padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text-mute); cursor: pointer; font: inherit; font-size: 11.5px; text-transform: capitalize; }
+  .eff-chip:hover { border-color: var(--accent); color: var(--text); }
+  .eff-chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
   #send {
     width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
     background: var(--accent); color: var(--accent-ink);
@@ -394,6 +431,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   </header>
 
   <div id="log"></div>
+
+  <div id="ask-dock" hidden></div>
 
   <div id="composer">
     <div id="mentions" class="mentions" hidden></div>
@@ -423,6 +462,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 <script nonce="${nonce}">
   var vscode = acquireVsCodeApi();
   var log = document.getElementById('log');
+  var askDock = document.getElementById('ask-dock');
   var input = document.getElementById('input');
   var sendBtn = document.getElementById('send');
   var cleared = false;
@@ -562,6 +602,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // row; posts the answer back and locks the card.
   function addAskCard(m) {
     fresh();
+    askDock.innerHTML = ''; // one active prompt at a time
     var card = document.createElement('div'); card.className = 'ask';
     var h = document.createElement('div'); h.className = 'ask-q'; h.textContent = m.question || 'Hover needs your input'; card.appendChild(h);
     var opts = document.createElement('div'); opts.className = 'ask-opts'; card.appendChild(opts);
@@ -578,6 +619,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       var ck = document.createElement('span'); ck.textContent = '✓'; a.appendChild(ck);
       var av = document.createElement('span'); av.textContent = (val == null ? 'dismissed' : val); a.appendChild(av);
       card.appendChild(a);
+      // Undock → drop the collapsed record into the transcript at this point.
+      log.appendChild(card);
+      askDock.hidden = true; askDock.innerHTML = '';
       vscode.postMessage({ type: 'askUserAnswer', askId: m.askId, value: val });
       scroll();
     }
@@ -604,13 +648,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       snd.addEventListener('click', submitOther);
       inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); submitOther(); } });
     }
-    log.appendChild(card);
+    askDock.appendChild(card);
+    askDock.hidden = false;
     scroll();
   }
   // Re-render the chat from a switched conversation's saved transcript.
   function loadSession(tx){
     setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopTick();
     workingEl=null; running=false; document.body.classList.remove('running');
+    askDock.hidden=true; askDock.innerHTML='';
     log.innerHTML=''; curGroup=null; pendingTitle=null; cleared=true;
     var arr = Array.isArray(tx) ? tx : [];
     if (!arr.length) { cleared=false; log.appendChild(emptyEl()); syncSend(); return; }
@@ -794,48 +840,104 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   };
   var MODES = [
     { value:'normal',   icon:MODE_ICONS.normal,   title:'Frontend', desc:'AI drives your app & saves a Playwright spec' },
-    { value:'security', icon:MODE_ICONS.security, title:'Security', desc:'Business logic & authz — IDOR / BOLA → security spec' },
-    { value:'pentest',  icon:MODE_ICONS.pentest,  title:'Pentest',  desc:'Offensive scan of your OWN app → findings report' },
+    { value:'security', icon:MODE_ICONS.security, title:'Security', tag:'Experimental', desc:'Business logic & authz — IDOR / BOLA → security spec' },
+    { value:'pentest',  icon:MODE_ICONS.pentest,  title:'Pentest',  tag:'Experimental', desc:'Offensive scan of your OWN app → findings report' },
   ];
   document.getElementById('mode-icon').innerHTML = MODE_ICONS[currentModeId || 'normal'];
   function renderPicker(menuEl, header, items, activeVal){
     menuEl.innerHTML = '<div class="p-hdr">'+esc(header)+'</div>' + items.map(function(it){
       return '<div class="p-item'+(it.value===activeVal?' active':'')+'" data-v="'+esc(String(it.value))+'">'
         + (it.icon ? '<span class="p-ic">'+it.icon+'</span>' : '')
-        + '<div class="p-body"><div class="p-title">'+esc(it.title)+'</div>'
+        + '<div class="p-body"><div class="p-title">'+esc(it.title)+(it.tag ? ' <span class="p-tag">'+esc(it.tag)+'</span>' : '')+'</div>'
         + (it.desc ? '<div class="p-desc">'+esc(it.desc)+'</div>' : '')
         + '</div><span class="p-check">✓</span></div>';
     }).join('');
   }
   function closePickers(){ modeMenu.hidden = true; modelMenu.hidden = true; sessionMenu.hidden = true; }
-  // Each conversation as a picker row; a running one (incl. background) shows a
-  // "running…" subtitle so parallel runs are visible at a glance.
-  function sessionItems(){
-    var items = sessionList.map(function(s){ return { value:s.id, title:s.name, desc: s.running ? 'running…' : undefined }; });
-    items.push({ value:'__new__', title:'＋ New session' });
-    return items;
+  // The session switcher dropdown mirrors the Conversations sidebar: Local /
+  // Cloud (locked) tabs + a search box + the conversation rows. Cloud is a
+  // placeholder until Hover Cloud. A running conversation shows a pulse dot.
+  var sessTab = 'local', sessQ = '';
+  var SESS_LOCK = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>';
+  var SESS_SEARCH = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 13.5 13.5" stroke-linecap="round"/></svg>';
+  function sessRows(){
+    var ql = sessQ.trim().toLowerCase();
+    return sessionList.filter(function(s){ return !ql || (s.name||'').toLowerCase().indexOf(ql) !== -1; });
+  }
+  function renderSessList(){
+    var box = sessionMenu.querySelector('.sess-list'); if (!box) return;
+    if (sessTab === 'cloud') { box.innerHTML = '<div class="sess-cloud">☁ Cloud sessions are coming soon.</div>'; return; }
+    var rows = sessRows();
+    var html = rows.map(function(s){
+      return '<div class="p-item'+(s.id===activeSess?' active':'')+'" data-v="'+esc(s.id)+'">'
+        + '<div class="p-body"><div class="p-title">'+esc(s.name)+'</div></div>'
+        + (s.running ? '<span class="p-run"></span>' : '<span class="p-check">✓</span>')
+        + '</div>';
+    }).join('');
+    if (!rows.length) html = '<div class="sess-cloud">'+(sessionList.length?'No conversations match.':'No conversations yet.')+'</div>';
+    html += '<div class="p-item" data-v="__new__"><div class="p-body"><div class="p-title">＋ New session</div></div></div>';
+    box.innerHTML = html;
+  }
+  function renderSessShell(){
+    sessionMenu.innerHTML = '<div class="p-hdr">Conversations</div>'
+      + '<div class="sess-tabs">'
+      + '<div class="sess-tab'+(sessTab==='local'?' active':'')+'" data-tab="local">Local</div>'
+      + '<div class="sess-tab locked'+(sessTab==='cloud'?' active':'')+'" data-tab="cloud">'+SESS_LOCK+'<span>Cloud</span></div>'
+      + '</div>'
+      + '<div class="sess-search"'+(sessTab==='cloud'?' hidden':'')+'>'+SESS_SEARCH+'<input id="sess-q" type="text" placeholder="Search sessions…" value="'+esc(sessQ)+'"/></div>'
+      + '<div class="sess-list"></div>';
+    renderSessList();
   }
   function toggleSessionMenu(){
     if (!sessionMenu.hidden) { sessionMenu.hidden = true; return; }
     closePickers();
-    renderPicker(sessionMenu, 'Conversations', sessionItems(), activeSess);
+    renderSessShell();
     sessionMenu.hidden = false;
   }
+  // Row switch / new (mousedown so it beats the outside-close).
   sessionMenu.addEventListener('mousedown', function(e){
     var r = e.target && e.target.closest ? e.target.closest('.p-item') : null; if (!r) return;
     e.preventDefault(); var v = r.getAttribute('data-v'); sessionMenu.hidden = true;
     if (v === '__new__') vscode.postMessage({ type:'command', id:'hover.newSession' });
     else if (v !== activeSess) vscode.postMessage({ type:'switchSession', id:v });
   });
+  // Tab switch (Local / Cloud) — rebuild the shell, keep the menu open.
+  sessionMenu.addEventListener('click', function(e){
+    var t = e.target && e.target.closest ? e.target.closest('.sess-tab') : null; if (!t) return;
+    sessTab = t.getAttribute('data-tab') || 'local'; renderSessShell();
+  });
+  // Search filter — refresh only the list so the input keeps focus.
+  sessionMenu.addEventListener('input', function(e){
+    if (!e.target || e.target.id !== 'sess-q') return;
+    sessQ = e.target.value; renderSessList();
+  });
   function toggleModeMenu(){
     if (!modeMenu.hidden) { modeMenu.hidden = true; return; }
     closePickers(); renderPicker(modeMenu, 'Mode', MODES, currentModeId || 'normal'); modeMenu.hidden = false;
+  }
+  // Model menu: the model rows (a disabled one greys out + can't be picked),
+  // then a reasoning-effort chip row for the current model (hidden when the
+  // model has no effort control, e.g. Haiku).
+  var effortOpts = [], curEffort = '';
+  function renderModelMenu(){
+    var html = '<div class="p-hdr">Model</div>' + models.map(function(x){
+      return '<div class="p-item'+(x.value===currentModel?' active':'')+(x.disabled?' disabled':'')+'" data-v="'+esc(x.value)+'"'+(x.disabled?' data-disabled="1"':'')+'>'
+        + '<div class="p-body"><div class="p-title">'+esc(x.label)+(x.disabled?' <span class="p-tag">Soon</span>':'')+'</div>'
+        + (x.desc?'<div class="p-desc">'+esc(x.desc)+'</div>':'')+'</div>'
+        + '<span class="p-check">✓</span></div>';
+    }).join('');
+    if (effortOpts.length) {
+      html += '<div class="p-hdr eff-hdr">Reasoning effort</div><div class="eff-row">'
+        + effortOpts.map(function(lv){ return '<button class="eff-chip'+(lv===curEffort?' active':'')+'" data-eff="'+esc(lv)+'">'+esc(lv)+'</button>'; }).join('')
+        + '</div>';
+    }
+    modelMenu.innerHTML = html;
   }
   function toggleModelMenu(){
     if (!modelMenu.hidden) { modelMenu.hidden = true; return; }
     if (!models.length) return;
     closePickers();
-    renderPicker(modelMenu, 'Model', models.map(function(x){ return { value:x.value, title:x.label, desc:x.desc }; }), currentModel);
+    renderModelMenu();
     modelMenu.hidden = false;
   }
   modeMenu.addEventListener('mousedown', function(e){
@@ -845,8 +947,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   });
   modelMenu.addEventListener('mousedown', function(e){
     var r = e.target && e.target.closest ? e.target.closest('.p-item') : null; if (!r) return;
-    e.preventDefault(); var v = r.getAttribute('data-v'); modelMenu.hidden = true;
+    e.preventDefault();
+    if (r.getAttribute('data-disabled')) return; // not yet selectable
+    var v = r.getAttribute('data-v'); modelMenu.hidden = true;
     vscode.postMessage({ type:'setModel', value: v });
+  });
+  // Effort chip → apply (menu stays open; the 'models' refresh re-checks it).
+  modelMenu.addEventListener('click', function(e){
+    var c = e.target && e.target.closest ? e.target.closest('.eff-chip') : null; if (!c) return;
+    vscode.postMessage({ type:'setEffort', value: c.getAttribute('data-eff') });
   });
   document.getElementById('mode').addEventListener('click', function(e){ e.stopPropagation(); toggleModeMenu(); });
   document.getElementById('model-btn').addEventListener('click', function(e){ e.stopPropagation(); toggleModelMenu(); });
@@ -909,14 +1018,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // Pulsing dot on the collapsed button when a run is active in ANOTHER conversation.
       var bg = sessionList.some(function(s){ return s.running && s.id !== activeSess; });
       document.getElementById('session-run').hidden = !bg;
-      if (!sessionMenu.hidden) renderPicker(sessionMenu, 'Conversations', sessionItems(), activeSess);
+      if (!sessionMenu.hidden) renderSessList();
     }
     else if (m.type==='loadSession') loadSession(m.transcript);
     else if (m.type==='narration') addNarration(m.text);
     else if (m.type==='step') addStep(m);
     else if (m.type==='usage') { if (curGroup && typeof m.tokens === 'number') { if (typeof curGroup.tokStart !== 'number') curGroup.tokStart = m.tokens; if (m.tokens >= curGroup.tokStart) { curGroup.tokEnd = m.tokens; setGroupMeta(curGroup, undefined, true); } } }
     else if (m.type==='result') addResult(m);
-    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopTick(); workingEl=null; running=false; log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
+    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopTick(); workingEl=null; running=false; askDock.hidden=true; askDock.innerHTML=''; log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') {
       currentModeId = m.id || null;
       document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Frontend';
@@ -929,9 +1038,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='models') {
       models = Array.isArray(m.models) ? m.models : [];
       currentModel = m.current || '';
+      effortOpts = (m.effort && Array.isArray(m.effort.options)) ? m.effort.options : [];
+      curEffort = (m.effort && m.effort.current) || '';
       var found = models.filter(function(x){ return x.value===currentModel; })[0];
       document.getElementById('model-label').textContent = (found && found.label) || currentModel || 'Model';
-      if (!modelMenu.hidden) renderPicker(modelMenu, 'Model', models.map(function(x){ return { value:x.value, title:x.label, desc:x.desc }; }), currentModel);
+      if (!modelMenu.hidden) renderModelMenu();
     }
     else if (m.type==='appstatus') {
       var dot=document.getElementById('app-dot'); var lab=document.getElementById('app-label'); var btn=document.getElementById('appstatus');
