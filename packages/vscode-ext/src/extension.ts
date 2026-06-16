@@ -489,7 +489,7 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       setSessionRunning(owner, true);
       break;
     case 'tool_use': {
-      owner.transcript.push({ kind: 'step', tool: ev.tool, input: ev.input });
+      owner.transcript.push({ kind: 'step', tool: ev.tool, input: ev.input, label: humanizeTool(String(ev.tool ?? ''), ev.input) });
       owner.stepCount = (owner.stepCount ?? 0) + 1;
       if (typeof ev.costUsdSnapshot === 'number') owner.runCost = ev.costUsdSnapshot;
       if (typeof ev.tokensSnapshot === 'number') owner.runTokens = ev.tokensSnapshot;

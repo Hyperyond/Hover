@@ -620,9 +620,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     replaying = true;
     arr.forEach(function(m){
       if (m.kind==='user') addMessage('user', m.text || '');
-      // Replayed agent text rendered muted + WITHOUT speaking (no TTS on switch).
-      else if (m.kind==='system' || m.kind==='ai' || m.kind==='assistant') { if (m.text) addMessage('system', m.text); }
-      else if (m.kind==='step') addStep({ tool: m.tool, label: m.tool, detail: m.input != null ? JSON.stringify(m.input) : '' });
+      // Agent narration becomes the NEXT group's title (same as live), so steps
+      // fold under it instead of opening tool-named groups. Genuine system lines
+      // stay as messages. No TTS on replay (the replaying guard mutes speak).
+      else if (m.kind==='ai' || m.kind==='assistant') addNarration(m.text || '');
+      else if (m.kind==='system') { if (m.text) addMessage('system', m.text); }
+      else if (m.kind==='step') addStep({ tool: m.tool, label: m.label || m.tool, detail: m.input != null ? JSON.stringify(m.input) : '', isError: m.isError });
       else if (m.kind==='done') addResult({ verdict: 'Done', summary: m.summary || '' });
     });
     if (curGroup) finalizeGroup();
