@@ -184,7 +184,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     --accent: #7CFFA8; --accent-dim: rgba(124,255,168,0.16); --accent-ink: #0c2417;
     --warn: #fb923c; --err: #f87171; --link: #7dd3fc;
   }
-  body.mode-security { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
+  body.mode-api-test { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
   body.mode-pentest  { --accent: #f87171; --accent-dim: rgba(248,113,113,0.16); --accent-ink: #2a0d0d; }
   * { box-sizing: border-box; }
   body {
@@ -204,13 +204,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
   @keyframes hov-spinborder { to { --hov-angle: 360deg; } }
   /* Security mode running → orange border; pentest → red. Pulsing glow. */
-  body.border-security::after, body.border-pentest::after {
+  body.border-api-test::after, body.border-pentest::after {
     content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none; padding: 2.5px;
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude;
     animation: hov-bpulse 1.6s ease-in-out infinite;
   }
-  body.border-security::after { background: #fb923c; }
+  body.border-api-test::after { background: #fb923c; }
   body.border-pentest::after { background: #f87171; }
   @keyframes hov-bpulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
   ::-webkit-scrollbar { width: 8px; }
@@ -385,7 +385,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
      browser / model / mode pickers (send becomes the stop control). */
   body.running #browser-toggle, body.running #model-btn, body.running #mode { pointer-events: none; opacity: .4; }
   /* Mode button tints to the active mode. */
-  body.mode-security #mode { color: var(--warn); }
+  body.mode-api-test #mode { color: var(--warn); }
   body.mode-pentest #mode { color: var(--err); }
   /* Popup picker (modes / models) — mimics Claude Code's Modes list. */
   .popup { position: absolute; bottom: calc(100% - 6px); z-index: 30; min-width: 252px; max-width: calc(100% - 24px);
@@ -476,10 +476,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // Running-border: pentest → red, security → orange, else silent → Chrome ring.
   function applyBorder() {
     var b = document.body;
-    b.classList.remove('silent-running', 'border-security', 'border-pentest');
+    b.classList.remove('silent-running', 'border-api-test', 'border-pentest');
     if (!running) return;
     if (currentModeId === 'pentest') b.classList.add('border-pentest');
-    else if (currentModeId === 'security') b.classList.add('border-security');
+    else if (currentModeId === 'api-test') b.classList.add('border-api-test');
     else if (silentMode) b.classList.add('silent-running');
   }
   function fresh() { if (!cleared) { log.innerHTML = ''; cleared = true; } }
@@ -889,12 +889,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   var models = [], currentModel = '';
   var MODE_ICONS = {
     normal:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2H11l-1 8.8 8.6-12.2H12.1L13 2z"/></svg>',
-    security: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.2-3 7.6-7 9-4-1.4-7-4.8-7-9V6l7-3z"/></svg>',
+    'api-test': '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.2-3 7.6-7 9-4-1.4-7-4.8-7-9V6l7-3z"/></svg>',
     pentest:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3a7 7 0 0 0-3.6 13V18a1 1 0 0 0 1 1H10v-2M12 3a7 7 0 0 1 3.6 13V18a1 1 0 0 1-1 1H14v-2M9.5 19h5"/><circle cx="9.2" cy="11.5" r="1.4" fill="currentColor"/><circle cx="14.8" cy="11.5" r="1.4" fill="currentColor"/></svg>',
   };
   var MODES = [
     { value:'normal',   icon:MODE_ICONS.normal,   title:'Frontend', desc:'AI drives your app & saves a Playwright spec' },
-    { value:'security', icon:MODE_ICONS.security, title:'API testing', tag:'Experimental', desc:'Drive & verify your API — auth, status codes, access control' },
+    { value:'api-test', icon:MODE_ICONS['api-test'], title:'API testing', tag:'Experimental', desc:'Drive & verify your API — auth, status codes, access control' },
     { value:'pentest',  icon:MODE_ICONS.pentest,  title:'Pentest',  tag:'Experimental', desc:'Offensive scan of your OWN app → findings report' },
   ];
   document.getElementById('mode-icon').innerHTML = MODE_ICONS[currentModeId || 'normal'];
@@ -1084,8 +1084,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='mode') {
       currentModeId = m.id || null;
       document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Frontend';
-      document.getElementById('mode-icon').innerHTML = MODE_ICONS[m.id==='pentest' ? 'pentest' : (m.id==='security' ? 'security' : 'normal')];
-      document.body.classList.remove('mode-security','mode-pentest');
+      document.getElementById('mode-icon').innerHTML = MODE_ICONS[m.id==='pentest' ? 'pentest' : (m.id==='api-test' ? 'api-test' : 'normal')];
+      document.body.classList.remove('mode-api-test','mode-pentest');
       if (m.id) document.body.classList.add('mode-'+m.id);
       if (!modeMenu.hidden) renderPicker(modeMenu, 'Mode', MODES, currentModeId || 'normal');
       applyBorder();

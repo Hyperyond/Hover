@@ -80,7 +80,7 @@ async function pushEngineConfig(): Promise<void> {
  *  mode is the extension's own state (the engine, once hosted here, reads it).
  *  A connected service's reported modes are merged on top. */
 const BUILTIN_MODES: ModeEntry[] = [
-  { id: 'security', label: 'API testing', description: 'drive & verify your API — auth, status, access control' },
+  { id: 'api-test', label: 'API testing', description: 'drive & verify your API — auth, status, access control' },
   { id: 'pentest', label: 'Pentest', description: 'offensive vuln hunting — red' },
 ];
 
@@ -92,10 +92,10 @@ function allModes(): ModeEntry[] {
 }
 
 function modeLabel(id: string): string {
-  // 'security' is surfaced to users as "API testing" (its real-world use); the
-  // internal id + plugin stay 'security'. Force it so an engine-reported label
+  // 'api-test' is surfaced to users as "API testing" (its real-world use); the
+  // internal id + plugin stay 'api-test'. Force it so an engine-reported label
   // can't override the display name.
-  if (id === 'security') return 'API testing';
+  if (id === 'api-test') return 'API testing';
   return allModes().find((m) => m.id === id)?.label ?? id;
 }
 
@@ -1219,7 +1219,7 @@ function renderModeStatus(): void {
   modeStatus.backgroundColor =
     currentMode === 'pentest'
       ? new vscode.ThemeColor('statusBarItem.errorBackground')
-      : currentMode === 'security'
+      : currentMode === 'api-test'
         ? new vscode.ThemeColor('statusBarItem.warningBackground')
         : undefined;
   modeStatus.tooltip = disconnected

@@ -11,7 +11,7 @@
  *   });
  *
  * What it contributes (via the @hover-dev/core/plugin-api manifest):
- *   - mode { id: 'security' } shown in the widget mode-picker
+ *   - mode { id: 'api-test' } shown in the widget mode-picker
  *   - chromeFlags routing the secured Chrome (port 9333, separate profile)
  *     through a local mockttp proxy so HTTPS traffic is decrypted into a
  *     FlowStore that the widget renders as a Network panel
@@ -97,7 +97,7 @@ const MCP_SERVER_ID = '@hover-dev/api-test:flows';
  * vulnerability classes (SQLi / SSRF / RCE) that this framework can't
  * meaningfully probe.
  */
-const SECURITY_SYSTEM_PROMPT = `Security testing mode is active — AUTHORISED testing on the user's own dev
+const SECURITY_SYSTEM_PROMPT = `API testing mode is active — AUTHORISED testing on the user's own dev
 application. Probe for vulnerabilities reachable from a browser session, then
 crystallize confirmed findings into Playwright specs the user can run in CI.
 
@@ -239,8 +239,8 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
     name: '@hover-dev/api-test',
 
     mode: {
-      id: 'security',
-      label: 'Security testing',
+      id: 'api-test',
+      label: 'API testing',
       description:
         'Routes the debug Chrome through a local HTTPS MITM so the agent can inspect, replay, and mutate API calls.',
       engagedHint: 'MITM proxy active',

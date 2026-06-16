@@ -249,7 +249,7 @@ export interface HoverPluginSaveHandler {
  *   export default defineHoverPlugin<MyOpts>((opts) => ({
  *     apiVersion: 1,
  *     name: '@hover-dev/api-test',
- *     mode: { id: 'security', label: 'Security testing' },
+ *     mode: { id: 'api-test', label: 'API testing' },
  *     ...
  *   }));
  */

@@ -43,7 +43,7 @@ export interface SessionRecord {
   durationMs?: number;
   agent: string;
   model?: string;
-  /** Active mode: null/absent = normal authoring, else 'security' / 'pentest'.
+  /** Active mode: null/absent = normal authoring, else 'api-test' / 'pentest'.
    *  A pentest record is a different artifact from a normal one. */
   mode?: string | null;
   prompt: string;

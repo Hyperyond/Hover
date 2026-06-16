@@ -52,7 +52,7 @@ function packInto(dir) {
 
 console.log('[stage-engine] packing core + security + pentest …');
 const coreTgz = packInto(pkgDir('core'));
-const securityTgz = packInto(pkgDir('security'));
+const securityTgz = packInto(pkgDir('api-test'));
 const pentestTgz = packInto(pkgDir('pentest'));
 
 const npmFlags = ['--no-save', '--omit=dev', '--no-audit', '--no-fund'];

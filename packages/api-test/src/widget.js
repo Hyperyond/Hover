@@ -89,7 +89,7 @@ if (host) {
   host.registerPlugin({
     apiVersion: 1,
     name: '@hover-dev/api-test',
-    modeId: 'security',
+    modeId: 'api-test',
 
     // Orange theme. The mode bar uses the same translucent orange gradient
     // as the core widget's `.modebar.engaged` (style.css) rather than a flat
