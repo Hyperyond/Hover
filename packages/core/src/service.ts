@@ -201,7 +201,20 @@ const REPORTING_DIRECTIVE =
   'lingering dialog, any tool quirk) is YOUR technique to work out — do it ' +
   'silently; it is NOT an app bug and must never appear as a finding. NEVER ' +
   'propose changes to Hover or its tools, and do not narrate your own environment, ' +
-  'capabilities, or memory. Report only what a user of the app would care about.';
+  'capabilities, or memory. Report only what a user of the app would care about.\n\n' +
+  'STRUCTURED FINDINGS — END YOUR REPORT WITH A JSON BLOCK. After your prose ' +
+  'summary, append exactly one fenced ```json block so the editor can render ' +
+  'findings as structured cards (do NOT rely on Markdown headings/bullets for ' +
+  'this). Shape:\n' +
+  '```json\n' +
+  '{ "summary": "<one-line plain-language outcome>",\n' +
+  '  "findings": [\n' +
+  '    { "severity": "high|medium|low|info", "title": "<short headline>", "detail": "<what + why it matters>", "endpoint": "<path, if an API call>", "method": "<HTTP method, if any>" }\n' +
+  '  ] }\n' +
+  '```\n' +
+  'One object per real defect; `endpoint`/`method` only when the finding is about ' +
+  'a specific API call. If there are no real defects, use "findings": []. Keep ' +
+  'the prose report above it for the human; the JSON is the source of truth.';
 const EXPLORATION_CHECKPOINT_DIRECTIVE =
   'OPEN-ENDED TASKS — CHECK IN BEFORE YOU STOP. When the request is vague or ' +
   'unscoped (e.g. just "test", "test this", "check the app") YOU chose what to ' +
@@ -1347,6 +1360,14 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             // totals so an aborted/errored run still records partial spend.
             if (ev.kind === 'session_end') {
               sessionEnd = { turns: ev.turns, costUsd: ev.costUsd, tokens: ev.tokens };
+              // Structured-first: parse the agent's JSON findings block, hand the
+              // editor the clean summary + structured findings (so the Findings
+              // card renders from data, not a Markdown scrape). All modes.
+              if (typeof ev.summary === 'string' && ev.summary) {
+                const parsed = parseFindings(ev.summary);
+                ev.summary = parsed.summary;
+                (ev as { findings?: unknown }).findings = parsed.findings;
+              }
             } else if (ev.kind === 'usage') {
               sessionEnd = {
                 turns: ev.turns ?? sessionEnd.turns,

@@ -22,6 +22,12 @@ export const SESSION_RECORD_VERSION = 2;
 export interface SessionFinding {
   severity: string;
   text: string;
+  /** Optional short headline (from the structured JSON findings block). */
+  title?: string;
+  /** Endpoint / method when the finding is about an API call — used to
+   *  crystallize a request-based regression later. */
+  endpoint?: string;
+  method?: string;
 }
 
 export interface SessionRecord {
@@ -82,7 +88,56 @@ export interface SessionRecord {
  *  the chat webview's splitter so the ledger and the UI agree on what counts
  *  as a finding. Returns the summary with the Findings block stripped, plus the
  *  parsed bullets. Pure + total — a malformed summary just yields no findings. */
+/** Extract + parse the agent's fenced ```json findings block, if present + valid.
+ *  Returns null when there's no usable block (caller falls back to markdown). */
+function parseStructuredFindings(
+  summary: string,
+): { summary: string; findings: SessionFinding[] } | null {
+  // The block is at the end of the report; scan all ```json fences, take the
+  // last one that parses into an object with a findings array.
+  const re = /```json\s*([\s\S]*?)```/gi;
+  let m: RegExpExecArray | null;
+  let last: { raw: string; obj: { summary?: unknown; findings?: unknown } } | null = null;
+  while ((m = re.exec(summary)) !== null) {
+    try {
+      const obj = JSON.parse(m[1].trim()) as { summary?: unknown; findings?: unknown };
+      if (obj && typeof obj === 'object' && Array.isArray(obj.findings)) last = { raw: m[0], obj };
+    } catch {
+      /* not this block */
+    }
+  }
+  if (!last) return null;
+  const findings: SessionFinding[] = [];
+  for (const f of last.obj.findings as Record<string, unknown>[]) {
+    if (!f || typeof f !== 'object') continue;
+    const title = typeof f.title === 'string' ? f.title.trim() : undefined;
+    const detail = typeof f.detail === 'string' ? f.detail.trim() : typeof f.text === 'string' ? f.text.trim() : '';
+    const text = detail || title || '';
+    if (!text) continue;
+    findings.push({
+      severity: typeof f.severity === 'string' && f.severity.trim() ? f.severity.trim() : 'note',
+      text,
+      title: title && title !== text ? title : undefined,
+      endpoint: typeof f.endpoint === 'string' ? f.endpoint : undefined,
+      method: typeof f.method === 'string' ? f.method : undefined,
+    });
+  }
+  // Human summary = the explicit `summary` field, else the report with the JSON
+  // block stripped out.
+  const clean =
+    typeof last.obj.summary === 'string' && last.obj.summary.trim()
+      ? last.obj.summary.trim()
+      : summary.replace(last.raw, '').replace(/\n{3,}/g, '\n\n').trim();
+  return { summary: clean, findings };
+}
+
+/** Structured-first: the agent ends its report with a fenced ```json block
+ *  { summary, findings: [{severity, title, detail, endpoint?, method?}] }. Parse
+ *  that (robust, no prose-scraping); fall back to the markdown heading scan only
+ *  when there's no valid block (older / non-compliant runs). */
 export function parseFindings(summary: string): { summary: string; findings: SessionFinding[] } {
+  const struct = parseStructuredFindings(summary);
+  if (struct) return struct;
   const lines = summary.split('\n');
   let hi = -1;
   for (let i = 0; i < lines.length; i++) {
