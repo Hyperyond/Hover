@@ -19,7 +19,7 @@ import { send, type ClientMessage } from './types.js';
 /** Extra launch options surfaced from the active mode (security plugin
  *  needs a resident proxy + spki). When none are set, behaviour is identical
  *  to pre-v0.7 normal-mode launch. */
-export type LaunchExtras = Pick<LaunchOptions, 'proxy'>;
+export type LaunchExtras = Pick<LaunchOptions, 'proxy' | 'userDataDir'>;
 
 /**
  * "Is this widget running inside the debug Chrome?" The widget asks this on
@@ -76,6 +76,7 @@ export async function handleLaunchChrome(
     url: pageUrl,
     port,
     proxy: extras?.proxy,
+    userDataDir: extras?.userDataDir,
     headless: msg.payload?.headless === true,
     force: msg.payload?.force === true,
   });

@@ -56,7 +56,7 @@ import { getAgent } from './agents/registry.js';
 import type { InvokeEvent } from './agents/types.js';
 import { getPreflight, invalidatePreflight } from './playwright/preflightCache.js';
 import { resolveMcpConfig, mcpToolPrefix } from './playwright/resolveMcpConfig.js';
-import { launchDebugChrome } from './playwright/launchChrome.js';
+import { launchDebugChrome, closeDebugChrome } from './playwright/launchChrome.js';
 import { listSpecs } from './specs/listSpecs.js';
 import { writeSessionRecord, parseFindings, tallyTools } from './sessions/sessions.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
@@ -101,6 +101,11 @@ export interface ServiceOptions {
   mcpConfig?: string;
   /** CDP URL to preflight before each command (default http://localhost:9222). */
   cdpUrl?: string;
+  /** Isolated Chrome user-data-dir for this service's debug Chrome (default
+   *  `<tmpdir>/hover-chrome`). Set per-service so several engine hosts (one per
+   *  chat session) each drive their OWN Chrome profile — distinct logins, no
+   *  profile-lock contention. Paired with a distinct `cdpUrl` port. */
+  userDataDir?: string;
   /** Working directory for the spawned agent. Also the root under which saved
    *  specs (`__vibe_tests__/`), sidecars + seeds (`.hover/`) live. Defaults to
    *  process.cwd(); in Vite plugin context, set to `server.config.root` so the
@@ -316,6 +321,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   // explicitly (or via the Vite plugin option) if a hard ceiling is needed.
   const maxBudgetUsd = opts.maxBudgetUsd;
   const cdpUrl = opts.cdpUrl ?? 'http://localhost:9222';
+  const userDataDir = opts.userDataDir;
   const devRoot = opts.devRoot ?? process.cwd();
 
   const wss = await pickAndBind('127.0.0.1', requestedPort, PORT_RETRIES);
@@ -502,8 +508,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
    *  no plugin set a resident proxy (the common no-security case), so plain
    *  Hover is byte-for-byte unchanged. */
   const effectiveLaunchExtras = (): LaunchExtras | undefined => {
-    if (!residentChromeProxy) return undefined;
-    return { proxy: residentChromeProxy };
+    if (!residentChromeProxy && !userDataDir) return undefined;
+    return {
+      ...(residentChromeProxy ? { proxy: residentChromeProxy } : {}),
+      ...(userDataDir ? { userDataDir } : {}),
+    };
   };
 
   /** Send the current mode catalogue to one ws (or all if undefined). */
@@ -1381,6 +1390,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       url: launchUrl,
       port: launchPort,
       proxy: residentChromeProxy ?? undefined,
+      userDataDir,
     })
       .then((r) => {
         if (!r.ok) {
@@ -1444,6 +1454,18 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       await new Promise<void>((res, rej) => {
         wss.close(err => (err ? rej(err) : res()));
       });
+      // Multi-host model: a per-session host owns its own Chrome (distinct
+      // userDataDir + CDP port). Tear that Chrome down with the host so the
+      // slot's CDP port frees up and a session reusing the slot gets a fresh
+      // browser — not the previous session's logged-in profile. The legacy
+      // single-Chrome model (no userDataDir) deliberately leaves its Chrome
+      // running, reused across runs / dev-server restarts.
+      if (userDataDir) {
+        const launchPort = (() => {
+          try { return Number(new URL(cdpUrl).port) || 9222; } catch { return 9222; }
+        })();
+        try { await closeDebugChrome(launchPort); } catch { /* best-effort */ }
+      }
     },
   };
 }

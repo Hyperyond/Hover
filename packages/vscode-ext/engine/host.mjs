@@ -18,6 +18,12 @@ import { startService } from '@hover-dev/core/service';
 
 const devRoot = process.env.HOVER_DEV_ROOT || process.cwd();
 const port = Number(process.env.HOVER_PORT || 51789);
+// Per-session isolation (multi-host model): each chat session spawns its own
+// host with a distinct CDP port + Chrome profile, so sessions drive separate
+// browsers (distinct logins) and can run in parallel. Absent → single-host
+// defaults (one Chrome on 9222), unchanged from the pre-multi-host behaviour.
+const cdpUrl = process.env.HOVER_CDP_URL || undefined;
+const userDataDir = process.env.HOVER_USER_DATA_DIR || undefined;
 
 // Load the optional mode plugins (🟠 security / 🔴 pentest) if they were staged
 // into engine/node_modules. Each exposes a `defineHoverPlugin(...)` factory as
@@ -56,6 +62,8 @@ try {
     autoLaunchChrome: false,
     codeContext: true,
     plugins,
+    ...(cdpUrl ? { cdpUrl } : {}),
+    ...(userDataDir ? { userDataDir } : {}),
   });
 } catch (err) {
   // Surface a structured line the parent (engine.ts) can show, instead of a

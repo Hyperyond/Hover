@@ -58,8 +58,10 @@ export interface PoolHandlers {
   onStatus?: (connectedCount: number) => void;
   onModes?: (current: string | null, available: ModeEntry[]) => void;
   onAgents?: (current: string | null, available: AgentEntry[]) => void;
-  /** Run lifecycle: streamed `event` payloads, plus `error` / `spec-saved`. */
-  onServerMessage?: (msg: ServerMessage) => void;
+  /** Run lifecycle: streamed `event` payloads, plus `error` / `spec-saved`.
+   *  `enginePort` is the host the message came from, so the extension can route
+   *  it to the chat session driving that host (multi-host model). */
+  onServerMessage?: (msg: ServerMessage, enginePort: number) => void;
 }
 
 export interface ServiceClientPool {
@@ -72,27 +74,32 @@ export interface ServiceClientPool {
   /** Set (or clear) the model API key — held in memory by the service only. */
   setApiKey(key: string): void;
   /** Start a run (prompt) on the engine. `accounts` are the @-mentioned test
-   *  accounts (with creds) the agent may log in with. Returns false if nothing
-   *  is connected. */
-  run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean;
+   *  accounts (with creds) the agent may log in with. `enginePort` targets the
+   *  session's own host (multi-host model); omit to use the first open socket.
+   *  Returns false if the target isn't connected. */
+  run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number): boolean;
   /** Reply to a source-read approval request from the engine's source MCP. */
-  sendSourceApproval(approvalId: string, allow: boolean): void;
+  sendSourceApproval(approvalId: string, allow: boolean, enginePort?: number): void;
   /** Reply to an ask_user prompt from the engine's control MCP — the user's
    *  answer (a chosen option label or typed text), or cancelled. */
-  sendAskUserResponse(askId: string, value: string | null): void;
-  /** Cancel the active run. */
-  cancel(): void;
+  sendAskUserResponse(askId: string, value: string | null, enginePort?: number): void;
+  /** Cancel a run. `enginePort` cancels one host; omit to cancel all. */
+  cancel(enginePort?: number): void;
   /** Crystallize the accumulated steps into a spec. `redactions` parameterize
    *  credential fill values into process.env refs so secrets stay out of the spec. */
-  saveSpec(name: string, steps: unknown[], redactions?: Redaction[]): boolean;
+  saveSpec(name: string, steps: unknown[], redactions?: Redaction[], enginePort?: number): boolean;
   /** Invoke a plugin-contributed save handler (e.g. `save:pentest:report`,
    *  `save:security:spec`). The engine replies with `<type>:saved` or `error`. */
-  pluginSave(type: string, payload: Record<string, unknown>): boolean;
+  pluginSave(type: string, payload: Record<string, unknown>, enginePort?: number): boolean;
   /** Ask the engine to launch the isolated debug Chrome at `pageUrl`
-   *  (headless = silent, no window). */
-  launchChrome(pageUrl: string, headless: boolean, force?: boolean): boolean;
+   *  (headless = silent, no window). `enginePort` targets the session's host. */
+  launchChrome(pageUrl: string, headless: boolean, force?: boolean, enginePort?: number): boolean;
   /** Run the deterministic + LLM optimization pass on a saved spec. */
-  optimizeSpec(slug: string): boolean;
+  optimizeSpec(slug: string, enginePort?: number): boolean;
+  /** Eagerly connect to a just-spawned host's port (skip the reconnect delay). */
+  ensureConnected(port: number): void;
+  /** Resolve once a socket to `port` is OPEN (or false on timeout). */
+  whenOpen(port: number, timeoutMs?: number): Promise<boolean>;
   dispose(): void;
 }
 
@@ -108,13 +115,24 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
     handlers.onStatus(open);
   };
 
-  // The engine is a single service; the lowest-numbered open socket is it.
+  // The lowest-numbered open socket — used for host-agnostic ops (save, plugin
+  // save, optimize) where any live host can serve the request.
   const firstOpen = (): WebSocket | undefined => {
     for (const p of [...sockets.keys()].sort((a, b) => a - b)) {
       const s = sockets.get(p);
       if (s && s.readyState === WebSocket.OPEN) return s;
     }
     return undefined;
+  };
+
+  /** Resolve a target socket: the specific host port if given + open, else the
+   *  first open socket (back-compat / host-agnostic ops). */
+  const target = (port?: number): WebSocket | undefined => {
+    if (typeof port === 'number') {
+      const s = sockets.get(port);
+      return s && s.readyState === WebSocket.OPEN ? s : undefined;
+    }
+    return firstOpen();
   };
 
   const connect = (port: number): void => {
@@ -159,7 +177,7 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'ask-user-request' ||
         (typeof msg.type === 'string' && msg.type.endsWith(':saved'))
       ) {
-        handlers.onServerMessage?.(msg as ServerMessage);
+        handlers.onServerMessage?.(msg as ServerMessage, port);
       }
     });
 
@@ -197,48 +215,73 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(body);
       }
     },
-    run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny'): boolean {
-      const ws = firstOpen();
+    run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number): boolean {
+      const ws = target(enginePort);
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId, accounts, env, sourceAccess } }));
       return true;
     },
-    sendSourceApproval(approvalId: string, allow: boolean): void {
-      const ws = firstOpen();
+    sendSourceApproval(approvalId: string, allow: boolean, enginePort?: number): void {
+      const ws = target(enginePort);
       if (ws) ws.send(JSON.stringify({ type: 'source-approval-response', payload: { approvalId, allow } }));
     },
-    sendAskUserResponse(askId: string, value: string | null): void {
-      const ws = firstOpen();
+    sendAskUserResponse(askId: string, value: string | null, enginePort?: number): void {
+      const ws = target(enginePort);
       if (ws) ws.send(JSON.stringify({ type: 'ask-user-response', payload: value == null ? { askId, cancelled: true } : { askId, value } }));
     },
-    cancel(): void {
+    cancel(enginePort?: number): void {
+      if (typeof enginePort === 'number') {
+        const ws = target(enginePort);
+        if (ws) ws.send(JSON.stringify({ type: 'cancel' }));
+        return;
+      }
       for (const ws of sockets.values()) {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel' }));
       }
     },
-    saveSpec(name: string, steps: unknown[], redactions?: Redaction[]): boolean {
-      const ws = firstOpen();
+    saveSpec(name: string, steps: unknown[], redactions?: Redaction[], enginePort?: number): boolean {
+      const ws = target(enginePort);
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions } }));
       return true;
     },
-    pluginSave(type: string, payload: Record<string, unknown>): boolean {
-      const ws = firstOpen();
+    pluginSave(type: string, payload: Record<string, unknown>, enginePort?: number): boolean {
+      const ws = target(enginePort);
       if (!ws) return false;
       ws.send(JSON.stringify({ type, payload }));
       return true;
     },
-    launchChrome(pageUrl: string, headless: boolean, force?: boolean): boolean {
-      const ws = firstOpen();
+    launchChrome(pageUrl: string, headless: boolean, force?: boolean, enginePort?: number): boolean {
+      const ws = target(enginePort);
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'launch-chrome', payload: { pageUrl, headless, force } }));
       return true;
     },
-    optimizeSpec(slug: string): boolean {
-      const ws = firstOpen();
+    optimizeSpec(slug: string, enginePort?: number): boolean {
+      const ws = target(enginePort);
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug } }));
       return true;
+    },
+    ensureConnected(port: number): void {
+      if (disposed) return;
+      const t = timers.get(port);
+      if (t) { clearTimeout(t); timers.delete(port); }
+      const s = sockets.get(port);
+      if (s && (s.readyState === WebSocket.OPEN || s.readyState === WebSocket.CONNECTING)) return;
+      connect(port);
+    },
+    whenOpen(port: number, timeoutMs = 8000): Promise<boolean> {
+      const existing = sockets.get(port);
+      if (existing && existing.readyState === WebSocket.OPEN) return Promise.resolve(true);
+      return new Promise<boolean>((resolve) => {
+        const started = Date.now();
+        const tick = setInterval(() => {
+          const s = sockets.get(port);
+          if (s && s.readyState === WebSocket.OPEN) { clearInterval(tick); resolve(true); }
+          else if (Date.now() - started > timeoutMs) { clearInterval(tick); resolve(false); }
+        }, 100);
+      });
     },
     setModel(model: string): void {
       const body = JSON.stringify({ type: 'set-model', payload: { model } });
