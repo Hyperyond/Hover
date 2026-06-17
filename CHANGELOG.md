@@ -6,6 +6,22 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-06-17
+
+Theme: **the chat stream, redesigned.** The run view is now a clean linear "thread" — like Claude Code — instead of collapsible step boxes.
+
+### Changed
+
+- **Linear thread chat stream.** Each AI decision is a node on a continuous left rail; the browser actions it triggers hang off the same rail as one-line, plain-language steps (`Clicked "Sign in"`, `Filled email → …`, `Navigated to /checkout`) instead of raw multi-line MCP JSON. The current action types out with a caret; nodes carry real per-thought time + token meta. No folding, no boxes.
+- **Result + findings merged into one plain block** (no cards) — a ✓ outcome, the summary, inline findings, a dim meta footer.
+- **Agent reporting prompt tightened (all modes):** keep interim narration to one short line of intent; the final report is exactly one fenced JSON block whose `summary` is formatted as Markdown (a lead line + bullets), with no duplicated prose. Cuts tokens and keeps the stream clean.
+
+### Added
+
+- **After-run save prompt.** The "Save as spec" button is gone; when a run finishes Hover asks — in the composer's place — whether to save and for a filename, warning when the agent flagged issues (the spec records the flow as passing). The ask/ save popups are mutually exclusive with the input and aligned to it.
+- **Copy buttons** on the Done summary and each finding (monochrome icon → ✓ on success).
+- The agent's `ask_user` answer now renders as a concise threaded node (`You answered: …`) instead of a lingering card.
+
 ## [0.16.0] — 2026-06-17
 
 Theme: **Hover is now a VS Code extension — on the Marketplace.** The editor extension (`hover-dev`) is the surface — chat, the Specs / Sessions / Environments views, and the whole engine run inside the editor, nothing else to install. (Published on the VS Code Marketplace as `hyperyond.hover-dev`.) The orange mode is renamed **API testing** and now covers both API/contract testing and security/authz testing; findings render from structured data; and the legacy model-API-key + in-page-widget code paths are gone. The npm bundler-plugin packages (`vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`, `@hover-dev/transform-source`) and the in-page widget have been **removed** from the repo — previously published versions stay on the registry as historical artifacts. `@hover-dev/core` keeps evolving as the extension's engine (consumed as local source, packed into the .vsix).
