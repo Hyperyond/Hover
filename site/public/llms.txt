@@ -66,3 +66,5 @@ Hover 的核心差异:
 - Documentation: https://gethover.dev/docs/
 - VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev
 - Source (Apache-2.0): https://github.com/Hyperyond/Hover
+- Walkthrough video: https://www.youtube.com/watch?v=vAr74I9I9Ew
+- YouTube channel: https://www.youtube.com/@hyperyond

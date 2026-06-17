@@ -14,15 +14,12 @@ import { Faq } from '@/components/Faq';
 import { AskDemo } from '@/components/AskDemo';
 import { EnvDemo } from '@/components/EnvDemo';
 
-/* Server-side file probe: only feed the <video> a src once the export actually
- * exists under public/, so the page never offers a play button that 404s. Drop
- * public/demo.mp4 (+ optional public/demo-poster.png) and it switches on.
- *
- * The `?v=<hash>` is a content-hash cache-bust: a static path like /demo.mp4
- * gets cached hard by the browser and Vercel's CDN, so replacing the file with
- * the same name otherwise keeps serving the stale video. Hashing the bytes at
- * build time means the URL changes only when the content changes — new video,
- * new URL, instant invalidation; same video, stable URL. */
+/* The walkthrough lives on YouTube; the landing page only shows a poster that
+ * links out (no self-hosted asset, no iframe on load). `asset()` appends a
+ * content-hash cache-bust to the poster: a static path like /demo-poster.jpg
+ * gets cached hard by the browser and Vercel's CDN, so swapping the file for a
+ * same-named one would keep serving the stale image. Hashing the bytes at build
+ * time means the URL changes only when the content changes. */
 const PUBLIC = join(process.cwd(), 'public');
 
 function asset(rel: string): string {
@@ -32,7 +29,7 @@ function asset(rel: string): string {
   return `/${rel}?v=${hash}`;
 }
 
-const DEMO_MP4 = asset('demo.mp4');
+const DEMO_VIDEO = 'https://www.youtube.com/watch?v=vAr74I9I9Ew';
 const DEMO_POSTER = asset('demo-poster.jpg');
 
 const GITHUB = 'https://github.com/Hyperyond/Hover';
@@ -89,13 +86,9 @@ export default function Home() {
       <Nav />
       <Hero />
       <Triad />
-      {/* Walkthrough video. Self-hosted MP4 is preferred — YouTube flagged the
-       * source clip (ASWFWUyMUlc) with a server-side "confirm you're not a bot"
-       * gate that no embed param can bypass. Drop the export at public/demo.mp4
-       * (and optionally a still at public/demo-poster.png) and it plays for
-       * everyone, ad-block and all. Until the file exists this shows a
-       * placeholder; the id is kept only as a documented fallback. */}
-      <VideoSection src={DEMO_MP4} poster={DEMO_POSTER} />
+      {/* Walkthrough video. The poster (public/demo-poster.jpg) links out to the
+       * YouTube watch page — no self-hosted MP4, no iframe on load. */}
+      <VideoSection watchUrl={DEMO_VIDEO} poster={DEMO_POSTER} />
       <Coverage />
       <Pillars />
       <Teammate />
