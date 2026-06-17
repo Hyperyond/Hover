@@ -12,7 +12,7 @@
  *     dev/debugging through this Chrome is unaffected.
  *   - 'intercept': request/response pairs (with bodies) are piped into the
  *     FlowStore so the agent can inspect/replay them. Entered when the user
- *     switches the widget into Security mode.
+ *     switches into API-testing mode.
  *
  * Stop is idempotent so the service teardown can call it unconditionally.
  */
@@ -74,7 +74,7 @@ export async function startProxy(devRoot: string): Promise<ProxyHandle> {
   const idMap = new Map<string, string>();
 
   // Runtime mode. Default 'passthrough' so the resident proxy is transparent
-  // until the user enters Security mode (setMode('intercept')). Held in a
+  // until the user enters API-testing mode (setMode('intercept')). Held in a
   // closure variable the callbacks read on every request — flipping it needs
   // no rule swap and no Chrome/proxy restart.
   let mode: ProxyMode = 'passthrough';

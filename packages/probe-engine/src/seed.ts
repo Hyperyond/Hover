@@ -1,5 +1,5 @@
 export type SecurityClass =
-  // business / authorization (orange "security mode")
+  // business / authorization (orange "API-testing mode")
   | 'idor' | 'bola' | 'bfla' | 'mass-assignment' | 'auth-bypass'
   // vulnerability / attack (red "pentest mode")
   | 'ssrf' | 'open-redirect' | 'path-traversal' | 'cors' | 'jwt'
@@ -13,7 +13,7 @@ export type SeedCategory = 'authz' | 'vuln';
 export interface SecuritySeed {
   name: string;
   class: SecurityClass;
-  /** authz (security mode) vs vuln (pentest mode). */
+  /** authz (API-testing mode) vs vuln (pentest mode). */
   category?: SeedCategory;
   note?: string;
   match: { method?: string[]; urlParam?: string; bodyField?: string; needsAuth?: boolean };

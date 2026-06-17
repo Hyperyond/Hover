@@ -3,7 +3,7 @@ import { type SecuritySeed } from './seed.js';
 /**
  * Built-in probe recipes that ship with the engine — the entire security /
  * pentest probe catalogue, inlined as data. Each is tagged `category`: `authz`
- * (business / access-control — orange security mode) or `vuln` (attack /
+ * (business / access-control — orange API-testing mode) or `vuln` (attack /
  * exploit — red pentest mode). The set adapts offensive web-vuln methodology
  * from Claude-BugHunter (MIT).
  *
@@ -17,7 +17,7 @@ import { type SecuritySeed } from './seed.js';
  * `SecuritySeed` to the array below.
  */
 export const builtinSecuritySeeds: SecuritySeed[] = [
-  // ── authz (security mode) ────────────────────────────────────────────────
+  // ── authz (API-testing mode) ────────────────────────────────────────────────
   {
     name: 'idor-numeric-id',
     class: 'idor',

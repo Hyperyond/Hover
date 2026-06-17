@@ -27,7 +27,7 @@ export interface ProbeSuggestion {
  * the deterministic "what's worth probing" list the agent acts on. Pure.
  *
  * `opts.categories`, when given, gates seeds by their `category` (defaulting a
- * seed with no category to `authz`) so orange security mode and red pentest
+ * seed with no category to `authz`) so orange API-testing mode and red pentest
  * mode can each draw their own slice of the seed set. Omitting it keeps ALL
  * seeds (back-compat).
  */

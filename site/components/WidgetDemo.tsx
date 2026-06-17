@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
  *
  * It loops three scripted sessions to show off the three modes:
  *   1. Default mode (mint)   — login → add todo → Save as spec.
- *   2. Security mode (orange) — probes captured API calls for IDOR → security spec.
+ *   2. API testing (orange) — probes captured API calls for IDOR → API-test spec.
  *   3. Pentest mode (red)    — attacks the app for web vulns → findings report.
  *
  * Pure client-side theatre — no WebSocket, no service. A phase machine on a
@@ -218,7 +218,7 @@ export function WidgetDemo() {
               {scene.mode === 'pentest'
                 ? 'Pentest mode — the agent attacks your own dev app for vulns.'
                 : scene.mode === 'security'
-                  ? 'Security mode — the agent probes captured API calls.'
+                  ? 'API testing — the agent probes captured API calls.'
                   : 'Describe a flow in plain English. Hover drives your real Chrome.'}
             </p>
           )}

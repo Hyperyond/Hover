@@ -126,7 +126,7 @@ export interface ControlPlaneOptions {
   /** Label → Playwright storageState file path, for replaying as a second
    *  identity (IDOR/BOLA). e.g. { userB: 'state/userB.json' }. */
   identities?: Record<string, string>;
-  /** Restrict probe suggestions to these seed categories. Security mode passes
+  /** Restrict probe suggestions to these seed categories. API-testing mode passes
    *  `['authz']` so the agent only sees access-control probes; left undefined
    *  (the CLI scan + pentest plugin) means all seeds. */
   seedCategories?: SeedCategory[];
@@ -438,7 +438,7 @@ export async function startControlPlane(
         // Match captured flows against the built-in probe catalogue → the
         // "what's worth probing" list the agent acts on. store.list()
         // returns full flows (headers + body), which suggestProbes needs.
-        // Security mode restricts to authz seeds via `seedCategories`.
+        // API-testing mode restricts to authz seeds via `seedCategories`.
         sendJson(res, 200, {
           suggestions: suggestProbes(store.list(), builtinSecuritySeeds, { categories: options.seedCategories }),
         });

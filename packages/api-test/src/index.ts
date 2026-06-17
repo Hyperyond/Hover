@@ -1,20 +1,15 @@
 /**
  * @hover-dev/api-test — Hover plugin: HTTPS MITM + flow inspector + replay.
  *
- * Usage:
- *
- *   import { hover } from 'vite-plugin-hover';
- *   import securityMode from '@hover-dev/api-test';
- *
- *   export default defineConfig({
- *     plugins: [hover({}, securityMode())],
- *   });
+ * Loaded by the Hover VS Code extension's staged engine (host.mjs passes it to
+ * startService({ plugins })) — not via a bundler plugin. Default export → mode
+ * `api-test`.
  *
  * What it contributes (via the @hover-dev/core/plugin-api manifest):
- *   - mode { id: 'api-test' } shown in the widget mode-picker
- *   - chromeFlags routing the secured Chrome (port 9333, separate profile)
- *     through a local mockttp proxy so HTTPS traffic is decrypted into a
- *     FlowStore that the widget renders as a Network panel
+ *   - mode { id: 'api-test' } shown in the extension's mode-picker
+ *   - chromeFlags routing the one debug Chrome through a local mockttp proxy
+ *     (resident, refcounted) so HTTPS traffic is decrypted into a FlowStore
+ *     that the extension renders as a Network view
  *   - mcpServers exposing list_flows / get_flow / replay_flow /
  *     clear_flows to the agent (see src/mcp/server.ts)
  *   - systemPromptAdditions teaching the agent the security workflow,
@@ -42,7 +37,7 @@ import type { SeedCategory } from '@hover-dev/probe-engine';
 // Only ONE proxy can own the debug Chrome: Chrome is born with `--proxy-server`
 // pointed at it (setChromeProxy at service start), so a second proxy would run
 // orphaned and capture nothing. But two plugins legitimately need it — the
-// orange security mode AND the red pentest mode (`@hover-dev/pentest/plugin`,
+// orange API-testing mode AND the red pentest mode (`@hover-dev/pentest/plugin`,
 // which reaches the proxy through `startSecurityRuntime` below). Both resolve
 // `@hover-dev/api-test` to the same module instance, so this module-level
 // singleton is genuinely shared between them: the first to start the proxy wins,
@@ -74,7 +69,7 @@ async function releaseResidentProxy(): Promise<void> {
 export interface SecurityModeOptions {
   /** @deprecated Single-Chrome model: security no longer launches a second
    *  Chrome on a separate port. The one debug Chrome (normal CDP port) is born
-   *  pointed through the resident MITM proxy; entering Security mode flips the
+   *  pointed through the resident MITM proxy; entering API-testing mode flips the
    *  proxy to intercept. This option is ignored and kept only so existing
    *  configs don't error. */
   cdpPort?: number;
@@ -92,7 +87,7 @@ const MCP_SERVER_ID = '@hover-dev/api-test:flows';
 
 /**
  * System-prompt addition concatenated onto the agent's prompt when
- * security mode is active. Scope-restricted to browser-reachable
+ * API-testing mode is active. Scope-restricted to browser-reachable
  * issues — we explicitly tell the agent NOT to attempt server-side
  * vulnerability classes (SQLi / SSRF / RCE) that this framework can't
  * meaningfully probe.
@@ -216,17 +211,6 @@ function resolveMcpScriptPath(): string {
   return resolve(here, 'mcp', 'server.js');
 }
 
-/** Resolve the absolute path to the widget contribution module. Same
- *  relative-to-self trick as resolveMcpScriptPath. The Hover widget host
- *  reads this file at bundle-assembly time and inlines it as a
- *  `<script type="module">` after the widget core. The package's build
- *  step copies `src/widget.js` to `dist/widget.js` (`widget.js` is
- *  authored as plain JS — tsc doesn't compile it). */
-function resolveWidgetScriptPath(): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  return resolve(here, 'widget.js');
-}
-
 export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
   // Closed-over handles so the service:start hook can boot the resident
   // sidecars and the shutdown hook can stop them. One factory call ⇒ one set
@@ -267,26 +251,10 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
       },
     ],
 
-    widgetEventTypes: [
-      'security:flow:added',
-      'security:flow:updated',
-      // v0.12 — each agent-driven recordable replay (the agent passed
-      // intent + expectStatus to replay_flow) emits a check event. The
-      // widget's Specs / Findings UI uses it to surface "agent recorded
-      // a security check" rows.
-      'security:check:recorded',
-      // Emitted when the agent runs clear_flows (DELETE /flows wipes the
-      // store + checks). The widget resets its flows/checks state + badge so
-      // they don't go stale after a session reset.
-      'security:flows:cleared',
-    ],
-
-    // v0.12 — Save dropdown contribution. Widget surfaces this in the
-    // Save-as menu under the Result card whenever security mode is
-    // active. Handler reads checks live from the control plane (closure)
-    // so we don't have to round-trip the SecurityCheckStep[] through
-    // the widget — which would otherwise force the widget to also
-    // know the full SecurityCheckStep shape.
+    // v0.12 — Save handler contribution. The extension routes its
+    // `save:security:spec` WS message here whenever the user saves a spec in
+    // API-testing mode. Handler reads checks live from the control plane
+    // (closure) so we don't round-trip the SecurityCheckStep[] through the UI.
     saveHandlers: [
       {
         type: 'save:security:spec',
@@ -295,7 +263,7 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
           'Playwright regression spec from the agent\'s recorded replay decisions. Runs in CI without MITM or agent.',
         handle: async ({ devRoot, payload }) => {
           if (!control) {
-            throw new Error('Security mode is not active — no control plane to read checks from.');
+            throw new Error('API-testing mode is not active — no control plane to read checks from.');
           }
           const checks = control.listChecks();
           if (checks.length === 0) {
@@ -326,13 +294,11 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
       },
     ],
 
-    widgetEntry: resolveWidgetScriptPath(),
-
     hooks: {
       // Single-Chrome model: the MITM proxy is RESIDENT. It starts here, at
       // service start, BEFORE the host launches the one debug Chrome — so
       // Chrome is born pointed through it (transparent passthrough by
-      // default). Entering Security mode no longer launches a second Chrome;
+      // default). Entering API-testing mode no longer launches a second Chrome;
       // it just flips the proxy into intercept mode (see mode:activate).
       async 'hover:service:start'(ctx) {
         if (proxy && control) return; // idempotent
@@ -350,7 +316,7 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
         control = await startControlPlane(proxy.store, {
           devRoot: ctx.devRoot,
           identities: opts?.identities,
-          // Orange security mode is access-control only — restrict probe
+          // Orange API-testing mode is access-control only — restrict probe
           // suggestions to authz seeds (the red pentest plugin / CLI scan get
           // the full set by not passing this).
           seedCategories: ['authz'],
@@ -388,14 +354,14 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
         });
       },
 
-      // Enter Security mode: flip the resident proxy to intercept. No Chrome
+      // Enter API-testing mode: flip the resident proxy to intercept. No Chrome
       // relaunch, no second instance — the same already-proxied Chrome simply
       // starts having its traffic recorded.
       async 'hover:mode:activate'() {
         proxy?.setMode('intercept');
       },
 
-      // Leave Security mode: back to transparent passthrough. The proxy and
+      // Leave API-testing mode: back to transparent passthrough. The proxy and
       // control plane stay up (resident); we just stop recording.
       async 'hover:mode:deactivate'() {
         proxy?.setMode('passthrough');

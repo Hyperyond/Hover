@@ -184,30 +184,12 @@ export interface HoverPluginManifest {
    *  the indicated modes. */
   systemPromptAdditions?: HoverPluginSystemPromptAddition[];
 
-  /** Names of custom event types this plugin broadcasts. Documented
-   *  here so the widget side can be tree-shaken to skip handlers for
-   *  events that no loaded plugin will ever produce. */
-  widgetEventTypes?: string[];
-
-  /** Absolute path to a JS module that runs inside the widget's Shadow
-   *  DOM. The host reads this file at bundle-assembly time, inlines it
-   *  as a `<script type="module">` after the widget core, and exposes
-   *  `window.__HOVER_WIDGET__` for the module to register itself.
-   *
-   *  Plugin authors typically resolve this via `import.meta` or
-   *  `fileURLToPath(new URL('./widget.js', import.meta.url))` from
-   *  inside their server-side entry. If absent, the plugin contributes
-   *  no widget code (server-side-only plugin). */
-  widgetEntry?: string;
-
-  /** v0.12 — plugin-contributed save handlers. The widget Save dropdown
-   *  picks up these entries via the host API (`host.registerSaveEntry`)
-   *  and the service routes incoming `save:<type>` WS messages to the
-   *  plugin's handler. Each plugin owns its own write semantics — the
-   *  service does NOT touch the payload, it just delivers it. Letting
-   *  plugins write entirely different artefacts (security regression
-   *  specs, performance reports, …) without forcing them into core's
-   *  SkillStep[] shape. */
+  /** v0.12 — plugin-contributed save handlers. The service routes incoming
+   *  `save:<type>` WS messages to the plugin's handler. Each plugin owns its
+   *  own write semantics — the service does NOT touch the payload, it just
+   *  delivers it. Letting plugins write entirely different artefacts (security
+   *  regression specs, performance reports, …) without forcing them into
+   *  core's SkillStep[] shape. */
   saveHandlers?: HoverPluginSaveHandler[];
 
   hooks?: HoverHooks;

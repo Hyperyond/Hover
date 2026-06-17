@@ -3,7 +3,7 @@
  * @hover-dev/api-test MCP server.
  *
  * Spawned by the agent (Claude Code / Codex) as a stdio subprocess when
- * security mode is active. Talks back to the plugin's control plane over
+ * API-testing mode is active. Talks back to the plugin's control plane over
  * loopback HTTP. The control plane URL + auth token come in via env:
  *
  *   HOVER_SECURITY_API        e.g. "http://127.0.0.1:51850"

@@ -186,7 +186,7 @@ function Hero() {
  * author, optimize, secure — over ONE chat in your editor, with the crystallize
  * moat as the shared through-line: whatever the AI does, the artifact that lands
  * in your repo is plain @playwright/test that runs in CI with no AI. The
- * "secure" card is orange to match the 🟠 Security mode; red is 🔴 Pentest. */
+ * "secure" card is orange to match the 🟠 API testing mode; red is 🔴 Pentest. */
 const TRIAD = [
   {
     k: 'author',
@@ -206,7 +206,7 @@ const TRIAD = [
     k: 'secure',
     tag: 'Secure',
     accent: '#fb923c',
-    title: 'Flip the same chat into a security mode',
+    title: 'Flip the same chat into API & security testing',
     body: 'Switch the chat to orange and it replays captured API calls with mutations to probe IDOR / authz, crystallizing findings into .api-test.spec.ts CI gates; flip to red and it goes offensive — SQLi / XSS / SSTI / SSRF on your own dev app — and writes a findings report.',
   },
 ];
@@ -366,7 +366,7 @@ function Accounts() {
 }
 
 /* ── Security testing — two modes ────────────────────────────────────────
- * The same widget grows two distinct security modes, each its own plugin +
+ * The same chat grows two distinct modes, each its own plugin +
  * colour: orange (@hover-dev/api-test — business/authz, crystallizes to a CI
  * spec) and red (@hover-dev/pentest — offensive vuln scan, writes a findings
  * report). Themed so they read as separate modes, not the mint default flow. */
@@ -376,9 +376,9 @@ const SECURITY_MODES = [
     accent: '#fb923c',
     glow: 'rgba(251,146,60',
     plugin: '@hover-dev/api-test',
-    heading: 'orange — security',
+    heading: 'orange — API & security',
     pitch:
-      'Business / authorization testing. A local HTTPS MITM lets the agent replay captured API calls with mutations to probe access control; confirmed findings crystallize into .api-test.spec.ts regression gates that run in CI — no proxy, no agent.',
+      'Functional API + business/authorization testing. A local HTTPS MITM lets the agent replay captured API calls with mutations to verify auth / status / access control and probe for IDOR; confirmed findings crystallize into .api-test.spec.ts regression gates that run in CI — no proxy, no agent.',
     output: '.api-test.spec.ts',
     checksTitle: 'Probes for',
     checks: [
@@ -412,15 +412,15 @@ const SECURITY_MODES = [
 function Security() {
   return (
     <section className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>Two security modes</SectionLabel>
+      <SectionLabel>API &amp; security testing</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        The same widget, an{' '}
-        <span style={{ color: '#fb923c' }}>orange</span> and a{' '}
-        <span style={{ color: '#dc2626' }}>red</span> security mode.
+        The same chat, an{' '}
+        <span style={{ color: '#fb923c' }}>orange</span> API &amp; security mode and a{' '}
+        <span style={{ color: '#dc2626' }}>red</span> pentest mode.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Flip the same chat into a security mode — one for the defensive,
-        business-logic side and one for the offensive. Zero external deps (no
+        Flip the same chat into a dedicated mode — one for API &amp;
+        business-logic testing, one for the offensive. Zero external deps (no
         mitmproxy, no Python, no system CA); both run on your own dev server,
         authorized testing only. Flip on the opt-in{' '}
         <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-text">
@@ -513,8 +513,8 @@ const ROADMAP = [
   },
   {
     status: 'shipped',
-    title: 'Security & pentest modes',
-    body: 'Flip the same chat to security (IDOR / broken authorization, via a local HTTPS MITM that replays captured API calls with mutations) or pentest (offensive, your own app). Findings become .api-test.spec.ts CI gates or a report.',
+    title: 'API testing & pentest modes',
+    body: 'Flip the same chat to API testing (auth / status / access control / IDOR / broken authorization, via a local HTTPS MITM that replays captured API calls with mutations) or pentest (offensive, your own app). Findings become .api-test.spec.ts CI gates or a report.',
   },
   {
     status: 'shipped',
@@ -549,8 +549,8 @@ function Roadmap() {
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
         Hover ships as a VS Code extension that tests like a coworker: it asks
         when it is unsure, runs on your own agent (local models included),
-        handles multi-environment logins, and flips into security and pentest
-        modes. It still grows a clean spec into an architecture (page objects,
+        handles multi-environment logins, and flips into API-testing and
+        pentest modes. It still grows a clean spec into an architecture (page objects,
         test.step stages, an optional AI optimize pass), and whatever it does,
         the artifact is plain @playwright/test with no agent in CI. Next: Hover
         Cloud. Follow along on{' '}

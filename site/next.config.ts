@@ -32,6 +32,18 @@ const nextConfig: NextConfig = {
         destination: '/blog/keep-playwright-tests-from-breaking',
         permanent: true,
       },
+      // The orange "security" mode was renamed to "API testing"; its two feature
+      // pages moved with it. These routes were indexed, so 301 the old slugs.
+      {
+        source: '/docs/features/security',
+        destination: '/docs/features/api-test',
+        permanent: true,
+      },
+      {
+        source: '/docs/features/security-spec',
+        destination: '/docs/features/api-test-spec',
+        permanent: true,
+      },
     ];
   },
 };

@@ -27,11 +27,11 @@ export const DOCS_NAV: DocSection[] = [
     title: 'Features',
     items: [
       { text: 'Overview', href: '/docs/features/' },
-      { text: 'Security testing', href: '/docs/features/security/' },
+      { text: 'API & security testing', href: '/docs/features/api-test/' },
       { text: 'Save as Spec', href: '/docs/features/save-as-spec/' },
       { text: 'Structured spec output', href: '/docs/features/structured-output/' },
       { text: 'Optimize a spec', href: '/docs/features/optimization-pass/' },
-      { text: 'Save as Security spec', href: '/docs/features/security-spec/' },
+      { text: 'Save as an API-test spec', href: '/docs/features/api-test-spec/' },
       { text: 'Findings cards', href: '/docs/features/findings-cards/' },
     ],
   },

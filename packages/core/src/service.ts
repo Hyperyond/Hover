@@ -511,7 +511,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
    *  (security's resident MITM). RESIDENT for the whole session — set once
    *  before Chrome launches, never cleared on mode change — so the single
    *  debug Chrome is born with `--proxy-server` + the SPKI pin and entering
-   *  Security mode is just a runtime flip of the proxy, not a Chrome relaunch.
+   *  API-testing mode is just a runtime flip of the proxy, not a Chrome relaunch.
    *  Read by `effectiveLaunchExtras()` and threaded into every cdp handler
    *  (check-cdp / launch-chrome / focus-debug) plus the initial auto-launch. */
   let residentChromeProxy: { port: number; spki: string } | null = null;
@@ -525,7 +525,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
    *  focus-debug and the initial auto-launch. In the single-Chrome model this
    *  is driven purely by the RESIDENT proxy (set in `hover:service:start`),
    *  NOT by the active mode — there is one Chrome on the normal CDP port that
-   *  is always proxied; entering Security mode flips the proxy's behaviour,
+   *  is always proxied; entering API-testing mode flips the proxy's behaviour,
    *  it does not relaunch Chrome on a different port. Returns undefined when
    *  no plugin set a resident proxy (the common no-security case), so plain
    *  Hover is byte-for-byte unchanged. */

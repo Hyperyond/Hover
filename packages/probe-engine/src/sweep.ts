@@ -30,7 +30,7 @@ export interface SweepOptions {
   allowDestructive?: boolean;
   seeds?: SecuritySeed[];
   /** Gate seeds by `category` (a seed with no category defaults to `authz`) so
-   *  orange security mode and red pentest mode each draw their own slice.
+   *  orange API-testing mode and red pentest mode each draw their own slice.
    *  Omitting it keeps ALL seeds (back-compat). */
   categories?: SeedCategory[];
 }

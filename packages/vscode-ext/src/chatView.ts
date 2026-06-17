@@ -203,7 +203,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     animation: hov-spinborder 2.4s linear infinite;
   }
   @keyframes hov-spinborder { to { --hov-angle: 360deg; } }
-  /* Security mode running → orange border; pentest → red. Pulsing glow. */
+  /* API-testing mode running → orange border; pentest → red. Pulsing glow. */
   body.border-api-test::after, body.border-pentest::after {
     content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none; padding: 2.5px;
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
