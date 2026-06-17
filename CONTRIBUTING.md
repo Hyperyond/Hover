@@ -69,7 +69,7 @@ packages/
 │   ├── src/smoke.ts        Command-line agent smoke
 │   └── src/scripts/        start-chrome.ts, ws-smoke.ts, detect-cli.ts
 ├── probe-engine/           private shared probe engine (security + pentest)
-├── security/               @hover-dev/security — 🟠 security mode plugin
+├── api-test/               @hover-dev/api-test — 🟠 API-testing mode plugin
 ├── pentest/                @hover-dev/pentest — 🔴 pentest mode plugin
 └── vscode-ext/             hover-dev — the VS Code extension (primary surface)
 

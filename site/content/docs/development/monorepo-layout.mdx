@@ -10,7 +10,7 @@ The surface is the VS Code extension; `@hover-dev/core` is the shared engine. (T
 |---|---|
 | `hover-dev` (`packages/vscode-ext`) | The VS Code extension. Chat webview + Specs / Sessions / Environments tree views + Settings; ships the engine inside the `.vsix` (`scripts/stage-engine.mjs` `npm pack`s local `packages/core`) and spawns it under VS Code's own Node. Publisher `hyperyond`. |
 | `@hover-dev/core` | The Node engine: agent CLI invocation, Playwright CDP preflight, WebSocket bridge between the client and the agent. Owns the plugin API. |
-| `@hover-dev/security` / `@hover-dev/pentest` | 🟠 Security (MITM HTTPS proxy + flow inspector + MCP) and 🔴 Pentest modes, built on the shared private `packages/probe-engine`. Never published (probe seeds inlined at build). See [Features → Security testing](/docs/features/security/). |
+| `@hover-dev/api-test` / `@hover-dev/pentest` | 🟠 API testing (MITM HTTPS proxy + flow inspector + MCP) and 🔴 Pentest modes, built on the shared private `packages/probe-engine`. Never published (probe seeds inlined at build). See [Features → API & security testing](/docs/features/security/). |
 
 ## Examples
 
@@ -34,5 +34,5 @@ Most packages set `main` / `exports` directly to `src/*.ts`, so consumers' trans
 
 Practical implications:
 
-- A root `postinstall` hook builds core (plus the security / pentest plugins) after every `pnpm install`. Fresh clones get usable `dist/` artefacts immediately.
+- A root `postinstall` hook builds core (plus the api-test / pentest plugins) after every `pnpm install`. Fresh clones get usable `dist/` artefacts immediately.
 - Editing `core/src` during extension dev needs a `pnpm --filter @hover-dev/core build` (or a `dev` watch terminal) so the staged engine picks it up; `pnpm --filter hover-dev package` re-packs core fresh into the `.vsix`.

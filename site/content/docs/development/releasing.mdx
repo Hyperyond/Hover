@@ -10,7 +10,7 @@ The **VS Code extension** (`hover-dev`) is the distribution. It is built, engine
 |---|---|
 | `@hover-dev/core` | [https://www.npmjs.com/package/@hover-dev/core](https://www.npmjs.com/package/@hover-dev/core) |
 
-`@hover-dev/core` is the only package this repo still publishes to npm — it's the extension's engine. (The old bundler-plugin packages were removed; previously published versions remain on the registry as historical artifacts.) `@hover-dev/security` and `@hover-dev/pentest` are staged into the extension's bundled engine rather than published. All scoped packages live under the `@hover-dev` npm org (public access).
+`@hover-dev/core` is the only package this repo still publishes to npm — it's the extension's engine. (The old bundler-plugin packages were removed; previously published versions remain on the registry as historical artifacts.) `@hover-dev/api-test` and `@hover-dev/pentest` are staged into the extension's bundled engine rather than published. All scoped packages live under the `@hover-dev` npm org (public access).
 
 ## Cutting a release
 
@@ -21,7 +21,7 @@ The **VS Code extension** (`hover-dev`) is the distribution. It is built, engine
    ```bash
    git tag -a v0.7.0 -m "v0.7.0 — Security testing mode
 
-   - @hover-dev/security: HTTPS MITM + flow inspector + MCP server
+   - @hover-dev/api-test: HTTPS MITM + flow inspector + MCP server
    - Plugin API for declarative manifest-based extensions
    - …"
    git push --tags

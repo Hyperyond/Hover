@@ -1,13 +1,13 @@
-# Security testing
+# API & security testing
 
-Hover covers application-security testing in the **same chat** as functional testing — flip a mode switch. There are two security modes:
+Hover covers API and application-security testing in the **same chat** as functional testing — flip a mode switch. There are two modes:
 
-- 🟠 **Security** — business / authorization testing. Hover routes the debug Chrome through a local HTTPS MITM and lets the agent re-issue captured API calls with mutations to probe for IDOR / authentication bypass / parameter tampering. Confirmed findings crystallize into `.security.spec.ts` regression specs that run in CI without the proxy.
+- 🟠 **API testing** — functional + business/authorization testing of your API surface. Hover routes the debug Chrome through a local HTTPS MITM and lets the agent re-issue captured API calls with mutations to verify auth / status codes / access control and probe for IDOR / authentication bypass / parameter tampering. Confirmed findings crystallize into `.api-test.spec.ts` regression specs that run in CI without the proxy.
 - 🔴 **Pentest** — offensive, white-box testing against your **own** dev app: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR. The output is a findings report that says what it did *and didn't* test. Authorized own-app testing only.
 
-Both are taught by **seeds** — small probe recipes (8 access-control classes + 9 vulnerability classes). The catalogue ships built-in; add your own under `<root>/.hover/rules/`.
+Both are taught by **seeds** — small probe recipes (8 access-control classes + 9 vulnerability classes). The full catalogue ships built-in.
 
-Both modes run inside the VS Code extension: `@hover-dev/security` and `@hover-dev/pentest` are packed into the extension's staged engine, so flipping the mode switch is all it takes — no separate install.
+Both modes run inside the VS Code extension: `@hover-dev/api-test` and `@hover-dev/pentest` are packed into the extension's staged engine, so flipping the mode switch is all it takes — no separate install.
 
 ## Why a separate mode
 
@@ -17,7 +17,7 @@ Hover's normal mode is for *building features*. Security testing is for *attacki
 
 Zero external dependencies — no `mitmproxy`, no Python, no system CA install. Hover uses [mockttp](https://github.com/httptoolkit/mockttp) (the engine behind HTTP Toolkit) for HTTPS MITM, generates a one-off CA the first time it starts, and pins it to the debug Chrome via `--ignore-certificate-errors-spki-list` — your OS trust store stays untouched.
 
-The proxy is **resident**: it starts with the engine (transparent passthrough by default) and the single debug Chrome is launched pointed through it. There is no second browser — entering Security mode just flips the proxy from passthrough to recording.
+The proxy is **resident**: it starts with the engine (transparent passthrough by default) and the single debug Chrome is launched pointed through it. There is no second browser — entering API-testing mode just flips the proxy from passthrough to recording.
 
 <Callout type="warning" title="Don't commit the CA">
 
@@ -27,7 +27,7 @@ The CA private key persists under `<your-project>/.hover/ca/ca.key`. The shipped
 
 ## Usage
 
-1. In the Hover chat, flip the **mode switch** to **🟠 Security**.
+1. In the Hover chat, flip the **mode switch** to **🟠 API testing**.
 2. The chat's running border turns orange to signal altered state. No new browser opens — the same debug Chrome (already routed through the resident proxy) simply starts having its traffic recorded.
 3. Drive the page as a normal user would — log in (mention `@account` to have the agent sign in), navigate, submit forms. Every HTTPS request is captured.
 4. Ask the agent to probe, for example:
@@ -36,9 +36,9 @@ The CA private key persists under `<your-project>/.hover/ca/ca.key`. The shipped
    list_flows, then look for IDOR vulnerabilities in the order endpoints
    ```
 
-   The agent uses `mcp__hover_dev_security_flows__list_flows` to enumerate the API surface, `get_flow` to inspect specific requests, and `replay_flow` to test mutations.
+   The agent uses `mcp__hover_dev_api_test_flows__list_flows` to enumerate the API surface, `get_flow` to inspect specific requests, and `replay_flow` to test mutations.
 
-5. When findings show up in the Result + Findings cards, click **Save as → Security spec** to crystallise the recorded `replay_flow` checks into a `__vibe_tests__/<slug>.security.spec.ts` regression test that runs in CI with vanilla `@playwright/test`. See [Save as Security spec](/docs/features/security-spec/).
+5. When findings show up in the Result + Findings cards, click **Save as spec** to crystallise the recorded `replay_flow` checks into a `__vibe_tests__/<slug>.api-test.spec.ts` regression test that runs in CI with vanilla `@playwright/test`. See [Save as an API-test spec](/docs/features/security-spec/).
 
 ## What the agent looks for
 
@@ -66,16 +66,16 @@ The system prompt restricts the agent to **browser-reachable** vulnerability cla
 
 ## Scope boundaries
 
-In **🟠 Security** mode (the MITM-replay business/authz mode described above), the agent will refuse to attempt:
+In **🟠 API testing** mode (the MITM-replay functional + business/authz mode described above), the agent will refuse to attempt:
 
 - **SQL injection, SSRF, command injection, deserialisation attacks** — out of scope for this authz-focused MITM-replay mode. (These offensive classes live in **🔴 Pentest** mode instead — run against your own dev app.)
-- **Automated fuzzing loops** — Security mode stays surgical: one hypothesis, one targeted replay, one observation.
+- **Automated fuzzing loops** — API-testing mode stays surgical: one hypothesis, one targeted replay, one observation.
 - **Modifying CSP / cookie settings before testing** — the application is probed as deployed.
 - **Real-user-data exfiltration** — this is a dev environment; the agent uses placeholder ids when demonstrating an issue.
 
 For offensive SQLi / XSS / SSTI / SSRF / open-redirect / IDOR testing, switch to **🔴 Pentest** mode — it runs those checks against your **own** dev app and produces a findings report. For deep server-side fuzzing, an actual server-side scanner (`sqlmap`, ZAP active scan, etc.) remains the right tool.
 
-## Tools available to the agent in security mode
+## Tools available to the agent in API-testing mode
 
 | Tool | Purpose |
 |---|---|
@@ -130,20 +130,20 @@ test('User A cannot read User B order', async ({ page, request }) => {
 });
 ```
 
-The MITM proxy is **not** part of this spec. The replay primitive lives in Playwright's own `request` fixture — CI runs this with vanilla `@playwright/test`, no Hover, no `@hover-dev/security`, no mockttp.
+The MITM proxy is **not** part of this spec. The replay primitive lives in Playwright's own `request` fixture — CI runs this with vanilla `@playwright/test`, no Hover, no `@hover-dev/api-test`, no mockttp.
 
 ## Implementation primer
 
-For contributors who want to extend the plugin or write a similar one (`@hover-dev/security` is built on the same plugin API as any optional Hover mode):
+For contributors who want to extend the plugin or write a similar one (`@hover-dev/api-test` is built on the same plugin API as any optional Hover mode):
 
-- `packages/security/src/mitm/` — mockttp lifecycle (CA generation, FlowStore, proxy wrapper, replay primitives).
-- `packages/security/src/control-plane.ts` — loopback HTTP API the MCP server talks to (Bearer-token auth on a process-random secret).
-- `packages/security/src/mcp/server.ts` — the stdio MCP server using `@modelcontextprotocol/sdk`. Tool descriptions explicitly mention IDOR / authz-bypass / parameter-tampering use cases so the agent picks the right one.
-- `packages/security/src/index.ts` — the plugin manifest itself.
+- `packages/api-test/src/mitm/` — mockttp lifecycle (CA generation, FlowStore, proxy wrapper, replay primitives).
+- `packages/api-test/src/control-plane.ts` — loopback HTTP API the MCP server talks to (Bearer-token auth on a process-random secret).
+- `packages/api-test/src/mcp/server.ts` — the stdio MCP server using `@modelcontextprotocol/sdk`. Tool descriptions explicitly mention IDOR / authz-bypass / parameter-tampering use cases so the agent picks the right one.
+- `packages/api-test/src/index.ts` — the plugin manifest itself.
 
 ## Limitations (honest)
 
 - **Service workers** — Playwright's `page.route()` historically can't see SW-mediated requests. The MITM proxy bypasses this (it's at the network layer, not the renderer layer), so capture works fine. But if your saved spec relies on observing a SW-routed request, you'll need to express it as `page.request.fetch()` (which goes around the SW) rather than `page.route()`.
 - **HTTP/3 / QUIC** — Chrome will quietly downgrade through the proxy. Not visible as h3 in the captured flow list.
 - **Cross-origin iframes** — captured, but the flow list is currently flattened; correlating which iframe a flow came from is future work.
-- **Session recording for security sessions** — click→spec semantics don't apply to a network-probing session. Instead, the agent calls `replay_flow({ intent, expectStatus })` to record security checks, and **Save as → Security spec** crystallises them into a Playwright regression spec. See [Save as Security spec](/docs/features/security-spec/).
+- **Session recording for API-test sessions** — click→spec semantics don't apply to a network-probing session. Instead, the agent calls `replay_flow({ intent, expectStatus })` to record API/authz checks, and **Save as spec** crystallises them into a Playwright regression spec. See [Save as an API-test spec](/docs/features/security-spec/).

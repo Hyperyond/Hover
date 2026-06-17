@@ -32,15 +32,15 @@ HOVER_AGENT=codex pnpm smoke                                   # switch agent fo
 
 ## Plugin smokes
 
-Optional plugins have their own smokes. `@hover-dev/security` ships six:
+Optional plugins have their own smokes. `@hover-dev/api-test` ships six:
 
 ```bash
-pnpm --filter @hover-dev/security smoke           # mitm primitives (no Chrome)
-pnpm --filter @hover-dev/security smoke:e2e       # real Chrome over CDP + SPKI + HTTP/2 mutation
-pnpm tsx packages/security/scripts/plugin-smoke.ts        # WS mode toggle lifecycle
-pnpm tsx packages/security/scripts/mcp-smoke.ts           # MCP client drives all 4 tools
-pnpm tsx packages/security/scripts/agent-config-smoke.ts  # mcp-config includes plugin entry
-pnpm tsx packages/security/scripts/widget-ws-smoke.ts     # widget wire protocol surface
+pnpm --filter @hover-dev/api-test smoke           # mitm primitives (no Chrome)
+pnpm --filter @hover-dev/api-test smoke:e2e       # real Chrome over CDP + SPKI + HTTP/2 mutation
+pnpm tsx packages/api-test/scripts/plugin-smoke.ts        # WS mode toggle lifecycle
+pnpm tsx packages/api-test/scripts/mcp-smoke.ts           # MCP client drives all 4 tools
+pnpm tsx packages/api-test/scripts/agent-config-smoke.ts  # mcp-config includes plugin entry
+pnpm tsx packages/api-test/scripts/widget-ws-smoke.ts     # widget wire protocol surface
 ```
 
 ## Validation strategy

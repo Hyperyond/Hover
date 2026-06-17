@@ -3,7 +3,7 @@
 This document covers two distinct things:
 
 1. **How to report a vulnerability in Hover itself** — see *Reporting a vulnerability* below.
-2. **Acceptable use of Hover's Security testing mode** — see *Acceptable use* below. This is important; please read it before running `@hover-dev/security` against any target.
+2. **Acceptable use of Hover's API-testing mode** — see *Acceptable use* below. This is important; please read it before running `@hover-dev/api-test` against any target.
 
 ---
 
@@ -32,20 +32,20 @@ Please **do not** open public GitHub issues for security reports. GitHub Securit
 
 In scope:
 
-- The `hover-dev` VS Code extension, `@hover-dev/core`, `@hover-dev/security`, and `@hover-dev/pentest` — built from this repository.
+- The `hover-dev` VS Code extension, `@hover-dev/core`, `@hover-dev/api-test`, and `@hover-dev/pentest` — built from this repository.
 - Documentation that, if followed, would create a security issue for the reader.
 
 Out of scope:
 
 - Issues in third-party packages we depend on (report those upstream — but if a transitive dep affects Hover's safe defaults, we want to know).
-- Findings *produced by* Hover's Security testing mode running against your own application — those are findings in **your app**, not in Hover. Don't email those here.
+- Findings *produced by* Hover's API-testing mode running against your own application — those are findings in **your app**, not in Hover. Don't email those here.
 - Findings produced by running Hover against systems you do not own or have written authorisation to test — those reports are not accepted, see the next section.
 
 ---
 
-## Acceptable use — Security testing mode
+## Acceptable use — API-testing mode (🟠)
 
-Hover ships an optional plugin, `@hover-dev/security`, that turns the extension's chat into an aided security-testing tool. When the mode is active the agent gets MCP tools to inspect, replay, and mutate captured API calls on whichever browser session it's driving.
+Hover ships an optional plugin, `@hover-dev/api-test`, that turns the extension's chat into an aided security-testing tool. When the mode is active the agent gets MCP tools to inspect, replay, and mutate captured API calls on whichever browser session it's driving.
 
 **You must only point this at systems you own, or systems you have explicit written authorisation to test.**
 
@@ -55,15 +55,15 @@ That includes:
 - Staging / pre-production environments your employer owns and has authorised you to probe.
 - Targets within a bug-bounty programme whose scope explicitly permits this style of testing.
 
-Pointing Security mode at anything else — production systems you don't own, third-party services you happen to be a customer of, friends' projects without their consent — is, in most jurisdictions, a **criminal offence** (US: Computer Fraud and Abuse Act; UK: Computer Misuse Act 1990; EU: Directive 2013/40/EU; PRC: Cybersecurity Law Article 27 / Criminal Law Article 285–286; equivalent laws elsewhere).
+Pointing API-testing mode at anything else — production systems you don't own, third-party services you happen to be a customer of, friends' projects without their consent — is, in most jurisdictions, a **criminal offence** (US: Computer Fraud and Abuse Act; UK: Computer Misuse Act 1990; EU: Directive 2013/40/EU; PRC: Cybersecurity Law Article 27 / Criminal Law Article 285–286; equivalent laws elsewhere).
 
 The maintainers cannot grant you authorisation to test anything. Authorisation comes from the system's owner, in writing, before you start. If you are unsure whether you have it, you do not have it.
 
 ### What the project does to keep you on the right side of this
 
-- The agent's system prompt (`SECURITY_SYSTEM_PROMPT` in `packages/security/src/index.ts`) is scoped to **browser-reachable** vulnerability classes only and explicitly forbids SQL injection, SSRF, RCE, fuzzing loops, and the kinds of probes that are harder to argue as defensive testing.
+- The agent's system prompt (`SECURITY_SYSTEM_PROMPT` in `packages/api-test/src/index.ts`) is scoped to **browser-reachable** vulnerability classes only and explicitly forbids SQL injection, SSRF, RCE, fuzzing loops, and the kinds of probes that are harder to argue as defensive testing.
 - The default debug Chrome lives in an isolated `<tmpdir>/hover-chrome-security` profile — you must log into a target separately, which surfaces the "is this really my system?" moment.
-- The mode bar tints orange and the launcher rings orange when Security mode is active, so it's hard to forget you're in altered state.
+- The mode bar tints orange and the launcher rings orange when API-testing mode is active, so it's hard to forget you're in altered state.
 - The crystallised Playwright specs save under `__vibe_tests__/` in your *own* repository — no central server, no telemetry, no upload.
 
 These are guardrails, not guarantees. Final responsibility for what Hover does on your machine is yours.

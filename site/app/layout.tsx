@@ -138,7 +138,7 @@ const JSON_LD = {
           name: 'Can Hover do security testing?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'Yes. The same chat flips into a security mode (IDOR / authz probing that crystallizes confirmed findings into .security.spec.ts CI gates) and a pentest mode (offensive, white-box, own-app-only — SQLi / XSS / SSTI / SSRF — writing a findings report).',
+            text: 'Yes. The same chat flips into an API-testing mode (IDOR / authz probing that crystallizes confirmed findings into .api-test.spec.ts CI gates) and a pentest mode (offensive, white-box, own-app-only — SQLi / XSS / SSTI / SSRF — writing a findings report).',
           },
         },
       ],

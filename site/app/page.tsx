@@ -207,7 +207,7 @@ const TRIAD = [
     tag: 'Secure',
     accent: '#fb923c',
     title: 'Flip the same chat into a security mode',
-    body: 'Switch the chat to orange and it replays captured API calls with mutations to probe IDOR / authz, crystallizing findings into .security.spec.ts CI gates; flip to red and it goes offensive — SQLi / XSS / SSTI / SSRF on your own dev app — and writes a findings report.',
+    body: 'Switch the chat to orange and it replays captured API calls with mutations to probe IDOR / authz, crystallizing findings into .api-test.spec.ts CI gates; flip to red and it goes offensive — SQLi / XSS / SSTI / SSRF on your own dev app — and writes a findings report.',
   },
 ];
 
@@ -367,7 +367,7 @@ function Accounts() {
 
 /* ── Security testing — two modes ────────────────────────────────────────
  * The same widget grows two distinct security modes, each its own plugin +
- * colour: orange (@hover-dev/security — business/authz, crystallizes to a CI
+ * colour: orange (@hover-dev/api-test — business/authz, crystallizes to a CI
  * spec) and red (@hover-dev/pentest — offensive vuln scan, writes a findings
  * report). Themed so they read as separate modes, not the mint default flow. */
 const SECURITY_MODES = [
@@ -375,11 +375,11 @@ const SECURITY_MODES = [
     k: 'security',
     accent: '#fb923c',
     glow: 'rgba(251,146,60',
-    plugin: '@hover-dev/security',
+    plugin: '@hover-dev/api-test',
     heading: 'orange — security',
     pitch:
-      'Business / authorization testing. A local HTTPS MITM lets the agent replay captured API calls with mutations to probe access control; confirmed findings crystallize into .security.spec.ts regression gates that run in CI — no proxy, no agent.',
-    output: '.security.spec.ts',
+      'Business / authorization testing. A local HTTPS MITM lets the agent replay captured API calls with mutations to probe access control; confirmed findings crystallize into .api-test.spec.ts regression gates that run in CI — no proxy, no agent.',
+    output: '.api-test.spec.ts',
     checksTitle: 'Probes for',
     checks: [
       'IDOR — replay a URL with another user’s id',
@@ -488,66 +488,72 @@ function Security() {
 const ROADMAP = [
   {
     status: 'shipped',
-    title: 'Page objects from repeated flows',
-    body: 'When a login or setup flow recurs across saved specs, Hover lifts it into a shared Page Object plus a fixture, so the selectors live in one file instead of five.',
+    title: 'A VS Code extension',
+    body: 'Hover lives in your editor: a chat panel plus Conversations, Specs, Environments, and a pass/fail Dashboard. The engine ships inside the extension. No bundler plugin, no config in your app.',
   },
   {
     status: 'shipped',
-    title: 'Structured test.step reports',
-    body: 'Saved flows wrap their actions in named test.step(...) stages, so the Playwright HTML report reads as logical steps instead of a flat action list.',
+    title: 'Asks you when it is unsure',
+    body: 'When the agent hits something it cannot safely decide (which account to use, an ambiguous step, a destructive action), it asks you right in the editor instead of guessing or stalling. A real coworker checks in.',
   },
   {
     status: 'shipped',
-    title: 'Multi-tab & popup flows',
-    body: 'A click that opens a payment popup or OAuth tab crystallises with the Promise.all listener pairing Playwright needs, so the saved spec drives the new tab without a race.',
+    title: 'Your agent, local models too',
+    body: 'Runs on the coding-agent CLI already on your machine: Claude Code, OpenAI Codex, Gemini, or Qwen. Point it at a self-hosted endpoint to drive a local model. No keys held by Hover, nothing leaves your computer.',
   },
   {
     status: 'shipped',
-    title: 'Project conventions file',
-    body: 'A .hover/conventions.md in your repo (which flows matter, where login lives, your preferred selectors) feeds the agent at exploration time, so generated specs follow your house style.',
+    title: 'Parallel chat sessions',
+    body: 'Run more than one conversation at once, each with its own browser, and switch between them. One session works a checkout while another drives a signup.',
   },
   {
     status: 'shipped',
-    title: 'Community translation seeds',
-    body: 'The optimization pass learns from a library of worked examples — built-in for common patterns like downloads, and extensible: you or the community add a seed in .hover/rules/ to teach a new pattern, no fork, no plugin code.',
+    title: 'Multi-environment accounts',
+    body: 'Define test accounts per environment once, then mention @account in chat and the agent logs in for you. Passwords stay in VS Code SecretStorage and parameterize into process.env references, never the spec.',
   },
   {
     status: 'shipped',
-    title: 'Optional AI optimization pass',
-    body: 'AI reads a generated spec and proposes a polished version you accept via a diff — observed assertions added, buggy behaviour flagged // KNOWN BUG. The deterministic original is always kept and the pass is off by default.',
+    title: 'Security & pentest modes',
+    body: 'Flip the same chat to security (IDOR / broken authorization, via a local HTTPS MITM that replays captured API calls with mutations) or pentest (offensive, your own app). Findings become .api-test.spec.ts CI gates or a report.',
   },
   {
     status: 'shipped',
     title: 'White-box mode (codeContext)',
-    body: 'An opt-in, read-only, fenced source reader (read_source MCP — secrets / .env / .git / build excluded) turns the red pentest mode white-box: the agent confirms a finding against the real query / authz check and points the report at the exact file:line, and authors smarter selectors from your actual code. Default off — the agent stays browser-only.',
+    body: 'An opt-in, read-only, fenced source reader (secrets / .env / .git / build excluded). The agent confirms a finding against the real query or authz check, points the report at the exact file:line, and authors smarter selectors from your code. Off by default.',
   },
   {
     status: 'shipped',
-    title: 'VS Code extension',
-    body: 'Hover now ships as a VS Code extension — chat, Specs / Sessions / Environments views, the in-extension engine, security + pentest modes, and the @account credential vault. No bundler plugin, no config in your app.',
+    title: 'Optional AI optimize pass',
+    body: 'AI reads a saved spec and proposes a polished version you accept via a diff: page objects lifted from repeated flows, named test.step stages, observed assertions, buggy behavior flagged // KNOWN BUG. The deterministic original is always kept, and the pass is off by default.',
+  },
+  {
+    status: 'shipped',
+    title: 'Built-in pattern library',
+    body: 'A curated library ships inside Hover: optimization patterns (downloads, popups, uploads, multi-tab pairing) and security probes (access control, common vulnerabilities). No setup, no plugin code.',
   },
   {
     status: 'planned',
     title: 'Hover Cloud',
-    body: 'A hosted layer over the specs you author locally: intent-driven self-heal, test-rot detection, AI failure diagnosis. Authoring stays local and free; CI still runs plain Playwright.',
+    body: 'A hosted layer over the specs you author locally: parallel runs, scheduled monitoring, a flakiness dashboard, and AI self-heal when a spec breaks. Authoring stays local and free; CI still runs plain Playwright.',
   },
 ];
 
 function Roadmap() {
   return (
     <section id="roadmap" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>Structured output</SectionLabel>
+      <SectionLabel>Shipped</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        Hover grows the output into a{' '}
-        <span className="text-mint">maintainable suite</span>.
+        A real teammate in your editor, shipping{' '}
+        <span className="text-mint">plain Playwright</span>.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Hover saves a clean, portable spec, then grows it into an architecture:
-        page objects and fixtures lifted from flows repeated across specs, named
-        test.step stages, popup / new-tab pairing, a built-in seed library, and
-        an optional AI pass that polishes a spec while always keeping the
-        deterministic original. All shipped, all still plain Playwright with no
-        agent in CI. Next: Hover Cloud. Follow along on{' '}
+        Hover ships as a VS Code extension that tests like a coworker: it asks
+        when it is unsure, runs on your own agent (local models included),
+        handles multi-environment logins, and flips into security and pentest
+        modes. It still grows a clean spec into an architecture (page objects,
+        test.step stages, an optional AI optimize pass), and whatever it does,
+        the artifact is plain @playwright/test with no agent in CI. Next: Hover
+        Cloud. Follow along on{' '}
         <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
           GitHub
         </a>

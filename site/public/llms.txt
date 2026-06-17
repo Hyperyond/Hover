@@ -24,7 +24,7 @@ Or open the Extensions view in VS Code and search "Hover — AI Vibe Testing". Y
 - Multi-environment accounts: define test accounts per environment, then mention `@account` in chat and the agent logs in. Credentials are parameterised into `process.env` references — never written into the spec — and export to CI secrets in one click.
 - Specs / Sessions / Environments views, plus an optional off-by-default AI optimize pass you accept via diff.
 - Re-record: when UI drift breaks a spec, the agent regenerates selectors from the original prompt.
-- Security mode (🟠): a local HTTPS MITM lets the agent replay captured API calls with mutations to probe for IDOR, authz bypass, parameter tampering, missing security headers, and PII leakage. Confirmed findings crystallise into `.security.spec.ts` regression gates.
+- API testing mode (🟠): a local HTTPS MITM lets the agent replay captured API calls with mutations to probe for IDOR, authz bypass, parameter tampering, missing security headers, and PII leakage. Confirmed findings crystallise into `.api-test.spec.ts` regression gates.
 - Pentest mode (🔴): offensive vulnerability hunting (SQLi / XSS / SSTI / SSRF / open-redirect / IDOR) on your own dev app, producing a findings report. Authorized own-app testing only.
 
 ## Hover Cloud (planned, not yet available)

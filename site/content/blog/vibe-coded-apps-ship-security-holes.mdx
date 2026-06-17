@@ -32,7 +32,7 @@ Hover is a free, open-source VS Code extension, and security mode (🟠) is buil
 
 From there the agent does what your test suite cannot. It takes a captured request, mutates the object ID, and replays it. If the server returns invoice 43 to the account that owns invoice 42, that is a confirmed access-control finding, not a guess. The agent saw the real call, changed one value, and watched the server leak.
 
-A confirmed finding does not stay a chat message. Hover crystallizes it into a `.security.spec.ts` regression gate, a plain spec that asserts the mutated request gets rejected. That gate runs in CI with no agent in the loop. Once you patch the missing check, the gate stays green. If someone reintroduces the hole later, the gate goes red on the pull request. The agent found it once; the spec guards it forever.
+A confirmed finding does not stay a chat message. Hover crystallizes it into a `.api-test.spec.ts` regression gate, a plain spec that asserts the mutated request gets rejected. That gate runs in CI with no agent in the loop. Once you patch the missing check, the gate stays green. If someone reintroduces the hole later, the gate goes red on the pull request. The agent found it once; the spec guards it forever.
 
 ## Pentest mode: go offensive on your own origin
 

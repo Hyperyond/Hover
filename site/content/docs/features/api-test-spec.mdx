@@ -1,22 +1,22 @@
-# Save as Security spec
+# Save as an API-test spec
 
-> Added in v0.12. Requires [`@hover-dev/security`](https://www.npmjs.com/package/@hover-dev/security).
+> Added in v0.12. Requires [`@hover-dev/api-test`](https://www.npmjs.com/package/@hover-dev/api-test).
 
-Close the security-testing loop opened in v0.7: turn the agent's authz / IDOR / parameter-tampering probes into deterministic Playwright regression specs that run in CI without MITM, without the agent.
+Close the API/security-testing loop opened in v0.7: turn the agent's authz / IDOR / parameter-tampering probes into deterministic Playwright regression specs that run in CI without MITM, without the agent.
 
 ## What it does
 
-While Hover is in **Security mode**, the agent uses the `replay_flow` MCP tool to re-send captured requests with mutations (changed URL, missing auth header, altered body field). In v0.12, `replay_flow` gained two parameters:
+While Hover is in **API-testing mode**, the agent uses the `replay_flow` MCP tool to re-send captured requests with mutations (changed URL, missing auth header, altered body field). In v0.12, `replay_flow` gained two parameters:
 
 | Parameter | Purpose |
 |---|---|
 | `intent` | One-line human description, e.g. `"IDOR: access another user's order"` |
 | `expectStatus` | The HTTP status that proves the security control works, e.g. `403` |
 
-When the agent passes BOTH parameters, the replay is **recorded as a security check** in the control plane. Recorded checks accumulate across the session. When you're done probing, click **Save as → Security spec** on the Result card. Hover writes:
+When the agent passes BOTH parameters, the replay is **recorded as an API/authz check** in the control plane. Recorded checks accumulate across the session. When you're done probing, click **Save as spec** on the Result card. Hover writes:
 
 ```ts
-// __vibe_tests__/orders-idor.security.spec.ts
+// __vibe_tests__/orders-idor.api-test.spec.ts
 import { test, expect } from '@playwright/test';
 
 /**
@@ -62,7 +62,7 @@ test.describe('security: orders-idor', () => {
 
 - For end-to-end UI tests of security flows (login → MFA → logout). Use the normal **Save as Spec** for that — UI semantics, not HTTP-level assertions.
 - For untriaged "let me explore" sessions. Until you know what you're checking and what the expected status is, just `replay_flow` without `intent` / `expectStatus`. The check log accumulates only deliberate assertions.
-- On systems you don't own. Hover's security plugin runs against `<your-dev-server>`; the [SECURITY.md](https://github.com/Hyperyond/Hover/blob/main/SECURITY.md) policy applies.
+- On systems you don't own. Hover's api-test plugin runs against `<your-dev-server>`; the [SECURITY.md](https://github.com/Hyperyond/Hover/blob/main/SECURITY.md) policy applies.
 
 ## Caveats
 
@@ -78,6 +78,6 @@ This release added two reusable plugin APIs:
 - **`HoverPluginManifest.saveHandlers`** (server) — `Array<{ type, label, description?, activeInModes?, handle(ctx) }>`. The service routes incoming `save:<type>` WS messages to the matching plugin handler. Each plugin owns its own write semantics (no forcing into core's `SkillStep[]` shape).
 - **`WidgetPluginSpec.saveEntries`** (widget) — `Array<{ type, label, sub?, fields?, confirmLabel?, successMsgTemplate? }>`. The widget's Save-as dropdown queries the active plugin's entries on open via `host.getActiveSaveEntries()` and appends them to the menu.
 
-Any plugin can register its own save type. The security plugin uses this for `save:security:spec`; a hypothetical perf-probe plugin could register `save:perf:report` the same way.
+Any plugin can register its own save type. The api-test plugin uses this for `save:security:spec` (the internal save-type id is unchanged); a hypothetical perf-probe plugin could register `save:perf:report` the same way.
 
-Reference: [`packages/security/src/writeSecuritySpec.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/security/src/writeSecuritySpec.ts) — the writer the handler delegates to. 17 unit tests cover the spec emission paths.
+Reference: [`packages/api-test/src/writeSecuritySpec.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/api-test/src/writeSecuritySpec.ts) — the writer the handler delegates to. 17 unit tests cover the spec emission paths.

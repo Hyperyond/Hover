@@ -40,7 +40,7 @@ yarn-error.log*
 .env.*
 !.env.example
 
-# @hover-dev/security stores a project-local MITM CA under .hover/ca/ —
+# @hover-dev/api-test stores a project-local MITM CA under .hover/ca/ —
 # the private key is mode 0600 but `git add .` would still pick it up.
 # Ignore the whole .hover dir so any future plugin-local state (CAs,
 # captured-flow snapshots, etc.) stays out of commits.

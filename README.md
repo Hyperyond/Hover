@@ -9,7 +9,7 @@
 [![Playwright](https://img.shields.io/badge/output-%40playwright%2Ftest-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-**Vibe-test your app, ship real Playwright specs — a local-first, open-source VS Code extension.** Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex) to drive your real Chrome via Playwright MCP, then crystallizes clean runs into plain `@playwright/test` specs that pass CI with **zero AI**. ✦ optimize pass · 🟠 security (IDOR / authz) · 🔴 pentest (offensive, white-box).
+**Hover's AI tests your app like a real teammate and ships a real Playwright spec — a local-first, open-source VS Code extension.** Describe a flow in plain English; Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex / Gemini / Qwen, or a local model) to drive your real Chrome via Playwright MCP, then crystallizes clean runs into plain `@playwright/test` specs that pass CI with **zero AI**. ✦ optimize pass · 🟠 API testing (auth / status / authz) · 🔴 pentest (offensive, white-box).
 
 ## Install
 
@@ -19,12 +19,13 @@ You also need **one coding-agent CLI** on your `PATH`: [Claude Code](https://cla
 
 ## What you get
 
-- **Chat to a test file** — Describe what you want to verify in plain English; Hover drives your real app and saves the verified run as a plain `@playwright/test` spec. The AI's job ends at "save" — CI is pure Playwright, with zero tokens and no key wired in.
-- **Multi-environment accounts, handled** — Define test accounts per environment (local / staging / prod) once, then just mention `@account` in chat — the agent logs in for you. Credentials are parameterized into `process.env` references: never written into the spec, the JSDoc, or the sidecar, and the same names export to your CI secrets in one click.
-- **Uses your local AI — nothing to configure** — Runs on the Claude Code / Codex CLI already on your machine, on the subscription you already pay for. No model keys to wire, no SDK, nothing leaves your computer (`@hover-dev/core` binds `127.0.0.1`, has no telemetry, no upload path).
-- **Security & pentest in the same chat** — Flip into 🟠 **Security** (IDOR / broken authorization / business-logic, via a local HTTPS MITM that replays captured API calls with mutations) or 🔴 **Pentest** (offensive, white-box: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR) against your **own** app. Confirmed findings become `.security.spec.ts` CI gates or a report that says what it did *and didn't* test. No mitmproxy, no Python, no system CA.
-- **Deterministic, portable specs** — Selectors are `getByRole / getByLabel / getByText`, not CSS/XPath. An optional, off-by-default **AI optimize pass** polishes a draft into a candidate you accept via diff (original always kept). Every spec is plain Playwright that checks into git and runs without Hover.
-- **Self-healing tests (coming)** — When a spec breaks in CI, **Hover Cloud** will repair the UI drift with AI and surface it on a dashboard. Authoring always stays local and free.
+- **Chat to a real Playwright spec** — Describe what you want to verify in plain English; Hover drives your real app and crystallizes the verified run into a plain `@playwright/test` spec (`getByRole / getByLabel`, not CSS/XPath). The AI's job ends at "save" — CI is pure Playwright, with zero tokens and no key wired in.
+- **Tests like a real teammate** — When the agent hits something it can't safely decide (which account to use, an ambiguous step, a destructive action), it asks you right in the editor instead of guessing or stalling. Human-in-the-loop, the way a coworker checks in.
+- **Multi-environment accounts, `@`-mentionable** — Define test accounts per environment (local / staging / prod) once, then just mention `@account` in chat — the agent logs in for you. Credentials are parameterized into `process.env` references: never written into the spec, the JSDoc, or the sidecar, and the same names export to your CI secrets in one click.
+- **Your model, local ones included** — Runs on the coding-agent CLI already on your machine: Claude Code, OpenAI Codex, Gemini, or Qwen, on the subscription you already pay for. Point it at a self-hosted endpoint to drive a local model. No SDK, nothing leaves your computer (`@hover-dev/core` binds `127.0.0.1`, no telemetry, no upload path).
+- **Nothing new to learn** — The chat looks and works like Claude Code or Codex, so there's no new tool to learn. Install it, open the panel, describe a flow. No setup in your app, no bundler plugin, no config.
+- **API testing & pentest in the same chat** — Flip into 🟠 **API testing** (auth / status codes / access control / IDOR / broken authorization / business-logic, via a local HTTPS MITM that replays captured API calls with mutations) or 🔴 **Pentest** (offensive, white-box: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR) against your **own** app. Confirmed findings become regression specs (CI gates) or a report that says what it did *and didn't* test. No mitmproxy, no Python, no system CA.
+- **Deterministic, portable specs** — Every spec is plain Playwright that checks into git and runs without Hover. An optional, off-by-default **AI optimize pass** polishes a draft into a candidate you accept via diff (original always kept).
 
 ## How it works
 
@@ -57,7 +58,7 @@ Point them at any environment with `BASE_URL` (and the `HOVER_<LABEL>_*` account
 | Mode | What it does |
 |---|---|
 | **Normal** | AI authors / runs functional E2E flows → `.spec.ts` |
-| 🟠 **Security** | Business / authz — MITM-replay IDOR / auth-bypass / parameter-tampering → `.security.spec.ts` CI gates |
+| 🟠 **API testing** | Business / authz — MITM-replay IDOR / auth-bypass / parameter-tampering → `.api-test.spec.ts` CI gates |
 | 🔴 **Pentest** | Offensive — SQLi / XSS / SSTI / SSRF / IDOR on your **own** dev app → a findings report |
 
 Both run off a built-in **probe catalogue** — small recipes covering 8 access-control + 9 vulnerability classes, curated and shipped with Hover.

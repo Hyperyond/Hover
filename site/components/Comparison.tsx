@@ -103,8 +103,8 @@ const ROWS: Row[] = [
     ],
   },
   {
-    dim: 'Community-extensible translation (drop-in seed library)',
-    hover: yes('Add a worked example to .hover/rules/ to teach a new pattern — no fork, no plugin code'),
+    dim: 'Built-in pattern library (optimization + security)',
+    hover: yes('A curated library of worked examples and probes ships built-in — no setup, no plugin code'),
     cols: [
       no('Closed platform; no user-extensible translation layer'),
       na('Managed — you do not author the translation'),
