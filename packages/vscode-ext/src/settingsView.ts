@@ -1,20 +1,18 @@
 /**
  * The Hover Settings panel — a webview view in the sidebar (mirrors the widget's
- * settings menu). Holds: speech narration (#1), browser mode silent/visible
- * (#8), model selection (#7), and the model API key. Reads/writes VSCode config
- * (`hover.*`); the API key goes to SecretStorage and is pushed to the engine
- * via set-api-key. Changes are applied live by the extension (model → set-model,
- * key → set-api-key, speech/browser → re-broadcast to the chat).
+ * settings menu). Holds: agent selection, the Local LLM endpoint, speech
+ * narration (#1), browser mode silent/visible (#8), and model selection (#7).
+ * Reads/writes VSCode config (`hover.*`); changes are applied live by the
+ * extension (model → set-model, speech/browser → re-broadcast to the chat).
+ * Coding agents authenticate via their own logged-in subscription.
  */
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
 
 export interface SettingsHandlers {
-  /** apiKey is read from / written to SecretStorage by the extension. */
-  getApiKey(): Promise<string>;
   /** Coding agents the user can pick (id + display label) + the current one. */
   getAgents(): { current: string; list: { id: string; label: string }[] };
-  onChange(change: { agent?: string; speech?: boolean; browser?: string; model?: string; apiKey?: string; localBaseUrl?: string; localModel?: string }): void | Promise<void>;
+  onChange(change: { agent?: string; speech?: boolean; browser?: string; model?: string; localBaseUrl?: string; localModel?: string }): void | Promise<void>;
 }
 
 export class SettingsViewProvider implements vscode.WebviewViewProvider {
@@ -45,7 +43,6 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
       model: cfg.get<string>('model', 'sonnet'),
       localBaseUrl: cfg.get<string>('localBaseUrl', ''),
       localModel: cfg.get<string>('localModel', ''),
-      apiKey: await this.handlers.getApiKey(),
     });
   }
 

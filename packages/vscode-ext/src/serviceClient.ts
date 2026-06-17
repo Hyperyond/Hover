@@ -78,8 +78,6 @@ export interface ServiceClientPool {
   setEffort(effort: string): void;
   /** Set the Local LLM endpoint base URL ('' clears it) for the qwen host. */
   setLocalEndpoint(baseUrl: string): void;
-  /** Set (or clear) the model API key — held in memory by the service only. */
-  setApiKey(key: string): void;
   /** Start a run (prompt) on the engine. `accounts` are the @-mentioned test
    *  accounts (with creds) the agent may log in with. `enginePort` targets the
    *  session's own host (multi-host model); omit to use the first open socket.
@@ -302,10 +300,6 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
     },
     setLocalEndpoint(baseUrl: string): void {
       const body = JSON.stringify({ type: 'set-local-endpoint', payload: { baseUrl } });
-      for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
-    },
-    setApiKey(key: string): void {
-      const body = JSON.stringify({ type: 'set-api-key', payload: { key } });
       for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
     },
     dispose(): void {

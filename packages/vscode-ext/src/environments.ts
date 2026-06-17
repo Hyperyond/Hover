@@ -6,7 +6,7 @@
  *     `.hover/environments.json` — commit-worthy, so a team shares one set of
  *     environment definitions that follow the repo.
  *   • Account passwords live in VSCode SecretStorage (per-user, never committed,
- *     never in a spec) — same policy as the model API key.
+ *     never in a spec).
  *   • The active environment id lives in workspaceState (a per-machine choice).
  *
  * `local` is always present (seeded on first load). For the `local` env the

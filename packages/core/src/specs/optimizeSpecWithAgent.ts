@@ -14,8 +14,6 @@ export interface OptimizeAgentOptions {
   agentId: string;
   model?: string;
   maxBudgetUsd?: number;
-  /** Optional model API key, injected into the spawned CLI's env. */
-  apiKey?: string;
   signal?: AbortSignal;
 }
 
@@ -39,7 +37,6 @@ export async function optimizeSpecWithAgent(
       prompt,
       model: opts.model,
       maxBudgetUsd: opts.maxBudgetUsd,
-      apiKey: opts.apiKey,
       signal: opts.signal,
       disallowedTools,
     })) {

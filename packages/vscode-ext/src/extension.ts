@@ -61,7 +61,7 @@ function pushChatConfig(): void {
   chatProvider?.updateConfig(cfg.get<boolean>('speech', false), cfg.get<string>('browser', 'silent') !== 'visible');
 }
 
-/** When the engine (re)connects, hand it the persisted model + API key. */
+/** When the engine (re)connects, hand it the persisted agent / model config. */
 async function pushEngineConfig(): Promise<void> {
   if (!pool) return;
   const cfg = vscode.workspace.getConfiguration('hover');
@@ -72,8 +72,6 @@ async function pushEngineConfig(): Promise<void> {
   const effort = cfg.get<string>('effort', '');
   pool.setEffort(effort);
   pool.setLocalEndpoint(cfg.get<string>('localBaseUrl', ''));
-  const key = await extContext?.secrets.get('hover.apiKey');
-  if (key) pool.setApiKey(key);
 }
 
 /** The modes the one extension offers, independent of any running service —
@@ -1063,7 +1061,6 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   const settings = registerSettingsView({
-    getApiKey: async () => (await context.secrets.get('hover.apiKey')) ?? '',
     getAgents: () => ({ current: currentAgent ?? (vscode.workspace.getConfiguration('hover').get<string>('agent') || 'claude'), list: allAgents().map((a) => ({ id: a.id, label: agentLabel(a.id) })) }),
     onChange: async (change) => {
       const cfg = vscode.workspace.getConfiguration('hover');
@@ -1082,10 +1079,6 @@ export function activate(context: vscode.ExtensionContext): void {
       if (typeof change.localModel === 'string') {
         await safeUpdate('localModel', change.localModel);
         await pushModels(); // pushes the local model to the engine when qwen is active
-      }
-      if (typeof change.apiKey === 'string') {
-        await context.secrets.store('hover.apiKey', change.apiKey);
-        pool?.setApiKey(change.apiKey);
       }
       pushChatConfig();
     },
