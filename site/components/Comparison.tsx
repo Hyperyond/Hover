@@ -3,23 +3,29 @@
 import { useState } from 'react';
 
 /* ── Honest competitive comparison ──────────────────────────────────────
- * Every cell here was fact-checked against each vendor's OWN docs/site/repo in
- * 2026 (sources linked per column under the table). Accuracy rules — do NOT
- * "round up" against competitors:
+ * Every cell here was fact-checked against each vendor's OWN docs/site/repo
+ * (re-verified June 2026; sources linked per column under the table). Accuracy
+ * rules — do NOT "round up" against competitors:
  *   - QA Wolf / Momentic publish NO public pricing. Describe the model
- *     ("managed contract" / "quote-based"); never quote a number (the figures
- *     online are third-party aggregator estimates).
- *   - Momentic DOES save a portable artifact — YAML in your repo — but its AI
- *     interprets those steps at runtime; it does not export Playwright. So the
- *     "plain Playwright, no AI in CI" row is NO, but the note must say "YAML +
- *     runtime AI", not "no code at all" (which was wrong).
- *   - Stagehand v3 dropped its Playwright dependency; the artifact is a
- *     Stagehand script. Cached actions replay WITHOUT an LLM, but the AI
- *     fallback stays wired into the runtime. Phrase as "cached replay is
- *     LLM-free, AI fallback stays in the loop" — NOT "needs AI every run".
- *   - Midscene: same nuance — caching reduces, does not eliminate, runtime AI.
- *   - QA Wolf is a managed service: their engineers + AI author the tests, so
- *     "AI authors from intent" is PARTIAL, not a flat yes/no.
+ *     ("managed contract" / "free tier + quote"); never quote a number (the
+ *     figures online are third-party aggregator estimates).
+ *   - Momentic saves NO code: its FAQ states the AI interprets intent-based
+ *     YAML at run time. So "plain Playwright, no AI in CI" is NO; the note must
+ *     say "no code, runtime YAML", not "Playwright export".
+ *   - Stagehand v3 (Oct 2025) DROPPED its Playwright dependency — it is now
+ *     CDP-native, and the artifact is Stagehand code, not @playwright/test.
+ *     Do NOT call it a "Playwright wrapper". Cached actions replay without an
+ *     LLM, but the AI self-heal stays wired into the runtime.
+ *   - Midscene: same nuance — caching reduces, does not eliminate, runtime AI;
+ *     aiAssert IS a per-step check, but an LLM evaluates it at run time.
+ *   - QA Wolf is a managed service: engineers + AI author the tests, so
+ *     "AI authors from intent" is PARTIAL. Its old OSS recorder was archived in
+ *     2024; the current product is closed managed SaaS. Per-step assertions and
+ *     structured output could not be confirmed from public docs — keep PARTIAL.
+ *   - Playwright now ALSO ships first-party AI (Test Agents: planner /
+ *     generator / healer, v1.56+) that emits standard specs. The column below
+ *     is the deterministic codegen recorder; Test Agents are noted under the
+ *     table so the comparison stays honest.
  * If you change a cell, re-verify against the source before shipping. */
 
 type Cell = { v: 'yes' | 'no' | 'partial' | 'na'; note: string };
@@ -52,9 +58,9 @@ const ROWS: Row[] = [
     hover: yes('Agent explores the flow from one English sentence'),
     cols: [
       yes('Natural-language prompts; AI turns them into steps'),
-      partial('Their QA engineers + AI author it for you'),
+      partial('Engineers + AI author it for you, as a managed service'),
       no('Deterministic recorder — transcribes clicks, cannot explore'),
-      yes('act / agent take intent; AI plans the steps'),
+      partial('act / agent run intent at run time; an SDK, not a test author'),
       yes('Vision model plans and locates from screenshots'),
     ],
   },
@@ -62,40 +68,40 @@ const ROWS: Row[] = [
     dim: 'Output is plain Playwright that runs in CI with NO AI',
     hover: yes('Standard @playwright/test .spec.ts, agent-free forever'),
     cols: [
-      no('YAML in your repo, but AI interprets it at runtime'),
-      yes('Real, exportable Playwright code — yours to keep'),
+      no('Saves no code; AI interprets intent-based YAML at run time'),
+      yes('Exportable Playwright you keep; runs on their cloud by default'),
       yes('Standard .spec.ts; no AI at author- or run-time'),
-      no('Stagehand script — cached replay is LLM-free, AI fallback stays in the loop'),
-      no('Own JS / YAML; needs Midscene runtime + AI (caching reduces, not eliminates)'),
+      no('Stagehand code (v3 dropped the Playwright dep); cached replay is LLM-free, AI self-heal stays wired in'),
+      no('ai*() calls need an LLM at run time; caching speeds reruns, never removes AI'),
     ],
   },
   {
     dim: 'Generated spec guards every step',
     hover: yes('Each interaction prefaced with an explicit expect(el).toBeVisible()'),
     cols: [
-      na('No code artifact — YAML interpreted by AI at runtime'),
-      partial('Hand / AI-written Playwright; a per-step guard isn\'t guaranteed'),
+      na('No code artifact; YAML steps the AI checks at run time'),
+      partial('Exportable Playwright, but a per-step guard is not guaranteed'),
       no('Records raw actions; a visibility assert needs a manual toolbar click'),
-      no('Runtime SDK — leans on Playwright auto-wait, no guard in the saved code'),
-      no('Runtime vision agent; asserts only where you write aiAssert'),
+      no('Runtime SDK with no assertion layer in the saved code'),
+      partial('aiAssert adds per-step checks, but an LLM evaluates them at run time'),
     ],
   },
   {
     dim: 'Structured output — Page Objects, test.step, fixtures',
     hover: yes('Lifts repeated flows into Page Objects + fixtures; wraps each step in test.step'),
     cols: [
-      na('No code artifact — runtime YAML'),
+      na('No code artifact; reuse is YAML “Modules”'),
       partial('Exportable Playwright, but you organise its structure by hand'),
       no('Flat recorded script — no Page Objects or test.step stages'),
       no('Stagehand script; no Page Object extraction'),
-      no('Own JS / YAML; no Page Object extraction'),
+      no('Selector-free by design; no Page Objects or test.step'),
     ],
   },
   {
     dim: 'Optional AI polish pass (diff-reviewed, original kept)',
     hover: yes('Deterministic draft first, then an opt-in AI pass you accept via diff'),
     cols: [
-      na('Runtime-AI YAML — nothing deterministic to polish'),
+      na('Runtime self-repair only; nothing deterministic to polish'),
       na('Managed — their team maintains the suite'),
       no('Deterministic recorder — no AI authoring or polishing'),
       no('AI stays in the loop; no deterministic draft to diff against'),
@@ -106,8 +112,8 @@ const ROWS: Row[] = [
     dim: 'Built-in pattern library (optimization + security)',
     hover: yes('A curated library of worked examples and probes ships built-in — no setup, no plugin code'),
     cols: [
-      no('Closed platform; no user-extensible translation layer'),
-      na('Managed — you do not author the translation'),
+      no('Closed platform; no user-extensible pattern library'),
+      na('Managed — you do not author the tests'),
       na('No translation layer — it transcribes clicks'),
       no('AI re-plans each run; no shareable pattern library'),
       no('Vision agent re-plans each run; no shareable pattern library'),
@@ -117,8 +123,8 @@ const ROWS: Row[] = [
     dim: 'Open source / self-hosted',
     hover: yes('Apache-2.0, runs entirely on your machine'),
     cols: [
-      no('Closed SaaS; local CLI still needs a Momentic account'),
-      no('Managed service; the platform is not self-hostable'),
+      no('Closed SaaS; the local CLI still needs a Momentic account'),
+      no('Managed SaaS; the old OSS recorder was archived in 2024'),
       yes('Apache-2.0 (part of Playwright)'),
       yes('MIT; runs fully local without Browserbase cloud'),
       yes('MIT; runs locally, bring your own model endpoint'),
@@ -128,29 +134,29 @@ const ROWS: Row[] = [
     dim: 'Bring-your-own AI (your CLI / model key)',
     hover: yes('Spawns the claude / codex CLI already on your PATH'),
     cols: [
-      no('Vendor-hosted AI; you supply a Momentic API key'),
-      na('Managed — AI is internal to their team'),
-      na('No AI involved at all'),
-      yes('Any structured-output LLM — OpenAI / Anthropic / local'),
-      yes('Any OpenAI-compatible / VL endpoint you configure'),
+      no('Vendor-hosted AI; you supply a Momentic key'),
+      na('Managed — the AI is internal to their service'),
+      na('No AI involved in the recorder'),
+      yes('Bring your own model key — OpenAI / Anthropic / Gemini / Ollama'),
+      yes('Any OpenAI-compatible / vision endpoint you configure'),
     ],
   },
   {
     dim: 'Drives your real local dev server',
     hover: yes('A VS Code extension drives your existing dev server over CDP — nothing added to your app'),
     cols: [
-      partial('CLI runs locally / in CI, but tied to the hosted account'),
+      partial('Local browser can hit localhost, but every step calls Momentic-hosted AI'),
       no('Runs the suite on QA Wolf’s own cloud infra'),
       yes('Records against any local URL in a real browser'),
-      yes('Local Chrome by default; Browserbase cloud optional'),
-      yes('Local via Playwright / Puppeteer or Bridge Mode'),
+      yes('Local Chrome by default (v3 is CDP-native); Browserbase cloud optional'),
+      yes('Local via Bridge Mode (your real Chrome), Puppeteer, or Playwright'),
     ],
   },
   {
     dim: 'Pricing',
     hover: yes('Free / OSS — you pay only the CLI plan you already have'),
     cols: [
-      no('Quote-based; no public pricing, free trial only'),
+      no('Free tier, then a sales quote; no public per-seat pricing'),
       no('Managed contract; no public pricing on their site'),
       yes('Free / OSS'),
       yes('SDK free (MIT); Browserbase cloud is a separate paid add-on'),
@@ -191,12 +197,15 @@ export function Comparison() {
     <section id="comparison" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
       <SectionLabel>How Hover compares</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        The only tool that pairs AI exploration with a{' '}
-        <span className="text-mint">portable, agent-free artifact</span>.
+        AI explores your app. The artifact is{' '}
+        <span className="text-mint">plain Playwright you own</span>.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        We checked every cell against each vendor&rsquo;s own docs. Where a tool
-        publishes no public pricing, we say so instead of guessing a number.
+        Most AI testing tools keep a model in the run loop or save no code at
+        all. Hover spends the model once at authoring, then hands you a
+        deterministic spec. We checked every cell against each vendor&rsquo;s own
+        docs, and where a tool publishes no public pricing we say so instead of
+        guessing a number.
       </p>
 
       {/* ── Desktop matrix (md+) ─────────────────────────────────────── */}
@@ -316,6 +325,26 @@ export function Comparison() {
         <span className="font-mono text-text-dim">–</span> not applicable. QA Wolf and
         Momentic do not publish public pricing; figures elsewhere online come from
         third-party aggregators, so we describe their model rather than quote a number.
+      </p>
+
+      <p className="mt-3 max-w-3xl text-[12.5px] leading-relaxed text-text-dim">
+        The Playwright column is the deterministic{' '}
+        <span className="text-text-mute">codegen</span> recorder. Microsoft now
+        also ships{' '}
+        <a
+          href="https://playwright.dev/docs/test-agents"
+          target="_blank"
+          rel="noreferrer"
+          className="text-text-mute underline-offset-2 hover:text-text hover:underline"
+        >
+          Playwright Test Agents
+        </a>{' '}
+        (a planner, generator, and healer; v1.56+) — an AI layer that drives a
+        coding agent to emit standard specs. It is the closest first-party take
+        on AI-explore-to-static-spec, and like Hover its output runs in CI with
+        no AI. Hover differs in driving your real Chrome from one chat, guarding
+        every step, lifting Page Objects, and adding API-testing and pentest
+        modes.
       </p>
 
       <p className="mt-3 max-w-3xl text-[12.5px] leading-relaxed text-text-dim">

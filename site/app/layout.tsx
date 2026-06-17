@@ -70,12 +70,14 @@ export const metadata: Metadata = {
   },
 };
 
-/* ── GEO / structured data ───────────────────────────────────────────────
- * JSON-LD that hands search engines AND generative engines (LLM answer
- * boxes) clean, quotable, declarative facts about what Hover is. Every claim
- * here must match the shipped product — these strings get quoted verbatim.
- * SoftwareApplication = the rich-result card; FAQPage = the Q&A an LLM lifts
- * when a user asks "what is Hover / how is it different / what does it cost". */
+/* ── Sitewide identity (GEO / structured data) ───────────────────────────
+ * Only the site-level identity lives here, because this renders on EVERY route:
+ * Organization + WebSite. Page-specific schema is scoped to the page that owns
+ * it — SoftwareApplication on the homepage (app/page.tsx), FAQPage on the
+ * homepage FAQ (components/Faq.tsx, where the Q&A is actually visible),
+ * BreadcrumbList on docs, BlogPosting on posts. That keeps each entity on the
+ * one page whose visible content it describes (a rich-results requirement) and
+ * avoids duplicate SoftwareApplication / FAQPage nodes. */
 const JSON_LD = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -88,60 +90,12 @@ const JSON_LD = {
       sameAs: ['https://github.com/Hyperyond/Hover'],
     },
     {
-      '@type': 'SoftwareApplication',
+      '@type': 'WebSite',
+      '@id': 'https://gethover.dev/#website',
       name: 'Hover',
-      alternateName: 'Hover — AI Vibe Testing',
-      publisher: { '@id': 'https://gethover.dev/#org' },
-      applicationCategory: 'DeveloperApplication',
-      operatingSystem: 'macOS, Windows, Linux',
-      description:
-        'Hover is an open-source VS Code extension for AI vibe-testing web apps. You describe a flow in plain English; Hover drives your real Chrome over CDP using the coding-agent CLI already on your machine (Claude Code or OpenAI Codex), then crystallizes the verified run into a plain @playwright/test spec that runs in CI with zero AI and zero tokens.',
       url: 'https://gethover.dev',
-      downloadUrl:
-        'https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev',
-      softwareHelp: 'https://gethover.dev/docs/',
-      license: 'https://www.apache.org/licenses/LICENSE-2.0',
-      author: { '@type': 'Organization', name: 'Hyperyond' },
-      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-      keywords:
-        'vibe testing, AI testing, Playwright, end-to-end testing, VS Code extension, AI security testing, pentest',
-    },
-    {
-      '@type': 'FAQPage',
-      mainEntity: [
-        {
-          '@type': 'Question',
-          name: 'What is Hover?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: 'Hover is an open-source VS Code extension that turns plain-English chat into end-to-end tests. AI drives your real Chrome once to explore a flow, then Hover crystallizes the verified run into a standard @playwright/test spec that runs in CI with no AI in the loop.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'How is Hover different from other AI testing tools?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: 'Other AI test tools keep a model in the loop at runtime and re-generate the test on every run, so CI keeps paying for tokens and results drift. Hover spends the model once, at authoring time, and the artifact it leaves behind is deterministic, human-readable @playwright/test code. Green builds never pay a recurring AI tax.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'What does Hover cost to run?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: 'Hover is free and open source. It bundles no model SDK and no API keys — it spawns the coding-agent CLI (Claude Code or OpenAI Codex) already on your PATH, running on your own subscription or API key. There is no per-token resale.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'Can Hover do security testing?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: 'Yes. The same chat flips into an API-testing mode (IDOR / authz probing that crystallizes confirmed findings into .api-test.spec.ts CI gates) and a pentest mode (offensive, white-box, own-app-only — SQLi / XSS / SSTI / SSRF — writing a findings report).',
-          },
-        },
-      ],
+      inLanguage: 'en',
+      publisher: { '@id': 'https://gethover.dev/#org' },
     },
   ],
 };

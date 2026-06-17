@@ -1,239 +1,272 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useInView, usePrefersReducedMotion } from '@/lib/useInView';
 
 /**
- * An auto-playing replica of the real Hover widget panel — DOM structure and
- * visual tokens mirror packages/widget-bootstrap/src/widget/{template.html,style.css}
- * so the hero shows the actual product, not a mockup.
+ * An auto-playing replica of the Hover chat panel — visual tokens mirror
+ * packages/vscode-ext/src/chatView.ts (linear thread, header, composer toolbar).
  *
- * It loops three scripted sessions to show off the three modes:
- *   1. Default mode (mint)   — login → add todo → Save as spec.
- *   2. API testing (orange) — probes captured API calls for IDOR → API-test spec.
- *   3. Pentest mode (red)    — attacks the app for web vulns → findings report.
- *
- * Pure client-side theatre — no WebSocket, no service. A phase machine on a
- * timer drives the cadence; the mode bar is clickable so a visitor can jump
- * between modes (which pauses the auto-advance for that scene).
+ * Loops three scripted sessions:
+ *   1. Default (mint)    — login → add todo → Save as spec
+ *   2. API testing (orange) — IDOR probe → api-test spec
+ *   3. Pentest (red)     — XSS pentest → findings report
  */
 
-type StepState = 'pending' | 'running' | 'done';
-type Mode = 'default' | 'security' | 'pentest';
+type Mode = 'default' | 'api-test' | 'pentest';
 
-/** Per-mode theme — `accent` for solid colour, `rgb` for rgba() tints (mint is
- *  a CSS var for solids but needs its raw triple for tints). */
-const THEME: Record<Mode, { accent: string; rgb: string; label: string; hint: string }> = {
-  default: { accent: 'var(--color-mint)', rgb: '124,255,168', label: 'Default', hint: 'click to switch' },
-  security: { accent: '#fb923c', rgb: '251,146,60', label: 'Security testing', hint: 'MITM proxy active' },
-  pentest: { accent: '#dc2626', rgb: '220,38,38', label: 'Pentest', hint: 'RED — offensive scan' },
+const ACCENT: Record<Mode, string> = {
+  default: '#7CFFA8',
+  'api-test': '#fb923c',
+  pentest: '#f87171',
+};
+const ACCENT_INK: Record<Mode, string> = {
+  default: '#0c2417',
+  'api-test': '#2a1605',
+  pentest: '#2a0d0d',
+};
+const MODE_LABEL: Record<Mode, string> = {
+  default: 'Frontend',
+  'api-test': 'API testing',
+  pentest: 'Pentest',
+};
+const SESSION_LABEL: Record<Mode, string> = {
+  default: 'Todo flow',
+  'api-test': 'IDOR probe',
+  pentest: 'XSS pentest',
 };
 
 type Scene = {
   mode: Mode;
   prompt: string;
-  steps: readonly string[];
-  result: {
-    headline: string;
-    /** When false the result reads as a finding (vulnerability), not a pass. */
-    pass: boolean;
-    summary: React.ReactNode;
-    saveLabel: string;
-  };
+  narration: string;
+  ops: string[];
+  summary: string;
+  steps: number;
 };
 
-const SCENES: readonly Scene[] = [
+const SCENES: Scene[] = [
   {
     mode: 'default',
     prompt: 'log in, then add a todo named "verify hover"',
-    steps: [
-      'Opening page',
-      'Filling login form',
-      'Clicking Sign in',
-      'Typing "verify hover"',
-      'Verifying todo appears',
+    narration: 'Logging in and adding the todo',
+    ops: [
+      'Navigated to /login',
+      'Filled Username → admin@example.com',
+      'Filled Password',
+      'Clicked "Sign in"',
+      'Clicked "Add todo"',
+      'Filled input → verify hover',
+      'Clicked "Save"',
     ],
-    result: {
-      headline: 'PASS — done in 11 steps',
-      pass: true,
-      summary: (
-        <>
-          Logged in, added the todo, and confirmed{' '}
-          <DemoCode>verify hover</DemoCode> is visible.
-        </>
-      ),
-      saveLabel: 'Save as',
-    },
+    summary: 'Logged in, added the todo, confirmed "verify hover" is visible.',
+    steps: 7,
   },
   {
-    mode: 'security',
-    prompt: 'probe /orders for IDOR — can I read another user’s order?',
-    steps: [
-      'Capturing API flows',
-      'Replaying GET /orders/999',
-      'Swapping the resource id',
-      'Checking response status',
-      'Recording the finding',
+    mode: 'api-test',
+    prompt: "probe /orders for IDOR — can I read another user's order?",
+    narration: 'Probing the orders endpoint for IDOR',
+    ops: [
+      'Captured GET /orders/42',
+      'Replayed GET /orders/999',
+      'Checked status → 200 (expected 403)',
+      'Recorded finding',
     ],
-    result: {
-      headline: 'FINDING — IDOR confirmed',
-      pass: false,
-      summary: (
-        <>
-          <DemoCode>GET /orders/999</DemoCode> returned{' '}
-          <span className="text-warn">200</span> — expected{' '}
-          <span className="text-mint">403</span>. Another user’s order leaked.
-        </>
-      ),
-      saveLabel: 'Save security spec',
-    },
+    summary: "IDOR confirmed — GET /orders/:id returned another user's order.",
+    steps: 5,
   },
   {
     mode: 'pentest',
-    prompt: 'pentest the search box for web vulns',
-    steps: [
-      'Operating the app for traffic',
-      'suggest_probes → candidates',
-      'Typing <script> into ?q=',
-      'Watching it execute',
-      'record_finding',
+    prompt: 'pentest the search box for reflected XSS',
+    narration: 'Testing the search box for reflected XSS',
+    ops: [
+      'Navigated to /search',
+      'Typed ?q= → <script>alert(1)</script>',
+      'Watched response execute',
+      'Recorded finding',
     ],
-    result: {
-      headline: 'FINDING — reflected XSS',
-      pass: false,
-      summary: (
-        <>
-          <DemoCode>{'<script>'}</DemoCode> in <DemoCode>?q=</DemoCode> reflected
-          unencoded and fired. Report carries severity, PoC + a{' '}
-          <span className="text-text">“not tested”</span> section.
-        </>
-      ),
-      saveLabel: 'Save findings report',
-    },
+    summary: 'Reflected XSS confirmed in ?q= param. Payload executed unencoded.',
+    steps: 4,
   },
-] as const;
+];
 
 export function WidgetDemo() {
-  // scene index (which mode's script) + phase within the scene.
-  // phase: 0 connecting · 1 user msg · 2..6 steps · 7 result · 8 hold → next scene
   const [sceneIdx, setSceneIdx] = useState(0);
+  // phase 0=idle, 1=typing user msg, 2=narration appears,
+  // 3+i=op[i] visible, RESULT_PHASE=result, HOLD_PHASE=hold
   const [phase, setPhase] = useState(0);
   const [typed, setTyped] = useState('');
-  // Set true when the visitor clicks the mode bar — pauses the auto-advance so
-  // they can read the mode they chose; cleared when they cycle again.
-  const [paused, setPaused] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inView = useInView(rootRef);
+  const reduced = usePrefersReducedMotion();
+  const run = inView && !reduced;
 
   const scene = SCENES[sceneIdx];
-  const t = THEME[scene.mode];
+  const accent = ACCENT[scene.mode];
+  const ink = ACCENT_INK[scene.mode];
 
+  // Reduced motion: freeze on a representative completed run instead of looping.
   useEffect(() => {
-    const dwell: Record<number, number> = {
-      0: 1000, 1: 1500, 2: 950, 3: 950, 4: 950, 5: 950, 6: 1100, 7: 3400, 8: 500,
-    };
-    // While paused (a manual mode pick), still play the scene through to its
-    // result, but don't auto-advance to the next mode at the end.
-    if (paused && phase >= 7) return;
-    const timer = setTimeout(() => {
-      if (phase >= 8) {
+    if (reduced) { setSceneIdx(0); setPhase(3 + SCENES[0].ops.length); }
+  }, [reduced]);
+
+  // Phase timer — phase 1 (typing) is driven by the typewriter effect below
+  useEffect(() => {
+    if (!run) return;
+    if (phase === 1) return;
+    const ops = SCENES[sceneIdx].ops;
+    const RESULT_PHASE = 3 + ops.length;
+    const HOLD_PHASE = RESULT_PHASE + 1;
+    const delay =
+      phase === 0 ? 900 :
+      phase === 2 ? 600 :
+      phase >= 3 && phase < RESULT_PHASE ? 750 :
+      phase === RESULT_PHASE ? 2800 :
+      phase >= HOLD_PHASE ? 600 : 700;
+    const id = setTimeout(() => {
+      const at = phase + 1;
+      if (at > HOLD_PHASE) {
+        setSceneIdx((s) => (s + 1) % SCENES.length);
+        setPhase(0);
+      } else if (phase >= HOLD_PHASE) {
         setSceneIdx((s) => (s + 1) % SCENES.length);
         setPhase(0);
       } else {
         setPhase((p) => p + 1);
       }
-    }, dwell[phase] ?? 1000);
-    return () => clearTimeout(timer);
-  }, [phase, paused]);
+    }, delay);
+    return () => clearTimeout(id);
+  }, [phase, sceneIdx, run]);
 
-  // Typewriter for the prompt during phase 1.
+  // Typewriter for phase 1 — advances to phase 2 when done
   useEffect(() => {
     if (phase !== 1) {
       if (phase === 0) setTyped('');
       return;
     }
+    if (!run) return;
     let i = 0;
     const id = setInterval(() => {
-      i += 1;
+      i++;
       setTyped(scene.prompt.slice(0, i));
-      if (i >= scene.prompt.length) clearInterval(id);
-    }, 26);
+      if (i >= scene.prompt.length) {
+        clearInterval(id);
+        setTimeout(() => setPhase(2), 350);
+      }
+    }, 22);
     return () => clearInterval(id);
-  }, [phase, scene.prompt]);
+  }, [phase, scene.prompt, run]);
 
+  // Keep log scrolled to bottom as content arrives
   useEffect(() => {
-    const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [phase, sceneIdx]);
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [phase]);
 
-  // Clicking the mode bar jumps to the next mode and plays it from the top.
-  const cycleMode = () => {
-    setSceneIdx((s) => (s + 1) % SCENES.length);
-    setPhase(0);
-    setPaused(true);
-  };
+  const ops = scene.ops;
+  const RESULT_PHASE = 3 + ops.length;
 
-  const connected = phase >= 1;
   const showUser = phase >= 1;
-  const showResult = phase >= 7;
-  const stepStateFor = (idx: number): StepState | null => {
-    const revealAt = idx + 2;
-    if (phase < revealAt) return null;
-    if (phase === revealAt && phase <= 6) return 'running';
-    return 'done';
-  };
+  const showNarration = phase >= 2;
+  const visibleOpsCount = Math.min(Math.max(0, phase - 2), ops.length);
+  const showResult = phase >= RESULT_PHASE;
+  const narrationActive = showNarration && !showResult;
+
+  // Build thread nodes
+  type TNode = { kind: 'think' | 'op'; text: string; active: boolean };
+  const threadNodes: TNode[] = showNarration
+    ? [
+        { kind: 'think', text: scene.narration, active: narrationActive },
+        ...ops.slice(0, visibleOpsCount).map((op, i) => ({
+          kind: 'op' as const,
+          text: op,
+          active: !showResult && i === visibleOpsCount - 1,
+        })),
+      ]
+    : [];
 
   return (
-    <div className="select-none">
+    <div ref={rootRef} className="select-none" style={{ width: 400, maxWidth: '100%' }}>
       <div
-        className="relative w-[380px] max-w-full overflow-hidden rounded-xl border bg-[var(--color-bg)] shadow-[0_18px_48px_rgba(0,0,0,0.55)] transition-colors duration-500"
-        style={{ borderColor: scene.mode === 'default' ? 'var(--color-line)' : `rgba(${t.rgb},0.55)` }}
+        className="overflow-hidden rounded-xl shadow-[0_18px_48px_rgba(0,0,0,0.55)]"
+        style={{
+          background: '#1a1a1a',
+          border: `1px solid ${scene.mode === 'default' ? '#2a2a2c' : `${accent}50`}`,
+          fontFamily: '-apple-system, system-ui, sans-serif',
+          fontSize: 13,
+          color: '#e5e7eb',
+          transition: 'border-color 0.5s ease',
+        }}
       >
-        <ModeBar theme={t} onCycle={cycleMode} />
-
-        {/* header */}
-        <header className="flex items-center gap-2 border-b border-line px-3 py-2.5">
-          <span className="flex items-center gap-1.5 rounded-md border border-line bg-bg-3 px-2.5 py-1.5 font-mono text-[12px] text-text">
-            claude <span className="text-text-dim">▾</span>
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '8px 10px', borderBottom: '1px solid #2a2a2c',
+        }}>
+          <span aria-hidden style={{ display: 'inline-flex', padding: 5, color: '#9ca3af' }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 3.5v9M3.5 8h9" />
+            </svg>
           </span>
-          <HeaderIcon label="Saved sessions">
-            <path d="M2 4h6a1 1 0 0 1 1 1v7H3a1 1 0 0 1-1-1V4Z" />
-            <path d="M9 5a1 1 0 0 1 1-1h4v8H10a1 1 0 0 0-1 1V5Z" />
-          </HeaderIcon>
-          <HeaderIcon label="Star on GitHub">
-            <path d="M8 2.2l1.85 3.75 4.15.6-3 2.92.71 4.13L8 11.65l-3.71 1.95.71-4.13-3-2.92 4.15-.6L8 2.2Z" />
-          </HeaderIcon>
-          <span className="flex-1" />
-          <span className={`flex items-center gap-1.5 font-mono text-[11px] ${connected ? 'text-text-mute' : 'text-text-dim'}`}>
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={connected ? { background: t.accent } : { background: 'var(--color-line-2)', animation: 'wd-blink 1s steps(2) infinite' }}
-            />
-            {connected ? 'ready' : 'connecting…'}
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '4px 9px', border: '1px solid #2a2a2c', borderRadius: 7,
+            background: '#222224', color: '#e5e7eb', fontSize: 12, maxWidth: 150,
+          }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {phase === 0 ? 'New session' : SESSION_LABEL[scene.mode]}
+            </span>
+            <span style={{ color: '#6b7280', fontSize: 10 }}>▾</span>
           </span>
-        </header>
+          <span style={{ flex: 1 }} />
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '3px 8px', borderRadius: 7, color: '#9ca3af', fontSize: 12,
+          }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: phase >= 1 ? accent : '#6b7280',
+              flexShrink: 0, display: 'inline-block',
+              transition: 'background 0.3s ease',
+            }} />
+            localhost
+          </span>
+        </div>
 
-        {/* body */}
-        <div ref={bodyRef} className="wd-body flex h-[336px] flex-col gap-1 overflow-y-auto px-3 py-3">
+        {/* Log */}
+        <div
+          ref={logRef}
+          className="wdchat-log"
+          style={{
+            overflowY: 'auto', padding: '14px 12px',
+            display: 'flex', flexDirection: 'column', gap: 8,
+            height: 400,
+          } as React.CSSProperties}
+        >
+          {/* Empty state placeholder */}
           {!showUser && (
-            <p className="m-auto px-6 text-center font-mono text-[11px] leading-relaxed text-text-dim">
+            <div style={{
+              margin: 'auto', textAlign: 'center', color: '#6b7280',
+              padding: '0 26px', lineHeight: 1.55, fontSize: 12,
+            }}>
               {scene.mode === 'pentest'
-                ? 'Pentest mode — the agent attacks your own dev app for vulns.'
-                : scene.mode === 'security'
-                  ? 'API testing — the agent probes captured API calls.'
-                  : 'Describe a flow in plain English. Hover drives your real Chrome.'}
-            </p>
+                ? 'Pentest mode — attack your own dev app for vulns.'
+                : scene.mode === 'api-test'
+                ? 'API testing — probe captured API calls for IDOR & authz.'
+                : 'Describe a flow in plain English. Hover drives your real Chrome.'}
+            </div>
           )}
 
+          {/* User message bubble */}
           {showUser && (
-            <div className="mb-2 flex shrink-0 justify-end">
-              <div className="max-w-[86%] rounded-[14px_14px_4px_14px] border border-line bg-bg-2 px-3.5 py-2 text-[13px] leading-snug text-text">
+            <div style={{ alignSelf: 'flex-end', maxWidth: '88%' }}>
+              <div style={{
+                padding: '8px 11px', borderRadius: 10,
+                background: accent, color: ink, fontWeight: 500,
+                lineHeight: 1.45, fontSize: 13,
+              }}>
                 {phase === 1 ? (
-                  <>
-                    {typed}
-                    <span
-                      className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 align-middle"
-                      style={{ background: t.accent, animation: 'wd-blink 0.9s steps(2) infinite' }}
-                    />
-                  </>
+                  <>{typed}<span style={{ marginLeft: 1, animation: 'wdchat-blink 0.9s steps(2) infinite' }}>▌</span></>
                 ) : (
                   scene.prompt
                 )}
@@ -241,192 +274,184 @@ export function WidgetDemo() {
             </div>
           )}
 
-          {phase >= 2 &&
-            scene.steps.map((label, i) => {
-              const st = stepStateFor(i);
-              if (!st) return null;
-              return <StepRow key={label} label={label} state={st} accent={t.accent} />;
-            })}
+          {/* Linear run thread */}
+          {threadNodes.length > 0 && (
+            <div style={{ margin: '5px 0 9px' }}>
+              {threadNodes.map((node, nodeIdx) => {
+                const isFirst = nodeIdx === 0;
+                const isLast = nodeIdx === threadNodes.length - 1;
+                return (
+                  <div key={nodeIdx} style={{ display: 'flex', gap: 9 }}>
+                    {/* Rail column */}
+                    <div style={{
+                      width: 11, flexShrink: 0,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    }}>
+                      {/* Space / connecting line above dot */}
+                      {isFirst ? (
+                        <div style={{ height: 8, flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 1.5, height: 8, background: '#2a2a2c', flexShrink: 0 }} />
+                      )}
+                      {/* Dot */}
+                      {node.kind === 'think' ? (
+                        <div style={{
+                          width: 9, height: 9, borderRadius: '50%',
+                          background: accent, flexShrink: 0,
+                          boxShadow: node.active
+                            ? `0 0 0 2px #1a1a1a, 0 0 0 5px ${accent}40`
+                            : `0 0 0 2px #1a1a1a, 0 0 0 3.5px ${accent}28`,
+                        }} />
+                      ) : (
+                        <div style={{
+                          width: 5, height: 5, borderRadius: '50%',
+                          background: node.active ? accent : '#1a1a1a',
+                          border: `1.5px solid ${node.active ? accent : '#6b7280'}`,
+                          boxShadow: '0 0 0 2px #1a1a1a',
+                          flexShrink: 0, margin: '0 2px',
+                        }} />
+                      )}
+                      {/* Line below dot → connects to next node */}
+                      {!isLast ? (
+                        <div style={{ width: 1.5, flex: 1, minHeight: 4, background: '#2a2a2c' }} />
+                      ) : (
+                        <div style={{ flex: 1 }} />
+                      )}
+                    </div>
+                    {/* Body */}
+                    <div style={{
+                      flex: 1, minWidth: 0,
+                      padding: `${node.kind === 'think' ? 4 : 2}px 8px ${isLast ? 2 : 8}px 0`,
+                      wordBreak: 'break-word', overflowWrap: 'anywhere',
+                      color: node.kind === 'think'
+                        ? (node.active ? accent : '#e5e7eb')
+                        : (node.active ? '#e5e7eb' : '#9ca3af'),
+                      fontSize: node.kind === 'think' ? 13 : 12,
+                      fontFamily: node.kind === 'think'
+                        ? '-apple-system, system-ui, sans-serif'
+                        : 'ui-monospace, monospace',
+                      lineHeight: node.kind === 'think' ? 1.5 : 1.4,
+                    } as React.CSSProperties}>
+                      {node.text}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-          {showResult && <ResultCard scene={scene} theme={t} />}
+          {/* Result block */}
+          {showResult && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 2px 6px' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                fontWeight: 600, color: '#e5e7eb', fontSize: 13.5,
+              }}>
+                <span style={{ color: accent, fontWeight: 700 }}>✓</span>
+                <span>Done</span>
+              </div>
+              <div style={{ lineHeight: 1.5, color: '#e5e7eb', fontSize: 13 }}>
+                {scene.summary}
+              </div>
+              <div style={{
+                fontSize: 11, color: '#6b7280',
+                fontVariantNumeric: 'tabular-nums', fontFamily: 'ui-monospace, monospace',
+              }}>
+                {scene.steps} steps
+              </div>
+              <button
+                type="button" tabIndex={-1} aria-hidden
+                style={{
+                  alignSelf: 'flex-start', padding: '6px 11px',
+                  border: `1px solid ${accent}`, borderRadius: 7,
+                  background: 'transparent', color: accent,
+                  cursor: 'default', font: 'inherit', fontWeight: 600, fontSize: 12,
+                }}
+              >
+                {scene.mode === 'pentest'
+                  ? 'Save findings report'
+                  : scene.mode === 'api-test'
+                  ? 'Save as api-test spec'
+                  : 'Save as spec'}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* composer */}
-        <div className="border-t border-line px-3 py-2.5">
-          <div className="flex items-center gap-2 rounded-lg border border-line bg-bg-3 px-3 py-2">
-            <span className="flex-1 truncate font-mono text-[12px] text-text-dim">
-              {phase === 0 || phase >= 7 ? 'Type a flow to test…' : 'Running…'}
-            </span>
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-hidden
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--color-bg)]"
-              style={{ background: t.accent }}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 8h9M8 4l4 4-4 4" />
-              </svg>
-            </button>
+        {/* Composer */}
+        <div style={{ padding: '10px 12px 12px' }}>
+          <div style={{
+            border: `1px solid ${!showResult && showNarration ? `${accent}80` : '#2a2a2c'}`,
+            borderRadius: 12, background: '#141414',
+            padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6,
+            transition: 'border-color 0.12s ease',
+          }}>
+            {/* Placeholder input */}
+            <div style={{
+              minHeight: 22, color: '#6b7280', fontSize: 13,
+              lineHeight: 1.45, padding: '2px 0',
+            }}>
+              {phase === 0 ? 'e.g. test the login flow  ·  @account to log in' : ''}
+            </div>
+            {/* Toolbar */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              borderTop: '1px solid #2a2a2c',
+              margin: '4px -10px 0', padding: '7px 10px 0',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '4px 7px', color: '#9ca3af', fontSize: 12, borderRadius: 7,
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true">
+                    <circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" strokeWidth="3.2"/>
+                    <path d="M24 6a18 18 0 0 1 15.6 9H24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round"/>
+                    <path d="M8.4 15a18 18 0 0 0 7.8 26.4l7.8-13.5" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round"/>
+                    <path d="M39.6 15a18 18 0 0 1-15.6 27l7.8-13.5" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round"/>
+                  </svg>
+                  Headless
+                </span>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '4px 7px', color: '#9ca3af', fontSize: 12,
+                }}>
+                  Sonnet 4.6
+                </span>
+              </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '4px 7px', fontSize: 12, borderRadius: 7,
+                  color: scene.mode === 'default' ? '#9ca3af' : accent,
+                  transition: 'color 0.3s ease',
+                }}>
+                  {MODE_LABEL[scene.mode]}
+                </span>
+                {/* Send — up arrow */}
+                <span aria-hidden style={{
+                  width: 30, height: 30, borderRadius: 8,
+                  background: accent, color: ink,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, transition: 'background 0.3s ease',
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 19V5M6 11l6-6 6 6" />
+                  </svg>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <style>{`
-        @keyframes wd-blink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
-        @keyframes wd-spin { to { transform: rotate(360deg) } }
-        @keyframes wd-row-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
-        .wd-body { scrollbar-width: thin; scrollbar-color: #2a2a2c transparent; }
-        .wd-body::-webkit-scrollbar { width: 8px; }
-        .wd-body::-webkit-scrollbar-track { background: transparent; }
-        .wd-body::-webkit-scrollbar-thumb {
-          background: #2a2a2c; border-radius: 999px;
-          border: 2px solid transparent; background-clip: padding-box;
-        }
-        .wd-body::-webkit-scrollbar-thumb:hover { background: #3a3a3c; background-clip: padding-box; }
+        @keyframes wdchat-blink { 0%,49% { opacity: 1 } 50%,100% { opacity: 0 } }
+        .wdchat-log::-webkit-scrollbar { width: 4px; }
+        .wdchat-log::-webkit-scrollbar-track { background: transparent; }
+        .wdchat-log::-webkit-scrollbar-thumb { background: #2a2a2c; border-radius: 4px; }
+        .wdchat-log { scrollbar-width: thin; scrollbar-color: #2a2a2c transparent; }
       `}</style>
     </div>
-  );
-}
-
-function ModeBar({
-  theme,
-  onCycle,
-}: {
-  theme: { accent: string; rgb: string; label: string; hint: string };
-  onCycle: () => void;
-}) {
-  const isDefault = theme.label === 'Default';
-  return (
-    <button
-      type="button"
-      onClick={onCycle}
-      aria-label="Switch mode"
-      className="flex h-7 w-full cursor-pointer items-center gap-2 border-b px-3 text-left text-[11px] font-medium transition-colors duration-500"
-      style={
-        isDefault
-          ? { background: 'var(--color-bg-2)', borderBottomColor: 'var(--color-line)', color: 'var(--color-text-mute)' }
-          : {
-              background: `linear-gradient(180deg, rgba(${theme.rgb},0.18), rgba(${theme.rgb},0.08))`,
-              borderBottomColor: `rgba(${theme.rgb},0.55)`,
-              color: theme.accent,
-            }
-      }
-    >
-      <span
-        className="h-2 w-2 flex-shrink-0 rounded-full transition-all duration-500"
-        style={isDefault ? { background: 'var(--color-text-dim)' } : { background: theme.accent, boxShadow: `0 0 0 3px rgba(${theme.rgb},0.18)` }}
-      />
-      <span className="font-semibold" style={{ color: isDefault ? 'var(--color-text)' : theme.accent }}>
-        {theme.label}
-      </span>
-      <span className="text-[9px] opacity-70">▾</span>
-      <span className="ml-auto truncate text-[10px] opacity-70">{theme.hint}</span>
-    </button>
-  );
-}
-
-function StepRow({ label, state, accent }: { label: string; state: StepState; accent: string }) {
-  const running = state === 'running';
-  return (
-    <div
-      className={`relative flex shrink-0 items-center gap-2.5 overflow-hidden rounded-[10px] bg-bg-2 px-3 py-2 text-[12.5px] ${running ? 'pl-3.5' : ''}`}
-      style={{ animation: 'wd-row-in 0.25s ease both' }}
-    >
-      {running && <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: accent }} />}
-      {running ? (
-        <Spinner accent={accent} />
-      ) : (
-        <span className="flex h-3.5 w-3.5 items-center justify-center" style={{ color: accent }}>
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 8.5l3.2 3.2L13 5" />
-          </svg>
-        </span>
-      )}
-      <span className={running ? 'text-text' : 'text-text-mute'}>{label}</span>
-      <span className="flex-1" />
-      <span className="text-text-dim">▾</span>
-    </div>
-  );
-}
-
-function Spinner({ accent }: { accent: string }) {
-  return (
-    <span
-      aria-hidden
-      className="h-3.5 w-3.5 rounded-full border-[1.6px] border-line"
-      style={{ borderTopColor: accent, animation: 'wd-spin 0.7s linear infinite' }}
-    />
-  );
-}
-
-function ResultCard({ scene, theme }: { scene: Scene; theme: { accent: string; rgb: string } }) {
-  const { result } = scene;
-  // pass → mint check; finding → the mode's accent alert badge.
-  const badgeColor = result.pass ? 'var(--color-mint)' : theme.accent;
-  const rgb = result.pass ? '124,255,168' : theme.rgb;
-  return (
-    <div
-      className="mt-1 shrink-0 rounded-[10px] border bg-bg-2 p-3"
-      style={{
-        borderColor: scene.mode === 'default' ? 'var(--color-line)' : `rgba(${theme.rgb},0.35)`,
-        animation: 'wd-row-in 0.3s ease both',
-      }}
-    >
-      <div className="mb-2 flex items-center gap-2">
-        <span
-          className="flex h-4 w-4 items-center justify-center rounded-full"
-          style={{ background: `rgba(${rgb},0.17)`, color: badgeColor }}
-        >
-          {result.pass ? (
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 8.5l3.2 3.2L13 5" />
-            </svg>
-          ) : (
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 5v4M8 11.5v.5" />
-            </svg>
-          )}
-        </span>
-        <span className="text-[12.5px] font-semibold" style={{ color: badgeColor }}>
-          {result.headline}
-        </span>
-      </div>
-      <p className="mb-3 border-l-2 px-2.5 py-0.5 text-[12px] leading-relaxed text-text-mute" style={{ borderColor: badgeColor }}>
-        {result.summary}
-      </p>
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-hidden
-        className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12px] font-semibold"
-        style={{ borderColor: `rgba(${rgb},0.5)`, background: `rgba(${rgb},0.12)`, color: badgeColor }}
-      >
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 3h7l3 3v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
-          <path d="M5 3v3h4M5 13v-4h6v4" />
-        </svg>
-        {result.saveLabel}
-        <span className="text-[10px]">▾</span>
-      </button>
-    </div>
-  );
-}
-
-function DemoCode({ children }: { children: React.ReactNode }) {
-  return (
-    <code className="rounded bg-bg-3 px-1 py-0.5 font-mono text-[10.5px] text-text">
-      {children}
-    </code>
-  );
-}
-
-function HeaderIcon({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <span aria-label={label} className="flex h-7 w-7 items-center justify-center rounded-md text-text-mute">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-        {children}
-      </svg>
-    </span>
   );
 }
