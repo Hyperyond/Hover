@@ -150,10 +150,11 @@ const CJK_RE = /[一-鿿]/;
  *  must still use the page's real (often English) accessible names, labels,
  *  and selectors when driving the browser. */
 const ZH_OUTPUT_DIRECTIVE =
-  '用户使用中文下达指令。请用简体中文撰写所有面向用户的文字输出：验证结论摘要、' +
-  '`## Findings` 区块（bug / 问题 / 备注）、以及每一步的中文描述。' +
-  '注意：这只影响你写给用户看的文字。操作浏览器时仍要使用页面真实的（通常是英文的）' +
-  '角色名、标签、可访问名称和选择器——不要把它们翻译成中文。';
+  '用户使用中文下达指令。请用简体中文撰写所有面向用户的文字：最终 JSON 报告里的 ' +
+  '`summary` 与每条 finding 的 `title` / `detail`，以及过程中每一步的简短意图说明。' +
+  '注意：这只影响写给用户看的文字。操作浏览器时仍要使用页面真实的（通常是英文的）' +
+  '角色名、标签、可访问名称和选择器——不要翻译成中文；JSON 的字段名（summary / findings / ' +
+  'severity 等）也保持英文。';
 
 /**
  * Normal-mode grounded actuation. The Playwright MCP interaction tools take a
@@ -188,19 +189,30 @@ const REPORTING_DIRECTIVE =
   'silently; it is NOT an app bug and must never appear as a finding. NEVER ' +
   'propose changes to Hover or its tools, and do not narrate your own environment, ' +
   'capabilities, or memory. Report only what a user of the app would care about.\n\n' +
-  'STRUCTURED FINDINGS — END YOUR REPORT WITH A JSON BLOCK. After your prose ' +
-  'summary, append exactly one fenced ```json block so the editor can render ' +
-  'findings as structured cards (do NOT rely on Markdown headings/bullets for ' +
-  'this). Shape:\n' +
+  'STRUCTURED REPORT — YOUR FINAL MESSAGE IS EXACTLY ONE FENCED ```json BLOCK, ' +
+  'with NOTHING before or after it: no prose summary, no Markdown headings or ' +
+  'bullets. The editor renders the report from this JSON and DISCARDS anything ' +
+  'outside it, so a prose write-up is wasted and will not be shown. Shape:\n' +
   '```json\n' +
-  '{ "summary": "<one-line plain-language outcome>",\n' +
+  '{ "summary": "<readable Markdown, NOT a run-on paragraph>",\n' +
   '  "findings": [\n' +
   '    { "severity": "high|medium|low|info", "title": "<short headline>", "detail": "<what + why it matters>", "endpoint": "<path, if an API call>", "method": "<HTTP method, if any>" }\n' +
   '  ] }\n' +
   '```\n' +
-  'One object per real defect; `endpoint`/`method` only when the finding is about ' +
-  'a specific API call. If there are no real defects, use "findings": []. Keep ' +
-  'the prose report above it for the human; the JSON is the source of truth.';
+  'FORMAT THE `summary` FOR READING: write it as Markdown with real line breaks ' +
+  '(use \\n in the JSON string). One short outcome sentence on the first line, then ' +
+  'a blank line, then concise `- ` bullet points for the key things you checked ' +
+  '(one per step / area / flow). NEVER cram everything into a single long ' +
+  'paragraph. One object per real defect; `endpoint`/`method` only when the ' +
+  'finding is about a specific API call. If there are no real defects, use ' +
+  '"findings": []. Put the entire human-readable wrap-up inside `summary` — do NOT ' +
+  'also write it as prose outside the block; the JSON block is the one and only report.';
+const NARRATION_DIRECTIVE =
+  'NARRATION — As you work, keep each interim status to ONE short present-tense ' +
+  'line stating your immediate intent before you act ("Filling the address ' +
+  'fields", "Now testing an underage date of birth"). Do not write paragraphs ' +
+  'between actions and do not restate what just happened — the steps are already ' +
+  'shown. Save the full wrap-up for the final JSON report only.';
 const EXPLORATION_CHECKPOINT_DIRECTIVE =
   'OPEN-ENDED TASKS — CHECK IN BEFORE YOU STOP. When the request is vague or ' +
   'unscoped (e.g. just "test", "test this", "check the app") YOU chose what to ' +
@@ -1200,6 +1212,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         // The report is about the app, never the tooling (all modes).
         appendSystemPrompt = `${appendSystemPrompt}\n\n${REPORTING_DIRECTIVE}`;
+        // Keep interim narration to one short line per intent (all modes).
+        appendSystemPrompt = `${appendSystemPrompt}\n\n${NARRATION_DIRECTIVE}`;
         // Open-ended prompts: confirm continue-vs-stop before ending with scope
         // left untested, instead of unilaterally finishing (all modes).
         appendSystemPrompt = `${appendSystemPrompt}\n\n${EXPLORATION_CHECKPOINT_DIRECTIVE}`;
