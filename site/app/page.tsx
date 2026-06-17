@@ -36,6 +36,7 @@ const DEMO_MP4 = asset('demo.mp4');
 const DEMO_POSTER = asset('demo-poster.jpg');
 
 const GITHUB = 'https://github.com/Hyperyond/Hover';
+const YOUTUBE = 'https://www.youtube.com/@hyperyond';
 const DOCS = '/docs/';
 
 /** SoftwareApplication structured data — the homepage's rich-result card and
@@ -536,6 +537,14 @@ function Footer() {
           </a>
           <a href={GITHUB} className="transition-colors hover:text-text">
             GitHub
+          </a>
+          <a
+            href={YOUTUBE}
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-text"
+          >
+            YouTube
           </a>
           <a
             href={MARKETPLACE_URL}

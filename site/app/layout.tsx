@@ -87,7 +87,10 @@ const JSON_LD = {
       name: 'Hyperyond',
       url: 'https://gethover.dev',
       logo: 'https://gethover.dev/favicon.svg',
-      sameAs: ['https://github.com/Hyperyond/Hover'],
+      sameAs: [
+        'https://github.com/Hyperyond/Hover',
+        'https://www.youtube.com/@hyperyond',
+      ],
     },
     {
       '@type': 'WebSite',
