@@ -1,5 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { Sparkle } from '@/components/Sparkle';
 import { WidgetDemo } from '@/components/WidgetDemo';
 import { InstallButton, MARKETPLACE_URL } from '@/components/InstallButton';
@@ -15,10 +16,24 @@ import { EnvDemo } from '@/components/EnvDemo';
 
 /* Server-side file probe: only feed the <video> a src once the export actually
  * exists under public/, so the page never offers a play button that 404s. Drop
- * public/demo.mp4 (+ optional public/demo-poster.png) and it switches on. */
+ * public/demo.mp4 (+ optional public/demo-poster.png) and it switches on.
+ *
+ * The `?v=<hash>` is a content-hash cache-bust: a static path like /demo.mp4
+ * gets cached hard by the browser and Vercel's CDN, so replacing the file with
+ * the same name otherwise keeps serving the stale video. Hashing the bytes at
+ * build time means the URL changes only when the content changes — new video,
+ * new URL, instant invalidation; same video, stable URL. */
 const PUBLIC = join(process.cwd(), 'public');
-const DEMO_MP4 = existsSync(join(PUBLIC, 'demo.mp4')) ? '/demo.mp4' : '';
-const DEMO_POSTER = existsSync(join(PUBLIC, 'demo-poster.png')) ? '/demo-poster.png' : '';
+
+function asset(rel: string): string {
+  const abs = join(PUBLIC, rel);
+  if (!existsSync(abs)) return '';
+  const hash = createHash('sha1').update(readFileSync(abs)).digest('hex').slice(0, 10);
+  return `/${rel}?v=${hash}`;
+}
+
+const DEMO_MP4 = asset('demo.mp4');
+const DEMO_POSTER = asset('demo-poster.jpg');
 
 const GITHUB = 'https://github.com/Hyperyond/Hover';
 const DOCS = '/docs/';

@@ -32,7 +32,7 @@ export function VideoSection({
   src = '',
   id = '',
   poster = '',
-  title = 'Watch Hover author a Playwright test in 90 seconds',
+  title = 'Watch Hover author a Playwright test in 60 seconds',
 }: Props) {
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
