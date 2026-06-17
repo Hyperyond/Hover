@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "displayName": "Hover — AI Vibe Testing",
   "description": "Describe a flow in plain English; Hover's AI tests your app like a real teammate and hands you a real Playwright spec. Hands-free, local-first, on your own Claude Code or Codex CLI.",
   "keywords": [

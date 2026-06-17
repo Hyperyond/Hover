@@ -6,7 +6,9 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
-Theme: **Hover is now a VS Code extension.** The editor extension (`hover-dev`) is the surface — chat, the Specs / Sessions / Environments views, and the whole engine run inside the editor, nothing else to install. (Sideload-only for now: build the `.vsix` and install it; not yet on the Marketplace.) The npm bundler-plugin packages (`vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`, `@hover-dev/transform-source`) and the in-page widget have been **removed** from the repo — previously published versions stay on the registry as historical artifacts. `@hover-dev/core` keeps evolving as the extension's engine (consumed as local source, packed into the .vsix).
+## [0.16.0] — 2026-06-17
+
+Theme: **Hover is now a VS Code extension — on the Marketplace.** The editor extension (`hover-dev`) is the surface — chat, the Specs / Sessions / Environments views, and the whole engine run inside the editor, nothing else to install. (Published on the VS Code Marketplace as `hyperyond.hover-dev`.) The orange mode is renamed **API testing** and now covers both API/contract testing and security/authz testing; findings render from structured data; and the legacy model-API-key + in-page-widget code paths are gone. The npm bundler-plugin packages (`vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`, `@hover-dev/transform-source`) and the in-page widget have been **removed** from the repo — previously published versions stay on the registry as historical artifacts. `@hover-dev/core` keeps evolving as the extension's engine (consumed as local source, packed into the .vsix).
 
 ### Added
 
@@ -16,10 +18,23 @@ Theme: **Hover is now a VS Code extension.** The editor extension (`hover-dev`) 
 - **Security (🟠) / Pentest (🔴) modes** as a mode switch in the one extension, with a mode-colored running border.
 - **Add CI Workflow.** Generates a `.github/workflows/hover-e2e.yml` that runs the crystallized specs on every PR — deterministic, no AI — wiring the account secrets by the same `HOVER_<LABEL>_*` names.
 - **Optimize auto-opens the candidate diff**, with a live spinner + watchdog; folder-grouped Specs tree.
+- **Structured findings.** The agent ends a run with a fenced ` ```json ` block (`{ summary, findings: [{ severity, title, detail, endpoint?, method? }] }`); the chat renders the Findings card from that data instead of scraping Markdown. All modes.
+- **Network view.** A live MITM flow inspector (method / URL / status / mutated marker) in 🟠 API-testing and 🔴 Pentest modes.
+- **Specs folded into the Dashboard view** (spec × run health matrix + the spec list in one place).
 
 ### Changed
 
 - **Distribution is the VS Code extension.** The npm bundler-plugin packages + in-page widget have been removed from the repo; `@hover-dev/core` remains as the extension's engine.
+- **Orange mode renamed Security → "API testing".** It covers BOTH functional/contract API testing AND security/authz testing (access control, IDOR/BOLA). The package `@hover-dev/security` → `@hover-dev/api-test`, the crystallized artifact `.security.spec.ts` → `.api-test.spec.ts`, the mode id, the CI release tag, and the docs/site (with 301 redirects from the old `/docs/features/security` routes) all moved with it. Confirmed authz findings still crystallize to a plain Playwright regression spec.
+
+### Removed
+
+- **Model-API-key feature.** The `set-api-key` message, the Settings API-key field, and the whole `apiKey` / `apiKeyEnv` injection path are gone. Coding agents authenticate via their own logged-in subscription (or a key already in the environment); the Local LLM endpoint reads `OPENAI_API_KEY` from the ambient env with a `local` fallback.
+- **Dead in-page-widget plugin path** (`widget.js` / `window.__HOVER_WIDGET__` / the `widgetEntry` + `widgetEventTypes` manifest fields) — superseded by the extension's own webview UI — plus a sweep of dead code and a pruned WebSocket protocol.
+
+### Fixed
+
+- **Specs row height no longer jumps on hover** in the Dashboard (the hover-revealed action buttons used to grow the row).
 
 ## [0.15.0] — 2026-06-07
 
