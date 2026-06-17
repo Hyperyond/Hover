@@ -23,6 +23,7 @@ type Inbound =
   | { type: 'setEffort'; value: string }
   | { type: 'askUserAnswer'; askId: string; value: string | null }
   | { type: 'switchSession'; id: string }
+  | { type: 'saveRun'; name: string; isPentest: boolean }
   | { type: 'ready' };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -42,6 +43,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   askAnswerHandler?: (askId: string, value: string | null) => void;
   /** Set by the extension: the user picked a conversation in the top-bar switcher. */
   sessionSwitchHandler?: (id: string) => void;
+  /** Set by the extension: the user confirmed the after-run save prompt with a
+   *  filename (isPentest → findings report, else a Playwright spec). */
+  saveRunHandler?: (name: string, isPentest: boolean) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -60,6 +64,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       else if (msg.type === 'setEffort' && typeof msg.value === 'string') this.effortHandler?.(msg.value);
       else if (msg.type === 'askUserAnswer' && typeof msg.askId === 'string') this.askAnswerHandler?.(msg.askId, msg.value ?? null);
       else if (msg.type === 'switchSession' && typeof msg.id === 'string') this.sessionSwitchHandler?.(msg.id);
+      else if (msg.type === 'saveRun' && typeof msg.name === 'string') this.saveRunHandler?.(msg.name, !!msg.isPentest);
       else if (msg.type === 'ready') this.onReady?.();
     });
   }
@@ -277,35 +282,53 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .step-meta { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
   .step-caret { color: var(--text-dim); font-size: 11px; }
   .step-detail { margin: 6px 0 0; padding: 8px; background: var(--bg-3); border-radius: 6px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 11px; white-space: pre-wrap; overflow: auto; max-height: 240px; }
-  /* grouped run rendering — ported from the widget (style.css .group*). */
-  .group { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; }
-  .group-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; cursor: pointer; user-select: none; }
-  .gr-chevron { width: 12px; flex-shrink: 0; color: var(--text-dim); font-size: 9px; text-align: center; transition: transform .12s ease, color .12s ease; }
-  .group.open .gr-chevron { transform: rotate(90deg); color: var(--text-mute); }
-  .gr-icon { width: 16px; height: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; border-radius: 50%; font-weight: 700; }
-  .group.ok .gr-icon { color: var(--accent); background: rgba(124,255,168,0.12); }
-  .group.error .gr-icon { color: var(--err); background: rgba(248,113,113,0.14); }
-  .group.running .gr-icon { color: var(--accent); background: transparent; }
-  .gr-icon.gr-ring { width: 12px; height: 12px; border: 1.5px solid var(--accent); border-top-color: transparent; border-radius: 50%; background: transparent; animation: hov-grspin .9s linear infinite; font-size: 0; }
-  @keyframes hov-grspin { to { transform: rotate(360deg); } }
-  .gr-title { flex: 1; min-width: 0; font-size: 13px; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .group.running .gr-title { color: var(--accent); }
-  .group.error .gr-title { color: var(--err); }
-  .gr-meta { flex-shrink: 0; font-size: 10.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
-  .gr-meta .gr-cost { color: var(--accent); }
-  .group.error .gr-meta .gr-cost { color: var(--err); }
-  .group-tools { display: none; padding: 0 10px 8px 36px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 11px; color: var(--text-mute); }
-  .group.open .group-tools { display: block; }
-  .group-tool { display: flex; gap: 6px; padding: 2px 0; align-items: flex-start; }
-  .gt-dot { color: var(--text-dim); flex-shrink: 0; }
-  .gt-name { color: var(--link); flex-shrink: 0; white-space: nowrap; }
-  .group-tool.error .gt-name { color: var(--err); }
-  .gt-args { color: var(--text-dim); min-width: 0; word-break: break-all; overflow-wrap: anywhere; }
-  .result { border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); padding: 13px 14px; display: flex; flex-direction: column; gap: 10px; }
-  .result .head { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); font-size: 13px; }
-  .result .head .rcheck { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent-dim); color: var(--accent); font-size: 11px; font-weight: 700; }
-  .result .head .rmeta { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
-  .result .head .rmeta .rcost { color: var(--accent); }
+  /* Linear run stream (Claude-Code style). One run = one continuous left "thread"
+     rail; every line (an AI thought or a browser op) is a node with a dot on the
+     rail and its content just to the right. The rail line is each node's
+     full-height left column, so stacked nodes form one unbroken line. */
+  .run { margin: 5px 0 9px; }
+  .node { display: flex; gap: 9px; align-items: stretch; }
+  .node-rail { position: relative; width: 11px; flex: none; }
+  .node-rail::before { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 1.5px; background: var(--line); }
+  .node:first-child .node-rail::before { top: 8px; }
+  .node:last-child .node-rail::before { bottom: auto; height: 9px; }
+  /* think node = a bold filled accent dot with an accent halo (distinct from
+     ops); op node = a small hollow dot that fills accent while live. Dots are
+     vertically centered on their first text line. */
+  .node-rail::after { content: ''; position: absolute; left: 1px; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent-dim); }
+  .node.think.active .node-rail::after { animation: hov-halo 1.5s ease-in-out infinite; }
+  @keyframes hov-halo { 0%,100% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent-dim); } 50% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 6px var(--accent-dim); } }
+  .node.op .node-rail::after { left: 3px; top: 6px; width: 5px; height: 5px; background: var(--bg); border: 1.5px solid var(--text-dim); box-shadow: 0 0 0 2px var(--bg); }
+  .node.op.live .node-rail::after { background: var(--accent); border-color: var(--accent); }
+  .node.op.answered .node-rail::after { background: var(--accent); border-color: var(--accent); }
+  .node.op.answered .node-body { color: var(--accent); }
+  .node.error .node-rail::after { background: var(--err); border-color: var(--err); }
+  .node-body { flex: 1; min-width: 0; padding: 1.5px 8px 1.5px 0; word-break: break-word; overflow-wrap: anywhere; }
+  .node.think .node-body { color: var(--text); font-size: 13px; line-height: 1.5; }
+  .node.think.active .node-body { color: var(--accent); }
+  .node.op .node-body { color: var(--text-mute); font-size: 12px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); line-height: 1.4; }
+  .node.op.live .node-body { color: var(--text); }
+  .node.error .node-body { color: var(--err); }
+  /* Typing caret: a blinking block cursor trailing the text while it types. */
+  .node-body.typing::after, .md.typing::after { content: '▌'; margin-left: 1px; color: var(--accent); animation: hov-blink 1s steps(1) infinite; }
+  @keyframes hov-blink { 50% { opacity: 0; } }
+  .node-meta { float: right; margin-left: 10px; font-size: 10.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
+  .node-meta .gr-cost { color: var(--accent); }
+  /* Monochrome copy button (Done summary + each finding); ✓ on success. */
+  .copybtn { flex: none; background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 2px; display: inline-flex; align-items: center; border-radius: 4px; }
+  .copybtn:hover { color: var(--text); background: var(--line); }
+  .copybtn.copied { color: var(--accent); }
+  .copybtn svg { width: 14px; height: 14px; }
+  /* Result: a plain conversational block (no card border) — ✓ + verdict, the
+     summary prose, inline findings, then a dim meta footer. */
+  .result { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 6px; }
+  .result .rhead { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); font-size: 13.5px; }
+  .result .rhead .rcheck { color: var(--accent); font-weight: 700; }
+  .result .rhead .copybtn { margin-left: auto; }
+  .result.err .rhead { color: var(--err); } .result.err .rhead .rcheck { color: var(--err); }
+  .result .rfoot { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
+  .result .finding { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; font-size: 12.5px; }
+  .result .finding .copybtn { margin-left: auto; align-self: flex-start; }
   .md { line-height: 1.5; }
   .md h4 { font-size: 1em; margin: 8px 0 4px; }
   .md div { margin: 2px 0; }
@@ -342,9 +365,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
      question docks just above the composer — pinned, never scrolled away with
      the transcript. On answer it collapses into the log as a record. */
   #ask-dock { width: 100%; max-width: 768px; margin: 0 auto; padding: 10px 12px 0; }
-  #ask-dock .ask { box-shadow: 0 -2px 18px rgba(0,0,0,.35); max-height: 46vh; overflow-y: auto; animation: askpop .16s ease-out; }
+  /* Docked popup frame matches the input box exactly (same bg / 1px border /
+     12px radius / focus highlight) so it sits right where the input was — no
+     accent left-stripe here, unlike the collapsed in-log ask records. */
+  #ask-dock .ask { background: var(--bg-3); border: 1px solid var(--line); box-shadow: 0 -2px 18px rgba(0,0,0,.35); max-height: 46vh; overflow-y: auto; animation: askpop .16s ease-out; }
+  #ask-dock .ask:focus-within { border-color: var(--accent); }
   @keyframes askpop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   #composer { padding: 10px 12px 12px; position: relative; width: 100%; max-width: 768px; margin: 0 auto; }
+  /* The ask popup is mutually exclusive with the input: while a question (or the
+     save prompt) is up it takes the composer's place — same width, input hidden.
+     Pinned to the bottom with the composer's exact padding so the popup's bottom
+     edge sits exactly where the input box's was; it grows upward as it gets taller. */
+  body.ask-open #composer { display: none; }
+  body.ask-open #ask-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 10px 12px 12px; background: var(--bg); }
+  body.ask-open #log { padding-bottom: 18px; }
+  .ask-warn { font-size: 12px; color: var(--warn); line-height: 1.4; }
+  .ask-btns { display: flex; justify-content: flex-end; gap: 8px; }
+  .ask-discard { padding: 7px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text-mute); cursor: pointer; font: inherit; }
+  .ask-discard:hover { color: var(--text); border-color: var(--text-dim); }
   .mentions { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 6px); z-index: 20;
     background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     box-shadow: 0 8px 24px rgba(0,0,0,.35); max-height: 220px; overflow-y: auto; }
@@ -468,6 +506,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   var log = document.getElementById('log');
   var askDock = document.getElementById('ask-dock');
   var input = document.getElementById('input');
+  // Ask/save popups are mutually exclusive with the composer: toggling this
+  // hides the input so the popup takes its place (same width).
+  function setAskActive(on) { document.body.classList.toggle('ask-open', !!on); }
+  // Monochrome copy button: copies getText() to the clipboard; the icon flips to
+  // a checkmark on success, then reverts.
+  var COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+  var CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"/></svg>';
+  function fallbackCopy(txt) { try { var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch (e) {} }
+  function makeCopyBtn(getText) {
+    var b = document.createElement('button'); b.className = 'copybtn'; b.type = 'button'; b.title = 'Copy'; b.innerHTML = COPY_SVG;
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var txt = (getText() || '').trim();
+      function ok() { b.innerHTML = CHECK_SVG; b.classList.add('copied'); b.title = 'Copied'; setTimeout(function () { b.innerHTML = COPY_SVG; b.classList.remove('copied'); b.title = 'Copy'; }, 1500); }
+      try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt).then(ok, function () { fallbackCopy(txt); ok(); }); return; } } catch (e2) {}
+      fallbackCopy(txt); ok();
+    });
+    return b;
+  }
   var sendBtn = document.getElementById('send');
   var cleared = false;
 
@@ -485,22 +542,66 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   function fresh() { if (!cleared) { log.innerHTML = ''; cleared = true; } }
   function scroll() { if (typeof workingEl !== 'undefined' && workingEl && running && workingEl.parentNode) log.appendChild(workingEl); log.scrollTop = log.scrollHeight; }
   function addMessage(role, text) { fresh(); var el = document.createElement('div'); el.className = 'msg ' + role; el.textContent = text; log.appendChild(el); if (role === 'assistant') speak(text); scroll(); }
-  // ── Grouped run rendering (mirrors the widget): tool steps fold under an
-  //    AI-narration title; boundary tools / >6 steps split into a new group. ──
-  var BOUNDARY = { browser_navigate: 1, browser_navigate_back: 1, browser_fill_form: 1, TaskCreate: 1 };
-  var MAX_GROUP = 6;
-  var pendingTitle = null;   // last AI narration, promoted to the next group's title
-  var curGroup = null;       // { iconEl, metaEl, stepsEl, count, start, snapStart, snapEnd }
+  // ── Linear run stream (Claude-Code style): each AI thought opens a "thinking"
+  //    section with a left thread rail; the browser ops it triggers hang off the
+  //    rail as nodes. Flat — no folding, no boxes. A new narration ends the
+  //    current section and opens the next. ──
+  var curRun = null;      // the current run's thread container (.run element)
+  var curThought = null;  // active thinking node: { node, meta, start, tokStart, tokEnd }
+  var pendingRec = null;  // a thought record held until its first op arrives (or discarded)
+  var liveRec = null;     // the thought record being timed, by REAL event-arrival times
+  var lastTokens = 0;     // latest cumulative token count seen (stamped at arrival)
 
-  function shortJson(s) { if (!s) return ''; return s.length > 90 ? s.slice(0, 87) + '…' : s; }
-  function setGroupStatus(g, status) {
-    var open = g.root.classList.contains('open');
-    g.root.className = 'group ' + status + (open ? ' open' : '');
-    if (status === 'running') { g.icon.className = 'gr-icon gr-ring'; g.icon.textContent = ''; }
-    else { g.icon.className = 'gr-icon'; g.icon.textContent = status === 'error' ? '✗' : '✓'; }
+  // Browser-op → one human line. live=true gives the present-progressive form
+  // ("Filling employer…") for the visible running line; live=false gives the
+  // past-tense form ("Filled employer → Acme Corp") for the collapsed history.
+  var OPVERB = {
+    click_control: ['Clicking', 'Clicked'], browser_click: ['Clicking', 'Clicked'],
+    fill_control: ['Filling', 'Filled'], browser_type: ['Typing into', 'Typed into'],
+    select_control: ['Selecting', 'Selected'], browser_select_option: ['Selecting', 'Selected'],
+    check_control: ['Checking', 'Checked'],
+    browser_navigate: ['Navigating to', 'Navigated to'], browser_navigate_back: ['Going back', 'Went back'],
+    browser_snapshot: ['Looking at the page', 'Looked at the page'],
+    browser_take_screenshot: ['Capturing a screenshot', 'Captured a screenshot'],
+    browser_press_key: ['Pressing', 'Pressed'], browser_hover: ['Hovering', 'Hovered'],
+    browser_drag: ['Dragging', 'Dragged'], browser_wait_for: ['Waiting', 'Waited'],
+    browser_tabs: ['Switching tabs', 'Switched tabs'], browser_evaluate: ['Running a script', 'Ran a script'],
+    browser_fill_form: ['Filling the form', 'Filled the form']
+  };
+  var FILLISH = { fill_control: 1, select_control: 1, browser_select_option: 1, browser_type: 1 };
+  var BARE = { browser_snapshot: 1, browser_navigate_back: 1, browser_take_screenshot: 1, browser_fill_form: 1, browser_drag: 1, browser_wait_for: 1, browser_tabs: 1, browser_evaluate: 1 };
+  function describeOp(tool, detailStr, live) {
+    var t = (tool || '').replace(/^mcp__.*?__/, '');
+    var d = {}; try { d = detailStr ? JSON.parse(detailStr) : {}; } catch (e) { d = {}; }
+    var name = d.name || d.text || d.element || '';
+    var val = (d.value !== undefined && d.value !== null && d.value !== '') ? String(d.value) : '';
+    var pair = OPVERB[t];
+    if (!pair) { var h = t.split('_').join(' '); h = h.charAt(0).toUpperCase() + h.slice(1); return h + (live ? '…' : ''); }
+    var verb = pair[live ? 0 : 1];
+    if (t === 'browser_navigate') return verb + (d.url ? ' ' + d.url : '') + (live ? '…' : '');
+    if (t === 'browser_press_key') return verb + (d.key ? ' ' + d.key : '') + (live ? '…' : '');
+    if (BARE[t]) return verb + (live ? '…' : '');
+    if (FILLISH[t]) { var lbl = name ? ' ' + name : ' a field'; return live ? verb + lbl + '…' : verb + lbl + (val ? ' → ' + val : ''); }
+    var q = name ? ' "' + name + '"' : ''; // click / hover / check
+    return verb + q + (live ? '…' : '');
+  }
+  // Type text into an element char-by-char with a trailing blinking caret, then
+  // call done(). Instant during replay so history doesn't re-animate. Reveals a
+  // few chars per tick so longer lines don't crawl.
+  function typeInto(el, text, done) {
+    if (el._iv) { clearInterval(el._iv); el._iv = null; }
+    if (replaying || !text) { el.textContent = text || ''; el.classList.remove('typing'); if (done) done(); return; }
+    el.textContent = ''; el.classList.add('typing'); var i = 0;
+    var step = text.length > 48 ? 2 : 1; // keep long lines from crawling
+    el._iv = setInterval(function () {
+      i = Math.min(i + step, text.length);
+      el.textContent = text.slice(0, i);
+      scroll();
+      if (i >= text.length) { clearInterval(el._iv); el._iv = null; el.classList.remove('typing'); if (done) done(); }
+    }, 18);
   }
   // Compact duration: sub-minute keeps one decimal ("48.3s"); a minute or more
-  // rolls into "1m 6s" so long groups don't read as an unbounded second count.
+  // rolls into "1m 6s" so long runs don't read as an unbounded second count.
   function fmtDur(ms) {
     var s = ms / 1000;
     if (s < 60) return s.toFixed(1) + 's';
@@ -508,103 +609,147 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (rs === 60) { mn++; rs = 0; }
     return mn + 'm' + (rs ? ' ' + rs + 's' : '');
   }
-  // Full token count with thousands separators (no k/M abbreviation) — the
-  // user wants the exact live number, like Claude Code.
+  // Full token count with thousands separators (no k/M abbreviation).
   function fmtTokens(n) { return Math.round(n).toLocaleString() + ' tok'; }
-  function setGroupMeta(g, endSnapshot, live) {
-    // Duration + step count tick live off the wall clock; tokens are the
-    // delta between this group's first and last usage snapshot.
-    var parts = [fmtDur(Date.now() - g.start)];
-    var endT = (typeof endSnapshot === 'number') ? endSnapshot : g.tokEnd;
-    if (typeof endT === 'number' && typeof g.tokStart === 'number') {
-      var d = endT - g.tokStart;
+  // Meta = the thought RECORD's real elapsed time + token delta. The record is
+  // stamped at event-ARRIVAL time (not render time), so the queue's render lag
+  // never collapses durations to 0.
+  function setThoughtMeta(t) {
+    if (!t || !t.meta || !t.rec) return;
+    var r = t.rec; var end = (r.end != null) ? r.end : Date.now();
+    var parts = [fmtDur(end - r.start)];
+    if (typeof r.tokEnd === 'number' && typeof r.tokStart === 'number') {
+      var d = r.tokEnd - r.tokStart;
       if (d > 0) parts.push('<span class="gr-cost">' + fmtTokens(d) + '</span>');
     }
-    if (g.count) parts.push(g.count + (g.count > 1 ? ' steps' : ' step'));
-    g.meta.innerHTML = parts.join(' · ');
+    t.meta.innerHTML = parts.join(' · ');
   }
-  // Tick the active group's meta ~10×/s so the seconds run like a stopwatch
-  // (0.1, 0.2, … 1.2, 1.3) instead of jumping a whole second at a time.
-  var groupTick = null;
-  function startTick() {
-    if (groupTick) return;
-    groupTick = setInterval(function () {
-      if (curGroup) setGroupMeta(curGroup, undefined, true);
-      else stopTick();
-    }, 100);
-  }
-  function stopTick() { if (groupTick) { clearInterval(groupTick); groupTick = null; } }
-  function finalizeGroup(endSnapshot) {
-    if (!curGroup) return;
-    setGroupStatus(curGroup, 'ok');
-    setGroupMeta(curGroup, endSnapshot, false);
-    curGroup = null;
-    stopTick();
+  // Close the active thought record at REAL arrival time + freeze its token delta.
+  function closeLiveRec(now) { if (liveRec && liveRec.end == null) { liveRec.end = now; liveRec.tokEnd = lastTokens; if (liveRec.t) setThoughtMeta(liveRec.t); } }
+  // Tick the active thought's meta ~10×/s so the seconds run like a stopwatch.
+  var secTick = null;
+  function startSecTick() { if (secTick) return; secTick = setInterval(function () { if (curThought) setThoughtMeta(curThought); else stopSecTick(); }, 100); }
+  function stopSecTick() { if (secTick) { clearInterval(secTick); secTick = null; } }
+  // One run = one continuous thread (rail) holding all its nodes.
+  function ensureRun() { if (curRun) return curRun; fresh(); curRun = document.createElement('div'); curRun.className = 'run'; log.appendChild(curRun); return curRun; }
+  function endThought() { if (curThought) { setThoughtMeta(curThought); if (curThought.node) curThought.node.classList.remove('active'); } curThought = null; }
+  function endSection(endSnapshot) {
+    if (typeof endSnapshot === 'number') lastTokens = endSnapshot;
+    closeLiveRec(Date.now()); pendingRec = null; liveRec = null;
+    endThought();
+    if (curRun) { var lives = curRun.querySelectorAll('.node.live'); for (var i = 0; i < lives.length; i++) lives[i].classList.remove('live'); }
+    curRun = null;
+    stopSecTick();
     updateWorking();
   }
-  function openGroup(titleText, snapshot) {
-    fresh();
-    var root = document.createElement('div'); root.className = 'group running';
-    var row = document.createElement('div'); row.className = 'group-row';
-    var chev = document.createElement('span'); chev.className = 'gr-chevron'; chev.textContent = '▶';
-    var icon = document.createElement('span'); icon.className = 'gr-icon gr-ring';
-    var t = document.createElement('span'); t.className = 'gr-title'; t.textContent = titleText;
-    var meta = document.createElement('span'); meta.className = 'gr-meta';
-    row.appendChild(chev); row.appendChild(icon); row.appendChild(t); row.appendChild(meta);
-    var tools = document.createElement('div'); tools.className = 'group-tools';
-    row.addEventListener('click', function () { root.classList.toggle('open'); });
-    root.appendChild(row); root.appendChild(tools);
-    log.appendChild(root);
-    curGroup = { root: root, icon: icon, meta: meta, tools: tools, count: 0, start: Date.now(), tokStart: (typeof snapshot === 'number' ? snapshot : undefined), tokEnd: undefined };
-    startTick();
-    updateWorking();
+  // A thread node: a dot on the rail (the rail line is the node's full-height
+  // left column) + a body. kind = 'think' (accent dot) | 'op' (small dim dot).
+  function makeNode(kind) {
+    var n = document.createElement('div'); n.className = 'node ' + kind;
+    var rail = document.createElement('span'); rail.className = 'node-rail';
+    var body = document.createElement('div'); body.className = 'node-body';
+    n.appendChild(rail); n.appendChild(body);
+    return { node: n, body: body };
   }
-  function addNarration(text) { if (text && text.trim()) pendingTitle = text.trim(); }
+  // ── Render queue: events arrive in bursts; render them one at a time (each op
+  //    types fully before the next starts) so the stream reads sequentially and
+  //    the scroll keeps up — never several lines flashing in at once. ──
+  var renderQ = [], renderBusy = false;
+  function enqueue(task) { renderQ.push(task); pumpQ(); }
+  function pumpQ() {
+    if (renderBusy) return;
+    var task = renderQ.shift();
+    if (!task) return;
+    renderBusy = true;
+    task(function () { renderBusy = false; scroll(); pumpQ(); });
+  }
+  function clearQ() { renderQ = []; renderBusy = false; }
+  function _renderNarration(rec) {
+    ensureRun(); endThought();
+    var nd = makeNode('think active');
+    var meta = document.createElement('span'); meta.className = 'node-meta'; nd.body.appendChild(meta);
+    var th = document.createElement('span'); th.className = 'think-text'; th.textContent = rec.text; nd.body.appendChild(th);
+    curRun.appendChild(nd.node);
+    curThought = { node: nd.node, meta: meta, rec: rec }; rec.t = curThought;
+    setThoughtMeta(curThought); startSecTick(); updateWorking(); scroll();
+  }
+  // A narration is held PENDING and only rendered once its first browser op
+  // arrives (or the next narration supersedes it). The run's final message also
+  // arrives as a narration but has no ops after it and is followed by the result
+  // — so it stays pending and gets discarded, never flashing into the stream.
+  function flushThought() { if (pendingRec) { var r = pendingRec; pendingRec = null; _renderNarration(r); } }
+  // Each AI narration is a thinking node. Its record is stamped NOW (real arrival)
+  // and the previous thought is closed NOW, so timing is real regardless of when
+  // the queue renders it. A fenced code block (the final JSON report) is dropped.
+  function addNarration(text) {
+    if (!text) return;
+    var fi = text.indexOf(String.fromCharCode(96, 96, 96)); if (fi >= 0) text = text.slice(0, fi);
+    text = text.trim(); if (!text) return;
+    var now = Date.now();
+    closeLiveRec(now); // the previous thought ends the moment this one begins
+    var rec = { text: text, start: now, end: null, tokStart: lastTokens, tokEnd: lastTokens, t: null };
+    liveRec = rec;
+    if (replaying) { flushThought(); pendingRec = rec; return; }
+    enqueue(function (next) { flushThought(); pendingRec = rec; next(); });
+  }
+  function _renderStep(m, done) {
+    flushThought(); ensureRun();
+    var prev = curRun.querySelector('.node.op.live'); if (prev) prev.classList.remove('live');
+    var nd = makeNode('op live' + (m.isError ? ' error' : ''));
+    curRun.appendChild(nd.node);
+    speak(m.label); scroll();
+    typeInto(nd.body, describeOp(m.tool, m.detail, false), done);
+  }
+  // A browser op is a node on the same thread (verb + value), typed as it lands.
+  // Token snapshot is taken NOW (arrival) so the thought's token delta is real.
   function addStep(m) {
-    if (curGroup && (BOUNDARY[m.tool] || curGroup.count >= MAX_GROUP)) finalizeGroup(typeof m.tokens === 'number' ? m.tokens : undefined);
-    if (!curGroup) { openGroup(pendingTitle || m.label, typeof m.tokens === 'number' ? m.tokens : undefined); pendingTitle = null; }
-    var line = document.createElement('div'); line.className = 'group-tool' + (m.isError ? ' error' : '');
-    var dot = document.createElement('span'); dot.className = 'gt-dot'; dot.textContent = '·';
-    var name = document.createElement('span'); name.className = 'gt-name'; name.textContent = m.tool || m.label;
-    var args = document.createElement('span'); args.className = 'gt-args'; args.textContent = ' ' + shortJson(m.detail);
-    line.appendChild(dot); line.appendChild(name); line.appendChild(args);
-    curGroup.tools.appendChild(line);
-    curGroup.count++;
-    if (typeof m.tokens === 'number') curGroup.tokEnd = m.tokens;
-    setGroupMeta(curGroup, undefined, true);
-    speak(m.label);
-    scroll();
+    if (typeof m.tokens === 'number') { lastTokens = m.tokens; if (liveRec && liveRec.end == null) { liveRec.tokEnd = lastTokens; if (liveRec.t) setThoughtMeta(liveRec.t); } }
+    if (replaying) { _renderStep(m, function () {}); return; }
+    enqueue(function (next) { _renderStep(m, next); });
   }
   function addResult(m) {
+    if (replaying) { _renderResult(m); return; }
+    enqueue(function (next) { _renderResult(m); next(); });
+  }
+  function _renderResult(m) {
     fresh();
-    finalizeGroup(typeof m.tokens === 'number' ? m.tokens : undefined);
+    // The run's final message is still a pending thought (never rendered) — the
+    // Done card below shows it. Discard so it never flashes into the stream.
+    if (typeof m.tokens === 'number') lastTokens = m.tokens;
+    pendingRec = null;
+    endSection(typeof m.tokens === 'number' ? m.tokens : undefined);
     // Structured-first: if the engine handed us parsed findings (from the
     // agent's JSON block), render the card from data and keep the summary whole.
     // Only fall back to scraping Markdown when no structured findings arrived.
     var struct = Array.isArray(m.findings) ? m.findings : null;
     var parsed = struct ? { main: m.summary || '', findings: null } : splitFindings(m.summary || '');
-    var card = document.createElement('div'); card.className = 'result';
-    var h = document.createElement('div'); h.className = 'head';
-    var chk = document.createElement('span'); chk.className = 'rcheck'; chk.textContent = '✓'; h.appendChild(chk);
+    var isErr = m.verdict && /fail|error|blocked/i.test(m.verdict);
+    // A plain conversational block (图3): ✓ + verdict, the summary prose, inline
+    // findings, a dim meta footer — no card border, no separate Findings card.
+    var wrap = document.createElement('div'); wrap.className = 'result' + (isErr ? ' err' : '');
+    var h = document.createElement('div'); h.className = 'rhead';
+    var chk = document.createElement('span'); chk.className = 'rcheck'; chk.textContent = isErr ? '✗' : '✓'; h.appendChild(chk);
     var lbl = document.createElement('span'); lbl.textContent = m.verdict || 'Done'; h.appendChild(lbl);
+    h.appendChild(makeCopyBtn(function () { return parsed.main; }));
+    wrap.appendChild(h);
+    var body = document.createElement('div'); body.className = 'md'; body.innerHTML = mdToHtml(parsed.main); wrap.appendChild(body);
+    if (struct && struct.length) appendInlineFindings(wrap, struct);
+    else if (parsed.findings) appendInlineFindingsText(wrap, parsed.findings);
     var metaBits = [];
     if (m.steps) metaBits.push(m.steps + (m.steps > 1 ? ' steps' : ' step'));
-    if (typeof m.tokens === 'number' && m.tokens > 0) metaBits.push('<span class="rcost">' + fmtTokens(m.tokens) + '</span>');
-    if (metaBits.length) { var rm = document.createElement('span'); rm.className = 'rmeta'; rm.innerHTML = metaBits.join(' · '); h.appendChild(rm); }
-    var body = document.createElement('div'); body.className = 'md'; body.innerHTML = mdToHtml(parsed.main);
-    // Pentest (🔴) crystallizes a findings REPORT, never a Playwright spec —
-    // a regression spec of an attack run is the wrong artifact. Other modes
-    // save a spec.
-    var isPentest = currentModeId === 'pentest';
-    var save = document.createElement('button'); save.className = 'saveas';
-    save.textContent = isPentest ? 'Save findings report' : 'Save as spec';
-    save.addEventListener('click', function () { vscode.postMessage({ type: 'command', id: isPentest ? 'hover.saveFindingsReport' : 'hover.saveSpec' }); });
-    card.appendChild(h); card.appendChild(body); card.appendChild(save);
-    log.appendChild(card);
-    if (struct && struct.length) renderStructuredFindings(struct);
-    else if (parsed.findings) renderFindings(parsed.findings);
+    if (typeof m.tokens === 'number' && m.tokens > 0) metaBits.push(fmtTokens(m.tokens));
+    if (metaBits.length) { var f = document.createElement('div'); f.className = 'rfoot'; f.textContent = metaBits.join(' · '); wrap.appendChild(f); }
+    log.appendChild(wrap);
     speak((m.verdict || 'Pass') + '. ' + parsed.main.replace(/[#*\`|>_-]+/g, ' '));
     scroll();
+    // After-run save prompt (replaces the old Save button): ask whether to
+    // crystallize + the filename, in the composer's place. Skip on replay and
+    // when there's nothing to save (a no-step Q&A run outside pentest).
+    var isPentest = currentModeId === 'pentest';
+    if (!replaying && (isPentest || (m.steps && m.steps > 0))) {
+      var fc = struct ? struct.filter(function (f) { return f && (f.text || f.title); }).length : 0;
+      addSaveCard({ isPentest: isPentest, findings: fc });
+    }
   }
   // In-chat ask_user card: the agent is blocked and needs a human decision.
   // Renders the question + option buttons + an always-present "Other" free-text
@@ -618,19 +763,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     var done = false;
     function answer(val) {
       if (done) return; done = true;
-      // Collapse the whole prompt (question + options + Other + input) into one
-      // compact record — like Claude Code's AskUserQuestion: pick, and the card
-      // folds to just "question → ✓ your choice". The full prompt does not linger.
-      card.innerHTML = '';
-      card.className = 'ask resolved';
-      var q = document.createElement('div'); q.className = 'ask-r-q'; q.title = m.question || ''; q.textContent = m.question || 'Hover asked'; card.appendChild(q);
-      var a = document.createElement('div'); a.className = 'ask-r-a';
-      var ck = document.createElement('span'); ck.textContent = '✓'; a.appendChild(ck);
-      var av = document.createElement('span'); av.textContent = (val == null ? 'dismissed' : val); a.appendChild(av);
-      card.appendChild(a);
-      // Undock → drop the collapsed record into the transcript at this point.
-      log.appendChild(card);
-      askDock.hidden = true; askDock.innerHTML = '';
+      askDock.hidden = true; askDock.innerHTML = ''; setAskActive(false);
+      // Don't leave a bulky resolved card — the question is already implied by the
+      // flow. Drop one concise answer node onto the thread, with a subject so it
+      // reads as a sentence ("You answered: Male" / "You dismissed the question").
+      ensureRun();
+      var nd = makeNode('op answered');
+      nd.body.textContent = (val == null ? 'You dismissed the question' : 'You answered: ' + val);
+      curRun.appendChild(nd.node);
       vscode.postMessage({ type: 'askUserAnswer', askId: m.askId, value: val });
       scroll();
     }
@@ -658,15 +798,49 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); submitOther(); } });
     }
     askDock.appendChild(card);
-    askDock.hidden = false;
+    askDock.hidden = false; setAskActive(true);
     scroll();
+  }
+  // After-run save prompt (replaces the old "Save as spec" button): asks whether
+  // to crystallize the run + the filename, in the composer's place. If the agent
+  // flagged findings, warn that the spec still records the flow as passing.
+  function addSaveCard(info) {
+    fresh();
+    askDock.innerHTML = '';
+    var isPentest = !!(info && info.isPentest);
+    var card = document.createElement('div'); card.className = 'ask';
+    var h = document.createElement('div'); h.className = 'ask-q';
+    h.textContent = isPentest ? 'Save this run as a findings report?' : 'Save this run as a spec?';
+    card.appendChild(h);
+    if (info && info.findings > 0 && !isPentest) {
+      var warn = document.createElement('div'); warn.className = 'ask-warn';
+      warn.textContent = '⚠ The agent flagged ' + info.findings + (info.findings > 1 ? ' issues' : ' issue') + '. The spec records the flow as passing — it won\\'t fail on these. Save anyway?';
+      card.appendChild(warn);
+    }
+    var row = document.createElement('div'); row.className = 'ask-other-row';
+    var inp = document.createElement('input'); inp.type = 'text';
+    inp.placeholder = isPentest ? 'Report name — e.g. scan' : 'Spec name — e.g. login-flow';
+    row.appendChild(inp); card.appendChild(row);
+    var btns = document.createElement('div'); btns.className = 'ask-btns';
+    var disc = document.createElement('button'); disc.className = 'ask-discard'; disc.textContent = 'Discard';
+    var save = document.createElement('button'); save.className = 'ask-send'; save.textContent = isPentest ? 'Save report' : 'Save spec';
+    btns.appendChild(disc); btns.appendChild(save); card.appendChild(btns);
+    var done = false;
+    function close() { if (done) return; done = true; askDock.hidden = true; askDock.innerHTML = ''; setAskActive(false); scroll(); }
+    function doSave() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } close(); vscode.postMessage({ type: 'saveRun', name: v, isPentest: isPentest }); }
+    save.addEventListener('click', doSave);
+    disc.addEventListener('click', close);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doSave(); } else if (e.key === 'Escape') { close(); } });
+    askDock.appendChild(card);
+    askDock.hidden = false; setAskActive(true);
+    inp.focus(); scroll();
   }
   // Re-render the chat from a switched conversation's saved transcript.
   function loadSession(tx){
-    setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopTick();
+    setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopSecTick(); clearQ();
     workingEl=null; running=false; document.body.classList.remove('running');
-    askDock.hidden=true; askDock.innerHTML='';
-    log.innerHTML=''; curGroup=null; pendingTitle=null; cleared=true;
+    askDock.hidden=true; askDock.innerHTML=''; setAskActive(false);
+    log.innerHTML=""; curRun=null; curThought=null; pendingRec=null; liveRec=null; lastTokens=0; cleared=true;
     var arr = Array.isArray(tx) ? tx : [];
     if (!arr.length) { cleared=false; log.appendChild(emptyEl()); syncSend(); return; }
     replaying = true;
@@ -680,7 +854,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       else if (m.kind==='step') addStep({ tool: m.tool, label: m.label || m.tool, detail: m.input != null ? JSON.stringify(m.input) : '', isError: m.isError });
       else if (m.kind==='done') addResult({ verdict: 'Done', summary: m.summary || '', findings: m.findings });
     });
-    if (curGroup) finalizeGroup();
+    if (curRun) endSection();
     replaying = false;
     syncSend(); scroll();
   }
@@ -699,30 +873,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (m.length <= 12 && !/\\s.*\\s/.test(m)) return m; // ≤12 chars, at most one space
     return null;
   }
-  // Render the Findings card from STRUCTURED data (the agent's JSON block,
-  // parsed by the engine): severity badge + optional bold title + detail. No
-  // Markdown scraping.
-  function renderStructuredFindings(arr) {
-    var real = arr.filter(function (f) { return f && (f.text || f.title); });
-    if (!real.length) return;
-    var card = document.createElement('div'); card.className = 'findings';
-    var h = document.createElement('div'); h.className = 'fhead'; h.textContent = '⚠ Findings'; card.appendChild(h);
-    real.forEach(function (f) {
-      var row = document.createElement('div'); row.className = 'finding';
+  // A single inline finding row: severity badge + html body. Appended directly
+  // into the result block (no separate Findings card).
+  function findingRow(word, html) {
+    var row = document.createElement('div'); row.className = 'finding';
+    if (word) { var b = document.createElement('span'); b.className = 'badge ' + sevClass(word); b.textContent = word; row.appendChild(b); }
+    var span = document.createElement('span'); span.innerHTML = html; row.appendChild(span);
+    row.appendChild(makeCopyBtn(function () { return (word ? word + ' — ' : '') + span.textContent; }));
+    return row;
+  }
+  // Inline findings from STRUCTURED data (the agent's JSON block, parsed by the
+  // engine): severity badge + optional bold title + detail. No Markdown scraping.
+  function appendInlineFindings(container, arr) {
+    arr.filter(function (f) { return f && (f.text || f.title); }).forEach(function (f) {
       var word = badgeWord(f.severity);
-      if (word) { var b = document.createElement('span'); b.className = 'badge ' + sevClass(word); b.textContent = word; row.appendChild(b); }
-      var span = document.createElement('span');
       var body = (f.title && f.title !== f.text) ? '**' + f.title + '** — ' + (f.text || '') : (f.text || f.title || '');
       var ep = f.method || f.endpoint ? ' \`' + [f.method, f.endpoint].filter(Boolean).join(' ') + '\`' : '';
-      span.innerHTML = inline(body + ep);
-      row.appendChild(span);
-      card.appendChild(row);
+      container.appendChild(findingRow(word, inline(body + ep)));
     });
-    log.appendChild(card);
   }
-  function renderFindings(text) {
-    var card = document.createElement('div'); card.className = 'findings';
-    var h = document.createElement('div'); h.className = 'fhead'; h.textContent = '⚠ Findings'; card.appendChild(h);
+  function appendInlineFindingsText(container, text) {
     text.split('\\n').forEach(function (line) {
       if (!line.trim()) return;
       var marker = null, rest = null;
@@ -735,13 +905,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       else if (b) { marker = b[1]; rest = b[2]; }
       else { rest = line.trim(); }
       var word = badgeWord(marker);
-      var row = document.createElement('div'); row.className = 'finding';
-      if (word) { var b = document.createElement('span'); b.className = 'badge ' + sevClass(word); b.textContent = word; row.appendChild(b); }
-      else if (marker) { rest = '**' + marker + '** ' + rest; } // long bold = sentence, keep inline
-      var span = document.createElement('span'); span.innerHTML = inline(rest); row.appendChild(span);
-      card.appendChild(row);
+      if (!word && marker) { rest = '**' + marker + '** ' + rest; } // long bold = sentence, keep inline
+      container.appendChild(findingRow(word, inline(rest)));
     });
-    log.appendChild(card);
   }
   // Split a summary into the main body + the Findings BULLET LIST only. The
   // heading + its bullets are removed from main; everything else (incl. a
@@ -1060,7 +1226,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
   // "Working…" only shows when running and no group is currently open (the open
   // group's own spinner covers the in-group activity).
-  function updateWorking(){ setWorking(running && !curGroup); }
+  function updateWorking(){ setWorking(running && !curRun); }
 
   window.addEventListener('message', function(e){
     var m = e.data; if (!m) return;
@@ -1078,9 +1244,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='loadSession') loadSession(m.transcript);
     else if (m.type==='narration') addNarration(m.text);
     else if (m.type==='step') addStep(m);
-    else if (m.type==='usage') { if (curGroup && typeof m.tokens === 'number') { if (typeof curGroup.tokStart !== 'number') curGroup.tokStart = m.tokens; if (m.tokens >= curGroup.tokStart) { curGroup.tokEnd = m.tokens; setGroupMeta(curGroup, undefined, true); } } }
+    else if (m.type==='usage') { if (typeof m.tokens === 'number') { lastTokens = m.tokens; if (liveRec && liveRec.end == null) { liveRec.tokEnd = lastTokens; if (liveRec.t) setThoughtMeta(liveRec.t); } } }
     else if (m.type==='result') addResult(m);
-    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopTick(); workingEl=null; running=false; askDock.hidden=true; askDock.innerHTML=''; log.innerHTML=''; cleared=false; curGroup=null; pendingTitle=null; log.appendChild(emptyEl()); input.value=''; syncSend(); }
+    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopSecTick(); clearQ(); workingEl=null; running=false; askDock.hidden=true; askDock.innerHTML=''; setAskActive(false); log.innerHTML=''; cleared=false; curRun=null; curThought=null; pendingRec=null; liveRec=null; lastTokens=0; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') {
       currentModeId = m.id || null;
       document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Frontend';
@@ -1109,7 +1275,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     else if (m.type==='accounts') { accounts = Array.isArray(m.accounts) ? m.accounts : []; }
     else if (m.type==='busy') { setBusy(m.done ? null : (m.text||'Working…')); }
-    else if (m.type==='running') { running = !!m.running; document.body.classList.toggle('running', running); if (running) { curGroup = null; pendingTitle = null; closePickers(); } else if (curGroup) { finalizeGroup(); } updateWorking(); applyBorder(); syncSend(); }
+    else if (m.type==='running') { running = !!m.running; document.body.classList.toggle('running', running); if (running) { clearQ(); curRun = null; curThought = null; pendingRec = null; liveRec = null; lastTokens = 0; closePickers(); } else { enqueue(function (next) { if (curRun) endSection(); next(); }); } updateWorking(); applyBorder(); syncSend(); }
     else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Headless' : 'Normal'; applyBorder(); }
   });
   function emptyEl(){

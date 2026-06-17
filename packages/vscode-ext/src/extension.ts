@@ -918,7 +918,7 @@ async function reopenBrowser(): Promise<void> {
   }
 }
 
-async function saveSpec(): Promise<void> {
+async function saveSpec(nameArg?: string): Promise<void> {
   // Save crystallizes the VISIBLE session's last run.
   const tx = activeChat().transcript;
   let idx = -1;
@@ -937,7 +937,7 @@ async function saveSpec(): Promise<void> {
     const url = await resolveTargetUrl();
     if (url) steps.unshift({ kind: 'step', tool: 'browser_navigate', input: { url } });
   }
-  const name = await vscode.window.showInputBox({ title: 'Save as Playwright spec', prompt: 'Spec name', placeHolder: 'login-flow' });
+  const name = nameArg ?? await vscode.window.showInputBox({ title: 'Save as Playwright spec', prompt: 'Spec name', placeHolder: 'login-flow' });
   if (!name) return;
   // Parameterize any @-mentioned account credentials this run used into
   // process.env refs so the saved spec never holds the literal secret.
@@ -952,12 +952,12 @@ async function saveSpec(): Promise<void> {
 /** 🔴 pentest mode: crystallize the session's recorded probes into a Markdown
  *  findings report via the pentest plugin's save handler — NOT a Playwright
  *  spec (an attack run is not a regression artifact). */
-async function saveFindingsReport(): Promise<void> {
+async function saveFindingsReport(nameArg?: string): Promise<void> {
   if (!pool || connectedServices === 0) {
     void vscode.window.showWarningMessage('Hover: engine not connected.');
     return;
   }
-  const name = await vscode.window.showInputBox({ title: 'Save findings report', prompt: 'Report name', placeHolder: 'scan' });
+  const name = nameArg ?? await vscode.window.showInputBox({ title: 'Save findings report', prompt: 'Report name', placeHolder: 'scan' });
   if (!name) return;
   // Report lives in the active session's host (its mode runtime accumulated the
   // findings). Target it so we save THAT session's pentest, not another's.
@@ -1018,6 +1018,8 @@ export function activate(context: vscode.ExtensionContext): void {
   chatProvider = chat.provider;
   loadSessions(); // restore persisted conversations (or seed one)
   chatProvider.runHandler = (prompt) => void runPrompt(prompt);
+  // The user confirmed the after-run save prompt (filename entered in-chat).
+  chatProvider.saveRunHandler = (name, isPentest) => void (isPentest ? saveFindingsReport(name) : saveSpec(name));
   // The user switched the active conversation from the top-bar switcher.
   chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver
