@@ -8,7 +8,7 @@ The surface is the VS Code extension; `@hover-dev/core` is the shared engine. (T
 
 | Package | What it does |
 |---|---|
-| `hover-dev` (`packages/vscode-ext`) | The VS Code extension. Chat webview + Specs / Sessions / Environments tree views + Settings; ships the engine inside the `.vsix` (`scripts/stage-engine.mjs` `npm pack`s local `packages/core`) and spawns it under VS Code's own Node. Publisher `hyperyond`. |
+| `hover-dev` (`packages/vscode-ext`) | The VS Code extension. Chat webview + Dashboard / Conversations / Network / Environments / Settings views; ships the engine inside the `.vsix` (`scripts/stage-engine.mjs` `npm pack`s local `packages/core`) and spawns it under VS Code's own Node. Publisher `hyperyond`. |
 | `@hover-dev/core` | The Node engine: agent CLI invocation, Playwright CDP preflight, WebSocket bridge between the client and the agent. Owns the plugin API. |
 | `@hover-dev/api-test` / `@hover-dev/pentest` | 🟠 API testing (MITM HTTPS proxy + flow inspector + MCP) and 🔴 Pentest modes, built on the shared private `packages/probe-engine`. Never published (probe seeds inlined at build). See [Features → API & security testing](/docs/features/api-test/). |
 

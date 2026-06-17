@@ -1,6 +1,6 @@
 # Pick an agent
 
-Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for. Six agents are wired today: `claude` (hard sandbox, recommended) and `codex` / `cursor-agent` / `aider` / `gemini-cli` / `qwen-code` (soft sandbox). More are one file in [the registry](/docs/reference/agent-registry/).
+Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on your `PATH` and reuses the subscription you already pay for. Four agents are wired today: `claude` (hard sandbox, recommended) and `codex` / `gemini` / `qwen` (soft sandbox) — the last surfaced as **Local LLM** for self-hosted models. More are one file in [the registry](/docs/reference/agent-registry/).
 
 ## Supported today
 
@@ -8,10 +8,8 @@ Hover doesn't bundle an AI runtime. It spawns whichever coding-agent CLI is on y
 |---|---|---|
 | **Claude Code** (`claude`) | Hard — explicit allow/deny list, MCP-only tool surface, `--max-budget-usd` ceiling | **Recommended default.** Tightest blast radius. |
 | **OpenAI Codex** (`codex`) | Soft — no built-in-tool deny list at CLI level; uses `--sandbox read-only` + strict `developer_instructions` | Marked with a ⚠ badge in the agent dropdown so you know the surface is broader. |
-| **Cursor Agent** (`cursor-agent`) | Soft | Added in v0.9; ⚠ badge in the agent dropdown |
-| **Aider** (`aider`) | Soft | Added in v0.10; ⚠ badge |
-| **Gemini CLI** (`gemini-cli`) | Soft | Added in v0.10; ⚠ badge |
-| **Qwen Code** (`qwen-code`) | Soft | Added in v0.10; ⚠ badge |
+| **Google Gemini** (`gemini`) | Soft — `--sandbox read-only` + system-prompt directive | ⚠ badge in the agent dropdown |
+| **Local LLM** (`qwen`, Qwen Code) | Soft — OpenAI-compatible host for a self-hosted model | Point it at your own endpoint in Settings; ⚠ badge. See [Use an API key](/docs/get-started/api-key/). |
 
 The chat shows the active agent as a pill (`claude ▾`) in the header. Click it for a dropdown of every agent in the registry — installed ones in white, missing ones grey with copy-pasteable install hints.
 

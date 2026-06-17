@@ -1,8 +1,10 @@
 # Use an API key
 
 Hover normally rides the subscription you logged your CLI into (`claude login`,
-`codex login`). If you'd rather run on a **model API key** — no subscription
-login required — set it in Hover's Settings and Hover passes it to the spawned CLI.
+`codex login`, `gemini`, `qwen`). If you'd rather run on a **model API key** — no
+subscription login required — set it in Hover's Settings and Hover passes it to
+the spawned CLI. Or skip the cloud entirely and point Hover at a
+[local model](#local-models-no-cloud-no-key).
 
 ## Where to set it
 
@@ -15,6 +17,22 @@ The key maps to the active agent's environment variable:
 |---|---|
 | Claude Code | `ANTHROPIC_API_KEY` |
 | OpenAI Codex | `OPENAI_API_KEY` |
+| Google Gemini | `GEMINI_API_KEY` |
+| Local LLM (Qwen Code) | `OPENAI_API_KEY` + `OPENAI_BASE_URL` |
+
+## Local models (no cloud, no key)
+
+To run a model on your own machine, set the **Agent** to **Local LLM** (Hover's
+Qwen Code host) and point it at a self-hosted OpenAI-compatible endpoint
+(Ollama, LM Studio, vLLM). In **Settings**, set the **Base URL**
+(`hover.localBaseUrl`, e.g. `http://localhost:11434/v1`) and the **model**
+(`hover.localModel`) your endpoint serves. Hover spawns the CLI with
+`OPENAI_BASE_URL` pointed at your endpoint.
+
+A cloud key isn't required: if you haven't set `OPENAI_API_KEY`, Hover passes a
+placeholder `local` value (most self-hosted endpoints ignore it). Your prompts
+and code never leave your machine — the request only ever goes to the URL you
+set.
 
 ## How it's handled
 

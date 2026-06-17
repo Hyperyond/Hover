@@ -1,23 +1,27 @@
 # Agent registry
 
-Hover doesn't bundle an AI runtime. Each supported coding-agent CLI is a single `AgentDescriptor` entry in [`packages/core/src/agents/registry.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/agents/registry.ts).
+Hover doesn't bundle an AI runtime. Each supported coding-agent CLI is a single `AgentDescriptor` entry in [`packages/core/src/agents/registry.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/agents/registry.ts). Hover auto-detects the first one installed on your `PATH`; you switch agent and model from the chat toolbar and Settings.
 
 ## Supported agents
 
-| Agent | Sandbox | Status | Notes |
+| Agent | id | Sandbox | Notes |
 |---|---|---|---|
-| `claude` | hard | ✅ shipped | Claude Code. `--strict-mcp-config` + `--allowedTools mcp__playwright` + per-tool `--disallowedTools` deny list. Honours `--max-budget-usd`. Stream-json on stdout. |
-| `codex` | soft | ✅ shipped | OpenAI Codex CLI. `--sandbox read-only` + a strict `developer_instructions` system prompt — codex has no CLI-level built-in-tool deny list. JSONL on stdout. ⚠ in the dropdown. |
-| `cursor-agent` | soft | ✅ shipped (v0.9) | Cursor CLI. Install hint: `curl https://cursor.com/install -fsS \| bash`. Stream-JSON / NDJSON parser handles Cursor's `system / user / assistant / tool_call / result` event shapes. Known limits: no `--max-budget-usd`, no `--mcp-config` (users add the Playwright MCP to `~/.cursor/mcp.json` themselves), no token / cost in the stream (widget renders `–` for cursor sessions). ⚠ in the dropdown. |
-| `aider` | soft | ✅ shipped (v0.10) | Aider. Install hint: `pipx install aider-chat`. Plain-text stream — no structured tool-call events. No MCP integration today, so aider in Hover is an LLM-chat mode without browser-driving ability — documented as a degraded mode in the descriptor. ⚠ in the dropdown. |
-| `gemini-cli` | soft | ✅ shipped (v0.10) | Google Gemini CLI. Install hint: `npm install -g @google/gemini-cli`. `--output-format stream-json` with documented event types. MCP via `~/.gemini/settings.json` (not per-invocation `--mcp-config`). No `--append-system-prompt` flag — HOVER preface prepends to the user prompt. ⚠ in the dropdown. |
-| `qwen-code` | soft | ✅ shipped (v0.10) | Qwen Code CLI. Install hint: `npm install -g @qwen-code/qwen-code@latest`. `--output-format stream-json` with Anthropic Messages-style envelope (`tool_use` in assistant content blocks, `tool_result` in user content blocks). Real `--append-system-prompt` flag (the cleanest of the four soft-sandbox descriptors). MCP via `~/.qwen/settings.json`. Run-level budgets via `--max-wall-time` / `--max-tool-calls` / `--max-session-turns`. ⚠ in the dropdown. |
+| Claude Code | `claude` | hard | `--strict-mcp-config` + `--allowedTools mcp__playwright` + a per-tool `--disallowedTools` deny list. Honours `--max-budget-usd`. stream-json on stdout. The recommended primary. |
+| OpenAI Codex | `codex` | soft | `--sandbox read-only` + a strict `developer_instructions` system prompt (Codex has no CLI-level built-in-tool deny list). JSONL on stdout. ⚠ in the dropdown. |
+| Google Gemini | `gemini` | soft | Gemini CLI. `--output-format stream-json`. MCP via `~/.gemini/settings.json` (not a per-invocation `--mcp-config`). No `--append-system-prompt`, so the Hover preface prepends to the user prompt. ⚠ in the dropdown. |
+| Local LLM (Qwen Code) | `qwen` | soft | Qwen Code CLI, surfaced as **Local LLM** — a model-agnostic OpenAI-compatible host. Point it at a self-hosted endpoint (Ollama / LM Studio / vLLM) by setting a Base URL in Settings; Hover runs it with `OPENAI_BASE_URL`. Real `--append-system-prompt`; MCP via `~/.qwen/settings.json`. ⚠ in the dropdown. |
+
+`cursor-agent` and `aider` were prototyped earlier and removed; the registry today is the four agents above.
+
+## Local models
+
+The `qwen` agent doubles as Hover's **Local LLM** path. Set the **Base URL** (`hover.localBaseUrl`) and **model** (`hover.localModel`) in Settings and Hover spawns Qwen Code with `OPENAI_BASE_URL` pointed at your endpoint — and a placeholder `OPENAI_API_KEY` if you haven't set one, so no cloud key is required. See [Use an API key](/docs/get-started/api-key/).
 
 ## The `AgentDescriptor` interface
 
 ```ts
 interface AgentDescriptor {
-  id: string;                                   // e.g. 'claude', 'codex', 'cursor-agent'
+  id: string;                                   // e.g. 'claude', 'codex', 'gemini', 'qwen'
   binName: string;                              // executable name on PATH
   protocol: 'argv' | 'stdin' | 'acp' | 'pi-rpc';
   streamFormat: 'stream-json' | 'sse' | 'plain-text' | 'json-lines';
@@ -29,21 +33,18 @@ interface AgentDescriptor {
 }
 ```
 
-To add a new agent: write a new descriptor file (e.g. `aider.ts`), import it in `registry.ts`, append to the `AGENTS` constant. Nothing else changes.
-
 ## Sandbox strength
 
 - **`hard`** — the agent CLI accepts a deny / allow list that effectively removes built-in tools (shell, file edit, …) so the only callable surface is whatever MCP servers Hover configures. Example: Claude Code's `--strict-mcp-config --allowedTools mcp__playwright --disallowedTools "Bash Edit Write Read …"`.
-- **`soft`** — no equivalent flag exists. Hover constrains side-effects via OS-level sandbox flags (e.g. Codex's `--sandbox read-only`) and leans on a strict `developer_instructions` system prompt to nudge the agent toward MCP-only behavior. A determined / hallucinating agent *could* still try a built-in shell call.
+- **`soft`** — no equivalent flag exists. Hover constrains side-effects via OS-level sandbox flags (e.g. Codex's `--sandbox read-only`) and leans on a strict `developer_instructions` system prompt to nudge the agent toward MCP-only behavior. A determined or hallucinating agent *could* still try a built-in shell call.
 
 Hover marks soft-sandbox agents with a ⚠ badge in the agent dropdown.
 
 ## Adding a new agent
 
-Pick the closest existing peer as a template:
+Write a descriptor under `packages/core/src/agents/`, import it in `registry.ts`, and append it to the `AGENTS` constant. Pick the closest existing peer as a template:
 
 - **Hard-sandbox CLI** (has an allow/deny tool list) — copy `claude.ts`.
-- **Soft-sandbox CLI** with `developer_instructions`-style system prompt support — copy `codex.ts`.
-- **Soft-sandbox CLI** with workspace-file rule injection only — copy `cursor.ts`.
+- **Soft-sandbox CLI** with a system-prompt directive — copy `codex.ts`, `gemini.ts`, or `qwen.ts`.
 
-Write the descriptor under `packages/core/src/agents/`, import it in `registry.ts`, append to the `AGENTS` constant. The detect / argv / invoke / service / widget chain picks it up automatically — no other changes. PRs welcome.
+The detect / argv / invoke / service / chat chain picks it up automatically — no other changes. PRs welcome.

@@ -44,6 +44,13 @@ const nextConfig: NextConfig = {
         destination: '/docs/features/api-test-spec',
         permanent: true,
       },
+      // The Findings-cards feature page was retired; 301 the indexed URL to the
+      // features overview so it doesn't 404.
+      {
+        source: '/docs/features/findings-cards',
+        destination: '/docs/features',
+        permanent: true,
+      },
     ];
   },
 };

@@ -14,11 +14,11 @@ Click the **Hover** icon in the Activity Bar to open the chat webview.
 
 You'll see:
 - A header pill `claude ▾` showing the active coding agent
-- A mode switch — Normal / 🟠 Security / 🔴 Pentest
+- A mode switch — Normal / 🟠 API testing / 🔴 Pentest
 - An empty conversation body
-- A footer with a textarea, **Send**, and a round 🎙 mic button
+- A composer with a textarea, a model pill, a voice (speech) toggle, and **Send**
 
-Alongside the chat, the `hover` container has native tree views: **Specs** (your saved `__vibe_tests__/`), **Sessions** (one record per agent run — agent, model, cost, outcome), and **Environments** (Local + remote targets and their accounts). A **Settings** view covers agent / model / browser visibility / speech / model API key.
+Alongside the chat, the `hover` container has these views: **Dashboard** (your saved `__vibe_tests__/` specs, folder-grouped, with pass/fail and ✨ Optimize), **Conversations** (one record per agent run — agent, model, cost, outcome), **Network** (captured API calls; shown in API-testing / Pentest modes), and **Environments** (Local + remote targets and their accounts). A **Settings** view covers agent / model / browser visibility / speech / model API key.
 
 ## Step 2 — Set up an environment (optional)
 
@@ -63,9 +63,9 @@ The agent's verification report renders as a Result card at the end. If it found
 
 ## Step 5 — Save the verified session
 
-Click **Save as Spec** on the Result card. Hover writes `__vibe_tests__/<slug>.spec.ts` using `getByRole` / `getByLabel` / `getByTestId`.
+When the run finishes, Hover asks **Save this run as a spec?** in the composer. Confirm and it writes `__vibe_tests__/<slug>.spec.ts` using `getByRole` / `getByLabel` / `getByTestId`.
 
-The extension's Save emits **only** the Playwright spec. It lands in the **Specs** view, where you can also ✨ **Optimize** it (an optional AI pass you accept via diff — the original is always kept).
+The extension's Save emits **only** the Playwright spec. It appears in the **Dashboard**, where you can also ✨ **Optimize** it (an optional AI pass you accept via diff — the original is always kept).
 
 ## Step 6 — Run the spec without Hover
 

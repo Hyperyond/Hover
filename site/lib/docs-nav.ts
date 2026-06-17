@@ -32,7 +32,6 @@ export const DOCS_NAV: DocSection[] = [
       { text: 'Structured spec output', href: '/docs/features/structured-output/' },
       { text: 'Optimize a spec', href: '/docs/features/optimization-pass/' },
       { text: 'Save as an API-test spec', href: '/docs/features/api-test-spec/' },
-      { text: 'Findings cards', href: '/docs/features/findings-cards/' },
     ],
   },
   {
