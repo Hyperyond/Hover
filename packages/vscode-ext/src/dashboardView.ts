@@ -212,7 +212,11 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
   h3 { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:12px 2px 6px; font-weight:600; }
   .group { color:var(--mute); font-size:10.5px; margin:9px 4px 3px; display:flex; align-items:center; gap:5px; }
   .group svg { opacity:.7; }
-  .row { display:flex; align-items:center; gap:7px; padding:5px 7px; border-radius:7px; min-height:30px; }
+  /* Fixed height (not min-height): the hover-revealed .acts buttons (24px) are
+     taller than the resting content, and min-height would let the row grow when
+     they appear. A fixed height + reduced vertical padding fits the buttons
+     without the row jumping on hover. */
+  .row { display:flex; align-items:center; gap:7px; padding:3px 7px; border-radius:7px; height:30px; }
   .row:hover { background:var(--bg-2); }
   .row .ic { flex:none; color:var(--mute); display:inline-flex; }
   .row .nm { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
