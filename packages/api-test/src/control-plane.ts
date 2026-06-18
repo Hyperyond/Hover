@@ -76,6 +76,11 @@ export interface ControlPlaneHandle {
   /** All captured/issued flows (full request + response) — used by the
    *  `hover:run:end` hook to persist the session's API record under `.hover/`. */
   listFlows(): Flow[];
+  /** Mark the start of an agent run — snapshots the current check count. */
+  markRunStart(): void;
+  /** Checks recorded SINCE the last markRunStart() — this run's checks, so a
+   *  save / run:end scopes to the run, not the whole session. */
+  listRunChecks(): SecurityCheckStep[];
   /** Browser-confirmed findings the agent recorded (XSS via input, DOM-based,
    *  etc.) — attacks driven through the page, not via replay_flow. */
   listFindings(): BrowserFinding[];
@@ -174,6 +179,11 @@ export async function startControlPlane(
   // reads this list. Cleared on `DELETE /checks` or `clear_flows` style
   // session reset.
   const checks: SecurityCheckStep[] = [];
+  // Index into `checks` marking where the current agent run began (set by
+  // markRunStart). listRunChecks() returns checks recorded since — so a save /
+  // run:end scopes to THIS run, not the whole session. Reset to 0 whenever the
+  // check list is cleared, keeping runStartIndex <= checks.length always.
+  let runStartIndex = 0;
   let nextCheckId = 1;
   const emitter = new EventEmitter();
 
@@ -259,7 +269,7 @@ export async function startControlPlane(
 
       if (req.method === 'DELETE' && path === '/checks') {
         const n = checks.length;
-        checks.length = 0;
+        checks.length = 0; runStartIndex = 0;
         sendJson(res, 200, { cleared: n });
         return;
       }
@@ -564,7 +574,7 @@ export async function startControlPlane(
         // checks would leave the spec emitter pointing at dangling ids.
         // We don't broadcast a 'check' event for each cleared entry;
         // callers should treat clear-flows as "session reset" too.
-        checks.length = 0;
+        checks.length = 0; runStartIndex = 0;
         // Tell subscribers (the plugin → widget) the session was reset so the
         // widget's flows/checks state + badge don't go stale after clear_flows.
         emitter.emit('clear');
@@ -604,6 +614,8 @@ export async function startControlPlane(
     token,
     listChecks: () => [...checks],
     listFlows: () => store.list(),
+    markRunStart: () => { runStartIndex = checks.length; },
+    listRunChecks: () => checks.slice(Math.min(runStartIndex, checks.length)),
     listFindings: () => [...findings],
     listGaps: () => [...gaps],
     on: (event, listener) => {
