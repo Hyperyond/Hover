@@ -421,8 +421,13 @@ const ROADMAP = [
   },
   {
     status: 'planned',
+    title: 'It remembers your codebase',
+    body: 'A local knowledge graph of your app and its tests. Before it writes a test, Hover already knows which pages, forms, and endpoints a flow touches; it flags coverage gaps and reruns only the specs a change affects. Stored on your machine, committed with your code, carried across any model. No source uploaded.',
+  },
+  {
+    status: 'planned',
     title: 'Hover Cloud',
-    body: 'Parallel runs, scheduled monitoring, flakiness dashboard, AI self-heal on drift. Authoring stays local and free; CI still runs plain Playwright.',
+    body: 'A hosted layer over the specs and memory you build locally: a team-shared memory graph, parallel runs, scheduled monitoring, a flakiness dashboard, and AI self-heal on drift. Only graph metadata syncs, never your source or DOM. Authoring stays local and free; CI still runs plain Playwright.',
   },
 ];
 
@@ -436,7 +441,7 @@ function Roadmap() {
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
         Every feature that ships is in the VS Code extension today, free and
-        open-source. Next: Hover Cloud. Follow along on{' '}
+        open-source. Next: a local memory graph, then Hover Cloud. Follow along on{' '}
         <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
           GitHub
         </a>
