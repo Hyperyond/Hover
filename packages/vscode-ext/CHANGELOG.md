@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.19.2 — 2026-06-18
+
+- **Narrow-panel polish.** When the chat panel is dragged narrow, the toolbar's labelled buttons (browser / mode) and the app-status collapse to icon-only (tooltips kept); the model name truncates with an ellipsis instead of overflowing the panel edge. The composer also sits a little tighter to the panel edges.
+
 ## 0.19.1 — 2026-06-18
 
 - **Redesigned the chat's empty state.** An ambient-glow sparkle with a gradient "Hover" wordmark, a refined tagline, and three example-prompt chips (click one to prefill the composer), with a staggered entrance and gentle idle motion (breathing glow, float, shimmer). Respects the OS "reduce motion" setting.

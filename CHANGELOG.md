@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.19.2] — 2026-06-18
+
+### Changed
+
+- **vscode-ext:** responsive chat toolbar — below 280px the browser / mode buttons and the app-status collapse to icon-only (tooltips kept) and the model name truncates instead of overflowing the panel edge. Trimmed the composer's edge padding.
+
 ## [0.19.1] — 2026-06-18
 
 ### Changed
