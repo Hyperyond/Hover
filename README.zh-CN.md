@@ -19,7 +19,7 @@
 - **对话即生成真正的 Playwright 用例** —— 用大白话描述你要验证什么,Hover 操作你真实的 Chrome,把跑通的流程结晶成纯 `@playwright/test` 用例(选择器是 `getByRole / getByLabel`,不是 CSS/XPath)。AI 的活到“保存”为止 —— CI 是纯 Playwright,零 token、不用塞 key。
 - **像真人同事一样测** —— 遇到拿不准的地方(用哪个账户、某一步有歧义、有破坏性的操作),Agent 会在编辑器里**直接问你**,而不是瞎猜或干脆卡住 —— 就像同事遇到拿不准的事会先问你一声。
 - **多环境账户,`@` 即用** —— 给每个环境(本地 / staging / prod)配一次测试账户,在对话里写 `@账户名`,Agent 就替你登录。密码存在 VS Code SecretStorage,**参数化成 spec 里的 `process.env` 引用**,一键导出到 CI secrets。绝不写进 spec、JSDoc 或 sidecar。
-- **你的模型,本地大模型也行** —— 跑你机器上已有的编码 Agent CLI:Claude Code、OpenAI Codex、Gemini 或 Qwen,用你本就付费的订阅或自己的 key。把它指向一个自建 endpoint 就能用本地模型。没有 SDK,数据不出本机(`@hover-dev/core` 只绑 `127.0.0.1`,无遥测、无上传)。
+- **你的模型 —— 本机 CLI 或 BYOK** —— 两种供模型方式,在 Settings 里切换。*本机 CLI*:用 `PATH` 上的编码 Agent CLI(Claude Code、Codex、Gemini、Qwen)驱动,跑你本就付费的订阅。*BYOK*:自带 API key —— 选协议(Anthropic / OpenAI / Azure OpenAI / Gemini)或 OpenAI 兼容网关(Ollama Cloud、AIHubMix 等),Hover 把 key + base URL + model 注入对应 CLI。任一方式都能指向自建 endpoint 跑本地模型。Key 存在 VS Code SecretStorage。没有 SDK,数据不出本机(`@hover-dev/core` 只绑 `127.0.0.1`,无遥测、无上传)。
 - **零学习成本** —— 对话界面长得、用起来都像 Claude Code / Codex,没有新工具要学。装好、打开面板、描述一个流程就行。不用改你的应用、不用 bundler 插件、不用配置。
 - **API & 安全测试 + 渗透,同一个对话框** —— 切到 🟠 **API & 安全测试**(接口校验 / IDOR / 越权 / 业务逻辑,靠本地 HTTPS MITM 把抓到的 API 改参重放)或 🔴 **渗透测试**(攻击性、白盒:SQLi / XSS / SSTI / SSRF / 开放重定向 / IDOR),只对你**自己的**应用。确认的发现会变成 `.api-test.spec.ts` 的 CI 关卡,或一份“测了什么、没测什么”的报告。不需要 mitmproxy、不需要 Python、不需要装系统 CA。
 - **确定性、可移植的 spec** —— 每个 spec 都是普通 Playwright,进 git、脱离 Hover 也能跑。可选、默认关闭的 **AI 优化 pass** 会把草稿打磨成候选,用 diff 让你采纳(原件永远保留)。

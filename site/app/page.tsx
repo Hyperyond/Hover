@@ -51,7 +51,7 @@ const JSON_LD = {
   applicationSubCategory: 'Test automation',
   operatingSystem: 'Visual Studio Code (macOS, Windows, Linux)',
   description:
-    'Hover is an open-source VS Code extension for AI vibe-testing web apps. You describe a flow in plain English; Hover drives your real Chrome over CDP using the coding-agent CLI already on your machine (Claude Code, OpenAI Codex, Gemini, or Qwen), then crystallizes the verified run into a plain @playwright/test spec that runs in CI with zero AI and zero tokens. The same chat also flips into API-testing and pentest modes.',
+    'Hover is an open-source VS Code extension for AI vibe-testing web apps. You describe a flow in plain English; Hover drives your real Chrome over CDP using the coding-agent CLI already on your machine (Claude Code, OpenAI Codex, Gemini, or Qwen) on your own subscription or your own API key (BYOK), then crystallizes the verified run into a plain @playwright/test spec that runs in CI with zero AI and zero tokens. The same chat also flips into API-testing and pentest modes.',
   url: 'https://gethover.dev/',
   downloadUrl: MARKETPLACE_URL,
   softwareHelp: 'https://gethover.dev/docs/',
@@ -65,7 +65,7 @@ const JSON_LD = {
   featureList: [
     'Describe a flow in plain English; AI drives your real Chrome and crystallizes a standard @playwright/test spec',
     'CI runs plain Playwright with no AI, no tokens, and no API key',
-    'Runs on the coding-agent CLI already on your PATH (Claude Code, OpenAI Codex, Gemini, Qwen) or a local model',
+    'Runs on the coding-agent CLI already on your PATH (Claude Code, OpenAI Codex, Gemini, Qwen) on your subscription, or BYOK with your own API key / gateway, or a local model',
     'Asks you in the chat when a step is ambiguous or destructive instead of guessing',
     'Multi-environment @account login; passwords stay in SecretStorage and parameterize into process.env',
     'API-testing mode replays captured API calls with mutations to catch IDOR and broken access control',
@@ -401,8 +401,8 @@ const ROADMAP = [
   },
   {
     status: 'shipped',
-    title: 'Your agent, local models too',
-    body: 'Claude Code, Codex, Gemini, or Qwen — whatever CLI is on your PATH. Point it at a self-hosted endpoint to run a local model. Hover holds no keys.',
+    title: 'Local CLI or BYOK',
+    body: 'Drive runs with a CLI on your PATH (Claude Code, Codex, Gemini, Qwen) on your own subscription — or switch to BYOK and bring your own API key (Anthropic / OpenAI / Azure / Gemini, or an OpenAI-compatible gateway), which Hover injects into the matching CLI. Point either at a self-hosted endpoint for a local model. Keys stay in SecretStorage.',
   },
   {
     status: 'shipped',
