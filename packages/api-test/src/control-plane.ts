@@ -81,6 +81,13 @@ export interface ControlPlaneHandle {
   /** Checks recorded SINCE the last markRunStart() — this run's checks, so a
    *  save / run:end scopes to the run, not the whole session. */
   listRunChecks(): SecurityCheckStep[];
+  /** Fallback for save/record when the agent recorded no explicit checks:
+   *  derive regression checks from THIS run's captured API flows (one per
+   *  method+path+status), asserting the observed status. This is the
+   *  "crystallize observed traffic" safety net so a save never fails after a
+   *  real audit the agent happened to drive via browser_navigate / a docs UI
+   *  instead of api_request. Returns a fresh array; does not mutate state. */
+  deriveRunChecks(): SecurityCheckStep[];
   /** Browser-confirmed findings the agent recorded (XSS via input, DOM-based,
    *  etc.) — attacks driven through the page, not via replay_flow. */
   listFindings(): BrowserFinding[];
@@ -184,6 +191,9 @@ export async function startControlPlane(
   // run:end scopes to THIS run, not the whole session. Reset to 0 whenever the
   // check list is cleared, keeping runStartIndex <= checks.length always.
   let runStartIndex = 0;
+  // Parallel boundary into the flow store, so deriveRunChecks() (the save
+  // fallback) only crystallizes flows captured during THIS run.
+  let runStartFlowIndex = 0;
   let nextCheckId = 1;
   const emitter = new EventEmitter();
 
@@ -241,6 +251,57 @@ export async function startControlPlane(
     checks.push(check);
     emitter.emit('check', check);
     return check;
+  };
+
+  // Save/record fallback: when the agent recorded no explicit checks this run
+  // (it probed via browser_navigate / a docs UI instead of api_request), build
+  // regression checks from the run's captured API flows — one per
+  // method+path+status, asserting the observed status. This is api-test's
+  // "crystallize real observed traffic" thesis as a safety net. Pure: builds a
+  // fresh array, never touches `checks`.
+  const deriveRunChecks = (): SecurityCheckStep[] => {
+    const all = store.list();
+    const runFlows = all.slice(Math.min(runStartFlowIndex, all.length));
+    const seen = new Set<string>();
+    const out: SecurityCheckStep[] = [];
+    let id = 1;
+    for (const f of runFlows) {
+      const r = f.response;
+      if (!r || typeof r.statusCode !== 'number') continue;
+      let pathname = f.request.url;
+      try { pathname = new URL(f.request.url, 'http://localhost').pathname; } catch { /* keep raw */ }
+      const ctRaw = r.headers['content-type'] ?? r.headers['Content-Type'];
+      const ct = Array.isArray(ctRaw) ? ctRaw.join(';') : (ctRaw ?? '');
+      // API heuristic — crystallize API calls, not page loads or static assets.
+      const looksApi = /\/(api|v\d+|graphql|rest)\b/i.test(pathname) || /json/i.test(ct);
+      if (!looksApi) continue;
+      const key = f.request.method + ' ' + pathname + ' ' + r.statusCode;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        id: id++,
+        sourceFlowId: f.id,
+        replayId: f.id,
+        intent: `${f.request.method} ${pathname} returns ${r.statusCode}`,
+        expectStatus: r.statusCode,
+        request: {
+          method: f.request.method,
+          url: f.request.url,
+          headers: f.request.headers,
+          bodyText: f.request.bodyText,
+        },
+        observed: {
+          method: f.request.method,
+          url: f.request.url,
+          status: r.statusCode,
+          statusMessage: r.statusMessage ?? null,
+          bodyExcerpt: r.bodyText && r.bodyText.length > 0 ? r.bodyText.slice(0, 500) : null,
+        },
+        matched: true,
+        recordedAt: Date.now(),
+      });
+    }
+    return out;
   };
 
   const server = createServer((req, res) => {
@@ -574,7 +635,7 @@ export async function startControlPlane(
         // checks would leave the spec emitter pointing at dangling ids.
         // We don't broadcast a 'check' event for each cleared entry;
         // callers should treat clear-flows as "session reset" too.
-        checks.length = 0; runStartIndex = 0;
+        checks.length = 0; runStartIndex = 0; runStartFlowIndex = 0;
         // Tell subscribers (the plugin → widget) the session was reset so the
         // widget's flows/checks state + badge don't go stale after clear_flows.
         emitter.emit('clear');
@@ -614,8 +675,9 @@ export async function startControlPlane(
     token,
     listChecks: () => [...checks],
     listFlows: () => store.list(),
-    markRunStart: () => { runStartIndex = checks.length; },
+    markRunStart: () => { runStartIndex = checks.length; runStartFlowIndex = store.list().length; },
     listRunChecks: () => checks.slice(Math.min(runStartIndex, checks.length)),
+    deriveRunChecks,
     listFindings: () => [...findings],
     listGaps: () => [...gaps],
     on: (event, listener) => {

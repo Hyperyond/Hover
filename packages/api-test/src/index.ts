@@ -125,9 +125,12 @@ The mcp__hoverapitest__* MCP server exposes:
 
 YOU ARE TESTING THE API, NOT A UI. Choose per project:
 - **API-only backend** (just endpoints, or only interactive docs like Swagger /
-  Scalar / Redoc): call endpoints DIRECTLY with **api_request**. NEVER click
-  through an API-docs UI to send requests — that records fragile UI clicks, not an
-  API test, and wastes turns fighting the page.
+  Scalar / Redoc): prefer calling endpoints DIRECTLY with **api_request** — it
+  records an explicit check (intent + expectStatus) and avoids wasting turns
+  fighting a docs page's request editor. You MAY still hit endpoints with
+  browser_navigate when that's easier; those requests are captured by the proxy
+  and crystallize into regression checks on save — api_request is just richer
+  (it carries your intent + an assertion).
 - **App with a real frontend**: drive it (mcp__playwright__*) to log in / capture
   real traffic, then list_flows → get_flow → replay_flow to probe + assert.
 Auth: read a cookie / bearer token from a captured flow (get_flow) or a prior
@@ -285,10 +288,15 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
           if (!control) {
             throw new Error('API-testing mode is not active — no control plane to read checks from.');
           }
-          const checks = control.listRunChecks();
+          // Prefer the agent's explicit checks (api_request / replay_flow with
+          // intent + expectStatus). If it recorded none, fall back to deriving
+          // regression checks from the run's captured API flows — so a save
+          // never fails after a real audit the agent drove via the browser.
+          let checks = control.listRunChecks();
+          if (checks.length === 0) checks = control.deriveRunChecks();
           if (checks.length === 0) {
             throw new Error(
-              'No API checks recorded in this run. Have the agent call api_request / replay_flow with intent + expectStatus first.',
+              'No API traffic recorded in this run. Test an endpoint first — call api_request / replay_flow (ideally with intent + expectStatus), or just hit your API so the proxy captures it.',
             );
           }
           const p = (payload ?? {}) as {
@@ -399,9 +407,10 @@ export default defineHoverPlugin<SecurityModeOptions | void>((opts) => {
       async 'hover:run:end'(ctx) {
         if (!control) return;
         const { writeApiRecord } = await import('./writeApiRecord.js');
+        const runChecks = control.listRunChecks();
         await writeApiRecord(ctx.devRoot, ctx.sessionId, {
           flows: control.listFlows(),
-          checks: control.listRunChecks(),
+          checks: runChecks.length ? runChecks : control.deriveRunChecks(),
         });
       },
 

@@ -78,8 +78,23 @@ export interface WriteSecuritySpecOptions {
 }
 
 export interface WriteSecuritySpecResult {
+  /** Primary path (the module folder when split, else the single file). */
   path: string;
   slug: string;
+  /** Every file written — one per API module when the run spanned several. */
+  files: { path: string; slug: string; module: string }[];
+}
+
+/** Resource module a request belongs to: the first path segment after any
+ *  `api` / `vN` / `rest` / `graphql` prefix. `/api/auth/start` → `auth`,
+ *  `/health` → `health`. This is the deterministic, no-LLM grouping key. */
+function moduleKey(url: string): string {
+  let segs: string[] = [];
+  try { segs = new URL(url, 'http://localhost').pathname.split('/').filter(Boolean); } catch { /* keep [] */ }
+  let i = 0;
+  while (i < segs.length && /^(api|v\d+|rest|graphql)$/i.test(segs[i])) i++;
+  const k = segs[i] ?? segs[i - 1] ?? 'api';
+  return k.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'api';
 }
 
 export async function writeSecuritySpec(
@@ -91,16 +106,45 @@ export async function writeSecuritySpec(
     throw new Error('security spec must contain at least one recorded check');
   }
 
-  const dir = join(opts.devRoot, '__vibe_tests__');
-  const path = join(dir, `${slug}.api-test.spec.ts`);
-  if (!opts.overwrite && existsSync(path)) {
-    throw new SecuritySpecExistsError(slug, path);
+  // Group checks by API module (resource). One module → one flat file (the
+  // classic layout). Several modules → a folder per run, one file per module,
+  // so the Specs tree shows the run as a tidy "module view".
+  const groups = new Map<string, SecurityCheckStep[]>();
+  for (const c of opts.checks) {
+    const key = moduleKey(c.observed?.url || c.request?.url || '');
+    const arr = groups.get(key) ?? [];
+    arr.push(c);
+    groups.set(key, arr);
   }
 
+  const root = join(opts.devRoot, '__vibe_tests__');
+  const files: { path: string; slug: string; module: string }[] = [];
+
+  if (groups.size <= 1) {
+    const path = join(root, `${slug}.api-test.spec.ts`);
+    if (!opts.overwrite && existsSync(path)) throw new SecuritySpecExistsError(slug, path);
+    await mkdir(root, { recursive: true });
+    await writeFile(path, renderSpec(slug, opts.name, opts.description ?? '', opts.checks, opts.summary), 'utf-8');
+    files.push({ path, slug, module: [...groups.keys()][0] ?? slug });
+    return { path, slug, files };
+  }
+
+  const dir = join(root, slug);
+  // Pre-flight the conflict check across all module files before writing any.
+  if (!opts.overwrite) {
+    for (const mod of groups.keys()) {
+      const p = join(dir, `${mod}.api-test.spec.ts`);
+      if (existsSync(p)) throw new SecuritySpecExistsError(`${slug}/${mod}`, p);
+    }
+  }
   await mkdir(dir, { recursive: true });
-  const source = renderSpec(slug, opts.name, opts.description ?? '', opts.checks, opts.summary);
-  await writeFile(path, source, 'utf-8');
-  return { path, slug };
+  for (const [mod, checks] of groups) {
+    const path = join(dir, `${mod}.api-test.spec.ts`);
+    const source = renderSpec(`${slug}-${mod}`, `${opts.name} · ${mod}`, opts.description ?? '', checks, opts.summary);
+    await writeFile(path, source, 'utf-8');
+    files.push({ path, slug: `${slug}/${mod}`, module: mod });
+  }
+  return { path: dir, slug, files };
 }
 
 function slugify(name: string): string {
