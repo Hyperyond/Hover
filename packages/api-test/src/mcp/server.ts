@@ -30,7 +30,7 @@ const apiBase = process.env.HOVER_SECURITY_API;
 const apiToken = process.env.HOVER_SECURITY_API_TOKEN;
 if (!apiBase || !apiToken) {
   process.stderr.write(
-    '[hover-security-mcp] HOVER_SECURITY_API and HOVER_SECURITY_API_TOKEN must be set by the host plugin.\n',
+    '[hover-api-test-mcp] HOVER_SECURITY_API and HOVER_SECURITY_API_TOKEN must be set by the host plugin.\n',
   );
   process.exit(1);
 }
@@ -109,7 +109,7 @@ function truncate(s: string | null, n = 2000): string {
 }
 
 const server = new McpServer({
-  name: 'hover-security',
+  name: 'hover-api-test',
   version: '0.0.0',
 });
 
@@ -335,6 +335,67 @@ server.registerTool(
 );
 
 server.registerTool(
+  'api_request',
+  {
+    description:
+      'Issue an HTTP request DIRECTLY to the app under test (not a replay of a captured flow). This is the request-first way to test an API: for an API-only backend with no real frontend, call endpoints here instead of clicking through an interactive API-docs UI (Swagger / Scalar / Redoc) — never drive a docs UI to send requests. You decide per project: drive the real app UI to capture auth, or call endpoints directly here, or both. Supply auth yourself in `headers` (a cookie or bearer token you read from a captured flow via get_flow, or from a prior response). The request + response are recorded as a flow.\n\nPass `intent` (one-line description, e.g. "wrong levelId is rejected") and `expectStatus` (the status that proves the behaviour, e.g. 400) together to RECORD this as a check — checks crystallise into the `.api-test.spec.ts` (plain Playwright `request.*`, no UI). Always supply both when you are asserting an endpoint contract; without them the request still runs but is not recorded into the saved spec.',
+    inputSchema: {
+      method: z.string().optional().describe('HTTP method (GET/POST/PUT/PATCH/DELETE). Defaults to GET.'),
+      url: z.string().describe('Absolute URL of the endpoint on the app under test, e.g. http://localhost:3000/api/scan/verify.'),
+      headers: z
+        .record(z.string(), z.union([z.string(), z.null()]))
+        .optional()
+        .describe('Request headers — include auth here (cookie / authorization) as needed. Case-insensitive.'),
+      bodyText: z.string().optional().describe('Request body as a UTF-8 string (typically JSON). Omit for GET.'),
+      intent: z
+        .string()
+        .optional()
+        .describe('One-line description of the contract this asserts (e.g. "non-UUID runId returns 400"). With expectStatus, records a check that crystallises into the spec.'),
+      expectStatus: z
+        .number()
+        .optional()
+        .describe('The HTTP status that proves the expected behaviour (e.g. 200, 400, 403). When present with intent, records this request as a spec check.'),
+      allowCrossOrigin: z
+        .boolean()
+        .optional()
+        .describe('By default the request is refused if its origin differs from the app under test (prevents probing third-party APIs). Set true only when the user explicitly authorised the target origin.'),
+    },
+  },
+  async ({ method, url, headers, bodyText, intent, expectStatus, allowCrossOrigin }) => {
+    const payload = { method, url, headers, bodyText, intent, expectStatus, allowCrossOrigin };
+    const result = await api<{
+      requestId: string;
+      flow: FullFlow;
+      check?: { id: number; intent: string; expectStatus: number; matched: boolean };
+    }>('/request', { method: 'POST', body: JSON.stringify(payload) });
+    const f = result.flow;
+    const r = f.request;
+    const s = f.response;
+    const out: string[] = [];
+    out.push(`${r.method} ${r.url}`);
+    out.push(`→ ${s ? `${s.statusCode} ${s.statusMessage ?? ''}`.trim() : 'no response'}`);
+    if (s?.bodyText) {
+      out.push('```');
+      out.push(truncate(s.bodyText, 1000));
+      out.push('```');
+    }
+    if (result.check) {
+      out.push('');
+      out.push(`📝 **API check recorded** (#${result.check.id}): ${result.check.intent}`);
+      out.push(
+        result.check.matched
+          ? `   ✓ Observed ${s?.statusCode ?? '?'} matches expected ${result.check.expectStatus}. Will crystallise into the spec.`
+          : `   ✗ Observed ${s?.statusCode ?? '?'} ≠ expected ${result.check.expectStatus}. The endpoint does not meet the asserted contract — report it.`,
+      );
+    } else if (intent || expectStatus) {
+      out.push('');
+      out.push('_(Not recorded as a check — supply both `intent` and `expectStatus` to record one.)_');
+    }
+    return md(out.join('\n'));
+  },
+);
+
+server.registerTool(
   'adjudicate_bola',
   {
     description:
@@ -402,4 +463,4 @@ server.registerTool(
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-process.stderr.write(`[hover-security-mcp] connected (api=${apiBase})\n`);
+process.stderr.write(`[hover-api-test-mcp] connected (api=${apiBase})\n`);

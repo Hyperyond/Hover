@@ -144,3 +144,104 @@ export async function replayFlow(
 
   return { replayId: flow.id, flow };
 }
+
+/**
+ * Issue an ARBITRARY request from scratch (not a replay of a captured flow) and
+ * record it as a new flow. This is the request-first primitive behind the
+ * `api_request` MCP tool: for API-only backends (no frontend to drive) the agent
+ * calls endpoints directly here. Mirrors replayFlow's fetch + store-record path.
+ *
+ * Origin-locked like replayFlow: the target must share the origin of the app
+ * being tested (inferred from already-captured flows) unless allowCrossOrigin is
+ * set — so a hijacked prompt can't make api_request hit a third-party. Auth is
+ * auto-carried: if no cookie is supplied, the session cookie from a same-origin
+ * captured flow is reused (the browser's logged-in session).
+ */
+function headerValueOf(h: Record<string, string | string[] | undefined>, name: string): string | null {
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(h)) {
+    if (k.toLowerCase() === lower && v !== undefined) return Array.isArray(v) ? v.join('; ') : v;
+  }
+  return null;
+}
+
+export async function issueRequest(
+  store: FlowStore,
+  opts: { method?: string; url: string; headers?: Record<string, string | null>; bodyText?: string; allowCrossOrigin?: boolean },
+): Promise<{ requestId: string; flow: Flow } | { error: string }> {
+  const method = (opts.method ?? 'GET').toUpperCase();
+  const url = opts.url;
+  const targetOrigin = originOf(url);
+  if (!url || !targetOrigin) return { error: `invalid url: ${url}` };
+
+  // Origin lock: stay on the app under test. Reference = the origin of an
+  // already-captured flow (what the browser is driving). An empty store (a pure-
+  // API run's very first call) is allowed to bootstrap the origin.
+  if (!opts.allowCrossOrigin) {
+    let ref: string | null = null;
+    for (const f of store.list()) { const o = originOf(f.request.url); if (o) { ref = o; break; } }
+    if (ref && ref !== targetOrigin) {
+      return {
+        error:
+          `request refused: cross-origin (app ${ref}, target ${targetOrigin}). ` +
+          `Pass allowCrossOrigin: true only if you own / are authorised to test the target.`,
+      };
+    }
+  }
+
+  const headers = mergeHeaders({}, opts.headers);
+  // Auto-carry the session: if the caller didn't set a cookie, reuse one from a
+  // same-origin captured flow (the debug Chrome's logged-in session).
+  if (!headers['cookie']) {
+    for (const f of store.list()) {
+      if (originOf(f.request.url) !== targetOrigin) continue;
+      const c = headerValueOf(f.request.headers, 'cookie');
+      if (c) { headers['cookie'] = c; break; }
+    }
+  }
+  const bodyText = opts.bodyText;
+  const hasBody = bodyText !== undefined && method !== 'GET' && method !== 'HEAD';
+
+  const newFlowReq: FlowRequest = {
+    method,
+    url,
+    httpVersion: '?',
+    headers,
+    bodyText: bodyText ?? null,
+    bodyLen: bodyText ? Buffer.byteLength(bodyText) : 0,
+    startedAt: Date.now(),
+  };
+  const flow = store.add(newFlowReq);
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: hasBody ? bodyText : undefined,
+      signal: AbortSignal.timeout(REPLAY_TIMEOUT_MS),
+    });
+    const resText = await res.text();
+    const resHeaders: Record<string, string> = {};
+    res.headers.forEach((v, k) => { resHeaders[k] = v; });
+    store.attachResponse(flow.id, {
+      statusCode: res.status,
+      statusMessage: res.statusText,
+      headers: resHeaders,
+      bodyText: resText,
+      bodyLen: Buffer.byteLength(resText),
+      completedAt: Date.now(),
+    }, true);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    store.attachResponse(flow.id, {
+      statusCode: 0,
+      statusMessage: `request failed: ${msg}`,
+      headers: {},
+      bodyText: null,
+      bodyLen: 0,
+      completedAt: Date.now(),
+    }, true);
+  }
+
+  return { requestId: flow.id, flow };
+}

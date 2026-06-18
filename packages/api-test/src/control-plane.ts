@@ -29,7 +29,7 @@ import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
 import type { Flow, FlowStore } from './mitm/flows.js';
-import { replayFlow, type MutateOptions } from './mitm/replay.js';
+import { replayFlow, issueRequest, type MutateOptions } from './mitm/replay.js';
 import { suggestProbes, cookieHeaderFor, builtinSecuritySeeds, adjudicate, type StorageState, type SecurityCheckStep, type BrowserFinding, type SeedCategory, type OracleResponse } from '@hover-dev/probe-engine';
 
 const PORT_RETRIES = 10;
@@ -73,6 +73,9 @@ export interface ControlPlaneHandle {
    *  plugin's hooks to forward checks to the widget without going
    *  through HTTP. Returns a copy so callers can mutate freely. */
   listChecks(): SecurityCheckStep[];
+  /** All captured/issued flows (full request + response) — used by the
+   *  `hover:run:end` hook to persist the session's API record under `.hover/`. */
+  listFlows(): Flow[];
   /** Browser-confirmed findings the agent recorded (XSS via input, DOM-based,
    *  etc.) — attacks driven through the page, not via replay_flow. */
   listFindings(): BrowserFinding[];
@@ -456,6 +459,42 @@ export async function startControlPlane(
         return;
       }
 
+      // Issue an arbitrary request from scratch (api_request) — the request-first
+      // path for API-only backends. Records a check when intent + expectStatus
+      // are both supplied, exactly like /replay.
+      if (req.method === 'POST' && path === '/request') {
+        let p: { method?: string; url?: string; headers?: Record<string, string | null>; bodyText?: string; body?: string; intent?: string; expectStatus?: number; allowCrossOrigin?: boolean } | undefined;
+        try {
+          const b = await readBody(req);
+          if (b) p = JSON.parse(b);
+        } catch (err) {
+          sendJson(res, 400, { error: 'invalid JSON body', detail: String(err) });
+          return;
+        }
+        const o = p ?? {};
+        if (!o.url || typeof o.url !== 'string') {
+          sendJson(res, 400, { error: 'url required' });
+          return;
+        }
+        const bodyText = typeof o.bodyText === 'string' ? o.bodyText : (typeof o.body === 'string' ? o.body : undefined);
+        const result = await issueRequest(store, { method: o.method, url: o.url, headers: o.headers, bodyText, allowCrossOrigin: o.allowCrossOrigin });
+        if ('error' in result) {
+          sendJson(res, 400, result);
+          return;
+        }
+        let check: SecurityCheckStep | null = null;
+        if (typeof o.intent === 'string' && o.intent.trim().length > 0 && typeof o.expectStatus === 'number') {
+          check = recordCheck({
+            sourceFlowId: result.flow.id,
+            replayFlow: result.flow,
+            intent: o.intent.trim(),
+            expectStatus: o.expectStatus,
+          });
+        }
+        sendJson(res, 200, { requestId: result.requestId, flow: result.flow, ...(check ? { check } : {}) });
+        return;
+      }
+
       const replayMatch = /^\/flows\/([a-f0-9]+)\/replay$/.exec(path);
       if (req.method === 'POST' && replayMatch) {
         const id = replayMatch[1];
@@ -555,7 +594,7 @@ export async function startControlPlane(
   }
   if (!boundPort) {
     throw new Error(
-      `[hover-security] control plane couldn't bind in [${DEFAULT_PORT}, ${DEFAULT_PORT + PORT_RETRIES}): ` +
+      `[hover-api-test] control plane couldn't bind in [${DEFAULT_PORT}, ${DEFAULT_PORT + PORT_RETRIES}): ` +
         (lastErr instanceof Error ? lastErr.message : String(lastErr)),
     );
   }
@@ -564,6 +603,7 @@ export async function startControlPlane(
     port: boundPort,
     token,
     listChecks: () => [...checks],
+    listFlows: () => store.list(),
     listFindings: () => [...findings],
     listGaps: () => [...gaps],
     on: (event, listener) => {
