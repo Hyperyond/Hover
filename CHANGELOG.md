@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.19.1] — 2026-06-18
+
+### Changed
+
+- **vscode-ext:** redesigned the chat empty state — an ambient-glow sparkle, a gradient "Hover" wordmark, a refined tagline, and three clickable example-prompt chips that prefill the composer. Staggered entrance + gentle idle motion (breathing glow / float / shimmer), gated behind `prefers-reduced-motion`.
+
 ## [0.19.0] — 2026-06-18
 
 ### Added
