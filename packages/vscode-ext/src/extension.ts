@@ -663,7 +663,7 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
         // "Done" not "PASS": the run finished and here's the summary — it is
         // not a test-pass assertion (the agent may have logged real bugs in
         // ## Findings). PASS read as a green light even when issues existed.
-        chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), steps, owner.runCost ?? 0, owner.runTokens ?? 0, Array.isArray(ev.findings) ? ev.findings : undefined);
+        chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), steps, owner.runCost ?? 0, owner.runTokens ?? 0, Array.isArray(ev.findings) ? ev.findings : undefined, currentMode);
       }
       break;
     }

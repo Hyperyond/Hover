@@ -149,8 +149,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   askUser(req: { askId: string; question: string; options: { label: string; description?: string }[]; other?: boolean }): void {
     this.post({ type: 'askUser', ...req });
   }
-  pushResult(verdict: string, summary: string, steps?: number, cost?: number, tokens?: number, findings?: unknown[]): void {
-    this.post({ type: 'result', verdict, summary, steps, cost, tokens, findings });
+  pushResult(verdict: string, summary: string, steps?: number, cost?: number, tokens?: number, findings?: unknown[], mode?: string | null): void {
+    this.post({ type: 'result', verdict, summary, steps, cost, tokens, findings, mode: mode ?? null });
   }
   setRunning(running: boolean): void {
     this.post({ type: 'running', running });
@@ -383,9 +383,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
      save prompt) is up it takes the composer's place — same width, input hidden.
      Pinned to the bottom with the composer's exact padding so the popup's bottom
      edge sits exactly where the input box's was; it grows upward as it gets taller. */
+  /* While an ask/save popup is up, hide the input and let the dock take its
+     place. The dock stays IN FLOW (same max-width / centering as the composer,
+     so identical width) and is the last flex child, so it sits at the bottom;
+     matching the composer's bottom padding aligns its bottom edge to the input's. */
   body.ask-open #composer { display: none; }
-  body.ask-open #ask-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 10px 12px 12px; background: var(--bg); }
-  body.ask-open #log { padding-bottom: 18px; }
+  body.ask-open #ask-dock { padding-bottom: 12px; }
   .ask-warn { font-size: 12px; color: var(--warn); line-height: 1.4; }
   .ask-btns { display: flex; justify-content: flex-end; gap: 8px; }
   .ask-discard { padding: 7px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text-mute); cursor: pointer; font: inherit; }
@@ -539,14 +542,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   var speechOn = false, silentMode = false, currentModeId = null, replaying = false;
   function speak(text) { if (!speechOn || !text || replaying) return; try { if (window.speechSynthesis) { window.speechSynthesis.speak(new SpeechSynthesisUtterance(String(text).slice(0, 300))); } } catch (e) {} }
-  // Running-border: pentest → red, security → orange, else silent → Chrome ring.
+  // Running-border: only the silent (headless) Chrome ring. The api-test /
+  // pentest mode tint was removed — the mode is already shown by the mode pill.
   function applyBorder() {
     var b = document.body;
     b.classList.remove('silent-running', 'border-api-test', 'border-pentest');
     if (!running) return;
-    if (currentModeId === 'pentest') b.classList.add('border-pentest');
-    else if (currentModeId === 'api-test') b.classList.add('border-api-test');
-    else if (silentMode) b.classList.add('silent-running');
+    if (silentMode) b.classList.add('silent-running');
   }
   function fresh() { if (!cleared) { log.innerHTML = ''; cleared = true; } }
   function scroll() { if (typeof workingEl !== 'undefined' && workingEl && running && workingEl.parentNode) log.appendChild(workingEl); log.scrollTop = log.scrollHeight; }
@@ -767,11 +769,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // save this run. The click opens the filename + findings-warning prompt, and
     // addSaveCard routes by mode (api-test → request spec, pentest → report).
     // Skip when there's nothing to save (a no-step Q&A run outside pentest).
-    if (!replaying && (currentModeId === 'pentest' || (m.steps && m.steps > 0))) {
+    // Bind Save to THIS run's mode (m.mode), not the live mode — so switching
+    // modes after a run can't route its save to the wrong writer.
+    var runMode = m.mode || null;
+    if (!replaying && (runMode === 'pentest' || (m.steps && m.steps > 0))) {
       var fc = struct ? struct.filter(function (f2) { return f2 && (f2.text || f2.title); }).length : 0;
       var saveBtn = document.createElement('button'); saveBtn.className = 'saveas';
-      saveBtn.textContent = currentModeId === 'pentest' ? 'Save findings report' : 'Save as spec';
-      saveBtn.addEventListener('click', function () { addSaveCard({ isPentest: currentModeId === 'pentest', findings: fc }); });
+      saveBtn.textContent = runMode === 'pentest' ? 'Save findings report' : 'Save as spec';
+      saveBtn.addEventListener('click', function () { addSaveCard({ mode: runMode, findings: fc }); });
       wrap.appendChild(saveBtn);
     }
     log.appendChild(wrap);
@@ -832,7 +837,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   function addSaveCard(info) {
     fresh();
     askDock.innerHTML = '';
-    var isPentest = !!(info && info.isPentest);
+    var saveMode = info && info.mode ? info.mode : null;
+    var isPentest = saveMode === 'pentest';
     var card = document.createElement('div'); card.className = 'ask';
     var h = document.createElement('div'); h.className = 'ask-q';
     h.textContent = isPentest ? 'Save this run as a findings report?' : 'Save this run as a spec?';
@@ -852,7 +858,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     btns.appendChild(disc); btns.appendChild(save); card.appendChild(btns);
     var done = false;
     function close() { if (done) return; done = true; askDock.hidden = true; askDock.innerHTML = ''; setAskActive(false); scroll(); }
-    function doSave() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } close(); vscode.postMessage({ type: 'saveRun', name: v, mode: currentModeId }); }
+    function doSave() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } close(); vscode.postMessage({ type: 'saveRun', name: v, mode: saveMode }); }
     save.addEventListener('click', doSave);
     disc.addEventListener('click', close);
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doSave(); } else if (e.key === 'Escape') { close(); } });
