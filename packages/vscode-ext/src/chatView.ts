@@ -398,14 +398,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /* Bottom ask "popup": while the agent is waiting on a human decision, its
      question docks just above the composer — pinned, never scrolled away with
      the transcript. On answer it collapses into the log as a record. */
-  #ask-dock { width: 100%; max-width: 768px; margin: 0 auto; padding: 10px 12px 0; }
+  #ask-dock { width: 100%; max-width: 768px; margin: 0 auto; padding: 8px 8px 0; }
   /* Docked popup frame matches the input box exactly (same bg / 1px border /
      12px radius / focus highlight) so it sits right where the input was — no
      accent left-stripe here, unlike the collapsed in-log ask records. */
   #ask-dock .ask { background: var(--bg-3); border: 1px solid var(--line); box-shadow: 0 -2px 18px rgba(0,0,0,.35); max-height: 46vh; overflow-y: auto; animation: askpop .16s ease-out; }
   #ask-dock .ask:focus-within { border-color: var(--accent); }
   @keyframes askpop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  #composer { padding: 10px 12px 12px; position: relative; width: 100%; max-width: 768px; margin: 0 auto; }
+  #composer { padding: 8px 8px 9px; position: relative; width: 100%; max-width: 768px; margin: 0 auto; }
   /* The ask popup is mutually exclusive with the input: while a question (or the
      save prompt) is up it takes the composer's place — same width, input hidden.
      Pinned to the bottom with the composer's exact padding so the popup's bottom
@@ -415,12 +415,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
      so identical width) and is the last flex child, so it sits at the bottom;
      matching the composer's bottom padding aligns its bottom edge to the input's. */
   body.ask-open #composer { display: none; }
-  body.ask-open #ask-dock { padding-bottom: 12px; }
+  body.ask-open #ask-dock { padding-bottom: 9px; }
   .ask-warn { font-size: 12px; color: var(--warn); line-height: 1.4; }
   .ask-btns { display: flex; justify-content: flex-end; gap: 8px; }
   .ask-discard { padding: 7px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text-mute); cursor: pointer; font: inherit; }
   .ask-discard:hover { color: var(--text); border-color: var(--text-dim); }
-  .mentions { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 6px); z-index: 20;
+  .mentions { position: absolute; left: 8px; right: 8px; bottom: calc(100% - 6px); z-index: 20;
     background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     box-shadow: 0 8px 24px rgba(0,0,0,.35); max-height: 220px; overflow-y: auto; }
   .m-item { display: flex; align-items: baseline; gap: 8px; padding: 7px 11px; cursor: pointer; font-size: 12px; }
@@ -443,8 +443,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .inputrow { display: flex; align-items: flex-start; gap: 6px; }
   .inputrow #input { flex: 1; }
   #toolbar { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); margin: 4px -10px 0; padding: 7px 10px 0; }
-  #toolbar .left { display: flex; align-items: center; gap: 6px; }
-  #toolbar .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  #toolbar .left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  #toolbar .right { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+  /* The model name (text-only) absorbs the squeeze: it truncates instead of
+     pushing the mode / send buttons off the panel edge. */
+  #model-btn { min-width: 0; }
+  #model-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   /* Borderless toolbar buttons (Claude-Code "auto mode" style): icon + text,
      no chrome, subtle hover. */
   .barebtn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: none; background: none; color: var(--text-mute); cursor: pointer; font: inherit; font-size: 12px; border-radius: 7px; }
@@ -455,6 +459,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .barebtn .caret { color: var(--text-dim); font-size: 10px; }
   .barebtn svg { opacity: .9; }
   #mode-icon { display: inline-flex; align-items: center; }
+  /* Narrow panel: collapse labelled buttons to icon-only and trim chrome so
+     nothing overflows the panel edge. The model name keeps showing (it
+     truncates); browser / mode keep their icons. */
+  @media (max-width: 280px) {
+    #browser-label, #mode-label, #app-label { display: none; }
+    #toolbar { gap: 4px; }
+    #toolbar .left, #toolbar .right { gap: 2px; }
+    .barebtn { padding: 4px 5px; }
+    .appstatus { padding: 3px 5px; }
+    #session { max-width: 150px; }
+  }
   .p-ic svg { display: block; margin: 1px auto 0; }
   /* While a run is active, the target can't change mid-flight — lock the
      browser / model / mode pickers (send becomes the stop control). */
