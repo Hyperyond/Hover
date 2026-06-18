@@ -23,7 +23,7 @@ type Inbound =
   | { type: 'setEffort'; value: string }
   | { type: 'askUserAnswer'; askId: string; value: string | null }
   | { type: 'switchSession'; id: string }
-  | { type: 'saveRun'; name: string; isPentest: boolean }
+  | { type: 'saveRun'; name: string; mode: string | null }
   | { type: 'ready' };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -44,8 +44,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Set by the extension: the user picked a conversation in the top-bar switcher. */
   sessionSwitchHandler?: (id: string) => void;
   /** Set by the extension: the user confirmed the after-run save prompt with a
-   *  filename (isPentest → findings report, else a Playwright spec). */
-  saveRunHandler?: (name: string, isPentest: boolean) => void;
+   *  filename. `mode` (null = frontend, 'api-test', 'pentest') routes the writer:
+   *  api-test → request-based spec, pentest → findings report, else → normal spec. */
+  saveRunHandler?: (name: string, mode: string | null) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -64,7 +65,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       else if (msg.type === 'setEffort' && typeof msg.value === 'string') this.effortHandler?.(msg.value);
       else if (msg.type === 'askUserAnswer' && typeof msg.askId === 'string') this.askAnswerHandler?.(msg.askId, msg.value ?? null);
       else if (msg.type === 'switchSession' && typeof msg.id === 'string') this.sessionSwitchHandler?.(msg.id);
-      else if (msg.type === 'saveRun' && typeof msg.name === 'string') this.saveRunHandler?.(msg.name, !!msg.isPentest);
+      else if (msg.type === 'saveRun' && typeof msg.name === 'string') this.saveRunHandler?.(msg.name, msg.mode ?? null);
       else if (msg.type === 'ready') this.onReady?.();
     });
   }
@@ -349,8 +350,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .ask .ask-opt:hover { border-color: var(--accent); }
   .ask .ask-opt small { color: var(--text-dim); font-size: 11px; }
   .ask .ask-other { color: var(--text-dim); }
-  .ask .ask-other-row { display: flex; gap: 6px; }
-  .ask .ask-other-row input { flex: 1; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; }
+  .ask .ask-other-row { display: flex; gap: 7px; align-items: center; }
+  .ask .ask-other-row input { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  .ask .ask-other-row input:focus { outline: none; border-color: var(--accent); }
+  .ask .ask-pencil { flex: none; display: inline-flex; align-items: center; color: var(--text-dim); }
+  .ask .ask-pencil svg { width: 14px; height: 14px; }
+  .ask .ask-go { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); color: var(--text); cursor: pointer; }
+  .ask .ask-go:hover { border-color: var(--accent); color: var(--accent); }
+  .ask .ask-go svg { width: 16px; height: 16px; }
   .ask .ask-send { padding: 7px 12px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: var(--accent-ink); cursor: pointer; font: inherit; font-weight: 600; }
   .findings { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 12px; background: var(--bg-2); padding: 13px 14px; display: flex; flex-direction: column; gap: 9px; }
   .findings .fhead { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--warn); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
@@ -511,6 +518,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   function setAskActive(on) { document.body.classList.toggle('ask-open', !!on); }
   // Monochrome copy button: copies getText() to the clipboard; the icon flips to
   // a checkmark on success, then reverts.
+  var ICON_PENCIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+  var ICON_ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
   var COPY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
   var CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"/></svg>';
   function fallbackCopy(txt) { try { var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch (e) {} }
@@ -570,6 +579,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   };
   var FILLISH = { fill_control: 1, select_control: 1, browser_select_option: 1, browser_type: 1 };
   var BARE = { browser_snapshot: 1, browser_navigate_back: 1, browser_take_screenshot: 1, browser_fill_form: 1, browser_drag: 1, browser_wait_for: 1, browser_tabs: 1, browser_evaluate: 1 };
+  // Low-signal ops kept OUT of the visible stream (the full record stays in the
+  // .hover sidecar): pure observation (snapshot/screenshot), waits, and
+  // navigation-only key presses (scroll / Escape). Meaningful keys (Enter,
+  // Meta+a, Tab) still render.
+  var QUIET_TOOLS = { browser_snapshot: 1, browser_take_screenshot: 1, browser_wait_for: 1 };
+  var NAV_KEYS = { pagedown: 1, pageup: 1, end: 1, home: 1, escape: 1 };
+  function isQuietStep(m) {
+    var t = (m.tool || '').replace(/^mcp__.*?__/, '');
+    if (QUIET_TOOLS[t]) return true;
+    if (t === 'browser_press_key') {
+      try { var k = String((JSON.parse(m.detail || '{}').key) || '').toLowerCase(); if (NAV_KEYS[k] || k.indexOf('arrow') === 0) return true; } catch (e) {}
+    }
+    return false;
+  }
   function describeOp(tool, detailStr, live) {
     var t = (tool || '').replace(/^mcp__.*?__/, '');
     var d = {}; try { d = detailStr ? JSON.parse(detailStr) : {}; } catch (e) { d = {}; }
@@ -704,6 +727,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // Token snapshot is taken NOW (arrival) so the thought's token delta is real.
   function addStep(m) {
     if (typeof m.tokens === 'number') { lastTokens = m.tokens; if (liveRec && liveRec.end == null) { liveRec.tokEnd = lastTokens; if (liveRec.t) setThoughtMeta(liveRec.t); } }
+    if (isQuietStep(m)) return; // keep read-only / navigation noise out of the stream
     if (replaying) { _renderStep(m, function () {}); return; }
     enqueue(function (next) { _renderStep(m, next); });
   }
@@ -739,17 +763,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (m.steps) metaBits.push(m.steps + (m.steps > 1 ? ' steps' : ' step'));
     if (typeof m.tokens === 'number' && m.tokens > 0) metaBits.push(fmtTokens(m.tokens));
     if (metaBits.length) { var f = document.createElement('div'); f.className = 'rfoot'; f.textContent = metaBits.join(' · '); wrap.appendChild(f); }
+    // Save is a BUTTON on the Done block (not an auto-popup) — click it to name +
+    // save this run. The click opens the filename + findings-warning prompt, and
+    // addSaveCard routes by mode (api-test → request spec, pentest → report).
+    // Skip when there's nothing to save (a no-step Q&A run outside pentest).
+    if (!replaying && (currentModeId === 'pentest' || (m.steps && m.steps > 0))) {
+      var fc = struct ? struct.filter(function (f2) { return f2 && (f2.text || f2.title); }).length : 0;
+      var saveBtn = document.createElement('button'); saveBtn.className = 'saveas';
+      saveBtn.textContent = currentModeId === 'pentest' ? 'Save findings report' : 'Save as spec';
+      saveBtn.addEventListener('click', function () { addSaveCard({ isPentest: currentModeId === 'pentest', findings: fc }); });
+      wrap.appendChild(saveBtn);
+    }
     log.appendChild(wrap);
     speak((m.verdict || 'Pass') + '. ' + parsed.main.replace(/[#*\`|>_-]+/g, ' '));
     scroll();
-    // After-run save prompt (replaces the old Save button): ask whether to
-    // crystallize + the filename, in the composer's place. Skip on replay and
-    // when there's nothing to save (a no-step Q&A run outside pentest).
-    var isPentest = currentModeId === 'pentest';
-    if (!replaying && (isPentest || (m.steps && m.steps > 0))) {
-      var fc = struct ? struct.filter(function (f) { return f && (f.text || f.title); }).length : 0;
-      addSaveCard({ isPentest: isPentest, findings: fc });
-    }
   }
   // In-chat ask_user card: the agent is blocked and needs a human decision.
   // Renders the question + option buttons + an always-present "Other" free-text
@@ -782,19 +809,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       b.addEventListener('click', function(){ answer(o.label); });
       opts.appendChild(b);
     });
-    // "Other" free-text — always present for ask_user; omitted for permission
-    // cards (m.other === false), where a typed instruction makes no sense.
+    // Free-text answer — an always-present inline row (pencil + input + ↵ button),
+    // NOT a separate "Other" option that expands. Omitted for permission cards
+    // (m.other === false), where a typed instruction makes no sense.
     if (m.other !== false) {
-      var other = document.createElement('button'); other.className = 'ask-opt ask-other';
-      var ot = document.createElement('span'); ot.textContent = '✎ Other — type your own instruction…'; other.appendChild(ot);
-      opts.appendChild(other);
-      var row = document.createElement('div'); row.className = 'ask-other-row'; row.hidden = true;
-      var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Type what you want the agent to do…';
-      var snd = document.createElement('button'); snd.className = 'ask-send'; snd.textContent = 'Send';
-      row.appendChild(inp); row.appendChild(snd); card.appendChild(row);
+      var row = document.createElement('div'); row.className = 'ask-other-row';
+      var pencil = document.createElement('span'); pencil.className = 'ask-pencil'; pencil.innerHTML = ICON_PENCIL;
+      var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Type your own answer…';
+      var go = document.createElement('button'); go.className = 'ask-go'; go.title = 'Send'; go.innerHTML = ICON_ARROW;
+      row.appendChild(pencil); row.appendChild(inp); row.appendChild(go); card.appendChild(row);
       var submitOther = function(){ var v = inp.value.trim(); if (v) answer(v); };
-      other.addEventListener('click', function(){ if (done) return; row.hidden = false; inp.focus(); });
-      snd.addEventListener('click', submitOther);
+      go.addEventListener('click', submitOther);
       inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); submitOther(); } });
     }
     askDock.appendChild(card);
@@ -827,7 +852,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     btns.appendChild(disc); btns.appendChild(save); card.appendChild(btns);
     var done = false;
     function close() { if (done) return; done = true; askDock.hidden = true; askDock.innerHTML = ''; setAskActive(false); scroll(); }
-    function doSave() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } close(); vscode.postMessage({ type: 'saveRun', name: v, isPentest: isPentest }); }
+    function doSave() { var v = inp.value.trim(); if (!v) { inp.focus(); return; } close(); vscode.postMessage({ type: 'saveRun', name: v, mode: currentModeId }); }
     save.addEventListener('click', doSave);
     disc.addEventListener('click', close);
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doSave(); } else if (e.key === 'Escape') { close(); } });

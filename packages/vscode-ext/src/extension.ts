@@ -966,6 +966,22 @@ async function saveFindingsReport(nameArg?: string): Promise<void> {
   }
 }
 
+/** 🟠 api-test mode: crystallize the recorded API checks (replay_flow /
+ *  api_request with intent + expectStatus) into a plain `request.*`
+ *  `.api-test.spec.ts` via the api-test plugin's save handler — NOT the
+ *  browser-step writer (an API test must be UI-independent). */
+async function saveApiTestSpec(nameArg?: string): Promise<void> {
+  if (!pool || connectedServices === 0) {
+    void vscode.window.showWarningMessage('Hover: engine not connected.');
+    return;
+  }
+  const name = nameArg ?? await vscode.window.showInputBox({ title: 'Save as API-test spec', prompt: 'Spec name', placeHolder: 'api-contract' });
+  if (!name) return;
+  if (!pool.pluginSave('save:security:spec', { name }, activeEnginePort())) {
+    void vscode.window.showWarningMessage('Hover: engine not connected — or no API checks recorded this run (use api_request / replay_flow with intent + expectStatus).');
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   extContext = context;
   context.subscriptions.push(
@@ -1019,7 +1035,10 @@ export function activate(context: vscode.ExtensionContext): void {
   loadSessions(); // restore persisted conversations (or seed one)
   chatProvider.runHandler = (prompt) => void runPrompt(prompt);
   // The user confirmed the after-run save prompt (filename entered in-chat).
-  chatProvider.saveRunHandler = (name, isPentest) => void (isPentest ? saveFindingsReport(name) : saveSpec(name));
+  chatProvider.saveRunHandler = (name, mode) => void (
+    mode === 'pentest' ? saveFindingsReport(name)
+    : mode === 'api-test' ? saveApiTestSpec(name)
+    : saveSpec(name));
   // The user switched the active conversation from the top-bar switcher.
   chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver
