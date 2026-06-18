@@ -28,9 +28,28 @@ export interface ModeEntry {
   pluginName?: string;
 }
 
+/** A BYOK model config pushed to the engine via `set-byok`. The protocol
+ *  selects the CLI + auth env vars; key/base/model are injected at run time. */
+export interface ByokConfig {
+  protocol: string;
+  baseUrl: string;
+  model: string;
+  maxTokens: number;
+  apiKey: string;
+}
+
 export interface AgentEntry {
   id: string;
   installed?: boolean;
+  /** Rich availability fields the engine already sends in the `agents`
+   *  payload (from core's listAgentAvailability) — used by the Settings
+   *  "Local CLI" panel to render detected + installable agents. */
+  label?: string;
+  tagline?: string;
+  sandboxStrength?: 'hard' | 'soft';
+  binPath?: string;
+  homepage?: string;
+  installHint?: string;
 }
 
 /** A test account passed to a run so the agent can log in with it. */
@@ -78,6 +97,13 @@ export interface ServiceClientPool {
   setEffort(effort: string): void;
   /** Set the Local LLM endpoint base URL ('' clears it) for the qwen host. */
   setLocalEndpoint(baseUrl: string): void;
+  /** Set the BYOK config for subsequent runs — protocol + key + base URL +
+   *  model are injected into the protocol's matching CLI. null clears it
+   *  (fall back to the local-CLI agent's own auth). */
+  setByok(config: ByokConfig | null): void;
+  /** Force the engine to re-scan PATH for installed CLIs and re-broadcast the
+   *  agent availability list. */
+  refreshAgents(): void;
   /** Start a run (prompt) on the engine. `accounts` are the @-mentioned test
    *  accounts (with creds) the agent may log in with. `enginePort` targets the
    *  session's own host (multi-host model); omit to use the first open socket.
@@ -300,6 +326,14 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
     },
     setLocalEndpoint(baseUrl: string): void {
       const body = JSON.stringify({ type: 'set-local-endpoint', payload: { baseUrl } });
+      for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
+    },
+    setByok(config: ByokConfig | null): void {
+      const body = JSON.stringify({ type: 'set-byok', payload: { config } });
+      for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
+    },
+    refreshAgents(): void {
+      const body = JSON.stringify({ type: 'refresh-agents' });
       for (const ws of sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(body);
     },
     dispose(): void {

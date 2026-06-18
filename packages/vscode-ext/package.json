@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.18.2",
+  "version": "0.19.0",
   "displayName": "Hover — AI Vibe Testing",
   "description": "Describe a flow in plain English; Hover's AI tests your app like a real teammate and hands you a real Playwright spec. Hands-free, local-first, on your own Claude Code or Codex CLI.",
   "keywords": [
@@ -354,6 +354,62 @@
           "type": "string",
           "default": "",
           "description": "Model id served by your local endpoint (e.g. qwen2.5-coder), used by the Local LLM agent."
+        },
+        "hover.modelSource": {
+          "type": "string",
+          "enum": [
+            "cli",
+            "byok"
+          ],
+          "enumDescriptions": [
+            "Local CLI — drive runs with a coding-agent CLI on your PATH, using its own logged-in subscription",
+            "BYOK — bring your own API key; the key + base URL + model are injected into the matching CLI"
+          ],
+          "default": "cli",
+          "description": "Where runs get their model. Local CLI uses an installed agent's own auth; BYOK injects your API key into the matching CLI."
+        },
+        "hover.byok.protocol": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai",
+            "azure",
+            "gemini"
+          ],
+          "enumDescriptions": [
+            "Anthropic (Claude) — driven via the claude CLI",
+            "OpenAI-compatible — driven via the codex CLI",
+            "Azure OpenAI — driven via the codex CLI against an Azure endpoint",
+            "Google Gemini — driven via the gemini CLI"
+          ],
+          "default": "anthropic",
+          "description": "BYOK API protocol. Determines which CLI is driven and which auth env vars are set."
+        },
+        "hover.byok.gateway": {
+          "type": "string",
+          "enum": [
+            "none",
+            "ollama-cloud",
+            "sense",
+            "aihubmix"
+          ],
+          "default": "none",
+          "description": "Optional BYOK gateway preset (an OpenAI-compatible aggregator). 'none' = the protocol's official endpoint. A gateway preset fills the Base URL."
+        },
+        "hover.byok.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "BYOK API base URL. Empty = the protocol's default endpoint."
+        },
+        "hover.byok.model": {
+          "type": "string",
+          "default": "",
+          "description": "BYOK model id (e.g. claude-sonnet-4-5, gpt-5.5, gemini-2.5-pro)."
+        },
+        "hover.byok.maxTokens": {
+          "type": "number",
+          "default": 0,
+          "description": "BYOK response length cap (max output tokens). 0 = the model's default."
         }
       }
     },

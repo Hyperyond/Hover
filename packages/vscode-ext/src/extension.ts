@@ -28,7 +28,7 @@ import { registerDashboardView } from './dashboardView.js';
 import { registerTrafficView, type TrafficViewProvider, type Flow } from './trafficView.js';
 import { registerConversationsView, type ConversationsViewProvider } from './conversationsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
-import { registerSettingsView, type SettingsViewProvider } from './settingsView.js';
+import { registerSettingsView, type SettingsViewProvider, type SettingsByokState } from './settingsView.js';
 import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar, type ResolvedAccount } from './environments.js';
 import { registerEnvironmentsView } from './environmentsView.js';
 import { buildWorkflowYaml } from './ciWorkflow.js';
@@ -72,6 +72,7 @@ async function pushEngineConfig(): Promise<void> {
   const effort = cfg.get<string>('effort', '');
   pool.setEffort(effort);
   pool.setLocalEndpoint(cfg.get<string>('localBaseUrl', ''));
+  await pushByok();
 }
 
 /** The modes the one extension offers, independent of any running service —
@@ -218,6 +219,48 @@ async function pushModels(): Promise<void> {
   if (want !== effort) { effort = want; await safeUpdate('effort', effort); }
   pool?.setEffort(effort);
   chatProvider?.updateModels(list, model, { options: efforts, current: effort });
+}
+
+// ── BYOK (bring-your-own-key) ──────────────────────────────────────────────
+// The API key lives in SecretStorage, keyed per protocol so switching protocols
+// keeps each provider's key. The rest of the config is plain `hover.byok.*`.
+function byokSecretKey(protocol: string): string {
+  return `hover.byok.key.${protocol}`;
+}
+/** Current BYOK config for the Settings panel (key presence only). */
+async function readByok(): Promise<SettingsByokState> {
+  const cfg = vscode.workspace.getConfiguration('hover');
+  const protocol = cfg.get<string>('byok.protocol', 'anthropic');
+  const key = await extContext?.secrets.get(byokSecretKey(protocol));
+  return {
+    protocol,
+    gateway: cfg.get<string>('byok.gateway', 'none'),
+    baseUrl: cfg.get<string>('byok.baseUrl', ''),
+    model: cfg.get<string>('byok.model', ''),
+    maxTokens: cfg.get<number>('byok.maxTokens', 0),
+    hasKey: !!key,
+  };
+}
+/** Push the effective model source to the engine: a full BYOK config when the
+ *  BYOK tab is active (and a key is set), or null to fall back to the local-CLI
+ *  agent's own auth. Sent via `set-byok`. */
+async function pushByok(): Promise<void> {
+  if (!pool) return;
+  const cfg = vscode.workspace.getConfiguration('hover');
+  const source = cfg.get<string>('modelSource', 'cli');
+  if (source !== 'byok') {
+    pool.setByok(null);
+    return;
+  }
+  const protocol = cfg.get<string>('byok.protocol', 'anthropic');
+  const apiKey = (await extContext?.secrets.get(byokSecretKey(protocol))) || '';
+  pool.setByok({
+    protocol,
+    baseUrl: cfg.get<string>('byok.baseUrl', '').trim(),
+    model: cfg.get<string>('byok.model', '').trim(),
+    maxTokens: cfg.get<number>('byok.maxTokens', 0),
+    apiKey,
+  });
 }
 
 /** Apply a reasoning-effort pick from the chat model menu. */
@@ -1082,7 +1125,8 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   const settings = registerSettingsView({
-    getAgents: () => ({ current: currentAgent ?? (vscode.workspace.getConfiguration('hover').get<string>('agent') || 'claude'), list: allAgents().map((a) => ({ id: a.id, label: agentLabel(a.id) })) }),
+    getAgents: () => ({ current: activeAgentId(), list: allAgents() }),
+    getByok: () => readByok(),
     onChange: async (change) => {
       const cfg = vscode.workspace.getConfiguration('hover');
       if (typeof change.agent === 'string') await setAgent(change.agent);
@@ -1101,6 +1145,27 @@ export function activate(context: vscode.ExtensionContext): void {
         await safeUpdate('localModel', change.localModel);
         await pushModels(); // pushes the local model to the engine when qwen is active
       }
+      // ── BYOK ──────────────────────────────────────────────────────────
+      if (change.modelSource === 'cli' || change.modelSource === 'byok') await safeUpdate('modelSource', change.modelSource);
+      if (typeof change.byokProtocol === 'string') { await safeUpdate('byok.protocol', change.byokProtocol); settingsProvider?.refresh(); }
+      if (typeof change.byokGateway === 'string') await safeUpdate('byok.gateway', change.byokGateway);
+      if (typeof change.byokBaseUrl === 'string') await safeUpdate('byok.baseUrl', change.byokBaseUrl);
+      if (typeof change.byokModel === 'string') await safeUpdate('byok.model', change.byokModel);
+      if (typeof change.byokMaxTokens === 'number') await safeUpdate('byok.maxTokens', change.byokMaxTokens);
+      if (typeof change.byokApiKey === 'string') {
+        const proto = cfg.get<string>('byok.protocol', 'anthropic');
+        const sk = byokSecretKey(proto);
+        if (change.byokApiKey) await extContext?.secrets.store(sk, change.byokApiKey);
+        else await extContext?.secrets.delete(sk);
+        settingsProvider?.refresh();
+      }
+      // Any model-source / byok change re-pushes the active config to the engine.
+      if (
+        change.modelSource !== undefined || change.byokProtocol !== undefined || change.byokGateway !== undefined ||
+        change.byokBaseUrl !== undefined || change.byokModel !== undefined || change.byokMaxTokens !== undefined ||
+        change.byokApiKey !== undefined || change.agent !== undefined
+      ) await pushByok();
+      if (change.rescan) pool?.refreshAgents();
       pushChatConfig();
     },
   });
