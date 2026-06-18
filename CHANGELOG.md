@@ -6,6 +6,15 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-06-18
+
+### Added
+
+- **vscode-ext:** model settings are now a **Local CLI ↔ BYOK** tab switch.
+  - *Local CLI* renders detected coding-agent CLIs as selectable cards (Recommended / soft-sandbox badges, inline Local-LLM endpoint), an **Installable** list with copy-paste install hints, and a **Rescan** button (new `refresh-agents` engine message that re-scans PATH).
+  - *BYOK* — pick a protocol (Anthropic / OpenAI / Azure OpenAI / Gemini) or an OpenAI-compatible gateway (Ollama Cloud / SenseAudio / AIHubMix); supply key + base URL + model. The key lives in VS Code SecretStorage (per protocol).
+- **core:** new `set-byok` / `refresh-agents` WS messages. When BYOK is active, a run is driven by the protocol's matching CLI (anthropic→claude, gemini→gemini, openai/azure/gateway→codex) with the key + base URL injected via env (`ANTHROPIC_*` / `OPENAI_*` / `GEMINI_*`) and the BYOK model id overriding the run model.
+
 ## [0.18.2] — 2026-06-18
 
 ### Fixed

@@ -3,6 +3,13 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.19.0 — 2026-06-18
+
+**Model settings: Local CLI ↔ BYOK.** The Settings panel now has two tabs for where runs get their model.
+
+- **Local CLI** — your detected coding-agent CLIs render as selectable cards (Claude Code / Codex / Gemini / Local LLM), with a "Recommended" / "⚠ Soft sandbox" badge, an inline endpoint for the Local LLM, an **Installable** list with one-click-copy install commands, and a **Rescan** button.
+- **BYOK (bring your own key)** — pick a protocol (Anthropic / OpenAI / Azure OpenAI / Google Gemini) or an OpenAI-compatible gateway (Ollama Cloud / SenseAudio / AIHubMix), then supply an API key + base URL + model. Hover injects these into the protocol's matching CLI at run time (so that CLI still needs to be installed). The API key is stored in VS Code SecretStorage, per protocol — never in settings or the spec.
+
 ## 0.18.2 — 2026-06-18
 
 - **Fix:** the chat stream and the `ask_user` prompt now render the agent's Markdown (`**bold**`, `` `code` ``) instead of showing the raw `**` / `` ` `` characters — narration, question, options, and the answer line all parse it.
