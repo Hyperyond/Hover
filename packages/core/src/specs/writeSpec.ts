@@ -78,6 +78,7 @@ function filterDirtySteps(steps: SpecStep[]): { clean: SpecStep[]; omitted: numb
   let omitted = 0;
   const clean = steps.filter(s => {
     if (s.kind !== 'step' || !s.tool) return true; // non-action entries pass through
+    if (isFlowMarker(s)) return false; // mark_flow is a split boundary, not an action — drop, don't count
     if (s.isError || isExploratoryTool(s.tool)) { omitted++; return false; }
     return true;
   });
@@ -168,15 +169,81 @@ function renderFillValue(value: string): string {
   return /^process\.env\b/.test(value) ? value : JSON.stringify(value);
 }
 
-export interface WriteSpecResult { path: string; slug: string; }
+export interface WriteSpecResult {
+  /** Primary written file (the first flow when split, else the single spec). */
+  path: string;
+  slug: string;
+  /** Every file written — one per `mark_flow` feature when the run was split. */
+  files: { path: string; slug: string; flow: string }[];
+}
+
+/** True for a `mark_flow` boundary step (the agent's per-feature split marker).
+ *  Matches the raw tool name with or without the `mcp__<server>__` prefix. */
+function isFlowMarker(s: SpecStep): boolean {
+  return s.kind === 'step' && /(^|__)mark_flow$/.test(String((s as { tool?: string }).tool ?? ''));
+}
+
+/** Split a run into per-feature segments at `mark_flow` markers. Steps before
+ *  the first marker (the prompt + initial navigation/setup) are shared context
+ *  prepended to every segment so each file stands alone (fresh goto + intent).
+ *  No markers → a single unnamed segment (classic one-file behaviour). */
+function splitFlows(steps: SpecStep[]): { name: string; steps: SpecStep[] }[] {
+  if (!steps.some(isFlowMarker)) return [{ name: '', steps }];
+  const segs: { name: string; steps: SpecStep[] }[] = [];
+  const preamble: SpecStep[] = [];
+  let cur: { name: string; steps: SpecStep[] } | null = null;
+  for (const s of steps) {
+    if (isFlowMarker(s)) {
+      const raw = (s as { input?: { name?: unknown } }).input?.name;
+      const name = typeof raw === 'string' && raw.trim() ? raw.trim() : `flow-${segs.length + 1}`;
+      cur = { name, steps: [] };
+      segs.push(cur);
+    } else if (cur) {
+      cur.steps.push(s);
+    } else {
+      preamble.push(s); // before the first marker
+    }
+  }
+  // Shared context = the user prompt + any initial navigation, so each flow file
+  // opens the app and carries the original intent.
+  const ctx = preamble.filter(
+    (s) => s.kind === 'user' || (s.kind === 'step' && /navigate/.test(String((s as { tool?: string }).tool ?? ''))),
+  );
+  for (const seg of segs) seg.steps = [...ctx, ...seg.steps];
+  return segs.filter((seg) => seg.steps.some((s) => s.kind === 'step' && !isFlowMarker(s)));
+}
 
 export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult> {
-  const slug = slugify(opts.name);
-  if (!slug) throw new Error('spec name must contain at least one alphanumeric character');
-  if (!opts.steps.some(s => s.kind === 'step')) {
+  if (!slugify(opts.name)) throw new Error('spec name must contain at least one alphanumeric character');
+  if (!opts.steps.some((s) => s.kind === 'step' && !isFlowMarker(s))) {
     throw new Error('spec must contain at least one tool step to replay');
   }
 
+  // Split by mark_flow into per-feature files (checkout.spec.ts, login.spec.ts,
+  // …). Flat in __vibe_tests__ so each keeps slug == filename — the sidecar /
+  // optimize / runSpec slug↔path mapping is untouched.
+  const segments = splitFlows(opts.steps);
+  if (segments.length <= 1) {
+    return writeOneSpec(opts, slugify(opts.name), opts.name, opts.steps);
+  }
+  const files: { path: string; slug: string; flow: string }[] = [];
+  for (const seg of segments) {
+    const r = await writeOneSpec(opts, slugify(seg.name), seg.name, seg.steps);
+    files.push({ path: r.path, slug: r.slug, flow: seg.name });
+  }
+  return { path: files[0].path, slug: files[0].slug, files };
+}
+
+/** Write ONE spec file from a (sub)set of steps. The single-file path and each
+ *  per-flow file both go through here, so rendering / sidecar / config logic is
+ *  identical whether or not the run was split. */
+async function writeOneSpec(
+  opts: WriteSpecOptions,
+  slug: string,
+  displayName: string,
+  rawSteps: SpecStep[],
+): Promise<WriteSpecResult> {
+  if (!slug) throw new Error('spec name must contain at least one alphanumeric character');
   const dir = join(opts.devRoot, '__vibe_tests__');
   const path = join(dir, `${slug}.spec.ts`);
 
@@ -188,7 +255,7 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   // Redact credentials ONCE, up front, so every downstream artifact (spec
   // source, JSDoc header, sidecar) sees only `process.env.…` references — the
   // literal password/username is never written anywhere.
-  const steps = redactSteps(opts.steps, opts.redactions ?? []);
+  const steps = redactSteps(rawSteps, opts.redactions ?? []);
   // Stage 3c: if a prior extraction left a Page Object whose flow prefixes
   // this spec, consume it (await loginPage.login(…)) instead of re-emitting
   // the steps inline. No manifest (extraction never ran) → plain spec.
@@ -201,7 +268,7 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   const { clean: cleanSteps, omitted } = filterDirtySteps(steps);
   const manifest = await readPageObjectManifest(opts.devRoot);
   const match = manifest ? matchPageObject(cleanSteps, manifest) : null;
-  const source = renderSpec(slug, opts.name, opts.description ?? '', cleanSteps, opts.assertions ?? [], match, omitted, opts.startUrl);
+  const source = renderSpec(slug, displayName, opts.description ?? '', cleanSteps, opts.assertions ?? [], match, omitted, opts.startUrl);
   await writeFile(path, source, 'utf-8');
   // Specs use relative URLs (page.goto("/")), which need a `baseURL` in the
   // project's Playwright config. If the project has NO config at all, the saved
@@ -218,15 +285,15 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   // Playwright's *.spec.ts glob never collects.
   await writeSidecar(opts.devRoot, {
     slug,
-    name: opts.name,
+    name: displayName,
     steps,
     assertions: opts.assertions ?? [],
   });
   // Session-ledger patch, best-effort by contract: markSessionSaved swallows
   // its own failures — it must never break Save-as-spec.
-  const promptText = opts.steps.find(s => s.kind === 'user')?.text;
+  const promptText = rawSteps.find(s => s.kind === 'user')?.text;
   if (promptText) await markSessionSaved(opts.devRoot, promptText, slug);
-  return { path, slug };
+  return { path, slug, files: [{ path, slug, flow: displayName }] };
 }
 
 // Escape sequences that would prematurely terminate the JSDoc block.

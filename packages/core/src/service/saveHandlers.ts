@@ -74,7 +74,17 @@ export async function handleSaveArtifact<TWriteResult extends { slug: string; pa
     send(ws, { type: 'error', payload: { message: `${cfg.requestName} failed: ${message}` } });
     return;
   }
-  send(ws, { type: cfg.savedType, payload: { name: result.slug, path: result.path } });
+  // When the run was split into several feature files, report all their slugs
+  // so the widget can confirm "Saved 3 specs: login, checkout, …".
+  const files = (result as { files?: { slug: string }[] }).files;
+  send(ws, {
+    type: cfg.savedType,
+    payload: {
+      name: result.slug,
+      path: result.path,
+      ...(files && files.length > 1 ? { files: files.map((f) => f.slug) } : {}),
+    },
+  });
   // The artifact is already on disk; an onSaved failure (e.g. a follow-up
   // list re-scan) shouldn't surface as if the save itself failed — log on.
   if (cfg.onSaved) {

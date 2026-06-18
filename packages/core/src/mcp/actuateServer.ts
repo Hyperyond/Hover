@@ -185,6 +185,20 @@ server.registerTool(
 );
 
 server.registerTool(
+  'mark_flow',
+  {
+    description:
+      "Mark the start of a distinct user flow / feature so Hover saves it as its OWN spec file. Call this RIGHT BEFORE you begin a new feature — e.g. before logging in, before adding to cart, before checkout. `name` becomes the spec filename: use a feature / context name ('login', 'checkout', 'user-profile'), NOT a test-type. Every step after this call, until the next mark_flow, crystallizes into <name>.spec.ts. Records a boundary only — it does NOT touch the page. Split a long session into small, single-feature specs this way.",
+    inputSchema: {
+      name: z
+        .string()
+        .describe("Feature / flow name → spec filename, e.g. 'login', 'checkout', 'user-profile'."),
+    },
+  },
+  async ({ name }) => md(`✓ flow: ${name}`),
+);
+
+server.registerTool(
   'click_control',
   {
     description:
