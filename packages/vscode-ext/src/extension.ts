@@ -589,7 +589,12 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
     return;
   }
   if (msg.type === 'spec-saved') {
-    chatProvider?.pushSystem(`Saved spec: ${String(msg.payload?.name ?? '')}`);
+    const files = msg.payload?.files;
+    if (Array.isArray(files) && files.length > 1) {
+      chatProvider?.pushSystem(`Saved ${files.length} specs: ${files.join(', ')}`);
+    } else {
+      chatProvider?.pushSystem(`Saved spec: ${String(msg.payload?.name ?? '')}`);
+    }
     return;
   }
   // Plugin save handlers (save:pentest:report / save:security:spec) reply with
@@ -707,6 +712,9 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
         // not a test-pass assertion (the agent may have logged real bugs in
         // ## Findings). PASS read as a green light even when issues existed.
         chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), steps, owner.runCost ?? 0, owner.runTokens ?? 0, Array.isArray(ev.findings) ? ev.findings : undefined, currentMode);
+        // Auto-save: crystallize this finished run (gated by hover.autoSaveSpec).
+        // This branch already requires a successful run with steps > 0.
+        void autoSaveRun(owner);
       }
       break;
     }
@@ -961,7 +969,40 @@ async function reopenBrowser(): Promise<void> {
   }
 }
 
-async function saveSpec(nameArg?: string): Promise<void> {
+/** Auto-save (hover.autoSaveSpec): when a run finishes with results, crystallize
+ *  it without the manual Save click. The name is derived from the run's prompt so
+ *  re-running the same flow overwrites the same file. Mode-routed like the manual
+ *  Save. Best-effort — the underlying save fns surface their own failures. */
+async function autoSaveRun(owner: ChatSession): Promise<void> {
+  if (!vscode.workspace.getConfiguration('hover').get<boolean>('autoSaveSpec', true)) return;
+  const name = autoSpecName(owner);
+  // Auto-save overwrites the same-named file: re-running a flow refreshes its
+  // spec instead of piling up duplicates (the user's chosen dedup policy).
+  if (currentMode === 'pentest') await saveFindingsReport(name, true);
+  else if (currentMode === 'api-test') await saveApiTestSpec(name, true);
+  else await saveSpec(name, true);
+}
+
+/** A stable slug for auto-save, derived from the run's last user prompt. ASCII
+ *  prompts → a kebab slug (≤6 words); non-ASCII (e.g. Chinese) → a stable short
+ *  hash so the same prompt always maps to the same file (overwrite, not pile-up). */
+function autoSpecName(owner: ChatSession): string {
+  let prompt = '';
+  for (let i = owner.transcript.length - 1; i >= 0; i--) {
+    if (owner.transcript[i].kind === 'user') { prompt = String((owner.transcript[i] as { text?: unknown }).text ?? ''); break; }
+  }
+  let slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  slug = slug.split('-').filter(Boolean).slice(0, 6).join('-');
+  if (slug.length > 48) slug = slug.slice(0, 48).replace(/-+$/, '');
+  if (!slug) {
+    let h = 0;
+    for (let i = 0; i < prompt.length; i++) h = (Math.imul(h, 31) + prompt.charCodeAt(i)) >>> 0;
+    slug = 'flow-' + h.toString(36).slice(0, 6);
+  }
+  return slug;
+}
+
+async function saveSpec(nameArg?: string, overwrite = false): Promise<void> {
   // Save crystallizes the VISIBLE session's last run.
   const tx = activeChat().transcript;
   let idx = -1;
@@ -989,13 +1030,13 @@ async function saveSpec(nameArg?: string): Promise<void> {
     if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
     if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
   }
-  if (!pool?.saveSpec(name, steps, redactions)) void vscode.window.showWarningMessage('Hover: engine not connected.');
+  if (!pool?.saveSpec(name, steps, redactions, overwrite)) void vscode.window.showWarningMessage('Hover: engine not connected.');
 }
 
 /** 🔴 pentest mode: crystallize the session's recorded probes into a Markdown
  *  findings report via the pentest plugin's save handler — NOT a Playwright
  *  spec (an attack run is not a regression artifact). */
-async function saveFindingsReport(nameArg?: string): Promise<void> {
+async function saveFindingsReport(nameArg?: string, _overwrite = false): Promise<void> {
   if (!pool || connectedServices === 0) {
     void vscode.window.showWarningMessage('Hover: engine not connected.');
     return;
@@ -1013,14 +1054,14 @@ async function saveFindingsReport(nameArg?: string): Promise<void> {
  *  api_request with intent + expectStatus) into a plain `request.*`
  *  `.api-test.spec.ts` via the api-test plugin's save handler — NOT the
  *  browser-step writer (an API test must be UI-independent). */
-async function saveApiTestSpec(nameArg?: string): Promise<void> {
+async function saveApiTestSpec(nameArg?: string, overwrite = false): Promise<void> {
   if (!pool || connectedServices === 0) {
     void vscode.window.showWarningMessage('Hover: engine not connected.');
     return;
   }
   const name = nameArg ?? await vscode.window.showInputBox({ title: 'Save as API-test spec', prompt: 'Spec name', placeHolder: 'api-contract' });
   if (!name) return;
-  if (!pool.pluginSave('save:security:spec', { name }, activeEnginePort())) {
+  if (!pool.pluginSave('save:security:spec', { name, overwrite }, activeEnginePort())) {
     void vscode.window.showWarningMessage('Hover: engine not connected — or no API checks recorded this run (use api_request / replay_flow with intent + expectStatus).');
   }
 }

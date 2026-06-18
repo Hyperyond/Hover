@@ -70,16 +70,32 @@ export class ConversationsViewProvider implements vscode.WebviewViewProvider {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <style>
-  :root { --bg:#1a1a1a; --bg-2:#242426; --bg-3:#0f0f0f; --line:#2c2c2e; --text:#e8eaed; --mute:#a8adb7; --dim:#6b7079; --accent:#7CFFA8; --run:#3fb950; }
+  :root {
+    --bg: var(--vscode-sideBar-background, #1a1a1a);
+    --bg-2: var(--vscode-editorWidget-background, #242426);
+    --bg-3: var(--vscode-input-background, #0f0f0f);
+    --line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2c2c2e)));
+    --text: var(--vscode-foreground, #e8eaed);
+    --mute: var(--vscode-descriptionForeground, #a8adb7);
+    --dim: var(--vscode-disabledForeground, #6b7079);
+    --accent:#7CFFA8; --run:#3fb950;
+  }
+  body.vscode-light, body.vscode-high-contrast-light { --accent:#16a34a; }
   * { box-sizing: border-box; }
-  body { margin:0; padding:10px 10px 12px; font-family: var(--vscode-font-family); font-size:12.5px; color:var(--text); background:var(--bg); }
+  /* Reserve the scrollbar gutter always, so switching to a short tab (Cloud)
+     that drops the scrollbar doesn't widen the content and shift the layout. */
+  html { scrollbar-gutter: stable; }
+  body { margin:0; padding:10px 10px 12px; font-family: var(--vscode-font-family); font-size:12.5px; color:var(--text); background:var(--bg); scrollbar-gutter: stable; }
   .newbtn { width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:10px; border:1px solid var(--line); border-radius:9px; background:var(--bg-2); color:var(--text); cursor:pointer; font:inherit; font-size:12.5px; font-weight:500; }
-  .newbtn:hover { background:#2c2c2f; border-color:#3a3a3d; }
+  .newbtn:hover { background:var(--vscode-list-hoverBackground); border-color:var(--vscode-focusBorder); }
   .newbtn svg { flex:none; opacity:.85; }
 
   .tabs { display:flex; gap:2px; margin-bottom:10px; background:var(--bg-3); border:1px solid var(--line); border-radius:9px; padding:3px; }
-  .tab { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:6px 4px; border-radius:6px; color:var(--dim); cursor:pointer; user-select:none; font-weight:500; transition:background .12s,color .12s; }
-  .tab.active { color:var(--text); background:var(--bg-2); }
+  .tab { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:6px 4px; border-radius:6px; color:var(--mute); cursor:pointer; user-select:none; font-weight:500; transition:background .12s,color .12s,box-shadow .12s; }
+  /* Elevated "pill" for the selected tab — a contrasting surface + hairline ring
+     + drop shadow reads as selected in both light and dark (where bg-2 alone is
+     too close to the track). No font-weight change, so tab widths stay fixed. */
+  .tab.active { color:var(--text); background:var(--vscode-editor-background, var(--bg-2)); box-shadow:0 1px 2px rgba(0,0,0,.22), inset 0 0 0 1px var(--line); }
   .tab.locked { cursor:default; }
   .tab.locked:hover { color:var(--dim); }
   .tab svg { flex:none; opacity:.8; }
@@ -88,7 +104,7 @@ export class ConversationsViewProvider implements vscode.WebviewViewProvider {
   .search svg { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--dim); pointer-events:none; }
   .search input { width:100%; padding:7px 9px 7px 28px; border:1px solid var(--line); border-radius:8px; background:var(--bg-3); color:var(--text); font:inherit; font-size:12.5px; }
   .search input::placeholder { color:var(--dim); }
-  .search input:focus { outline:none; border-color:#3a3a3d; }
+  .search input:focus { outline:none; border-color:var(--vscode-focusBorder); }
 
   .list { display:flex; flex-direction:column; gap:1px; }
   /* Fixed height (not min-height) so hovering — which swaps the "N ago" stamp
@@ -96,8 +112,8 @@ export class ConversationsViewProvider implements vscode.WebviewViewProvider {
   .row { display:flex; align-items:center; gap:8px; padding:0 9px; border-radius:8px; cursor:pointer; height:36px; }
   .row:hover { background:var(--bg-2); }
   .row.active { background:var(--bg-2); }
-  .row .dot { flex:none; width:6px; height:6px; border-radius:50%; background:var(--run); visibility:hidden; }
-  .row.running .dot { visibility:visible; animation:pulse 1.4s ease-in-out infinite; }
+  .row .dot { flex:none; width:6px; height:6px; border-radius:50%; background:var(--run); display:none; }
+  .row.running .dot { display:inline-block; animation:pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.25; } }
   .row .nm { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--mute); }
   .row:hover .nm, .row.active .nm { color:var(--text); }
@@ -110,7 +126,7 @@ export class ConversationsViewProvider implements vscode.WebviewViewProvider {
   .row .acts { flex:none; display:none; gap:1px; margin-left:2px; }
   .row:hover .acts { display:flex; }
   .iact { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border:none; background:none; color:var(--mute); cursor:pointer; border-radius:6px; }
-  .iact:hover { color:var(--text); background:#343438; }
+  .iact:hover { color:var(--text); background:var(--vscode-list-hoverBackground); }
   .iact svg { width:15px; height:15px; }
 
   .empty, .cloud { color:var(--dim); text-align:center; padding:26px 10px; line-height:1.55; }
@@ -136,7 +152,7 @@ export class ConversationsViewProvider implements vscode.WebviewViewProvider {
 <script nonce="${nonce}">
   var vscode = acquireVsCodeApi();
   var rows = [], activeId = '', tab = 'local', q = '', editing = null;
-  var EDIT_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2.5 13.5 5 6 12.5l-3 .5.5-3z"/></svg>';
+  var EDIT_SVG ='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2.5 13.5 5 6 12.5l-3 .5.5-3z"/></svg>';
   var DEL_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5h9M6.5 4.5V3h3v1.5M5 4.5l.5 8h5l.5-8"/></svg>';
   function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function fmtAgo(ts){

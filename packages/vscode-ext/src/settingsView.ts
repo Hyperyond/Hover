@@ -133,10 +133,21 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <style>
-  :root { --bg:#1a1a1a; --bg-2:#222224; --bg-3:#141414; --line:#2a2a2c; --text:#e5e7eb; --mute:#9ca3af; --dim:#6b7280; --accent:#7CFFA8; --warn:#fb923c; }
+  /* Follow the active VS Code theme (hex = dark fallbacks); mint accent is the brand. */
+  :root {
+    --bg: var(--vscode-sideBar-background, #1a1a1a);
+    --bg-2: var(--vscode-editorWidget-background, #222224);
+    --bg-3: var(--vscode-input-background, #141414);
+    --line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c)));
+    --text: var(--vscode-foreground, #e5e7eb);
+    --mute: var(--vscode-descriptionForeground, #9ca3af);
+    --dim: var(--vscode-disabledForeground, #6b7280);
+    --accent:#7CFFA8; --warn: var(--vscode-editorWarning-foreground, #fb923c);
+  }
+  body.vscode-light, body.vscode-high-contrast-light { --accent:#16a34a; }
   * { box-sizing: border-box; }
   body { margin:0; padding:12px; font-family: var(--vscode-font-family); font-size:13px; color:var(--text); background:var(--bg); }
-  a { color:#7cc7ff; text-decoration:none; }
+  a { color:var(--vscode-textLink-foreground, #7cc7ff); text-decoration:none; }
   a:hover { text-decoration:underline; }
   .row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
   .row:last-child { border-bottom:none; }
@@ -155,7 +166,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   .cloudbtn { flex:none; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; background:var(--bg-3); color:var(--mute); border:1px solid var(--line); border-radius:6px; padding:6px 12px; font:inherit; font-size:12px; opacity:.6; cursor:not-allowed; }
   .txtin { width:100%; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--bg-3); color:var(--text); font:inherit; font-size:12px; }
   .txtin::placeholder { color:var(--dim); }
-  .txtin:focus { outline:none; border-color:#3a3a3d; }
+  .txtin:focus { outline:none; border-color:var(--vscode-focusBorder); }
 
   /* ── section + tabs ── */
   .sec-title { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--dim); margin:4px 0 8px; }
@@ -170,9 +181,9 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   .cli-head { display:flex; align-items:center; justify-content:space-between; margin:6px 0 8px; }
   .cli-head .t { font-size:12px; color:var(--mute); }
   .lnkbtn { background:var(--bg-3); color:var(--mute); border:1px solid var(--line); border-radius:6px; padding:4px 9px; font:inherit; font-size:11.5px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
-  .lnkbtn:hover { color:var(--text); border-color:#3a3a3d; }
+  .lnkbtn:hover { color:var(--text); border-color:var(--vscode-focusBorder); }
   .card { display:flex; gap:10px; align-items:flex-start; padding:11px; border:1px solid var(--line); border-radius:10px; background:var(--bg-2); margin-bottom:8px; cursor:pointer; position:relative; transition:.12s; }
-  .card:hover { border-color:#3a3a3d; }
+  .card:hover { border-color:var(--vscode-focusBorder); }
   .card.active { border-color:var(--accent); box-shadow:inset 3px 0 0 var(--accent); }
   .card .ico { flex:none; width:30px; height:30px; border-radius:8px; display:grid; place-items:center; font-weight:700; font-size:14px; color:#0a0a0a; }
   .card .body { flex:1; min-width:0; }
@@ -204,7 +215,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   /* ── BYOK ── */
   .pills { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
   .pchip { padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:var(--bg-3); color:var(--mute); font-size:12px; cursor:pointer; transition:.12s; }
-  .pchip:hover { color:var(--text); border-color:#3a3a3d; }
+  .pchip:hover { color:var(--text); border-color:var(--vscode-focusBorder); }
   .pchip.on { background:var(--accent); color:#0a0a0a; border-color:var(--accent); font-weight:600; }
   .flbl { font-size:12px; color:var(--text); margin:12px 0 5px; display:flex; align-items:center; justify-content:space-between; }
   .flbl .req { color:var(--warn); }
@@ -212,7 +223,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   .ingrp { display:flex; gap:6px; }
   .ingrp .txtin { flex:1; }
   .smbtn { flex:none; background:var(--bg-2); border:1px solid var(--line); border-radius:7px; color:var(--mute); padding:0 11px; font:inherit; font-size:12px; cursor:pointer; }
-  .smbtn:hover { color:var(--text); border-color:#3a3a3d; }
+  .smbtn:hover { color:var(--text); border-color:var(--vscode-focusBorder); }
   .fhint { color:var(--dim); font-size:11px; margin-top:4px; }
   .byok-sec { font-size:13px; font-weight:600; margin:6px 0 2px; }
 </style>

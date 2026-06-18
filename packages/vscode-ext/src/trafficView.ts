@@ -66,14 +66,24 @@ export class TrafficViewProvider implements vscode.WebviewViewProvider {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <style>
-  :root { --bg:#1a1a1a; --bg-2:#222224; --bg-3:#141414; --line:#2a2a2c; --text:#e5e7eb; --mute:#9ca3af; --dim:#6b7280; --ok:#7CFFA8; --warn:#fb923c; --err:#f87171; }
+  :root {
+    --bg: var(--vscode-sideBar-background, #1a1a1a);
+    --bg-2: var(--vscode-editorWidget-background, #222224);
+    --bg-3: var(--vscode-input-background, #141414);
+    --line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c)));
+    --text: var(--vscode-foreground, #e5e7eb);
+    --mute: var(--vscode-descriptionForeground, #9ca3af);
+    --dim: var(--vscode-disabledForeground, #6b7280);
+    --ok:#7CFFA8; --warn:#fb923c; --err:#f87171;
+  }
+  body.vscode-light, body.vscode-high-contrast-light { --ok:#16a34a; }
   * { box-sizing: border-box; }
   body { margin:0; padding:8px 8px 12px; font-family: var(--vscode-font-family); font-size:12px; color:var(--text); background:var(--bg); }
   .bar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
   .search { position:relative; flex:1; }
   .search input { width:100%; padding:6px 9px 6px 26px; border:1px solid var(--line); border-radius:7px; background:var(--bg-3); color:var(--text); font:inherit; font-size:12px; }
   .search input::placeholder { color:var(--dim); }
-  .search input:focus { outline:none; border-color:#3a3a3d; }
+  .search input:focus { outline:none; border-color:var(--vscode-focusBorder); }
   .search svg { position:absolute; left:8px; top:50%; transform:translateY(-50%); color:var(--dim); }
   .count { flex:none; color:var(--dim); font-size:11px; font-variant-numeric:tabular-nums; }
   .list { display:flex; flex-direction:column; }

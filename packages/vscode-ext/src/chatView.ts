@@ -12,22 +12,22 @@
  * extension executes; the engine wiring of `send` (run a prompt → stream steps
  * → crystallize) is the next slice — see onSend.
  */
-import * as vscode from 'vscode';
-import { randomBytes } from 'node:crypto';
+import * as vscode from "vscode";
+import { randomBytes } from "node:crypto";
 
 type Inbound =
-  | { type: 'send'; text: string }
-  | { type: 'command'; id: string }
-  | { type: 'setMode'; modeId: string | null }
-  | { type: 'setModel'; value: string }
-  | { type: 'setEffort'; value: string }
-  | { type: 'askUserAnswer'; askId: string; value: string | null }
-  | { type: 'switchSession'; id: string }
-  | { type: 'saveRun'; name: string; mode: string | null }
-  | { type: 'ready' };
+  | { type: "send"; text: string }
+  | { type: "command"; id: string }
+  | { type: "setMode"; modeId: string | null }
+  | { type: "setModel"; value: string }
+  | { type: "setEffort"; value: string }
+  | { type: "askUserAnswer"; askId: string; value: string | null }
+  | { type: "switchSession"; id: string }
+  | { type: "saveRun"; name: string; mode: string | null }
+  | { type: "ready" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-  static readonly viewId = 'hover.chat';
+  static readonly viewId = "hover.chat";
   private view?: vscode.WebviewView;
   /** Set by the extension: hand a prompt to the engine. */
   runHandler?: (prompt: string) => void;
@@ -54,19 +54,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.view = view;
     view.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'resources')],
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "resources")],
     };
     view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage((msg: Inbound) => {
-      if (msg.type === 'send') void this.onSend(msg.text);
-      else if (msg.type === 'command' && typeof msg.id === 'string') void vscode.commands.executeCommand(msg.id);
-      else if (msg.type === 'setMode') this.modeHandler?.(msg.modeId);
-      else if (msg.type === 'setModel' && typeof msg.value === 'string') this.modelHandler?.(msg.value);
-      else if (msg.type === 'setEffort' && typeof msg.value === 'string') this.effortHandler?.(msg.value);
-      else if (msg.type === 'askUserAnswer' && typeof msg.askId === 'string') this.askAnswerHandler?.(msg.askId, msg.value ?? null);
-      else if (msg.type === 'switchSession' && typeof msg.id === 'string') this.sessionSwitchHandler?.(msg.id);
-      else if (msg.type === 'saveRun' && typeof msg.name === 'string') this.saveRunHandler?.(msg.name, msg.mode ?? null);
-      else if (msg.type === 'ready') this.onReady?.();
+      if (msg.type === "send") void this.onSend(msg.text);
+      else if (msg.type === "command" && typeof msg.id === "string")
+        void vscode.commands.executeCommand(msg.id);
+      else if (msg.type === "setMode") this.modeHandler?.(msg.modeId);
+      else if (msg.type === "setModel" && typeof msg.value === "string")
+        this.modelHandler?.(msg.value);
+      else if (msg.type === "setEffort" && typeof msg.value === "string")
+        this.effortHandler?.(msg.value);
+      else if (msg.type === "askUserAnswer" && typeof msg.askId === "string")
+        this.askAnswerHandler?.(msg.askId, msg.value ?? null);
+      else if (msg.type === "switchSession" && typeof msg.id === "string")
+        this.sessionSwitchHandler?.(msg.id);
+      else if (msg.type === "saveRun" && typeof msg.name === "string")
+        this.saveRunHandler?.(msg.name, msg.mode ?? null);
+      else if (msg.type === "ready") this.onReady?.();
     });
   }
 
@@ -76,106 +82,150 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   /** Reveal + focus the chat (used by New Session). */
   async reveal(): Promise<void> {
-    await vscode.commands.executeCommand('hover.chat.focus');
+    await vscode.commands.executeCommand("hover.chat.focus");
   }
 
   /** Clear the transcript for a new session. */
   newSession(): void {
-    this.post({ type: 'reset' });
+    this.post({ type: "reset" });
   }
 
   /** Push the conversation list + active id to the top-bar switcher. */
-  setSessions(list: { id: string; name: string; running?: boolean }[], activeId: string): void {
-    this.post({ type: 'sessions', list, activeId });
+  setSessions(
+    list: { id: string; name: string; running?: boolean }[],
+    activeId: string,
+  ): void {
+    this.post({ type: "sessions", list, activeId });
   }
   /** Re-render the chat with a switched conversation's transcript. */
   loadSession(transcript: { kind: string; [k: string]: unknown }[]): void {
-    this.post({ type: 'loadSession', transcript });
+    this.post({ type: "loadSession", transcript });
   }
 
   updateMode(id: string | null, label: string | null): void {
-    this.post({ type: 'mode', id, label: label ?? 'Default' });
+    this.post({ type: "mode", id, label: label ?? "Default" });
   }
   updateStatus(text: string): void {
-    this.post({ type: 'status', text });
+    this.post({ type: "status", text });
   }
   /** Active-environment status shown top-right (label + reachability; the full
    *  URL is the tooltip). `label` is the env name for remote targets, or the
    *  host:port for Local. */
   updateApp(online: boolean, label: string | null, title?: string): void {
-    this.post({ type: 'appstatus', online, label, title: title ?? label });
+    this.post({ type: "appstatus", online, label, title: title ?? label });
   }
   /** Active environment's test accounts for the `@` autocomplete (no passwords). */
-  updateAccounts(accounts: { label: string; role?: string; username?: string }[]): void {
-    this.post({ type: 'accounts', accounts });
+  updateAccounts(
+    accounts: { label: string; role?: string; username?: string }[],
+  ): void {
+    this.post({ type: "accounts", accounts });
   }
   /** Push live config to the webview (drives voice + the silent-run border). */
   updateConfig(speech: boolean, silent: boolean): void {
-    this.post({ type: 'config', speech, silent });
+    this.post({ type: "config", speech, silent });
   }
   /** Push the model picker's list for the current agent + the active model,
    *  plus the reasoning-effort options for that model (empty = no effort
    *  control → the picker hides the effort section). */
   updateModels(
-    models: { value: string; label: string; desc?: string; disabled?: boolean }[],
+    models: {
+      value: string;
+      label: string;
+      desc?: string;
+      disabled?: boolean;
+    }[],
     current: string,
     effort?: { options: string[]; current: string },
     locked?: boolean,
   ): void {
-    this.post({ type: 'models', models, current, effort, locked });
+    this.post({ type: "models", models, current, effort, locked });
   }
 
   // Streamed run rendering (called by the extension as engine events arrive).
-  pushStep(step: { label: string; tool?: string; detail?: string; cost?: number; tokens?: number }): void {
-    this.post({ type: 'step', ...step });
+  pushStep(step: {
+    label: string;
+    tool?: string;
+    detail?: string;
+    cost?: number;
+    tokens?: number;
+  }): void {
+    this.post({ type: "step", ...step });
   }
   /** AI narration → the next step group's title. */
   pushNarration(text: string): void {
-    this.post({ type: 'narration', text });
+    this.post({ type: "narration", text });
   }
   /** Running token total (from usage events) → live group counter. */
   pushUsage(tokens: number): void {
-    this.post({ type: 'usage', tokens });
+    this.post({ type: "usage", tokens });
   }
   pushAssistant(text: string): void {
-    this.post({ type: 'assistant', text });
+    this.post({ type: "assistant", text });
   }
   pushSystem(text: string): void {
-    this.post({ type: 'system', text });
+    this.post({ type: "system", text });
   }
   /** Render an in-chat prompt card (question + options, plus an always-present
    *  "Other" free-text row unless `other:false` — permission cards omit it).
    *  The webview posts back `askUserAnswer` → askAnswerHandler. */
-  askUser(req: { askId: string; question: string; options: { label: string; description?: string }[]; other?: boolean }): void {
-    this.post({ type: 'askUser', ...req });
+  askUser(req: {
+    askId: string;
+    question: string;
+    options: { label: string; description?: string }[];
+    other?: boolean;
+  }): void {
+    this.post({ type: "askUser", ...req });
   }
-  pushResult(verdict: string, summary: string, steps?: number, cost?: number, tokens?: number, findings?: unknown[], mode?: string | null): void {
-    this.post({ type: 'result', verdict, summary, steps, cost, tokens, findings, mode: mode ?? null });
+  pushResult(
+    verdict: string,
+    summary: string,
+    steps?: number,
+    cost?: number,
+    tokens?: number,
+    findings?: unknown[],
+    mode?: string | null,
+  ): void {
+    this.post({
+      type: "result",
+      verdict,
+      summary,
+      steps,
+      cost,
+      tokens,
+      findings,
+      mode: mode ?? null,
+    });
   }
   setRunning(running: boolean): void {
-    this.post({ type: 'running', running });
+    this.post({ type: "running", running });
   }
   /** Show a live spinner row with an elapsed timer for an out-of-band job
    *  (e.g. spec optimization, which streams no step events). */
   pushBusy(text: string): void {
-    this.post({ type: 'busy', text });
+    this.post({ type: "busy", text });
   }
   /** Clear the spinner row started by pushBusy(). */
   clearBusy(): void {
-    this.post({ type: 'busy', done: true });
+    this.post({ type: "busy", done: true });
   }
 
   private onSend(text: string): void {
     const prompt = text.trim();
     if (!prompt) return;
-    this.post({ type: 'user', text: prompt });
+    this.post({ type: "user", text: prompt });
     if (this.runHandler) this.runHandler(prompt);
-    else this.post({ type: 'system', text: 'Engine not available.' });
+    else this.post({ type: "system", text: "Engine not available." });
   }
 
   private html(webview: vscode.Webview): string {
-    const nonce = randomBytes(16).toString('base64');
-    const csp = [`default-src 'none'`, `style-src 'unsafe-inline'`, `script-src 'nonce-${nonce}'`, `media-src 'self'`, `img-src ${webview.cspSource}`].join('; ');
+    const nonce = randomBytes(16).toString("base64");
+    const csp = [
+      `default-src 'none'`,
+      `style-src 'unsafe-inline'`,
+      `script-src 'nonce-${nonce}'`,
+      `media-src 'self'`,
+      `img-src ${webview.cspSource}`,
+    ].join("; ");
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -184,13 +234,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
   :root {
-    --bg: #1a1a1a; --bg-2: #222224; --bg-3: #141414; --line: #2a2a2c;
-    --text: #e5e7eb; --text-mute: #9ca3af; --text-dim: #6b7280;
+    /* Structural colours follow the active VS Code theme (light / dark / high
+       contrast / custom) via its CSS tokens; the hex values are dark-theme
+       fallbacks for any token a theme leaves unset. The mint accent is the
+       brand colour — kept across themes (retuned for light below). */
+    --bg: var(--vscode-sideBar-background, #1a1a1a);
+    --bg-2: var(--vscode-editorWidget-background, #222224);
+    --bg-3: var(--vscode-input-background, #141414);
+    --line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c)));
+    --text: var(--vscode-foreground, #e5e7eb);
+    --text-mute: var(--vscode-descriptionForeground, #9ca3af);
+    --text-dim: var(--vscode-disabledForeground, #6b7280);
     --accent: #7CFFA8; --accent-dim: rgba(124,255,168,0.16); --accent-ink: #0c2417;
-    --warn: #fb923c; --err: #f87171; --link: #7dd3fc;
+    --warn: var(--vscode-editorWarning-foreground, #fb923c); --err: var(--vscode-editorError-foreground, #f87171);
+    --link: var(--vscode-textLink-foreground, #7dd3fc);
   }
-  body.mode-api-test { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
-  body.mode-pentest  { --accent: #f87171; --accent-dim: rgba(248,113,113,0.16); --accent-ink: #2a0d0d; }
+  /* Light / high-contrast-light themes: mint-on-white has poor contrast as text,
+     so deepen the accent (button bg stays readable with white ink). */
+  body.vscode-light, body.vscode-high-contrast-light {
+    --accent: #16a34a; --accent-dim: rgba(22,163,74,0.12); --accent-ink: #ffffff;
+  }
+  body.vscode-light .splash-name, body.vscode-high-contrast-light .splash-name {
+    background: linear-gradient(110deg,#15803d 0%,#22c55e 30%,#16a34a 60%,#15803d 100%);
+    background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  /* Mode tint is scoped to the input region only (the composer + its ask/save
+     replacement) — switching mode recolours the send button, input focus ring,
+     and mode pill, but leaves the rest of the chat (messages, run thread,
+     splash) on the default mint. CSS custom properties cascade to descendants. */
+  body.mode-api-test #composer, body.mode-api-test #ask-dock { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
+  body.mode-pentest  #composer, body.mode-pentest  #ask-dock { --accent: #f87171; --accent-dim: rgba(248,113,113,0.16); --accent-ink: #2a0d0d; }
   * { box-sizing: border-box; }
   body {
     margin: 0; height: 100vh; display: flex; flex-direction: column;
@@ -221,21 +294,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 
-  header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); position: relative; }
+  header { display: flex; align-items: center; gap: 6px; padding: 8px 4px; border-bottom: 1px solid var(--line); position: relative; }
   #session { max-width: 230px; }
   #session #session-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #session-run { color: #3fb950; font-size: 9px; margin-right: 3px; animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
   .popup.sess { top: calc(100% - 2px); bottom: auto; left: 10px; max-height: 60vh; overflow: auto; }
   .popup.sess .sess-tabs { display: flex; gap: 2px; margin: 2px 6px 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
-  .popup.sess .sess-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px; border-radius: 5px; color: var(--text-dim); cursor: pointer; font-size: 12px; user-select: none; }
-  .popup.sess .sess-tab.active { color: var(--text); background: var(--bg-2); }
+  .popup.sess .sess-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px; border-radius: 5px; color: var(--text-mute); cursor: pointer; font-size: 12px; user-select: none; }
+  .popup.sess .sess-tab.active { color: var(--text); background: var(--vscode-editor-background, var(--bg-2)); box-shadow: 0 1px 2px rgba(0,0,0,.22), inset 0 0 0 1px var(--line); }
   .popup.sess .sess-tab.locked { cursor: default; }
   .popup.sess .sess-tab svg { opacity: .8; }
   .popup.sess .sess-search { margin: 0 6px 6px; position: relative; }
   .popup.sess .sess-search input { width: 100%; padding: 6px 9px 6px 26px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; font-size: 12px; }
   .popup.sess .sess-search input::placeholder { color: var(--text-dim); }
-  .popup.sess .sess-search input:focus { outline: none; border-color: #3a3a3d; }
+  .popup.sess .sess-search input:focus { outline: none; border-color: var(--vscode-focusBorder); }
   .popup.sess .sess-search svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--text-dim); }
   .popup.sess .sess-cloud { padding: 18px 12px; text-align: center; color: var(--text-dim); font-size: 11.5px; line-height: 1.5; }
   .popup.sess .p-item .p-run { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); align-self: center; animation: pulse 1.4s ease-in-out infinite; }
@@ -250,7 +323,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
   .dot.offline { background: var(--text-dim); }
 
-  #log { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 768px; margin: 0 auto; }
+  #log { flex: 1; overflow-y: auto; padding: 12px 8px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 1280px; margin: 0 auto; }
   .empty { margin: auto; text-align: center; color: var(--text-dim); padding: 0 26px; line-height: 1.55; }
   .empty em { color: var(--text-mute); font-style: normal; }
   /* Branded launch splash: ambient-glow mark + wordmark + tagline + prompt
@@ -340,6 +413,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /* Typing caret: a blinking block cursor trailing the text while it types. */
   .node-body.typing::after, .md.typing::after { content: '▌'; margin-left: 1px; color: var(--accent); animation: hov-blink 1s steps(1) infinite; }
   @keyframes hov-blink { 50% { opacity: 0; } }
+  /* Coalesced low-signal group (e.g. "Read source · 18 files"): a clickable
+     header that expands the individual paths. Keeps a long exploration run to
+     one tidy line. */
+  .node.op.group .node-body { cursor: pointer; }
+  .grp-head { display: flex; align-items: center; gap: 6px; }
+  .grp-head .caret { color: var(--text-dim); font-size: 9px; transition: transform .12s; }
+  .node.op.group.open .grp-head .caret { transform: rotate(90deg); }
+  .grp-count { color: var(--text-dim); }
+  .grp-list { display: none; margin-top: 3px; border-left: 1px solid var(--line); }
+  .node.op.group.open .grp-list { display: block; }
+  .grp-item { color: var(--text-dim); font-size: 11.5px; line-height: 1.5; padding: 1px 0 1px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .node-meta { float: right; margin-left: 10px; font-size: 10.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
   .node-meta .gr-cost { color: var(--accent); }
   /* Monochrome copy button (Done summary + each finding); ✓ on success. */
@@ -398,14 +482,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /* Bottom ask "popup": while the agent is waiting on a human decision, its
      question docks just above the composer — pinned, never scrolled away with
      the transcript. On answer it collapses into the log as a record. */
-  #ask-dock { width: 100%; max-width: 768px; margin: 0 auto; padding: 8px 8px 0; }
+  #ask-dock { width: 100%; max-width: 1280px; margin: 0 auto; padding: 12px 8px 0; }
   /* Docked popup frame matches the input box exactly (same bg / 1px border /
      12px radius / focus highlight) so it sits right where the input was — no
      accent left-stripe here, unlike the collapsed in-log ask records. */
   #ask-dock .ask { background: var(--bg-3); border: 1px solid var(--line); box-shadow: 0 -2px 18px rgba(0,0,0,.35); max-height: 46vh; overflow-y: auto; animation: askpop .16s ease-out; }
   #ask-dock .ask:focus-within { border-color: var(--accent); }
   @keyframes askpop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  #composer { padding: 8px 8px 9px; position: relative; width: 100%; max-width: 768px; margin: 0 auto; }
+  #composer { padding: 0px 8px 8px; position: relative; width: 100%; max-width: 1280px; margin: 0 auto; }
   /* The ask popup is mutually exclusive with the input: while a question (or the
      save prompt) is up it takes the composer's place — same width, input hidden.
      Pinned to the bottom with the composer's exact padding so the popup's bottom
@@ -415,12 +499,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
      so identical width) and is the last flex child, so it sits at the bottom;
      matching the composer's bottom padding aligns its bottom edge to the input's. */
   body.ask-open #composer { display: none; }
-  body.ask-open #ask-dock { padding-bottom: 9px; }
+  body.ask-open #ask-dock { padding-bottom: 10px; }
   .ask-warn { font-size: 12px; color: var(--warn); line-height: 1.4; }
   .ask-btns { display: flex; justify-content: flex-end; gap: 8px; }
   .ask-discard { padding: 7px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text-mute); cursor: pointer; font: inherit; }
   .ask-discard:hover { color: var(--text); border-color: var(--text-dim); }
-  .mentions { position: absolute; left: 8px; right: 8px; bottom: calc(100% - 6px); z-index: 20;
+  .mentions { position: absolute; left: 10px; right: 10px; bottom: calc(100% - 6px); z-index: 20;
     background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     box-shadow: 0 8px 24px rgba(0,0,0,.35); max-height: 220px; overflow-y: auto; }
   .m-item { display: flex; align-items: baseline; gap: 8px; padding: 7px 11px; cursor: pointer; font-size: 12px; }
@@ -430,7 +514,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   .m-empty { padding: 8px 11px; color: var(--text-mute); font-size: 11px; }
   #box {
     border: 1px solid var(--line); border-radius: 12px; background: var(--bg-3);
-    padding: 8px 10px 8px; display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 5px 8px; display: flex; flex-direction: column; gap: 6px;
     transition: border-color .12s ease;
   }
   #box:focus-within { border-color: var(--accent); }
@@ -516,7 +600,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     <button class="iconbtn" id="new" type="button" title="New session">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
     </button>
-    <button class="barebtn" id="session" type="button" title="Switch conversation"><span id="session-run" hidden title="A run is active in another conversation">●</span><span id="session-label">New session</span><span class="caret">▾</span></button>
+    <button class="barebtn" id="session" type="button" title="Switch conversation"><span id="session-run" hidden title="A run is active in another conversation">●</span><span id="session-label">New session</span></button>
     <span class="spacer"></span>
     <button class="appstatus" id="appstatus" type="button" title="App URL — click to set / start">
       <span class="dot offline" id="app-dot"></span><span id="app-label">detecting…</span>
@@ -604,6 +688,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   var pendingRec = null;  // a thought record held until its first op arrives (or discarded)
   var liveRec = null;     // the thought record being timed, by REAL event-arrival times
   var lastTokens = 0;     // latest cumulative token count seen (stamped at arrival)
+  // Active coalesce group: consecutive low-signal ops of the same kind (source
+  // reads/lists) fold into ONE expandable node ("Read source · 18 files") with
+  // a count, instead of one line each — like Claude's desktop tool log. Reset
+  // when a narration or any other op breaks the run.
+  var curGroup = null;
 
   // Browser-op → one human line. live=true gives the present-progressive form
   // ("Filling employer…") for the visible running line; live=false gives the
@@ -627,7 +716,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // .hover sidecar): pure observation (snapshot/screenshot), waits, and
   // navigation-only key presses (scroll / Escape). Meaningful keys (Enter,
   // Meta+a, Tab) still render.
-  var QUIET_TOOLS = { browser_snapshot: 1, browser_take_screenshot: 1, browser_wait_for: 1 };
+  var QUIET_TOOLS = { browser_snapshot: 1, browser_take_screenshot: 1, browser_wait_for: 1, mark_flow: 1 };
   var NAV_KEYS = { pagedown: 1, pageup: 1, end: 1, home: 1, escape: 1 };
   function isQuietStep(m) {
     var t = (m.tool || '').replace(/^mcp__.*?__/, '');
@@ -705,7 +794,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     closeLiveRec(Date.now()); pendingRec = null; liveRec = null;
     endThought();
     if (curRun) { var lives = curRun.querySelectorAll('.node.live'); for (var i = 0; i < lives.length; i++) lives[i].classList.remove('live'); }
-    curRun = null;
+    curRun = null; curGroup = null;
     stopSecTick();
     updateWorking();
   }
@@ -733,6 +822,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   function clearQ() { renderQ = []; renderBusy = false; }
   function _renderNarration(rec) {
     ensureRun(); endThought();
+    curGroup = null; // a new thought ends any open coalesce group
     var nd = makeNode('think active');
     var meta = document.createElement('span'); meta.className = 'node-meta'; nd.body.appendChild(meta);
     var th = document.createElement('span'); th.className = 'think-text'; th.innerHTML = inline(rec.text); nd.body.appendChild(th);
@@ -759,8 +849,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (replaying) { flushThought(); pendingRec = rec; return; }
     enqueue(function (next) { flushThought(); pendingRec = rec; next(); });
   }
+  // Low-signal ops that fold into a counted group rather than one line each.
+  var GROUP_LABEL = { source: 'Read source' };
+  function coalesceKind(tool) {
+    var t = (tool || '').replace(/^mcp__.*?__/, '');
+    if (t === 'read_source' || t === 'list_source') return 'source';
+    return null;
+  }
+  // A short, path-ish detail for a grouped op (shown when the group is expanded).
+  function groupDetail(m) {
+    var d = {}; try { d = m.detail ? JSON.parse(m.detail) : {}; } catch (e) { d = {}; }
+    return String(d.path || d.file || d.dir || d.subdir || d.query || d.name || describeOp(m.tool, m.detail, false));
+  }
+  function makeGroupNode(kind) {
+    var nd = makeNode('op group');
+    var head = document.createElement('div'); head.className = 'grp-head';
+    var car = document.createElement('span'); car.className = 'caret'; car.textContent = '▸';
+    var lbl = document.createElement('span'); lbl.textContent = GROUP_LABEL[kind] || 'Steps';
+    var cnt = document.createElement('span'); cnt.className = 'grp-count';
+    head.appendChild(car); head.appendChild(lbl); head.appendChild(cnt);
+    var list = document.createElement('div'); list.className = 'grp-list';
+    nd.body.appendChild(head); nd.body.appendChild(list);
+    head.addEventListener('click', function () { nd.node.classList.toggle('open'); });
+    return { node: nd.node, countEl: cnt, listEl: list, count: 0, kind: kind };
+  }
   function _renderStep(m, done) {
     flushThought(); ensureRun();
+    var ck = coalesceKind(m.tool);
+    if (ck) {
+      // Append to the active group of this kind, or start a new one.
+      if (!curGroup || curGroup.kind !== ck || curGroup.node !== curRun.lastElementChild) {
+        var prevL = curRun.querySelector('.node.op.live'); if (prevL) prevL.classList.remove('live');
+        curGroup = makeGroupNode(ck);
+        curRun.appendChild(curGroup.node);
+      }
+      curGroup.count++;
+      curGroup.countEl.textContent = ' · ' + curGroup.count + ' ' + (curGroup.count === 1 ? 'file' : 'files');
+      var item = document.createElement('div'); item.className = 'grp-item'; item.textContent = groupDetail(m);
+      curGroup.listEl.appendChild(item);
+      scroll(); done(); return;
+    }
+    curGroup = null;
     var prev = curRun.querySelector('.node.op.live'); if (prev) prev.classList.remove('live');
     var nd = makeNode('op live' + (m.isError ? ' error' : ''));
     curRun.appendChild(nd.node);
@@ -1327,7 +1456,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else if (m.type==='step') addStep(m);
     else if (m.type==='usage') { if (typeof m.tokens === 'number') { lastTokens = m.tokens; if (liveRec && liveRec.end == null) { liveRec.tokEnd = lastTokens; if (liveRec.t) setThoughtMeta(liveRec.t); } } }
     else if (m.type==='result') addResult(m);
-    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopSecTick(); clearQ(); workingEl=null; running=false; askDock.hidden=true; askDock.innerHTML=''; setAskActive(false); log.innerHTML=''; cleared=false; curRun=null; curThought=null; pendingRec=null; liveRec=null; lastTokens=0; log.appendChild(emptyEl()); input.value=''; syncSend(); }
+    else if (m.type==='reset') { setBusy(null); if (busyTimer) { clearInterval(busyTimer); busyTimer=null; } stopSecTick(); clearQ(); workingEl=null; running=false; askDock.hidden=true; askDock.innerHTML=''; setAskActive(false); log.innerHTML=''; cleared=false; curRun=null; curGroup=null; curThought=null; pendingRec=null; liveRec=null; lastTokens=0; log.appendChild(emptyEl()); input.value=''; syncSend(); }
     else if (m.type==='mode') {
       currentModeId = m.id || null;
       document.getElementById('mode-label').textContent = m.id ? (m.label||m.id) : 'Frontend';
@@ -1356,7 +1485,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     else if (m.type==='accounts') { accounts = Array.isArray(m.accounts) ? m.accounts : []; }
     else if (m.type==='busy') { setBusy(m.done ? null : (m.text||'Working…')); }
-    else if (m.type==='running') { running = !!m.running; document.body.classList.toggle('running', running); if (running) { clearQ(); curRun = null; curThought = null; pendingRec = null; liveRec = null; lastTokens = 0; closePickers(); } else { enqueue(function (next) { if (curRun) endSection(); next(); }); } updateWorking(); applyBorder(); syncSend(); }
+    else if (m.type==='running') { running = !!m.running; document.body.classList.toggle('running', running); if (running) { clearQ(); curRun = null; curGroup = null; curThought = null; pendingRec = null; liveRec = null; lastTokens = 0; closePickers(); } else { enqueue(function (next) { if (curRun) endSection(); next(); }); } updateWorking(); applyBorder(); syncSend(); }
     else if (m.type==='config') { speechOn = !!m.speech; silentMode = !!m.silent; var bl=document.getElementById('browser-label'); if(bl) bl.textContent = silentMode ? 'Headless' : 'Normal'; applyBorder(); }
   });
   function emptyEl(){
@@ -1391,10 +1520,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-export function registerChatView(extensionUri: vscode.Uri): { provider: ChatViewProvider; disposable: vscode.Disposable } {
+export function registerChatView(extensionUri: vscode.Uri): {
+  provider: ChatViewProvider;
+  disposable: vscode.Disposable;
+} {
   const provider = new ChatViewProvider(extensionUri);
-  const disposable = vscode.window.registerWebviewViewProvider(ChatViewProvider.viewId, provider, {
-    webviewOptions: { retainContextWhenHidden: true },
-  });
+  const disposable = vscode.window.registerWebviewViewProvider(
+    ChatViewProvider.viewId,
+    provider,
+    {
+      webviewOptions: { retainContextWhenHidden: true },
+    },
+  );
   return { provider, disposable };
 }

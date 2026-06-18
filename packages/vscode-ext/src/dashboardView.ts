@@ -190,11 +190,18 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <style>
+  /* Follow the active VS Code theme (hex = dark fallbacks); brand status colours kept. */
   :root {
-    --bg:#1a1a1a; --bg-2:#222224; --bg-3:#141414; --line:#2a2a2c;
-    --text:#e5e7eb; --mute:#9ca3af; --dim:#6b7280;
+    --bg: var(--vscode-sideBar-background, #1a1a1a);
+    --bg-2: var(--vscode-editorWidget-background, #222224);
+    --bg-3: var(--vscode-input-background, #141414);
+    --line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c)));
+    --text: var(--vscode-foreground, #e5e7eb);
+    --mute: var(--vscode-descriptionForeground, #9ca3af);
+    --dim: var(--vscode-disabledForeground, #6b7280);
     --pass:#7CFFA8; --fail:#f87171; --flaky:#fb923c; --accent:#7CFFA8;
   }
+  body.vscode-light, body.vscode-high-contrast-light { --accent:#16a34a; --pass:#16a34a; }
   * { box-sizing: border-box; }
   body { margin:0; padding:10px; font-family: var(--vscode-font-family); font-size:12px; color:var(--text); background:var(--bg); }
   .runall { width:100%; padding:8px; margin-bottom:8px; border:none; border-radius:8px; background:var(--accent); color:#0c2417; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
@@ -202,7 +209,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
   .search { position:relative; margin-bottom:10px; }
   .search input { width:100%; padding:7px 9px 7px 28px; border:1px solid var(--line); border-radius:8px; background:var(--bg-3); color:var(--text); font:inherit; font-size:12px; }
   .search input::placeholder { color:var(--dim); }
-  .search input:focus { outline:none; border-color:#3a3a3d; }
+  .search input:focus { outline:none; border-color:var(--vscode-focusBorder); }
   .search svg { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--dim); }
   .tiles { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px; }
   .tile { background:var(--bg-2); border:1px solid var(--line); border-radius:9px; padding:7px 9px; }

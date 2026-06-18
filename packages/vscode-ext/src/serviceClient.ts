@@ -118,7 +118,7 @@ export interface ServiceClientPool {
   cancel(enginePort?: number): void;
   /** Crystallize the accumulated steps into a spec. `redactions` parameterize
    *  credential fill values into process.env refs so secrets stay out of the spec. */
-  saveSpec(name: string, steps: unknown[], redactions?: Redaction[], enginePort?: number): boolean;
+  saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, enginePort?: number): boolean;
   /** Invoke a plugin-contributed save handler (e.g. `save:pentest:report`,
    *  `save:security:spec`). The engine replies with `<type>:saved` or `error`. */
   pluginSave(type: string, payload: Record<string, unknown>, enginePort?: number): boolean;
@@ -272,10 +272,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel' }));
       }
     },
-    saveSpec(name: string, steps: unknown[], redactions?: Redaction[], enginePort?: number): boolean {
+    saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, enginePort?: number): boolean {
       const ws = target(enginePort);
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions } }));
+      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions, overwrite } }));
       return true;
     },
     pluginSave(type: string, payload: Record<string, unknown>, enginePort?: number): boolean {
