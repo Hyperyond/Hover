@@ -3,6 +3,17 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.20.0 — 2026-06-18
+
+**Auto-saved, feature-split specs + full light/dark theming.**
+
+- **Auto-save.** When a run finishes with results it crystallizes automatically — no Save click. The name comes from your prompt; re-running a flow overwrites the same file. Turn off with `hover.autoSaveSpec`.
+- **Specs split by feature/module.** API-testing runs split by API resource (`auth.api-test.spec.ts`, `admin.api-test.spec.ts`); frontend runs split by feature when the agent marks flows (`login.spec.ts`, `checkout.spec.ts`) — small, single-purpose files instead of one monolith.
+- **API save never comes up empty.** If the agent verified endpoints by browsing (or a docs UI) instead of the direct request tool, the saved spec is now derived from the captured API traffic instead of failing with "no checks recorded".
+- **Follows your VS Code theme.** Every Hover panel (chat, Settings, Dashboard, Conversations, Network) now adapts to the active light / dark / high-contrast theme, with the mint accent retuned for light. Fixed hover/focus states that showed as dark blocks on light themes.
+- **Tidier, tighter chat.** Repeated source-exploration steps fold into one expandable line; the mode tint is confined to the input area; the input / messages / header sit tight to the panel edges (centered with a max-width only on very wide panels, like Claude Code). Removed the "New session" dropdown caret.
+- **Clearer Local / Cloud tabs.** The Conversations tab switcher has an elevated selected-pill state that's legible in both themes, and switching tabs no longer shifts the layout width.
+
 ## 0.19.2 — 2026-06-18
 
 - **Narrow-panel polish.** When the chat panel is dragged narrow, the toolbar's labelled buttons (browser / mode) and the app-status collapse to icon-only (tooltips kept); the model name truncates with an ellipsis instead of overflowing the panel edge. The composer also sits a little tighter to the panel edges.

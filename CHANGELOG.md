@@ -6,6 +6,20 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-06-18
+
+### Added
+
+- **vscode-ext:** auto-save — a finished run crystallizes automatically (gated by `hover.autoSaveSpec`), named from the prompt, overwriting the same file on re-run.
+- **api-test:** specs split by API resource module into per-module files (and a per-run folder); a save with no explicit checks falls back to deriving regression checks from the run's captured API flows (`deriveRunChecks`).
+- **core:** a `mark_flow` control tool — the agent marks each feature it tests, and `writeSpec` splits the run into per-feature spec files (flat, slug == filename).
+
+### Changed
+
+- **vscode-ext:** all webviews (chat, Settings, Dashboard, Conversations, Network) follow the active VS Code theme via `--vscode-*` tokens; the mint accent is retuned for light themes. Fixed hardcoded-dark hover/focus states that rendered as dark blocks on light themes.
+- **vscode-ext:** tightened the chat layout — input / message column / header sit tight to the panel edges (max-width centering kicks in only on very wide panels); the stream folds repeated source-exploration steps into one expandable summary; the mode-colour tint is scoped to the input area; removed the "New session" caret; the Local / Cloud tab switcher has a clearer selected state and no longer shifts width on switch.
+- **api-test:** the prompt no longer forbids `browser_navigate` to API URLs — direct browsing is captured and crystallized too; `api_request` stays preferred for explicit assertions.
+
 ## [0.19.2] — 2026-06-18
 
 ### Changed
