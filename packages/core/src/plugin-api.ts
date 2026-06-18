@@ -153,10 +153,20 @@ export interface ServiceStartCtx extends HoverHookCtxBase {
  *  reason. Hooks must release subprocesses and file handles. */
 export type ShutdownCtx = HoverHookCtxBase;
 
+/** Fired after a single agent run is recorded to the session ledger, on the
+ *  ACTIVE mode's plugin only. `sessionId` is the ledger id
+ *  (.hover/sessions/<id>.json), so a plugin can persist its own per-run
+ *  artifacts (e.g. api-test's captured API flows + checks) bound to that
+ *  session. Best-effort: a throw here is logged, never breaks the run. */
+export interface RunEndCtx extends HoverHookCtxBase {
+  sessionId: string;
+}
+
 export interface HoverHooks {
   'hover:service:start'?: (ctx: ServiceStartCtx) => void | Promise<void>;
   'hover:mode:activate'?: (ctx: ModeActivateCtx) => void | Promise<void>;
   'hover:mode:deactivate'?: (ctx: ModeDeactivateCtx) => void | Promise<void>;
+  'hover:run:end'?: (ctx: RunEndCtx) => void | Promise<void>;
   'hover:service:shutdown'?: (ctx: ShutdownCtx) => void | Promise<void>;
 }
 

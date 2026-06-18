@@ -150,9 +150,11 @@ const CJK_RE = /[一-鿿]/;
  *  must still use the page's real (often English) accessible names, labels,
  *  and selectors when driving the browser. */
 const ZH_OUTPUT_DIRECTIVE =
-  '用户使用中文下达指令。请用简体中文撰写所有面向用户的文字：最终 JSON 报告里的 ' +
-  '`summary` 与每条 finding 的 `title` / `detail`，以及过程中每一步的简短意图说明。' +
-  '注意：这只影响写给用户看的文字。操作浏览器时仍要使用页面真实的（通常是英文的）' +
+  '用户使用中文下达指令。请用简体中文撰写【所有】面向用户的文字：最终 JSON 报告里的 ' +
+  '`summary` 与每条 finding 的 `title` / `detail`，以及过程中每一步的简短说明。' +
+  '这一点【贯穿整个过程，不分顺利与否】：当你在排查、卡住、改变思路、或自言自语式地推理时' +
+  '（例如“让我先找一下…”“这个按钮点不到，换个方式”），也必须用中文，绝不要中途切回英文。' +
+  '注意：这只影响写给用户看的叙述文字。操作浏览器时仍要使用页面真实的（通常是英文的）' +
   '角色名、标签、可访问名称和选择器——不要翻译成中文；JSON 的字段名（summary / findings / ' +
   'severity 等）也保持英文。';
 
@@ -1070,7 +1072,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         const toolCounts = detail?.steps ? tallyTools(detail.steps) : undefined;
         const target =
           runTargetUrl || runEnv ? { url: runTargetUrl, id: runEnv?.id, name: runEnv?.name } : undefined;
-        await writeSessionRecord(devRoot, {
+        const rec = await writeSessionRecord(devRoot, {
           startedAt: sessionStartedAt,
           endedAt,
           durationMs: Date.parse(endedAt) - Date.parse(sessionStartedAt),
@@ -1092,6 +1094,17 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           tokensUsed: sessionEnd.tokens,
           stepCount,
         });
+        // Let the active mode's plugin persist its own per-run artifacts bound to
+        // this session id (e.g. api-test writes .hover/api/<id>.json). Best-effort.
+        const sid = rec && 'id' in rec ? rec.id : null;
+        const runEndPlugin = runMode ? pluginsByModeId.get(runMode) : null;
+        if (sid && runEndPlugin?.hooks?.['hover:run:end']) {
+          try {
+            await runEndPlugin.hooks['hover:run:end']({ devRoot, broadcast: broadcastPluginEvent, sessionId: sid });
+          } catch (err) {
+            process.stderr.write(`[hover] plugin "${runEndPlugin.name}" run:end failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+        }
       };
       try {
         // Build the MCP config first — it's pure local file IO and lets
