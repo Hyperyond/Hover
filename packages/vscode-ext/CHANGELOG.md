@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.18.2 — 2026-06-18
+
+- **Fix:** the chat stream and the `ask_user` prompt now render the agent's Markdown (`**bold**`, `` `code` ``) instead of showing the raw `**` / `` ` `` characters — narration, question, options, and the answer line all parse it.
+
 ## 0.18.1 — 2026-06-18
 
 - **Fix:** in API-testing / Pentest mode the agent's API tools (`api_request`, `replay_flow`, …) were blocked under Claude — now allowed, so the agent calls your endpoints directly instead of falling back to the docs UI.

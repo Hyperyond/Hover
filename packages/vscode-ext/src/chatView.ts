@@ -693,7 +693,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     ensureRun(); endThought();
     var nd = makeNode('think active');
     var meta = document.createElement('span'); meta.className = 'node-meta'; nd.body.appendChild(meta);
-    var th = document.createElement('span'); th.className = 'think-text'; th.textContent = rec.text; nd.body.appendChild(th);
+    var th = document.createElement('span'); th.className = 'think-text'; th.innerHTML = inline(rec.text); nd.body.appendChild(th);
     curRun.appendChild(nd.node);
     curThought = { node: nd.node, meta: meta, rec: rec }; rec.t = curThought;
     setThoughtMeta(curThought); startSecTick(); updateWorking(); scroll();
@@ -790,7 +790,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     fresh();
     askDock.innerHTML = ''; // one active prompt at a time
     var card = document.createElement('div'); card.className = 'ask';
-    var h = document.createElement('div'); h.className = 'ask-q'; h.textContent = m.question || 'Hover needs your input'; card.appendChild(h);
+    var h = document.createElement('div'); h.className = 'ask-q'; h.innerHTML = inline(m.question || 'Hover needs your input'); card.appendChild(h);
     var opts = document.createElement('div'); opts.className = 'ask-opts'; card.appendChild(opts);
     var done = false;
     function answer(val) {
@@ -801,7 +801,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // reads as a sentence ("You answered: Male" / "You dismissed the question").
       ensureRun();
       var nd = makeNode('op answered');
-      nd.body.textContent = (val == null ? 'You dismissed the question' : 'You answered: ' + val);
+      nd.body.innerHTML = (val == null ? 'You dismissed the question' : 'You answered: ' + inline(val));
       curRun.appendChild(nd.node);
       vscode.postMessage({ type: 'askUserAnswer', askId: m.askId, value: val });
       scroll();
@@ -809,8 +809,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     (Array.isArray(m.options) ? m.options : []).forEach(function(o){
       if (!o || !o.label) return;
       var b = document.createElement('button'); b.className = 'ask-opt';
-      var t = document.createElement('span'); t.textContent = o.label; b.appendChild(t);
-      if (o.description) { var d = document.createElement('small'); d.textContent = o.description; b.appendChild(d); }
+      var t = document.createElement('span'); t.innerHTML = inline(o.label); b.appendChild(t);
+      if (o.description) { var d = document.createElement('small'); d.innerHTML = inline(o.description); b.appendChild(d); }
       b.addEventListener('click', function(){ answer(o.label); });
       opts.appendChild(b);
     });

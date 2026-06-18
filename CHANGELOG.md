@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.18.2] — 2026-06-18
+
+### Fixed
+
+- **vscode-ext:** the chat stream and `ask_user` prompt now render the agent's Markdown (`**bold**`, `` `code` ``) instead of showing raw `**` / `` ` `` characters. Narration, the question, options, and the answer line all run through the inline renderer (HTML-escaped first, so no XSS).
+
 ## [0.18.1] — 2026-06-18
 
 Fixes for API-testing found dogfooding on a real API project (under Claude).
