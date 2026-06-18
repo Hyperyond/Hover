@@ -3,6 +3,13 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.18.1 — 2026-06-18
+
+- **Fix:** in API-testing / Pentest mode the agent's API tools (`api_request`, `replay_flow`, …) were blocked under Claude — now allowed, so the agent calls your endpoints directly instead of falling back to the docs UI.
+- **Fix:** Save now routes by the run's mode — switching modes after a run no longer mis-saves it.
+- **Fix:** an API-test save / record covers just that run, not the whole session.
+- The ask / save popup width matches the input box, and the mode-colour running border is removed.
+
 ## 0.18.0 — 2026-06-18
 
 **API testing is request-first.** The 🟠 API-testing mode now tests endpoints by issuing requests directly, and the saved spec is pure API — never UI clicks.

@@ -6,6 +6,22 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.18.1] — 2026-06-18
+
+Fixes for API-testing found dogfooding on a real API project (under Claude).
+
+### Fixed
+
+- **API-testing / pentest MCP tools were denied under the Claude hard sandbox.** The flows MCP server used a namespaced id (`@hover-dev/api-test:flows`) whose sanitized allow-list prefix never matched the tool names Claude derives (it keeps the id verbatim), so `api_request` / `replay_flow` / `list_flows` were all blocked — the agent silently fell back to driving the docs UI. The ids are now alphanumeric (`hoverapitest` / `hoverpentest`), and `HoverPluginMcpServer.id` documents the constraint.
+- **Soft-sandbox agents (codex) self-restricted to Playwright** and refused the plugin tools — their `developer_instructions` now enumerate the active mode's allowed-tool prefixes instead of hardcoding "playwright only".
+- **Save routed by the live mode, not the run's mode** — switching modes after a run could send its save to the wrong writer. Each result carries its run's mode; the Save button binds to it.
+- **API checks accumulated across runs in a session** — a save / `.hover/cache/api` record now scopes to the run you saved (new `hover:run:start` boundary), matching the frontend's per-run behaviour.
+
+### Changed
+
+- The `ask_user` / save popup width matches the input box (was wider — it had escaped to the viewport edge).
+- Removed the api-test / pentest running-border colour tint (the mode pill already shows the mode).
+
 ## [0.18.0] — 2026-06-18
 
 Theme: **API testing is request-first.** The 🟠 API-testing mode tests endpoints by issuing requests directly, and crystallizes to a pure `request.*` spec — never UI clicks.
