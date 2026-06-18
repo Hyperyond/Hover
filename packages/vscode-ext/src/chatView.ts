@@ -176,7 +176,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(16).toString('base64');
     const csp = [`default-src 'none'`, `style-src 'unsafe-inline'`, `script-src 'nonce-${nonce}'`, `media-src 'self'`, `img-src ${webview.cspSource}`].join('; ');
-    const iconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'resources', 'icon.png'));
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -254,17 +253,45 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   #log { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 768px; margin: 0 auto; }
   .empty { margin: auto; text-align: center; color: var(--text-dim); padding: 0 26px; line-height: 1.55; }
   .empty em { color: var(--text-mute); font-style: normal; }
-  /* Branded launch splash (Codex-style): mark + wordmark + tagline + site link. */
+  /* Branded launch splash: ambient-glow mark + wordmark + tagline + prompt
+   *  chips + Start App, with a staggered entrance and idle motion. */
   .splash { display: flex; flex-direction: column; align-items: center; height: 100%; padding: 24px 20px 8px; }
-  .splash-hero { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
-  .splash-mark { width: 76px; height: 76px; border-radius: 18px; }
-  .splash-name { font-size: 30px; font-weight: 700; letter-spacing: .08em; color: var(--text); }
-  .splash-tag { color: var(--text-dim); line-height: 1.55; max-width: 320px; }
+  .splash-hero { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 13px; text-align: center; width: 100%; padding: 0 14px; }
+  .splash-mark { position: relative; display: grid; place-items: center; opacity: 0;
+    animation: hvRise .6s cubic-bezier(.22,.7,.3,1) forwards, hvFloat 5s ease-in-out .6s infinite, hvTwinkle 5s ease-in-out .6s infinite; }
+  .splash-mark svg { position: relative; z-index: 1; display: block; }
+  .splash-halo { position: absolute; width: 118px; height: 118px; border-radius: 50%; z-index: 0; pointer-events: none;
+    background: radial-gradient(circle, rgba(124,255,168,.42) 0%, rgba(124,255,168,.11) 38%, transparent 70%);
+    filter: blur(6px); animation: hvBreathe 4s ease-in-out infinite; }
+  .splash-name { font-size: 32px; font-weight: 700; letter-spacing: .06em;
+    background: linear-gradient(110deg,#9affc0 0%,#ffffff 25%,#b9ffd4 50%,var(--accent) 75%,#9affc0 100%);
+    background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: hvShimmer 6s ease-in-out infinite; }
+  .splash-tag { color: var(--text-dim); font-size: 13px; line-height: 1.55; max-width: 240px; }
   .splash-tag em { color: var(--text-mute); font-style: normal; }
+  .splash-chips { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 280px; margin-top: 6px; }
+  .splash-chip { text-align: left; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); color: var(--text-mute); font: inherit; font-size: 12.5px; cursor: pointer; transition: transform .16s, border-color .16s, color .16s, box-shadow .16s; display: flex; align-items: center; gap: 9px; }
+  .splash-chip:hover { border-color: rgba(124,255,168,.55); color: var(--text); transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+  .splash-chip .ar { margin-left: auto; color: var(--text-dim); transition: transform .16s, color .16s; }
+  .splash-chip:hover .ar { color: var(--accent); transform: translateX(3px); }
+  .startapp { margin-top: 10px; display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border: none; border-radius: 9px; background: var(--accent); color: var(--accent-ink); cursor: pointer; font: inherit; font-weight: 600; font-size: 13px; transition: filter .16s, box-shadow .16s; }
+  .startapp:hover { filter: brightness(1.06); box-shadow: 0 0 18px rgba(124,255,168,.4); }
   .splash-link { margin-top: auto; padding-top: 14px; color: var(--text-mute); font-size: 12px; cursor: pointer; text-decoration: none; }
   .splash-link:hover { color: var(--accent); }
-  .startapp { margin-top: 4px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 1px solid var(--accent); border-radius: 8px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
-  .startapp:hover { background: var(--accent); color: var(--accent-ink); }
+  /* entrance stagger — each rises + fades in, then idle motions take over */
+  .splash-hero .rise { opacity: 0; animation: hvRise .55s cubic-bezier(.22,.7,.3,1) forwards; }
+  .splash-hero .d1 { animation-delay: .10s; } .splash-hero .d2 { animation-delay: .20s; }
+  .splash-hero .d3 { animation-delay: .30s; } .splash-hero .d4 { animation-delay: .40s; }
+  .splash-hero .d5 { animation-delay: .50s; } .splash-hero .d6 { animation-delay: .60s; }
+  @keyframes hvRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @keyframes hvFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  @keyframes hvBreathe { 0%,100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.14); opacity: 1; } }
+  @keyframes hvTwinkle { 0%,92%,100% { filter: none; } 96% { filter: drop-shadow(0 0 6px rgba(124,255,168,.85)); } }
+  @keyframes hvShimmer { 0%,100% { background-position: 120% 0; } 50% { background-position: -20% 0; } }
+  /* respect the OS "reduce motion" setting — content appears, nothing loops */
+  @media (prefers-reduced-motion: reduce) {
+    .splash-mark, .splash-halo, .splash-name, .splash-hero .rise { animation: none !important; opacity: 1 !important; }
+  }
   .working { display: flex; align-items: center; gap: 9px; padding: 8px 11px; color: var(--text-mute); font-size: 12px; }
   .working .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: hoverpulse 1s ease-in-out infinite; }
   .working .busy-time { opacity: .6; font-variant-numeric: tabular-nums; }
@@ -1225,6 +1252,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // Delegated: the splash buttons live inside the (re-rendered) empty state.
   log.addEventListener('click', function(e){
     if (!e.target || !e.target.closest) return;
+    var chip = e.target.closest('.splash-chip');
+    if (chip) {
+      // Prefill the composer with the example, focus it, and let the user
+      // tweak + send (a chip suggests a flow; it doesn't auto-run one).
+      input.value = chip.getAttribute('data-prompt') || chip.textContent.replace(/→\s*$/, '').trim();
+      input.style.height='auto'; input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+      input.focus(); syncSend(); return;
+    }
     if (e.target.closest('#startapp')) vscode.postMessage({ type:'command', id:'hover.startApp' });
     else if (e.target.closest('#site')) vscode.postMessage({ type:'command', id:'hover.openSite' });
   });
@@ -1313,10 +1348,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     var d=document.createElement('div'); d.className='splash';
     d.innerHTML =
       '<div class="splash-hero">' +
-        '<img class="splash-mark" src="${iconUri}" alt="Hover" />' +
-        '<div class="splash-name">Hover</div>' +
-        '<div class="splash-tag">Describe what you want to verify, e.g. <em>"test the login flow"</em>.</div>' +
-        '<button class="startapp" id="startapp">▶ Start App</button>' +
+        '<div class="splash-mark"><span class="splash-halo"></span>' +
+          '<svg width="68" height="68" viewBox="0 0 100 100" aria-label="Hover">' +
+            '<defs><linearGradient id="hvsg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c6ffdd"/><stop offset="100%" stop-color="#5ef29a"/></linearGradient></defs>' +
+            '<path d="M50 3 C54.5 31, 69 45.5, 97 50 C69 54.5, 54.5 69, 50 97 C45.5 69, 31 54.5, 3 50 C31 45.5, 45.5 31, 50 3 Z" fill="url(#hvsg)"/>' +
+          '</svg>' +
+        '</div>' +
+        '<div class="splash-name rise d1">Hover</div>' +
+        '<div class="splash-tag rise d2">AI tests your app and writes a real Playwright spec.</div>' +
+        '<div class="splash-chips">' +
+          '<button class="splash-chip rise d3" data-prompt="Test the login flow">Test the login flow<span class="ar">→</span></button>' +
+          '<button class="splash-chip rise d4" data-prompt="Add an item to the cart">Add an item to the cart<span class="ar">→</span></button>' +
+          '<button class="splash-chip rise d5" data-prompt="Find broken access control">Find broken access control<span class="ar">→</span></button>' +
+        '</div>' +
+        '<button class="startapp rise d6" id="startapp">▶ Start App</button>' +
       '</div>' +
       '<a class="splash-link" id="site">Visit gethover.dev ↗</a>';
     return d;
