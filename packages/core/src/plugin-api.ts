@@ -56,8 +56,12 @@ export interface HoverPluginMode {
 }
 
 export interface HoverPluginMcpServer {
-  /** Stable, namespaced id (`@hover-dev/api-test:flows`). Host enforces
-   *  uniqueness across all loaded plugins. */
+  /** Stable, unique id, used verbatim as the JSON key in the agent's MCP config.
+   *  MUST be ALPHANUMERIC (e.g. `hoverapitest`) — no `@ / : -` or other special
+   *  chars. Claude forms tool names `mcp__<id>__<tool>` keeping the id verbatim,
+   *  while the hard-sandbox allow-list sanitizes non-alphanumerics; a namespaced
+   *  id like `@hover-dev/x:flows` makes the two diverge and every tool from this
+   *  server gets denied. Host enforces uniqueness across loaded plugins. */
   id: string;
   command: string;
   args?: string[];
@@ -162,10 +166,16 @@ export interface RunEndCtx extends HoverHookCtxBase {
   sessionId: string;
 }
 
+/** Fired on the ACTIVE mode's plugin just before an agent run starts, so a
+ *  plugin can mark a per-run boundary (e.g. api-test snapshots its recorded-check
+ *  count so a later save / run:end scopes to THIS run, not the whole session). */
+export type RunStartCtx = HoverHookCtxBase;
+
 export interface HoverHooks {
   'hover:service:start'?: (ctx: ServiceStartCtx) => void | Promise<void>;
   'hover:mode:activate'?: (ctx: ModeActivateCtx) => void | Promise<void>;
   'hover:mode:deactivate'?: (ctx: ModeDeactivateCtx) => void | Promise<void>;
+  'hover:run:start'?: (ctx: RunStartCtx) => void | Promise<void>;
   'hover:run:end'?: (ctx: RunEndCtx) => void | Promise<void>;
   'hover:service:shutdown'?: (ctx: ShutdownCtx) => void | Promise<void>;
 }

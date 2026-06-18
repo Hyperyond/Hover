@@ -107,14 +107,13 @@ export async function runSession(
     mcpConfig,
     cwd: opts.cwd,
     appendSystemPrompt: opts.appendSystemPrompt,
-    // Hard sandbox: only Playwright MCP (+ any active-mode plugin servers) is
-    // callable, every built-in tool denied — a hijacked prompt can't reach the
-    // shell or filesystem. Soft agents (codex, …) enforce their own sandbox via
-    // buildArgs, so the lists stay undefined for them — exactly what the
-    // service does.
-    allowedTools: isHardSandbox
-      ? ['mcp__playwright', ...(opts.allowedToolsExtra ?? [])]
-      : undefined,
+    // The allowed-tool set (Playwright MCP + the active mode's plugin servers:
+    // hover-control, api-test flows, source reader, …) is the SAME for every
+    // agent — hard-sandbox agents enforce it via --allowedTools; soft agents
+    // (codex) surface it in their developer_instructions so they don't
+    // self-restrict to Playwright and refuse the plugin tools (e.g. api_request).
+    // The DISallow list is hard-sandbox only (soft agents can't enforce it).
+    allowedTools: ['mcp__playwright', ...(opts.allowedToolsExtra ?? [])],
     disallowedTools: isHardSandbox
       ? [...(descriptor?.defaultDisallowedTools ?? []), ...(opts.disallowedToolsExtra ?? [])]
       : undefined,

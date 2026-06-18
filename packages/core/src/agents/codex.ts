@@ -156,14 +156,20 @@ function resetCodexCounters(s: CodexParserState): void {
   s.itemTypeById.clear();
 }
 
-/** Cap surfaced as a constraint in the system prompt — codex has no CLI flag. */
-const CODEX_DEVELOPER_INSTRUCTIONS = [
-  'You are operating in Hover, a browser-testing tool.',
-  'Use ONLY the MCP playwright tools (prefixed `mcp__playwright__` / `mcp__hover-playwright__`) to drive the browser.',
-  'Do NOT call shell, file-edit, web-search, or any other built-in tool.',
-  'Do NOT navigate to a URL the user is already on; check the page state via `browser_snapshot` first.',
-  'When the task is complete, emit a short agent_message summary and stop.',
-].join(' ');
+/** The tool-restriction is codex's only sandbox (no --allowedTools flag), so it
+ *  must mirror the hard-sandbox allow-list the service computes per mode — NOT a
+ *  hardcoded "playwright only", which made codex refuse the active mode's plugin
+ *  tools (api_request, replay_flow, hover-control, …). Built from opts.allowedTools. */
+function codexDeveloperInstructions(allowedTools?: string[]): string {
+  const prefixes = (allowedTools && allowedTools.length ? allowedTools : ['mcp__playwright']).map((p) => `${p}__*`);
+  return [
+    'You are operating in Hover, a browser- and API-testing tool.',
+    `Use ONLY MCP tools whose name starts with one of these prefixes: ${prefixes.join(', ')}. They cover driving the browser, the Hover control + API-request tools, and reading source — everything the task needs.`,
+    'Do NOT call shell, file-edit, web-search, or any other built-in tool.',
+    'Do NOT navigate to a URL the user is already on; check the page state via `browser_snapshot` first.',
+    'When the task is complete, emit a short agent_message summary and stop.',
+  ].join(' ');
+}
 
 export const codexAgent: AgentDescriptor = {
   id: 'codex',
@@ -213,9 +219,10 @@ export const codexAgent: AgentDescriptor = {
     // through `-c developer_instructions='...'`. Concatenate the standing
     // Hover-mode instructions with whatever the caller passes (e.g. "user is
     // already on http://localhost:5173/").
+    const base = codexDeveloperInstructions(opts.allowedTools);
     const sysPrompt = opts.appendSystemPrompt && opts.appendSystemPrompt.trim().length > 0
-      ? `${CODEX_DEVELOPER_INSTRUCTIONS} ${opts.appendSystemPrompt}`
-      : CODEX_DEVELOPER_INSTRUCTIONS;
+      ? `${base} ${opts.appendSystemPrompt}`
+      : base;
     args.push('-c', `developer_instructions=${JSON.stringify(sysPrompt)}`);
 
     // MCP servers are configured in ~/.codex/config.toml at install time,

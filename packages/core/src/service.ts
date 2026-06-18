@@ -1266,6 +1266,16 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         // codeContext: the fenced source reader is allowed in every mode.
         if (opts.codeContext) activePluginMcpIds.push(mcpToolPrefix(SOURCE_MCP_ID));
+        // Mark a per-run boundary on the active mode's plugin (api-test scopes its
+        // recorded checks to this run, not the whole session). Best-effort.
+        const runStartPlugin = currentModeId ? pluginsByModeId.get(currentModeId) : null;
+        if (runStartPlugin?.hooks?.['hover:run:start']) {
+          try {
+            await runStartPlugin.hooks['hover:run:start']({ devRoot, broadcast: broadcastPluginEvent });
+          } catch (err) {
+            process.stderr.write(`[hover] plugin "${runStartPlugin.name}" run:start failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+        }
         const runResult = await runSession(
           {
             agentId: invokedAgentId,
