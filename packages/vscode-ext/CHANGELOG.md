@@ -3,6 +3,18 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.18.0 — 2026-06-18
+
+**API testing is request-first.** The 🟠 API-testing mode now tests endpoints by issuing requests directly, and the saved spec is pure API — never UI clicks.
+
+- **`api_request` tool** — the agent calls endpoints directly. For an API-only backend (or one with only interactive docs like Swagger / Scalar / Redoc) it no longer drives the docs UI to send requests. Origin-locked to the app under test, and it auto-carries the browser's logged-in session cookie.
+- **Saved spec is a pure `request.*` `.api-test.spec.ts`** — UI-independent. Saving in API-testing mode routes to the request-writer (not the browser-step writer); every assertion comes from a recorded check.
+- **Full API traffic is recorded** to `.hover/cache/api/<session>.json`, bound to the session (local + git-ignored).
+- **Pentest** mode likewise: the agent chooses to drive the UI or call the API directly.
+- **Cleaner chat** — read-only / navigation steps (snapshots, screenshots, scroll) are hidden from the stream; the `ask_user` free-text answer is an inline row (pencil + input + send); narration stays in your language throughout.
+- **Save is a button** on the Done block (mode-aware: API spec / findings report / spec), instead of an auto-popup.
+- The Activity Bar panel is renamed **Hover Testing**.
+
 ## 0.17.0 — 2026-06-17
 
 **The chat stream, redesigned.** The run view is now a clean linear "thread" — like Claude Code — instead of collapsible step boxes.

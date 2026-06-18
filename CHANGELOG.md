@@ -6,6 +6,24 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-06-18
+
+Theme: **API testing is request-first.** The 🟠 API-testing mode tests endpoints by issuing requests directly, and crystallizes to a pure `request.*` spec — never UI clicks.
+
+### Added
+
+- **`api_request` MCP tool** (`@hover-dev/api-test`) — issue a request directly to the app under test (`api_request(method, url, headers?, body?, intent?, expectStatus?)`). For an API-only backend (or one exposing only interactive docs — Swagger / Scalar / Redoc) the agent calls endpoints here instead of driving the docs UI. Origin-locked like `replay_flow` (cross-origin needs `allowCrossOrigin`); auto-carries the session cookie from a same-origin captured flow. `intent` + `expectStatus` record a check.
+- **`.hover/cache/api/<session>.json`** — every run's full API traffic + recorded checks, persisted via a new `hover:run:end` plugin hook and bound to the session-ledger id. Lives under `cache/` (always git-ignored) because it holds raw auth/bodies.
+
+### Changed
+
+- **API-testing saves a request-based spec.** The after-run Save (now a button on the Done block, mode-aware) routes API-testing → the request-writer (`writeSecuritySpec` → `request.*` + `expect`), not the browser-step writer. An API test is UI-independent.
+- **Pentest** mode is request-aware too: the agent chooses to drive the real UI or call the API directly (`api_request`); same prompt reframe.
+- **Prompts** request-first across both modes; agent narration stays in the user's language even while troubleshooting.
+- **Cleaner chat stream** — read-only / navigation ops (snapshot, screenshot, scroll, Escape) are kept out of the visible stream (the full record stays in the sidecar). The `ask_user` free-text answer is an always-present inline row (pencil + input + send) instead of an "Other" option that expands.
+- Activity Bar panel renamed **Hover Testing** (was "Hover Chat").
+- Internal: the api-test MCP server / log prefix `hover-security` → `hover-api-test` (env vars unchanged).
+
 ## [0.17.0] — 2026-06-17
 
 Theme: **the chat stream, redesigned.** The run view is now a clean linear "thread" — like Claude Code — instead of collapsible step boxes.
