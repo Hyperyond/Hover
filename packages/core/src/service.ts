@@ -344,6 +344,33 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   // active, this OpenAI-compatible base URL is injected so qwen drives the
   // user's self-hosted model instead of a hosted one.
   let currentLocalBaseUrl: string | undefined;
+  // BYOK (set via set-byok): when present, runs are driven by the protocol's
+  // matching CLI with the user's key + base URL + model injected via env,
+  // instead of the local-CLI agent's own logged-in auth. null = use the CLI.
+  let currentByok:
+    | { protocol: string; baseUrl: string; model: string; maxTokens: number; apiKey: string }
+    | null = null;
+  // Protocol → CLI: Anthropic drives claude (hard sandbox), Gemini drives the
+  // gemini CLI, OpenAI / Azure / OpenAI-compatible gateways drive codex.
+  const byokAgentFor = (protocol: string): string =>
+    protocol === 'anthropic' ? 'claude' : protocol === 'gemini' ? 'gemini' : 'codex';
+  // Protocol → auth env vars the matching CLI reads. Only set what's provided
+  // so an empty base URL leaves the CLI on its own default endpoint.
+  const byokEnvFor = (b: NonNullable<typeof currentByok>): Record<string, string> => {
+    const env: Record<string, string> = {};
+    if (b.protocol === 'anthropic') {
+      if (b.apiKey) env.ANTHROPIC_API_KEY = b.apiKey;
+      if (b.baseUrl) env.ANTHROPIC_BASE_URL = b.baseUrl;
+    } else if (b.protocol === 'gemini') {
+      if (b.apiKey) { env.GEMINI_API_KEY = b.apiKey; env.GOOGLE_API_KEY = b.apiKey; }
+      if (b.baseUrl) env.GOOGLE_GEMINI_BASE_URL = b.baseUrl;
+    } else {
+      // openai / azure / gateways — OpenAI-compatible, driven via codex.
+      if (b.apiKey) env.OPENAI_API_KEY = b.apiKey;
+      if (b.baseUrl) env.OPENAI_BASE_URL = b.baseUrl;
+    }
+    return env;
+  };
   // No default budget cap — long real-world flows (form filling, multi-step
   // checkouts) routinely run past the old $0.50 ceiling and got cut off
   // mid-run. The widget shows the running $ counter in the header instead,
@@ -960,6 +987,23 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         currentLocalBaseUrl = url || undefined;
         return;
       }
+      if (msg.type === 'set-byok') {
+        // BYOK config for subsequent runs, or null to fall back to the
+        // local-CLI agent's own auth. Refused mid-run, like set-model.
+        if (activeRun) {
+          send(ws, { type: 'error', payload: { message: 'set-byok: a command is already running; stop it first' } });
+          return;
+        }
+        const c = msg.payload?.config;
+        currentByok = c && typeof c.protocol === 'string' ? c : null;
+        return;
+      }
+      if (msg.type === 'refresh-agents') {
+        // Re-scan PATH (the user just installed a CLI) and re-broadcast.
+        await getAvailability(true);
+        await broadcastAgents();
+        return;
+      }
       if (msg.type === 'save-spec') {
         await handleSaveArtifact(ws, msg, devRoot, SPEC_CONFIG);
         return;
@@ -1244,7 +1288,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // can't smear two agents across one invocation. (We also gate
         // switch-agent on an active run, but defense in depth.) runSession gates
         // the allow/deny lists on the agent's sandboxStrength internally.
-        const invokedAgentId = currentAgentId;
+        // BYOK overrides the active CLI: the protocol picks which CLI is
+        // driven; key/base/model are injected via env below. Otherwise the
+        // user's selected local-CLI agent runs with its own auth.
+        const invokedAgentId = currentByok ? byokAgentFor(currentByok.protocol) : currentAgentId;
+        const effectiveModel = currentByok?.model || model;
         // Active mode's plugin-contributed MCP server ids — added to the
         // hard-sandbox allow list so Claude can actually call them. Claude
         // sanitises non-alphanumeric chars in the id when forming tool
@@ -1293,14 +1341,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             // must use the grounded mcp__hover-control__* actuation tools.
             disallowedToolsExtra: groundedActuation ? GROUNDED_ACTUATION_DENY : undefined,
             maxBudgetUsd,
-            model,
+            model: effectiveModel,
             effort: currentEffort,
-            // Local LLM (qwen host): point qwen at the user's OpenAI-compatible
-            // endpoint via env. The endpoint's key (if any) is read from the
-            // ambient OPENAI_API_KEY; most self-hosted endpoints ignore it, so
-            // fall back to a placeholder.
-            env:
-              invokedAgentId === 'qwen' && currentLocalBaseUrl
+            // BYOK: inject the protocol's auth env (key + base URL) into the
+            // matching CLI. Otherwise, Local LLM (qwen host): point qwen at the
+            // user's OpenAI-compatible endpoint via env (the endpoint's key, if
+            // any, falls back to the ambient OPENAI_API_KEY / a placeholder).
+            env: currentByok
+              ? byokEnvFor(currentByok)
+              : invokedAgentId === 'qwen' && currentLocalBaseUrl
                 ? { OPENAI_BASE_URL: currentLocalBaseUrl, OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'local' }
                 : undefined,
             signal: run.abort.signal,

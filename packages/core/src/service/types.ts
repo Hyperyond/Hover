@@ -45,6 +45,16 @@ export interface ClientMessage {
     /** set-local-endpoint only — base URL of the user's self-hosted
      *  OpenAI-compatible endpoint for the Local LLM agent. */
     baseUrl?: string;
+    /** set-byok only — bring-your-own-key model config (protocol + key + base
+     *  URL + model injected into the protocol's matching CLI), or null to clear
+     *  and fall back to the local-CLI agent's own auth. */
+    config?: {
+      protocol: string;
+      baseUrl: string;
+      model: string;
+      maxTokens: number;
+      apiKey: string;
+    } | null;
     /** set-mode only — id of the plugin-contributed mode to activate,
      *  or null to return to normal (unmoded) operation. */
     modeId?: string | null;
