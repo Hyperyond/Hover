@@ -14,6 +14,10 @@
  */
 import * as vscode from "vscode";
 import { randomBytes } from "node:crypto";
+// The chat webview's stylesheet lives in a real .css file (full editor tooling,
+// no JS-template escaping) and is inlined into <style> via esbuild's `text`
+// loader (see tsup.config.ts + css.d.ts).
+import chatCss from "./chatView.css";
 
 type Inbound =
   | { type: "send"; text: string }
@@ -54,9 +58,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.view = view;
     view.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, "resources")],
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.extensionUri, "resources"),
+        vscode.Uri.joinPath(this.extensionUri, "dist", "webview"),
+      ],
     };
-    view.webview.html = this.html(view.webview);
+    // Opt-in React webview (Vite build) while the migration is in progress; the
+    // legacy string template stays the default until the React UI reaches parity.
+    const useReact = vscode.workspace.getConfiguration("hover").get<boolean>("reactChat", false);
+    view.webview.html = useReact ? this.reactHtml(view.webview) : this.html(view.webview);
     view.webview.onDidReceiveMessage((msg: Inbound) => {
       if (msg.type === "send") void this.onSend(msg.text);
       else if (msg.type === "command" && typeof msg.id === "string")
@@ -217,6 +227,35 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     else this.post({ type: "system", text: "Engine not available." });
   }
 
+  /** Host page for the React webview (Vite build under dist/webview). Loads the
+   *  bundled chat.js / chat.css via webview URIs; the message protocol with the
+   *  extension is unchanged. Shown when `hover.reactChat` is on. */
+  private reactHtml(webview: vscode.Webview): string {
+    const nonce = randomBytes(16).toString("base64");
+    const dist = vscode.Uri.joinPath(this.extensionUri, "dist", "webview");
+    const js = webview.asWebviewUri(vscode.Uri.joinPath(dist, "chat.js"));
+    const css = webview.asWebviewUri(vscode.Uri.joinPath(dist, "chat.css"));
+    const csp = [
+      `default-src 'none'`,
+      `img-src ${webview.cspSource} https: data:`,
+      `font-src ${webview.cspSource}`,
+      `style-src ${webview.cspSource} 'unsafe-inline'`,
+      `script-src 'nonce-${nonce}' ${webview.cspSource}`,
+      `connect-src ${webview.cspSource}`,
+      `media-src ${webview.cspSource}`,
+    ].join("; ");
+    return `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="${csp}" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="${css}" />
+</head><body>
+<div id="root"></div>
+<script type="module" nonce="${nonce}" src="${js}"></script>
+</body></html>`;
+  }
+
   private html(webview: vscode.Webview): string {
     const nonce = randomBytes(16).toString("base64");
     const csp = [
@@ -232,368 +271,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
-  :root {
-    /* Structural colours follow the active VS Code theme (light / dark / high
-       contrast / custom) via its CSS tokens; the hex values are dark-theme
-       fallbacks for any token a theme leaves unset. The mint accent is the
-       brand colour — kept across themes (retuned for light below). */
-    --bg: var(--vscode-sideBar-background, #1a1a1a);
-    --bg-2: var(--vscode-editorWidget-background, #222224);
-    --bg-3: var(--vscode-input-background, #141414);
-    --line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c)));
-    --text: var(--vscode-foreground, #e5e7eb);
-    --text-mute: var(--vscode-descriptionForeground, #9ca3af);
-    --text-dim: var(--vscode-disabledForeground, #6b7280);
-    --accent: #7CFFA8; --accent-dim: rgba(124,255,168,0.16); --accent-ink: #0c2417;
-    --warn: var(--vscode-editorWarning-foreground, #fb923c); --err: var(--vscode-editorError-foreground, #f87171);
-    --link: var(--vscode-textLink-foreground, #7dd3fc);
-  }
-  /* Light / high-contrast-light themes: mint-on-white has poor contrast as text,
-     so deepen the accent (button bg stays readable with white ink). */
-  body.vscode-light, body.vscode-high-contrast-light {
-    --accent: #16a34a; --accent-dim: rgba(22,163,74,0.12); --accent-ink: #ffffff;
-  }
-  body.vscode-light .splash-name, body.vscode-high-contrast-light .splash-name {
-    background: linear-gradient(110deg,#15803d 0%,#22c55e 30%,#16a34a 60%,#15803d 100%);
-    background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  /* Mode tint is scoped to the input region only (the composer + its ask/save
-     replacement) — switching mode recolours the send button, input focus ring,
-     and mode pill, but leaves the rest of the chat (messages, run thread,
-     splash) on the default mint. CSS custom properties cascade to descendants. */
-  body.mode-api-test #composer, body.mode-api-test #ask-dock { --accent: #fb923c; --accent-dim: rgba(251,146,60,0.16); --accent-ink: #2a1605; }
-  body.mode-pentest  #composer, body.mode-pentest  #ask-dock { --accent: #f87171; --accent-dim: rgba(248,113,113,0.16); --accent-ink: #2a0d0d; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; height: 100vh; display: flex; flex-direction: column;
-    font-family: var(--vscode-font-family, -apple-system, system-ui, sans-serif);
-    font-size: 13px; color: var(--text); background: var(--bg);
-  }
-  /* Silent mode + running: a rotating Google-Chrome-colored border, signalling
-     the invisible browser is working (the page itself you can't see). */
-  @property --hov-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
-  body.silent-running::after {
-    content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none; padding: 2.5px;
-    background: conic-gradient(from var(--hov-angle), #4285F4, #EA4335, #FBBC05, #34A853, #4285F4);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor; mask-composite: exclude;
-    animation: hov-spinborder 2.4s linear infinite;
-  }
-  @keyframes hov-spinborder { to { --hov-angle: 360deg; } }
-  /* API-testing mode running → orange border; pentest → red. Pulsing glow. */
-  body.border-api-test::after, body.border-pentest::after {
-    content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none; padding: 2.5px;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor; mask-composite: exclude;
-    animation: hov-bpulse 1.6s ease-in-out infinite;
-  }
-  body.border-api-test::after { background: #fb923c; }
-  body.border-pentest::after { background: #f87171; }
-  @keyframes hov-bpulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
-  ::-webkit-scrollbar { width: 8px; }
-  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
-
-  header { display: flex; align-items: center; gap: 6px; padding: 8px 4px; border-bottom: 1px solid var(--line); position: relative; }
-  #session { max-width: 230px; }
-  #session #session-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #session-run { color: #3fb950; font-size: 9px; margin-right: 3px; animation: pulse 1.4s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-  .popup.sess { top: calc(100% - 2px); bottom: auto; left: 10px; max-height: 60vh; overflow: auto; }
-  .popup.sess .sess-tabs { display: flex; gap: 2px; margin: 2px 6px 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
-  .popup.sess .sess-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px; border-radius: 5px; color: var(--text-mute); cursor: pointer; font-size: 12px; user-select: none; }
-  .popup.sess .sess-tab.active { color: var(--text); background: var(--vscode-editor-background, var(--bg-2)); box-shadow: 0 1px 2px rgba(0,0,0,.22), inset 0 0 0 1px var(--line); }
-  .popup.sess .sess-tab.locked { cursor: default; }
-  .popup.sess .sess-tab svg { opacity: .8; }
-  .popup.sess .sess-search { margin: 0 6px 6px; position: relative; }
-  .popup.sess .sess-search input { width: 100%; padding: 6px 9px 6px 26px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; font-size: 12px; }
-  .popup.sess .sess-search input::placeholder { color: var(--text-dim); }
-  .popup.sess .sess-search input:focus { outline: none; border-color: var(--vscode-focusBorder); }
-  .popup.sess .sess-search svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--text-dim); }
-  .popup.sess .sess-cloud { padding: 18px 12px; text-align: center; color: var(--text-dim); font-size: 11.5px; line-height: 1.5; }
-  .popup.sess .p-item .p-run { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); align-self: center; animation: pulse 1.4s ease-in-out infinite; }
-  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-2); color: var(--text); cursor: pointer; font: inherit; }
-  .pill:hover { border-color: var(--accent); }
-  .caret { color: var(--text-dim); }
-  .iconbtn { display: inline-flex; padding: 5px; border: none; background: none; color: var(--text-mute); cursor: pointer; border-radius: 6px; }
-  .iconbtn:hover { color: var(--text); background: var(--bg-2); }
-  .spacer { flex: 1; }
-  .appstatus { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: none; border-radius: 7px; background: none; color: var(--text-mute); font: inherit; font-size: 12px; cursor: pointer; }
-  .appstatus:hover { background: var(--bg-2); color: var(--text); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
-  .dot.offline { background: var(--text-dim); }
-
-  #log { flex: 1; overflow-y: auto; padding: 12px 8px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 1280px; margin: 0 auto; }
-  .empty { margin: auto; text-align: center; color: var(--text-dim); padding: 0 26px; line-height: 1.55; }
-  .empty em { color: var(--text-mute); font-style: normal; }
-  /* Branded launch splash: ambient-glow mark + wordmark + tagline + prompt
-   *  chips + Start App, with a staggered entrance and idle motion. */
-  .splash { display: flex; flex-direction: column; align-items: center; height: 100%; padding: 24px 20px 8px; }
-  .splash-hero { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 13px; text-align: center; width: 100%; padding: 0 14px; }
-  .splash-mark { position: relative; display: grid; place-items: center; opacity: 0;
-    animation: hvRise .6s cubic-bezier(.22,.7,.3,1) forwards, hvFloat 5s ease-in-out .6s infinite, hvTwinkle 5s ease-in-out .6s infinite; }
-  .splash-mark svg { position: relative; z-index: 1; display: block; }
-  .splash-halo { position: absolute; width: 118px; height: 118px; border-radius: 50%; z-index: 0; pointer-events: none;
-    background: radial-gradient(circle, rgba(124,255,168,.42) 0%, rgba(124,255,168,.11) 38%, transparent 70%);
-    filter: blur(6px); animation: hvBreathe 4s ease-in-out infinite; }
-  .splash-name { font-size: 32px; font-weight: 700; letter-spacing: .06em;
-    background: linear-gradient(110deg,#9affc0 0%,#ffffff 25%,#b9ffd4 50%,var(--accent) 75%,#9affc0 100%);
-    background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
-    animation: hvShimmer 6s ease-in-out infinite; }
-  .splash-tag { color: var(--text-dim); font-size: 13px; line-height: 1.55; max-width: 240px; }
-  .splash-tag em { color: var(--text-mute); font-style: normal; }
-  .splash-chips { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 280px; margin-top: 6px; }
-  .splash-chip { text-align: left; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); color: var(--text-mute); font: inherit; font-size: 12.5px; cursor: pointer; transition: transform .16s, border-color .16s, color .16s, box-shadow .16s; display: flex; align-items: center; gap: 9px; }
-  .splash-chip:hover { border-color: rgba(124,255,168,.55); color: var(--text); transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,.3); }
-  .splash-chip .ar { margin-left: auto; color: var(--text-dim); transition: transform .16s, color .16s; }
-  .splash-chip:hover .ar { color: var(--accent); transform: translateX(3px); }
-  .startapp { margin-top: 10px; display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border: none; border-radius: 9px; background: var(--accent); color: var(--accent-ink); cursor: pointer; font: inherit; font-weight: 600; font-size: 13px; transition: filter .16s, box-shadow .16s; }
-  .startapp:hover { filter: brightness(1.06); box-shadow: 0 0 18px rgba(124,255,168,.4); }
-  .splash-link { margin-top: auto; padding-top: 14px; color: var(--text-mute); font-size: 12px; cursor: pointer; text-decoration: none; }
-  .splash-link:hover { color: var(--accent); }
-  /* entrance stagger — each rises + fades in, then idle motions take over */
-  .splash-hero .rise { opacity: 0; animation: hvRise .55s cubic-bezier(.22,.7,.3,1) forwards; }
-  .splash-hero .d1 { animation-delay: .10s; } .splash-hero .d2 { animation-delay: .20s; }
-  .splash-hero .d3 { animation-delay: .30s; } .splash-hero .d4 { animation-delay: .40s; }
-  .splash-hero .d5 { animation-delay: .50s; } .splash-hero .d6 { animation-delay: .60s; }
-  @keyframes hvRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-  @keyframes hvFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-  @keyframes hvBreathe { 0%,100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.14); opacity: 1; } }
-  @keyframes hvTwinkle { 0%,92%,100% { filter: none; } 96% { filter: drop-shadow(0 0 6px rgba(124,255,168,.85)); } }
-  @keyframes hvShimmer { 0%,100% { background-position: 120% 0; } 50% { background-position: -20% 0; } }
-  /* respect the OS "reduce motion" setting — content appears, nothing loops */
-  @media (prefers-reduced-motion: reduce) {
-    .splash-mark, .splash-halo, .splash-name, .splash-hero .rise { animation: none !important; opacity: 1 !important; }
-  }
-  .working { display: flex; align-items: center; gap: 9px; padding: 8px 11px; color: var(--text-mute); font-size: 12px; }
-  .working .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: hoverpulse 1s ease-in-out infinite; }
-  .working .busy-time { opacity: .6; font-variant-numeric: tabular-nums; }
-  @keyframes hoverpulse { 0%,100% { opacity: .3; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.12); } }
-  .msg { padding: 8px 11px; border-radius: 10px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-  .msg.user { align-self: flex-end; max-width: 88%; background: var(--accent); color: var(--accent-ink); font-weight: 500; }
-  .msg.assistant { align-self: flex-start; max-width: 88%; background: var(--bg-2); border: 1px solid var(--line); }
-  .msg.system { align-self: stretch; font-size: 12px; color: var(--text-dim); background: none; border: none; padding: 2px 2px; }
-  .step { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; }
-  .step-head { display: flex; align-items: center; gap: 9px; }
-  .step-icon { width: 14px; height: 14px; flex: none; text-align: center; }
-  .step-icon.check { color: var(--accent); font-weight: 700; }
-  .step-icon.spin { border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: hoverspin .7s linear infinite; box-sizing: border-box; }
-  @keyframes hoverspin { to { transform: rotate(360deg); } }
-  .step .label { flex: 1; }
-  .step-meta { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
-  .step-caret { color: var(--text-dim); font-size: 11px; }
-  .step-detail { margin: 6px 0 0; padding: 8px; background: var(--bg-3); border-radius: 6px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 11px; white-space: pre-wrap; overflow: auto; max-height: 240px; }
-  /* Linear run stream (Claude-Code style). One run = one continuous left "thread"
-     rail; every line (an AI thought or a browser op) is a node with a dot on the
-     rail and its content just to the right. The rail line is each node's
-     full-height left column, so stacked nodes form one unbroken line. */
-  .run { margin: 5px 0 9px; }
-  .node { display: flex; gap: 9px; align-items: stretch; }
-  .node-rail { position: relative; width: 11px; flex: none; }
-  .node-rail::before { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 1.5px; background: var(--line); }
-  .node:first-child .node-rail::before { top: 8px; }
-  .node:last-child .node-rail::before { bottom: auto; height: 9px; }
-  /* think node = a bold filled accent dot with an accent halo (distinct from
-     ops); op node = a small hollow dot that fills accent while live. Dots are
-     vertically centered on their first text line. */
-  .node-rail::after { content: ''; position: absolute; left: 1px; top: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent-dim); }
-  .node.think.active .node-rail::after { animation: hov-halo 1.5s ease-in-out infinite; }
-  @keyframes hov-halo { 0%,100% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent-dim); } 50% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 6px var(--accent-dim); } }
-  .node.op .node-rail::after { left: 3px; top: 6px; width: 5px; height: 5px; background: var(--bg); border: 1.5px solid var(--text-dim); box-shadow: 0 0 0 2px var(--bg); }
-  .node.op.live .node-rail::after { background: var(--accent); border-color: var(--accent); }
-  .node.op.answered .node-rail::after { background: var(--accent); border-color: var(--accent); }
-  .node.op.answered .node-body { color: var(--accent); }
-  .node.error .node-rail::after { background: var(--err); border-color: var(--err); }
-  .node-body { flex: 1; min-width: 0; padding: 1.5px 8px 1.5px 0; word-break: break-word; overflow-wrap: anywhere; }
-  .node.think .node-body { color: var(--text); font-size: 13px; line-height: 1.5; }
-  .node.think.active .node-body { color: var(--accent); }
-  .node.op .node-body { color: var(--text-mute); font-size: 12px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); line-height: 1.4; }
-  .node.op.live .node-body { color: var(--text); }
-  .node.error .node-body { color: var(--err); }
-  /* Typing caret: a blinking block cursor trailing the text while it types. */
-  .node-body.typing::after, .md.typing::after { content: '▌'; margin-left: 1px; color: var(--accent); animation: hov-blink 1s steps(1) infinite; }
-  @keyframes hov-blink { 50% { opacity: 0; } }
-  /* Coalesced low-signal group (e.g. "Read source · 18 files"): a clickable
-     header that expands the individual paths. Keeps a long exploration run to
-     one tidy line. */
-  .node.op.group .node-body { cursor: pointer; }
-  .grp-head { display: flex; align-items: center; gap: 6px; }
-  .grp-head .caret { color: var(--text-dim); font-size: 9px; transition: transform .12s; }
-  .node.op.group.open .grp-head .caret { transform: rotate(90deg); }
-  .grp-count { color: var(--text-dim); }
-  .grp-list { display: none; margin-top: 3px; border-left: 1px solid var(--line); }
-  .node.op.group.open .grp-list { display: block; }
-  .grp-item { color: var(--text-dim); font-size: 11.5px; line-height: 1.5; padding: 1px 0 1px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .node-meta { float: right; margin-left: 10px; font-size: 10.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
-  .node-meta .gr-cost { color: var(--accent); }
-  /* Monochrome copy button (Done summary + each finding); ✓ on success. */
-  .copybtn { flex: none; background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 2px; display: inline-flex; align-items: center; border-radius: 4px; }
-  .copybtn:hover { color: var(--text); background: var(--line); }
-  .copybtn.copied { color: var(--accent); }
-  .copybtn svg { width: 14px; height: 14px; }
-  /* Result: a plain conversational block (no card border) — ✓ + verdict, the
-     summary prose, inline findings, then a dim meta footer. */
-  .result { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 6px; }
-  .result .rhead { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); font-size: 13.5px; }
-  .result .rhead .rcheck { color: var(--accent); font-weight: 700; }
-  .result .rhead .copybtn { margin-left: auto; }
-  .result.err .rhead { color: var(--err); } .result.err .rhead .rcheck { color: var(--err); }
-  .result .rfoot { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
-  .result .finding { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; font-size: 12.5px; }
-  .result .finding .copybtn { margin-left: auto; align-self: flex-start; }
-  .md { line-height: 1.5; }
-  .md h4 { font-size: 1em; margin: 8px 0 4px; }
-  .md div { margin: 2px 0; }
-  .md code { background: var(--bg-3); padding: 1px 4px; border-radius: 4px; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
-  .md table { border-collapse: collapse; margin: 6px 0; font-size: 12px; }
-  .md th, .md td { border: 1px solid var(--line); padding: 3px 7px; text-align: left; }
-  .md ul { margin: 4px 0; padding-left: 18px; }
-  .md hr { border: none; border-top: 1px solid var(--line); margin: 9px 0; }
-  .saveas { align-self: flex-start; padding: 6px 11px; border: 1px solid var(--accent); border-radius: 7px; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
-  .saveas:hover { background: var(--accent); color: var(--accent-ink); }
-  .ask { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--bg-2); padding: 13px 14px; display: flex; flex-direction: column; gap: 10px; }
-  .ask.resolved { border: 1px solid var(--line); border-left: 2px solid var(--accent); background: var(--bg-2); padding: 7px 11px; gap: 2px; }
-  .ask.resolved .ask-r-q { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ask.resolved .ask-r-a { font-size: 12.5px; color: var(--accent); font-weight: 600; display: flex; align-items: center; gap: 5px; }
-  .ask .ask-q { font-weight: 600; color: var(--text); font-size: 13px; line-height: 1.4; }
-  .ask .ask-opts { display: flex; flex-direction: column; gap: 6px; }
-  .ask .ask-opt { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; font: inherit; }
-  .ask .ask-opt:hover { border-color: var(--accent); }
-  .ask .ask-opt small { color: var(--text-dim); font-size: 11px; }
-  .ask .ask-other { color: var(--text-dim); }
-  .ask .ask-other-row { display: flex; gap: 7px; align-items: center; }
-  .ask .ask-other-row input { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
-  .ask .ask-other-row input:focus { outline: none; border-color: var(--accent); }
-  .ask .ask-pencil { flex: none; display: inline-flex; align-items: center; color: var(--text-dim); }
-  .ask .ask-pencil svg { width: 14px; height: 14px; }
-  .ask .ask-go { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); color: var(--text); cursor: pointer; }
-  .ask .ask-go:hover { border-color: var(--accent); color: var(--accent); }
-  .ask .ask-go svg { width: 16px; height: 16px; }
-  .ask .ask-send { padding: 7px 12px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: var(--accent-ink); cursor: pointer; font: inherit; font-weight: 600; }
-  .findings { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 12px; background: var(--bg-2); padding: 13px 14px; display: flex; flex-direction: column; gap: 9px; }
-  .findings .fhead { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--warn); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
-  .finding { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; }
-  .badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; flex: none; text-transform: uppercase; letter-spacing: .03em; }
-  .badge.bug { background: #f87171; color: #240808; }
-  .badge.minor { background: var(--warn); color: #241805; }
-  .badge.info { background: var(--line); color: var(--text); }
-
-  /* Claude-Code-style input box: one rounded container, toolbar row inside. */
-  /* Bottom ask "popup": while the agent is waiting on a human decision, its
-     question docks just above the composer — pinned, never scrolled away with
-     the transcript. On answer it collapses into the log as a record. */
-  #ask-dock { width: 100%; max-width: 1280px; margin: 0 auto; padding: 12px 8px 0; }
-  /* Docked popup frame matches the input box exactly (same bg / 1px border /
-     12px radius / focus highlight) so it sits right where the input was — no
-     accent left-stripe here, unlike the collapsed in-log ask records. */
-  #ask-dock .ask { background: var(--bg-3); border: 1px solid var(--line); box-shadow: 0 -2px 18px rgba(0,0,0,.35); max-height: 46vh; overflow-y: auto; animation: askpop .16s ease-out; }
-  #ask-dock .ask:focus-within { border-color: var(--accent); }
-  @keyframes askpop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  #composer { padding: 0px 8px 8px; position: relative; width: 100%; max-width: 1280px; margin: 0 auto; }
-  /* The ask popup is mutually exclusive with the input: while a question (or the
-     save prompt) is up it takes the composer's place — same width, input hidden.
-     Pinned to the bottom with the composer's exact padding so the popup's bottom
-     edge sits exactly where the input box's was; it grows upward as it gets taller. */
-  /* While an ask/save popup is up, hide the input and let the dock take its
-     place. The dock stays IN FLOW (same max-width / centering as the composer,
-     so identical width) and is the last flex child, so it sits at the bottom;
-     matching the composer's bottom padding aligns its bottom edge to the input's. */
-  body.ask-open #composer { display: none; }
-  body.ask-open #ask-dock { padding-bottom: 10px; }
-  .ask-warn { font-size: 12px; color: var(--warn); line-height: 1.4; }
-  .ask-btns { display: flex; justify-content: flex-end; gap: 8px; }
-  .ask-discard { padding: 7px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text-mute); cursor: pointer; font: inherit; }
-  .ask-discard:hover { color: var(--text); border-color: var(--text-dim); }
-  .mentions { position: absolute; left: 10px; right: 10px; bottom: calc(100% - 6px); z-index: 20;
-    background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
-    box-shadow: 0 8px 24px rgba(0,0,0,.35); max-height: 220px; overflow-y: auto; }
-  .m-item { display: flex; align-items: baseline; gap: 8px; padding: 7px 11px; cursor: pointer; font-size: 12px; }
-  .m-item .m-label { color: var(--text); font-weight: 600; }
-  .m-item .m-sub { color: var(--text-mute); font-size: 11px; }
-  .m-item.sel, .m-item:hover { background: var(--bg-3); }
-  .m-empty { padding: 8px 11px; color: var(--text-mute); font-size: 11px; }
-  #box {
-    border: 1px solid var(--line); border-radius: 12px; background: var(--bg-3);
-    padding: 8px 5px 8px; display: flex; flex-direction: column; gap: 6px;
-    transition: border-color .12s ease;
-  }
-  #box:focus-within { border-color: var(--accent); }
-  #input {
-    width: 100%; resize: none; min-height: 22px; max-height: 160px;
-    border: none; outline: none; background: transparent; color: var(--text);
-    font: inherit; line-height: 1.45; padding: 2px 0;
-  }
-  #input::placeholder { color: var(--text-dim); }
-  .inputrow { display: flex; align-items: flex-start; gap: 6px; }
-  .inputrow #input { flex: 1; }
-  #toolbar { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); margin: 4px -10px 0; padding: 7px 10px 0; }
-  #toolbar .left { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  #toolbar .right { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
-  /* The model name (text-only) absorbs the squeeze: it truncates instead of
-     pushing the mode / send buttons off the panel edge. */
-  #model-btn { min-width: 0; }
-  #model-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  /* Borderless toolbar buttons (Claude-Code "auto mode" style): icon + text,
-     no chrome, subtle hover. */
-  .barebtn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: none; background: none; color: var(--text-mute); cursor: pointer; font: inherit; font-size: 12px; border-radius: 7px; }
-  .barebtn:hover { color: var(--text); background: var(--bg-2); }
-  /* Model button when locked (Local LLM — model lives in Settings): shown but not interactive. */
-  #model-btn.locked { opacity: .6; cursor: default; }
-  #model-btn.locked:hover { background: none; color: var(--text-mute); }
-  .barebtn .caret { color: var(--text-dim); font-size: 10px; }
-  .barebtn svg { opacity: .9; }
-  #mode-icon { display: inline-flex; align-items: center; }
-  /* Narrow panel: collapse labelled buttons to icon-only and trim chrome so
-     nothing overflows the panel edge. The model name keeps showing (it
-     truncates); browser / mode keep their icons. */
-  @media (max-width: 280px) {
-    #browser-label, #mode-label, #app-label { display: none; }
-    #toolbar { gap: 4px; }
-    #toolbar .left, #toolbar .right { gap: 2px; }
-    .barebtn { padding: 4px 5px; }
-    .appstatus { padding: 3px 5px; }
-    #session { max-width: 150px; }
-  }
-  .p-ic svg { display: block; margin: 1px auto 0; }
-  /* While a run is active, the target can't change mid-flight — lock the
-     browser / model / mode pickers (send becomes the stop control). */
-  body.running #browser-toggle, body.running #model-btn, body.running #mode { pointer-events: none; opacity: .4; }
-  /* Mode button tints to the active mode. */
-  body.mode-api-test #mode { color: var(--warn); }
-  body.mode-pentest #mode { color: var(--err); }
-  /* Popup picker (modes / models) — mimics Claude Code's Modes list. */
-  .popup { position: absolute; bottom: calc(100% - 6px); z-index: 30; min-width: 252px; max-width: calc(100% - 24px);
-    background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
-    box-shadow: 0 10px 28px rgba(0,0,0,.42); padding: 4px; }
-  #model-menu { left: 12px; }
-  #mode-menu { right: 12px; }
-  .popup .p-hdr { padding: 6px 8px 4px; font-size: 11px; color: var(--text-dim); }
-  .p-item { display: flex; gap: 9px; padding: 8px 8px; cursor: pointer; align-items: flex-start; border-radius: 7px; }
-  .p-item:hover, .p-item.sel { background: var(--bg-3); }
-  .p-item .p-ic { width: 18px; flex: none; text-align: center; color: var(--text-mute); }
-  .p-item .p-body { flex: 1; min-width: 0; }
-  .p-item .p-title { color: var(--text); font-size: 12.5px; }
-  .p-item .p-desc { color: var(--text-mute); font-size: 11px; line-height: 1.4; margin-top: 1px; }
-  .p-item .p-check { flex: none; color: var(--accent); opacity: 0; }
-  .p-item.active .p-check { opacity: 1; }
-  /* "Experimental" / "Soon" pill next to a picker title. */
-  .p-tag { font-size: 9px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
-  .p-item.disabled { opacity: .45; cursor: default; }
-  .p-item.disabled:hover { background: none; }
-  /* Reasoning-effort chips below the model list. */
-  .eff-hdr { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 8px; }
-  .eff-row { display: flex; flex-wrap: wrap; gap: 5px; padding: 2px 8px 6px; }
-  .eff-chip { padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text-mute); cursor: pointer; font: inherit; font-size: 11.5px; text-transform: capitalize; }
-  .eff-chip:hover { border-color: var(--accent); color: var(--text); }
-  .eff-chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-  #send {
-    width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
-    background: var(--accent); color: var(--accent-ink);
-    display: inline-flex; align-items: center; justify-content: center;
-  }
-  #send:hover { filter: brightness(1.08); }
-  #send:disabled { opacity: .45; cursor: default; }
-</style>
+<style>${chatCss}</style>
 </head>
 <body>
   <header>
