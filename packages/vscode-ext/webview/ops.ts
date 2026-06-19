@@ -57,6 +57,21 @@ export function isQuietStep(m: StepMsg): boolean {
   return false;
 }
 
+/** Present-continuous label for the live "working" indicator — tracks what the
+ *  agent is actually doing right now (e.g. "Clicking", "Filling", "Reading
+ *  source", "Navigating"). Short: no target name, trailing prepositions trimmed,
+ *  so it reads as a status word, not a sentence. */
+export function presentLabel(tool?: string, detail?: string): string {
+  const t = strip(tool);
+  if (t === "read_source" || t === "list_source") return "Reading source";
+  const pair = OPVERB[t];
+  if (!pair) {
+    const h = t.split("_").join(" ");
+    return h ? h.charAt(0).toUpperCase() + h.slice(1) : "Working";
+  }
+  return pair[0].replace(/ (to|into)$/, ""); // "Navigating to" → "Navigating"
+}
+
 /** Past-tense one-liner for an op (e.g. `Clicked "Sign in"`, `Navigated to /x`). */
 export function describeOp(tool?: string, detail?: string): string {
   const t = strip(tool);

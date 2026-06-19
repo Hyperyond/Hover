@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { onMessage } from "./vscode";
-import { isQuietStep, coalesceKind, describeOp, groupDetail, GROUP_LABEL, type StepMsg } from "./ops";
+import { isQuietStep, coalesceKind, describeOp, presentLabel, groupDetail, GROUP_LABEL, type StepMsg } from "./ops";
 import { splitFindings } from "./markdown";
 
 export interface Finding {
@@ -54,8 +54,12 @@ function makeResult(m: Record<string, unknown>): ThreadItem {
  * lands), so the final narration never flashes. Consecutive source reads/lists
  * coalesce into one expandable group.
  */
-export function useThread(): ThreadItem[] {
+export function useThread(): { items: ThreadItem[]; workLabel: string | null } {
   const [items, setItems] = useState<ThreadItem[]>([]);
+  // The live operation label for the "working" indicator — tracks the agent's
+  // current activity so the foot-of-thread status matches what's happening
+  // (e.g. "Clicking" / "Reading source"), instead of a generic spinner word.
+  const [workLabel, setWorkLabel] = useState<string | null>(null);
   const pending = useRef<string | null>(null);
 
   useEffect(() => {
@@ -63,6 +67,7 @@ export function useThread(): ThreadItem[] {
       const m = raw as Record<string, unknown>;
       switch (m.type) {
         case "user":
+          setWorkLabel("Thinking");
           setItems((p) => {
             const next = [...p];
             flushPending(next, pending);
@@ -73,6 +78,7 @@ export function useThread(): ThreadItem[] {
         case "narration": {
           const text = String(m.text || "").trim();
           if (!text) break;
+          setWorkLabel("Thinking");
           setItems((p) => {
             const next = [...p];
             flushPending(next, pending); // commit the previous thought
@@ -83,6 +89,9 @@ export function useThread(): ThreadItem[] {
         }
         case "step": {
           const step = m as StepMsg;
+          // Update the live label even for "quiet" steps (snapshot / wait) so the
+          // indicator reflects them, but don't add a thread item for those.
+          setWorkLabel(presentLabel(step.tool, step.detail));
           if (isQuietStep(step)) break;
           setItems((p) => {
             const next = [...p];
@@ -105,6 +114,7 @@ export function useThread(): ThreadItem[] {
         }
         case "result":
           pending.current = null; // the result's summary supersedes the final thought
+          setWorkLabel(null);
           setItems((p) => [...p, makeResult(m)]);
           break;
         case "system":
@@ -120,17 +130,19 @@ export function useThread(): ThreadItem[] {
           break;
         case "loadSession":
           pending.current = null;
+          setWorkLabel(null);
           setItems(buildFromTranscript(Array.isArray(m.transcript) ? (m.transcript as Record<string, unknown>[]) : []));
           break;
         case "reset":
           pending.current = null;
+          setWorkLabel(null);
           setItems([]);
           break;
       }
     });
   }, []);
 
-  return items;
+  return { items, workLabel };
 }
 
 function flushPending(list: ThreadItem[], pending: { current: string | null }) {
