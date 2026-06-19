@@ -269,14 +269,7 @@ const GROUNDED_ACTUATION_DIRECTIVE =
   'mcp__hovercontrol__upload_file (path or placeholder) is how you set a file on ' +
   'an upload control, since you have no filesystem access yourself. NEVER ' +
   'silently stop and report a limitation when working it out — or asking — could ' +
-  'unblock you.\n\n' +
-  'SPLIT BY FEATURE — call mcp__hovercontrol__mark_flow at the START of each ' +
-  'distinct feature / user flow you test (e.g. mark_flow("login") before signing ' +
-  'in, mark_flow("checkout") before the checkout flow). Each marked flow is saved ' +
-  'as its OWN small spec file named after it (login.spec.ts, checkout.spec.ts) — ' +
-  'good test structure splits by feature/context, not one giant file. Use a ' +
-  'feature/context name, not a test-type. If the whole run is one simple flow, a ' +
-  'single mark_flow (or none) is fine.';
+  'unblock you.';
 
 /**
  * Try to bind a WebSocketServer to <host>:<port>. Resolves with the wss on
