@@ -1347,7 +1347,8 @@ body.ask-open #ask-dock {
   align-items: center;
   gap: 6px;
   border-top: 1px solid var(--line);
-  padding: 7px 5px 0;
+  margin: 4px -5px 0;
+  padding: 7px 10px 0;
 }
 #toolbar .left {
   display: flex;
