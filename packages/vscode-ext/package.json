@@ -415,11 +415,6 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically crystallize a spec / report when a run finishes with results (not cancelled or errored). The spec name is derived from your prompt; re-running the same flow overwrites the same file. Turn off to save manually with the Save button."
-        },
-        "hover.reactChat": {
-          "type": "boolean",
-          "default": false,
-          "description": "Experimental: render the chat with the new React webview (migration in progress). Off uses the current chat."
         }
       }
     },

@@ -28,6 +28,9 @@
          keep the input tight-to-edge on a wide panel; lower it to cap sooner. */
   --chat-gut: 10px;
   --chat-max: 728px;
+  /* The message stream (#log) gets a wider gutter than the header/composer, so
+     the conversation breathes while the input/header stay tight. Dial freely. */
+  --log-gut: 22px;
 }
 /* Light / high-contrast-light themes: mint-on-white has poor contrast as text,
      so deepen the accent (button bg stays readable with white ink). */
@@ -72,6 +75,9 @@ body.mode-pentest #ask-dock {
 }
 body {
   margin: 0;
+  /* Override VS Code's default webview body padding (0 20px) so the panel goes
+     edge-to-edge like Claude Code; the chat's own gutter is --chat-gut. */
+  padding: 0;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -324,6 +330,9 @@ header {
   color: var(--text-mute);
   font: inherit;
   font-size: 12px;
+  /* Tighten the text line-box so the status dot centres on the text's optical
+     middle (default line-height makes the dot read as too high). */
+  line-height: 1;
   cursor: pointer;
 }
 .appstatus:hover {
@@ -344,7 +353,7 @@ header {
 #log {
   flex: 1;
   overflow-y: auto;
-  padding: 12px var(--chat-gut);
+  padding: 12px var(--log-gut);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -604,7 +613,7 @@ header {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 11px;
+  padding: 8px 0px;
   color: var(--text-mute);
   font-size: 12px;
 }
@@ -753,15 +762,18 @@ header {
 .node-rail::after {
   content: "";
   position: absolute;
-  left: 1px;
-  top: 7px;
-  width: 9px;
-  height: 9px;
+  /* `* {box-sizing}` doesn't reach pseudo-elements — set it so the op dot's
+     1.5px border doesn't inflate its width and shift the dot off the others'
+     centre axis (x = 5.5, matching the think dot + the rail line). */
+  box-sizing: border-box;
+  left: 2.5px;
+  top: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow:
-    0 0 0 2px var(--bg),
-    0 0 0 3.5px var(--accent-dim);
+  /* bg ring masks the rail line behind the dot; no accent-dim halo */
+  box-shadow: 0 0 0 2px var(--bg);
 }
 .node.think.active .node-rail::after {
   animation: hov-halo 1.5s ease-in-out infinite;
@@ -780,10 +792,10 @@ header {
   }
 }
 .node.op .node-rail::after {
-  left: 3px;
-  top: 6px;
-  width: 5px;
-  height: 5px;
+  left: 2.5px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
   background: var(--bg);
   border: 1.5px solid var(--text-dim);
   box-shadow: 0 0 0 2px var(--bg);
@@ -802,6 +814,43 @@ header {
 .node.error .node-rail::after {
   background: var(--err);
   border-color: var(--err);
+}
+/* Live "Working…" node — distinct from settled ops: the rail dot is replaced by
+   a small spinning Chrome-coloured ring (echoes the headless-browser border —
+   "the invisible browser is working"). Text is muted, NOT italic. */
+.node.op.working .node-rail::after {
+  display: none;
+}
+.node.op.working .work-ico {
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from var(--hov-angle),
+    #4285f4,
+    #ea4335,
+    #fbbc05,
+    #34a853,
+    #4285f4
+  );
+  /* thicker ring so it reads as solid as the dots at this small size */
+  -webkit-mask: radial-gradient(closest-side, transparent 40%, #000 44%);
+  mask: radial-gradient(closest-side, transparent 40%, #000 44%);
+  animation: hov-spinborder 1.1s linear infinite;
+}
+/* No rail dot or rail line under the spinning ring (the ring IS the marker). */
+.node.op.working .node-rail::before {
+  display: none;
+}
+.node.op.working .node-body {
+  color: var(--text-mute);
+}
+.node.op.working .busy-time {
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
 }
 .node-body {
   flex: 1;
@@ -858,6 +907,13 @@ header {
   color: var(--text-dim);
   font-size: 9px;
   transition: transform 0.12s;
+  /* Fixed-width centred box so the (rotating) caret has a known centre (x=5.5)
+     that the child list's vertical line lines up under. */
+  width: 11px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .node.op.group.open .grp-head .caret {
   transform: rotate(90deg);
@@ -868,6 +924,9 @@ header {
 .grp-list {
   display: none;
   margin-top: 3px;
+  /* Line sits under the caret centre (5.5px); the gap before the caret box is
+     the grp-head's flex gap, so this matches the head's left edge + caret. */
+  margin-left: 5px;
   border-left: 1px solid var(--line);
 }
 .node.op.group.open .grp-list {
@@ -1313,10 +1372,18 @@ body.ask-open #ask-dock {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: border-color 0.12s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
+/* Refined focus: the border turns accent and a soft 1px halo + faint outer
+   bloom lifts the input, instead of a single hard 1px line. */
 #box:focus-within {
   border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 0 4px var(--accent-dim),
+    0 0 12px -4px var(--accent);
 }
 #input {
   width: 100%;
@@ -1409,7 +1476,8 @@ body.ask-open #ask-dock {
 .barebtn svg {
   opacity: 0.9;
 }
-#mode-icon {
+#mode-icon,
+.bolt {
   display: inline-flex;
   align-items: center;
 }

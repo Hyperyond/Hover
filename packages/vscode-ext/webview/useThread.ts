@@ -15,6 +15,7 @@ export type ThreadItem =
   | { kind: "user"; text: string }
   | { kind: "think"; text: string }
   | { kind: "op"; text: string; error?: boolean }
+  | { kind: "answered"; text: string }
   | { kind: "group"; label: string; items: string[] }
   | { kind: "system"; text: string }
   | { kind: "assistant"; text: string }
@@ -112,6 +113,15 @@ export function useThread(): ThreadItem[] {
         case "assistant":
           setItems((p) => [...p, { kind: "assistant", text: String(m.text || "") }]);
           break;
+        case "_answered":
+          // Local (not from the host): drop a concise "You answered: …" node
+          // onto the thread after an ask_user card resolves.
+          setItems((p) => [...p, { kind: "answered", text: String(m.text || "") }]);
+          break;
+        case "loadSession":
+          pending.current = null;
+          setItems(buildFromTranscript(Array.isArray(m.transcript) ? (m.transcript as Record<string, unknown>[]) : []));
+          break;
         case "reset":
           pending.current = null;
           setItems([]);
@@ -128,4 +138,61 @@ function flushPending(list: ThreadItem[], pending: { current: string | null }) {
     list.push({ kind: "think", text: pending.current });
     pending.current = null;
   }
+}
+
+/** Rebuild the thread from a persisted session transcript (on conversation
+ *  switch). Transcript kinds differ from the live stream: narration is `ai`,
+ *  and a step carries the raw `input` object (not a JSON `detail` string). */
+function buildFromTranscript(tx: Record<string, unknown>[]): ThreadItem[] {
+  const items: ThreadItem[] = [];
+  const pending = { current: null as string | null };
+  const flush = () => flushPending(items, pending);
+  for (const e of tx) {
+    switch (e.kind) {
+      case "user":
+        flush();
+        items.push({ kind: "user", text: String(e.text || "") });
+        break;
+      case "ai": {
+        const t = String(e.text || "").trim();
+        if (t) {
+          flush();
+          pending.current = t;
+        }
+        break;
+      }
+      case "step": {
+        const step: StepMsg = {
+          tool: e.tool as string | undefined,
+          detail: e.input != null ? JSON.stringify(e.input) : (e.detail as string | undefined),
+          isError: e.isError as boolean | undefined,
+        };
+        if (isQuietStep(step)) break;
+        flush();
+        const ck = coalesceKind(step.tool);
+        if (ck) {
+          const last = items[items.length - 1];
+          const label = GROUP_LABEL[ck];
+          if (last && last.kind === "group" && last.label === label) {
+            items[items.length - 1] = { ...last, items: [...last.items, groupDetail(step)] };
+          } else {
+            items.push({ kind: "group", label, items: [groupDetail(step)] });
+          }
+        } else {
+          items.push({ kind: "op", text: describeOp(step.tool, step.detail), error: step.isError });
+        }
+        break;
+      }
+      case "done":
+        pending.current = null;
+        items.push(
+          makeResult({ verdict: e.isError ? "Failed" : "Done", summary: e.summary, findings: e.findings }),
+        );
+        break;
+      case "system":
+        items.push({ kind: "system", text: String(e.text || "") });
+        break;
+    }
+  }
+  return items;
 }
