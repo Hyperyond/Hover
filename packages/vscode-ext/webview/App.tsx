@@ -51,10 +51,12 @@ export function App() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSess, setActiveSess] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const items = useThread();
-  // The live indicator at the foot of the thread: a timed busy job (optimize) or
-  // a plain "Working…" while a run streams between steps.
-  const working = busy != null ? { text: busy, timer: true } : running ? { text: "Working…", timer: false } : null;
+  const { items, workLabel } = useThread();
+  // The live indicator at the foot of the thread: a timed busy job (optimize), or
+  // — while a run streams between steps — a label that tracks the agent's current
+  // operation (workLabel, e.g. "Clicking" / "Reading source"), falling back to
+  // "Working" before the first step lands.
+  const working = busy != null ? { text: busy, timer: true } : running ? { text: workLabel || "Working", timer: false } : null;
 
   // Running chrome: a `running` body class + the silent-mode rotating border
   // (only when headless — the browser is invisible, so the border signals work).

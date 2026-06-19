@@ -756,6 +756,12 @@ header {
   bottom: auto;
   height: 9px;
 }
+/* The node right before the live spinner: stop its rail line at its own dot so
+   no grey connector runs down into the detached working spinner. */
+.node:has(+ .node.op.working) .node-rail::before {
+  bottom: auto;
+  height: 9px;
+}
 /* think node = a bold filled accent dot with an accent halo (distinct from
      ops); op node = a small hollow dot that fills accent while live. Dots are
      vertically centered on their first text line. */
@@ -823,10 +829,12 @@ header {
 }
 .node.op.working .work-ico {
   position: absolute;
-  left: 2px;
-  top: 6px;
-  width: 7px;
-  height: 7px;
+  /* Larger than the 6px rail dots so the spinner reads as the active marker,
+     centered on the same point (≈10px from the node top) the op text centers on. */
+  left: 0px;
+  top: 4.5px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: conic-gradient(
     from var(--hov-angle),
@@ -836,9 +844,9 @@ header {
     #34a853,
     #4285f4
   );
-  /* thicker ring so it reads as solid as the dots at this small size */
-  -webkit-mask: radial-gradient(closest-side, transparent 40%, #000 44%);
-  mask: radial-gradient(closest-side, transparent 40%, #000 44%);
+  /* ring band — proportional thickness at the larger size */
+  -webkit-mask: radial-gradient(closest-side, transparent 38%, #000 46%);
+  mask: radial-gradient(closest-side, transparent 38%, #000 46%);
   animation: hov-spinborder 1.1s linear infinite;
 }
 /* No rail dot or rail line under the spinning ring (the ring IS the marker). */
@@ -847,6 +855,21 @@ header {
 }
 .node.op.working .node-body {
   color: var(--text-mute);
+  font-weight: 600;
+}
+/* The op `line-height` already reserves the row height, and the cursor below is
+   always rendered, so deleting/typing the status never collapses or reflows the
+   row. Text flows like any other op line, so it aligns with the rail spinner. */
+/* Blinking block cursor trailing the status text (Claude-Code style). Always
+   rendered, so an empty mid-backspace label keeps the line height. */
+.work-cursor {
+  display: inline-block;
+  width: 0.46em;
+  height: 1.02em;
+  margin-left: 2px;
+  vertical-align: -0.16em;
+  background: var(--text-mute);
+  animation: hov-blink 1s steps(1) infinite;
 }
 .node.op.working .busy-time {
   opacity: 0.6;
@@ -855,7 +878,10 @@ header {
 .node-body {
   flex: 1;
   min-width: 0;
-  padding: 1.5px 8px 1.5px 0;
+  /* Extra bottom padding opens the rows up (less dense). The rail stretches with
+     the taller node, so the thread line stays continuous; the dot is pinned near
+     the top, so the breathing room lands between lines without shifting it. */
+  padding: 1.5px 8px 6px 0;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
@@ -863,6 +889,7 @@ header {
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
+  font-weight: 600;
 }
 .node.think.active .node-body {
   color: var(--accent);
@@ -872,6 +899,7 @@ header {
   font-size: 12px;
   font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
   line-height: 1.4;
+  font-weight: 500;
 }
 .node.op.live .node-body {
   color: var(--text);

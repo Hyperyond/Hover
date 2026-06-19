@@ -116,18 +116,17 @@ export function Thread({
   );
 }
 
-// Rotating status verbs for a live run, cycled with a typing reveal — like
-// Claude Code's animated status, so "Working…" isn't a dead label.
-const WORK_WORDS = ["Working", "Thinking", "Exploring", "Reasoning", "Checking", "Planning"];
-
-/** Live indicator on the thread rail — a spinning Chrome ring + a status word.
- *  A timed busy job (optimize) shows its fixed label + mm:ss; a plain run cycles
- *  the verbs above, each typed out. */
+/** Live indicator on the thread rail — a spinning Chrome ring + a typed status,
+ *  Claude-Code style (text + a blinking block cursor). The status `text` tracks
+ *  the agent's actual operation ("Clicking" / "Reading source"); when it changes
+ *  the cursor backspaces the mismatch and types the new label. A timed busy job
+ *  (optimize) shows its fixed label + mm:ss. The block cursor is always present,
+ *  so the line height never collapses between words. */
 function WorkingNode({ text, timer }: { text: string; timer: boolean }) {
   const [s, setS] = useState(0); // busy-job elapsed seconds
-  const [wi, setWi] = useState(0); // current word
-  const [n, setN] = useState(0); // chars typed of current word
+  const [shown, setShown] = useState(""); // chars currently revealed
 
+  // Busy-job elapsed timer.
   useEffect(() => {
     if (!timer) return;
     const start = Date.now();
@@ -135,42 +134,37 @@ function WorkingNode({ text, timer }: { text: string; timer: boolean }) {
     return () => clearInterval(iv);
   }, [timer]);
 
+  // Animate `shown` toward `text`: type forward while `shown` is a prefix of the
+  // target, otherwise backspace one char. Settles (no timer) when they match —
+  // leaving just the blinking cursor, so the height stays put between labels.
   useEffect(() => {
-    if (timer) return;
-    const word = WORK_WORDS[wi];
-    if (n < word.length) {
-      const t = setTimeout(() => setN(n + 1), 55);
-      return () => clearTimeout(t);
+    if (timer) {
+      setShown(text);
+      return;
     }
-    const t = setTimeout(() => {
-      setWi((wi + 1) % WORK_WORDS.length);
-      setN(0);
-    }, 1500);
+    if (shown === text) return;
+    const grow = text.startsWith(shown);
+    const t = setTimeout(
+      () => setShown(grow ? text.slice(0, shown.length + 1) : shown.slice(0, -1)),
+      grow ? 45 : 25,
+    );
     return () => clearTimeout(t);
-  }, [timer, wi, n]);
+  }, [shown, text, timer]);
 
-  const word = WORK_WORDS[wi];
-  const done = n >= word.length;
   return (
     <div className="node op working">
       <span className="node-rail">
         <span className="work-ico" />
       </span>
-      <div className="node-body">
-        {timer ? (
-          <>
-            {text}
-            <span className="busy-time">
-              {" "}
-              {Math.floor(s / 60)}:{("0" + (s % 60)).slice(-2)}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className={done ? "" : "typing"}>{word.slice(0, n)}</span>
-            {done && "…"}
-          </>
+      <div className="node-body work-status">
+        <span>{timer ? text : shown}</span>
+        {timer && (
+          <span className="busy-time">
+            {" "}
+            {Math.floor(s / 60)}:{("0" + (s % 60)).slice(-2)}
+          </span>
         )}
+        <span className="work-cursor" />
       </div>
     </div>
   );
