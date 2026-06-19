@@ -183,55 +183,20 @@ function isFlowMarker(s: SpecStep): boolean {
   return s.kind === 'step' && /(^|__)mark_flow$/.test(String((s as { tool?: string }).tool ?? ''));
 }
 
-/** Split a run into per-feature segments at `mark_flow` markers. Steps before
- *  the first marker (the prompt + initial navigation/setup) are shared context
- *  prepended to every segment so each file stands alone (fresh goto + intent).
- *  No markers → a single unnamed segment (classic one-file behaviour). */
-function splitFlows(steps: SpecStep[]): { name: string; steps: SpecStep[] }[] {
-  if (!steps.some(isFlowMarker)) return [{ name: '', steps }];
-  const segs: { name: string; steps: SpecStep[] }[] = [];
-  const preamble: SpecStep[] = [];
-  let cur: { name: string; steps: SpecStep[] } | null = null;
-  for (const s of steps) {
-    if (isFlowMarker(s)) {
-      const raw = (s as { input?: { name?: unknown } }).input?.name;
-      const name = typeof raw === 'string' && raw.trim() ? raw.trim() : `flow-${segs.length + 1}`;
-      cur = { name, steps: [] };
-      segs.push(cur);
-    } else if (cur) {
-      cur.steps.push(s);
-    } else {
-      preamble.push(s); // before the first marker
-    }
-  }
-  // Shared context = the user prompt + any initial navigation, so each flow file
-  // opens the app and carries the original intent.
-  const ctx = preamble.filter(
-    (s) => s.kind === 'user' || (s.kind === 'step' && /navigate/.test(String((s as { tool?: string }).tool ?? ''))),
-  );
-  for (const seg of segs) seg.steps = [...ctx, ...seg.steps];
-  return segs.filter((seg) => seg.steps.some((s) => s.kind === 'step' && !isFlowMarker(s)));
-}
-
 export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult> {
   if (!slugify(opts.name)) throw new Error('spec name must contain at least one alphanumeric character');
   if (!opts.steps.some((s) => s.kind === 'step' && !isFlowMarker(s))) {
     throw new Error('spec must contain at least one tool step to replay');
   }
 
-  // Split by mark_flow into per-feature files (checkout.spec.ts, login.spec.ts,
-  // …). Flat in __vibe_tests__ so each keeps slug == filename — the sidecar /
-  // optimize / runSpec slug↔path mapping is untouched.
-  const segments = splitFlows(opts.steps);
-  if (segments.length <= 1) {
-    return writeOneSpec(opts, slugify(opts.name), opts.name, opts.steps);
-  }
-  const files: { path: string; slug: string; flow: string }[] = [];
-  for (const seg of segments) {
-    const r = await writeOneSpec(opts, slugify(seg.name), seg.name, seg.steps);
-    files.push({ path: r.path, slug: r.slug, flow: seg.name });
-  }
-  return { path: files[0].path, slug: files[0].slug, files };
+  // One run → one file. Frontend runs are NOT auto-split: a single user journey
+  // (especially a multi-step single-page form) is stateful and sequential — each
+  // step depends on the prior steps' state, so chopping it into per-section files
+  // yields fragments that each fail when run standalone. Splitting into truly
+  // independent journeys is a deliberate refactor (the architecture pass), not
+  // something the agent improvises mid-run. (API checks ARE split by module in
+  // writeSecuritySpec — those are stateless and independently replayable.)
+  return writeOneSpec(opts, slugify(opts.name), opts.name, opts.steps);
 }
 
 /** Write ONE spec file from a (sub)set of steps. The single-file path and each

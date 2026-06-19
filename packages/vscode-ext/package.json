@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "displayName": "Hover — AI Vibe Testing",
   "description": "Describe a flow in plain English; Hover's AI tests your app like a real teammate and hands you a real Playwright spec. Hands-free, local-first, on your own Claude Code or Codex CLI.",
   "keywords": [
@@ -504,11 +504,13 @@
   },
   "scripts": {
     "build": "tsup",
+    "build:webview": "vite build",
+    "dev:webview": "vite",
     "watch": "tsup --watch",
     "stage:engine": "node scripts/stage-engine.mjs",
     "clean:vsix": "node -e \"const fs=require('node:fs');for(const f of fs.readdirSync('.'))if(f.endsWith('.vsix'))fs.rmSync(f)\"",
-    "package": "pnpm run clean:vsix && pnpm run build && pnpm run stage:engine && pnpm dlx @vscode/vsce package --no-dependencies",
-    "publish": "pnpm run build && pnpm run stage:engine && pnpm dlx @vscode/vsce publish --no-dependencies",
+    "package": "pnpm run clean:vsix && pnpm run build && pnpm run build:webview && pnpm run stage:engine && pnpm dlx @vscode/vsce package --no-dependencies",
+    "publish": "pnpm run build && pnpm run build:webview && pnpm run stage:engine && pnpm dlx @vscode/vsce publish --no-dependencies",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -517,8 +519,14 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.85.0",
     "@types/ws": "^8.5.0",
-    "tsup": "^8.0.0"
+    "@vitejs/plugin-react": "^5.2.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "tsup": "^8.0.0",
+    "vite": "^7.3.3"
   }
 }

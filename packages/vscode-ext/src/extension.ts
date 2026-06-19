@@ -1355,7 +1355,7 @@ async function switchMode(): Promise<void> {
   // it; otherwise it applies locally and takes effect on the next run.
   type Pick = vscode.QuickPickItem & { modeId: string | null };
   const items: Pick[] = [
-    { label: '$(circle-outline) Frontend', description: 'frontend testing — no API/security probing', modeId: null },
+    { label: '$(circle-outline) Flow', description: 'drive the flow you describe → one Playwright spec', modeId: null },
     ...allModes().map((m) => ({
       label: `${m.id === 'pentest' ? '$(flame)' : '$(shield)'} ${m.label}`,
       description: m.description ?? m.id,

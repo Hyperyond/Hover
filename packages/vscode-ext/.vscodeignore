@@ -1,11 +1,13 @@
 .vscode/**
 src/**
 scripts/**
+webview/**
 /node_modules/**
 engine/*.tgz
 *.map
 dist/**/*.map
 tsconfig.json
 tsup.config.ts
+vite.config.ts
 .gitignore
 resources/icon-source.png
