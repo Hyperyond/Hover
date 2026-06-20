@@ -1,5 +1,8 @@
 import { Chat } from "./views/chat/Chat";
 import { Settings } from "./views/settings/Settings";
+import { Dashboard } from "./views/dashboard/Dashboard";
+import { Conversations } from "./views/conversations/Conversations";
+import { Traffic } from "./views/traffic/Traffic";
 
 /**
  * Top-level view router. Every Hover WebviewView loads the SAME bundle; the
@@ -17,7 +20,12 @@ export function App({ view }: { view: HoverView }) {
       return <Chat />;
     case "settings":
       return <Settings />;
-    // Stages 2-4 add: dashboard / conversations / traffic.
+    case "dashboard":
+      return <Dashboard />;
+    case "conversations":
+      return <Conversations />;
+    case "traffic":
+      return <Traffic />;
     default:
       return <Chat />;
   }

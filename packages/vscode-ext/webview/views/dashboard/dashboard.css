@@ -1,0 +1,59 @@
+/* Dashboard view styles — scoped under .dashboard so they don't collide in the
+   shared bundle. Brand status colours kept; theme vars inherit to children. */
+.dashboard {
+  --bg: var(--vscode-sideBar-background, #1a1a1a);
+  --bg-2: var(--vscode-editorWidget-background, #222224);
+  --bg-3: var(--vscode-input-background, #141414);
+  --line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c)));
+  --text: var(--vscode-foreground, #e5e7eb);
+  --mute: var(--vscode-descriptionForeground, #9ca3af);
+  --dim: var(--vscode-disabledForeground, #6b7280);
+  --pass: #7cffa8;
+  --fail: #f87171;
+  --flaky: #fb923c;
+  --accent: #7cffa8;
+  padding: 10px;
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+  color: var(--text);
+}
+body.vscode-light .dashboard,
+body.vscode-high-contrast-light .dashboard { --accent: #16a34a; --pass: #16a34a; }
+.dashboard .runall { width: 100%; padding: 8px; margin-bottom: 8px; border: none; border-radius: 8px; background: var(--accent); color: #0c2417; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.dashboard .runall:hover { filter: brightness(1.08); }
+.dashboard .search { position: relative; margin-bottom: 10px; }
+.dashboard .search input { width: 100%; padding: 7px 9px 7px 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-3); color: var(--text); font: inherit; font-size: 12px; }
+.dashboard .search input::placeholder { color: var(--dim); }
+.dashboard .search input:focus { outline: none; border-color: var(--vscode-focusBorder); }
+.dashboard .search > svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--dim); }
+.dashboard .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.dashboard .tile { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; }
+.dashboard .tile .n { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dashboard .tile .k { color: var(--dim); font-size: 10px; margin-top: 1px; }
+.dashboard .tile .n.ok { color: var(--pass); }
+.dashboard .tile .n.bad { color: var(--fail); }
+.dashboard .tile .n.warn { color: var(--flaky); }
+.dashboard h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 12px 2px 6px; font-weight: 600; }
+.dashboard .group { color: var(--mute); font-size: 10.5px; margin: 9px 4px 3px; display: flex; align-items: center; gap: 5px; }
+.dashboard .group svg { opacity: .7; }
+/* Fixed height: hover-revealed .acts buttons (24px) are taller than resting
+   content; min-height would let the row grow on hover. */
+.dashboard .row { display: flex; align-items: center; gap: 7px; padding: 3px 7px; border-radius: 7px; height: 30px; }
+.dashboard .row:hover { background: var(--bg-2); }
+.dashboard .row .ic { flex: none; color: var(--mute); display: inline-flex; }
+.dashboard .row .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.dashboard .row .nm:hover { color: var(--text); text-decoration: underline; }
+.dashboard .row .cells { flex: none; display: flex; gap: 2px; }
+.dashboard .sq { width: 11px; height: 11px; border-radius: 2px; flex: none; background: var(--line); }
+.dashboard .sq.pass { background: var(--pass); }
+.dashboard .sq.fail { background: var(--fail); }
+.dashboard .sq.flaky { background: var(--flaky); }
+.dashboard .row .acts { flex: none; display: none; gap: 1px; }
+.dashboard .row:hover .acts { display: flex; }
+.dashboard .iact { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: none; color: var(--mute); cursor: pointer; border-radius: 5px; }
+.dashboard .iact:hover { color: var(--text); background: var(--line); }
+.dashboard .iact svg { width: 14px; height: 14px; }
+.dashboard .legend { display: flex; gap: 11px; color: var(--dim); font-size: 10px; margin-top: 10px; flex-wrap: wrap; }
+.dashboard .legend span { display: inline-flex; align-items: center; gap: 4px; }
+.dashboard .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.dashboard .empty { color: var(--dim); text-align: center; padding: 18px 6px; line-height: 1.5; }

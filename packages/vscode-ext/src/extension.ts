@@ -1228,19 +1228,19 @@ export function activate(context: vscode.ExtensionContext): void {
   settingsProvider = settings.provider;
   envStore = new EnvironmentStore(context);
   envStore.onDidChange(() => void pushAccounts());
-  const conversations = registerConversationsView({
+  const conversations = registerConversationsView(context.extensionUri, {
     onSwitch: (id) => switchSession(id),
     onNew: () => void newSession(),
     onRename: (id, name) => renameSession(id, name),
     onDelete: (id) => void deleteSession(id),
   });
   conversationsProvider = conversations.provider;
-  const traffic = registerTrafficView();
+  const traffic = registerTrafficView(context.extensionUri);
   trafficProvider = traffic.provider;
   context.subscriptions.push(
     chat.disposable,
     settings.disposable,
-    ...registerDashboardView(),
+    ...registerDashboardView(context.extensionUri),
     ...conversations.disposables,
     ...traffic.disposables,
     ...registerEnvironmentsView(envStore, () => {
