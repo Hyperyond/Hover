@@ -84,83 +84,34 @@ export interface SessionRecord {
   stepCount: number;
 }
 
-/** Parse the agent's final summary into prose + structured findings, mirroring
- *  the chat webview's splitter so the ledger and the UI agree on what counts
- *  as a finding. Returns the summary with the Findings block stripped, plus the
- *  parsed bullets. Pure + total — a malformed summary just yields no findings. */
-/** Extract + parse the agent's fenced ```json findings block, if present + valid.
- *  Returns null when there's no usable block (caller falls back to markdown). */
-function parseStructuredFindings(
-  summary: string,
-): { summary: string; findings: SessionFinding[] } | null {
-  // The block is at the end of the report; scan all ```json fences, take the
-  // last one that parses into an object with a findings array.
-  const re = /```json\s*([\s\S]*?)```/gi;
-  let m: RegExpExecArray | null;
-  let last: { raw: string; obj: { summary?: unknown; findings?: unknown } } | null = null;
-  while ((m = re.exec(summary)) !== null) {
-    try {
-      const obj = JSON.parse(m[1].trim()) as { summary?: unknown; findings?: unknown };
-      if (obj && typeof obj === 'object' && Array.isArray(obj.findings)) last = { raw: m[0], obj };
-    } catch {
-      /* not this block */
-    }
-  }
-  if (!last) {
-    // A ```json block exists but none parsed cleanly — the agent emitted
-    // malformed JSON (commonly unescaped " inside the summary string). Don't
-    // leak the raw block to the UI: loosely recover the summary field (matching
-    // up to `","findings"`, which tolerates stray quotes inside) and strip the
-    // block. findings is dropped (can't trust the malformed array).
-    const block = summary.match(/```json\s*([\s\S]*?)```/i);
-    if (block) {
-      const sm = block[1].match(/"summary"\s*:\s*"([\s\S]*?)"\s*,\s*"findings"/i);
-      const recovered = sm ? deEsc(sm[1].replace(/\\"/g, '"')).trim() : '';
-      const clean = (recovered || summary.replace(block[0], '').replace(/\n{3,}/g, '\n\n').trim()) || 'Done.';
-      return { summary: clean, findings: [] };
-    }
-    return null;
-  }
-  const findings: SessionFinding[] = [];
-  for (const f of last.obj.findings as Record<string, unknown>[]) {
-    if (!f || typeof f !== 'object') continue;
-    const title = typeof f.title === 'string' ? deEsc(f.title.trim()) : undefined;
-    const detail = typeof f.detail === 'string' ? deEsc(f.detail.trim()) : typeof f.text === 'string' ? deEsc(f.text.trim()) : '';
-    const text = detail || title || '';
-    if (!text) continue;
-    findings.push({
-      severity: typeof f.severity === 'string' && f.severity.trim() ? f.severity.trim() : 'note',
-      text,
-      title: title && title !== text ? title : undefined,
-      endpoint: typeof f.endpoint === 'string' ? f.endpoint : undefined,
-      method: typeof f.method === 'string' ? f.method : undefined,
-    });
-  }
-  // Human summary = the explicit `summary` field, else the report with the JSON
-  // block stripped out. deEsc: agents sometimes DOUBLE-escape newlines (the JSON
-  // value holds a literal "\n", not a real newline), so unescape them or the
-  // markdown renders one run-on line with literal \n.
-  const clean =
-    typeof last.obj.summary === 'string' && last.obj.summary.trim()
-      ? deEsc(last.obj.summary.trim())
-      : summary.replace(last.raw, '').replace(/\n{3,}/g, '\n\n').trim();
-  return { summary: clean, findings };
-}
-
 /** Unescape literal "\n" / "\r\n" / "\t" sequences (e.g. an agent double-escaped
  *  its newlines) into real whitespace so markdown renders properly. */
 function deEsc(s: string): string {
   return s.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\t/g, '  ');
 }
 
-/** Structured-first: the agent ends its report with a fenced ```json block
- *  { summary, findings: [{severity, title, detail, endpoint?, method?}] }. Parse
- *  that (robust, no prose-scraping); fall back to the markdown heading scan only
- *  when there's no valid block (older / non-compliant runs). */
+/** Defensive leak-guard, NOT a parse path. The agent is directed to emit a
+ *  plain-markdown report (REPORTING_DIRECTIVE) — no JSON. A non-compliant agent
+ *  that still wraps its report in a ```json block would otherwise leak raw JSON
+ *  to the UI, so strip it: recover the `summary` field as prose when present
+ *  (tolerating unescaped quotes by matching up to `","findings"`), else drop the
+ *  block. Findings are NEVER extracted from JSON — they come only from the
+ *  markdown `## Findings` section below. */
+function stripJsonArtifact(summary: string): string {
+  const block = summary.match(/```json\s*([\s\S]*?)```/i);
+  if (!block) return summary;
+  const sm = block[1].match(/"summary"\s*:\s*"([\s\S]*?)"\s*,\s*"findings"/i);
+  if (sm) return deEsc(sm[1].replace(/\\"/g, '"')).trim();
+  return summary.replace(block[0], '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Markdown-forced: the agent emits a plain-markdown report (REPORTING_DIRECTIVE)
+ *  — ONE outcome line, `- ` bullets, and an optional `## Findings` section with
+ *  `- **severity** — text` items. Parse the summary + findings from that markdown
+ *  only; a stray ```json block (a non-compliant agent) is stripped, never parsed
+ *  for findings and never leaked. Pure + total — no Findings block yields none. */
 export function parseFindings(summary: string): { summary: string; findings: SessionFinding[] } {
-  const struct = parseStructuredFindings(summary);
-  if (struct) return struct;
-  const lines = summary.split('\n');
+  const lines = stripJsonArtifact(summary).split('\n');
   let hi = -1;
   for (let i = 0; i < lines.length; i++) {
     const t = lines[i].trim();
