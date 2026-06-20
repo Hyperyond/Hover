@@ -245,11 +245,11 @@ Symptom: `require() of ES Module .../get-port/index.js from .../mockttp/dist/ser
 Workarounds, by preference:
 
 1. **Upgrade to Node ≥ 22.12** — Node added sync `require(ESM)` in 22.12, so the load succeeds out of the box. `@hover-dev/api-test` declares `engines.node >= 22.12.0` for this reason. Older Node still emits the runtime error.
-2. **Pin `get-port` to v6 in your project's overrides**:
+2. **Pin `get-port` to `5.1.1` in your project's overrides**:
    ```json
-   { "pnpm": { "overrides": { "get-port": "^6.1.2" } } }
+   { "pnpm": { "overrides": { "get-port": "5.1.1" } } }
    ```
-   (npm: `"overrides"` at top level; yarn: `"resolutions"`.) get-port@6.x is CJS and `mockttp`'s `require()` works.
+   (npm: `"overrides"` at top level; yarn: `"resolutions"`.) `get-port` is ESM from **v6 onward** (both v6 and v7 set `type: module`); `5.1.1` is the LAST CJS release, so `mockttp`'s `require()` works on any Node. This is exactly the override the extension's bundled engine ships (`packages/vscode-ext/engine/package.json`).
 3. **Remove the `@hover-dev/api-test` plugin from your `register()` call** if you don't need MITM mode — Hover works fine without it.
 
 We can't fix this from inside `@hover-dev/api-test`: npm overrides only flow from the consumer's root package.json, so a published dep can't override a sibling dep's resolution.

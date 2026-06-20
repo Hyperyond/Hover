@@ -278,6 +278,21 @@ interface SpecMsg {
   kind: string;
   [k: string]: unknown;
 }
+/** Tools that aren't real, replayable test actions: read-only perception
+ *  (snapshot / screenshot / wait), source exploration (read/list), and meta
+ *  (ask_user / mark_flow). A run made up of ONLY these has nothing to
+ *  crystallize — it shows as a plain reply, not a Done card with "Save spec?". */
+const NON_SAVEABLE_TOOLS = new Set([
+  'browser_snapshot', 'browser_take_screenshot', 'browser_wait_for', 'mark_flow',
+  'read_source', 'list_source', 'ask_user',
+]);
+function saveableStepCount(transcript: SpecMsg[]): number {
+  return transcript.filter((m) => {
+    if (m.kind !== 'step') return false;
+    const t = String((m as { tool?: unknown }).tool ?? '').replace(/^mcp__.*?__/, '');
+    return t !== '' && !NON_SAVEABLE_TOOLS.has(t);
+  }).length;
+}
 /** A live chat conversation: its transcript + the agent session id used to
  *  --resume follow-up turns. Multiple coexist; one is active. Persisted to
  *  workspaceState so they survive reload. Each session drives its OWN engine
@@ -451,7 +466,11 @@ async function runPrompt(prompt: string): Promise<void> {
     return;
   }
   const activeEnv = await envStore?.getActive();
-  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort)) {
+  // Memory: "isolated" runs the agent in a throwaway cwd so it loads none of the
+  // user's CLAUDE.md / Claude Code auto-memory; "shared" (default) keeps the
+  // project context. Stored in extension globalState (see the Settings handler).
+  const isolateContext = (extContext?.globalState.get<string>('hover.agentContext', 'shared') ?? 'shared') === 'isolated';
+  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext)) {
     setSessionRunning(sess, false);
     pushToSession(sess, 'system', 'Could not reach the engine.');
   }
@@ -630,6 +649,17 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
     chatProvider?.pushSystem(`Optimize failed for "${String(msg.payload?.slug ?? '')}": ${String(msg.payload?.reason ?? 'unknown error')}`);
     return;
   }
+  if (msg.type === 'screenshot') {
+    const sp = msg.payload as { path?: string; full?: boolean } | undefined;
+    if (sp?.path) {
+      // Persist in the transcript (absolute path) so the thumbnail survives a
+      // webview reload / conversation switch — loadSession re-derives a webview
+      // URI from the path. Store every shot; the chat coalesces full+viewport.
+      owner.transcript.push({ kind: 'shot', path: sp.path, full: !!sp.full });
+      if (live) chatProvider?.pushScreenshot(sp.path, !!sp.full);
+    }
+    return;
+  }
   if (msg.type !== 'event') return;
   const ev = msg.payload as { kind?: string; [k: string]: unknown } | undefined;
   switch (ev?.kind) {
@@ -682,12 +712,19 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       }
       break;
     case 'session_end': {
-      owner.transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError, findings: ev.findings });
+      // Count only saveable actions (not snapshot/ask_user/source reads) — that
+      // gates both the "Done card vs plain reply" branch and the Save prompt.
+      // Scope to the CURRENT run: the transcript is append-only across turns, so
+      // count from the last `user` seed onward — else an earlier turn's actions
+      // inflate a 0-action clarification into a (wrong) Done card.
+      let runStart = owner.transcript.length;
+      while (runStart > 0 && owner.transcript[runStart - 1].kind !== 'user') runStart--;
+      const steps = saveableStepCount(owner.transcript.slice(Math.max(0, runStart - 1)));
+      owner.transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError, findings: ev.findings, mode: currentMode, steps, tokens: owner.runTokens ?? 0 });
       persistSessions();
       if (typeof ev.costUsd === 'number') owner.runCost = ev.costUsd;
       if (typeof ev.tokens === 'number') owner.runTokens = ev.tokens;
       setSessionRunning(owner, false);
-      const steps = owner.stepCount ?? 0;
       if (!live) {
         // Background session finished — a quiet toast so the user knows to look,
         // without disturbing the conversation they're watching.
@@ -712,9 +749,8 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
         // not a test-pass assertion (the agent may have logged real bugs in
         // ## Findings). PASS read as a green light even when issues existed.
         chatProvider?.pushResult('Done', String(ev.summary ?? 'Done.'), steps, owner.runCost ?? 0, owner.runTokens ?? 0, Array.isArray(ev.findings) ? ev.findings : undefined, currentMode);
-        // Auto-save: crystallize this finished run (gated by hover.autoSaveSpec).
-        // This branch already requires a successful run with steps > 0.
-        void autoSaveRun(owner);
+        // No auto-save: the user decides whether to crystallize this run (the
+        // result card offers it; saving runs via the Hover: Save command).
       }
       break;
     }
@@ -969,38 +1005,6 @@ async function reopenBrowser(): Promise<void> {
   }
 }
 
-/** Auto-save (hover.autoSaveSpec): when a run finishes with results, crystallize
- *  it without the manual Save click. The name is derived from the run's prompt so
- *  re-running the same flow overwrites the same file. Mode-routed like the manual
- *  Save. Best-effort — the underlying save fns surface their own failures. */
-async function autoSaveRun(owner: ChatSession): Promise<void> {
-  if (!vscode.workspace.getConfiguration('hover').get<boolean>('autoSaveSpec', true)) return;
-  const name = autoSpecName(owner);
-  // Auto-save overwrites the same-named file: re-running a flow refreshes its
-  // spec instead of piling up duplicates (the user's chosen dedup policy).
-  if (currentMode === 'pentest') await saveFindingsReport(name, true);
-  else if (currentMode === 'api-test') await saveApiTestSpec(name, true);
-  else await saveSpec(name, true);
-}
-
-/** A stable slug for auto-save, derived from the run's last user prompt. ASCII
- *  prompts → a kebab slug (≤6 words); non-ASCII (e.g. Chinese) → a stable short
- *  hash so the same prompt always maps to the same file (overwrite, not pile-up). */
-function autoSpecName(owner: ChatSession): string {
-  let prompt = '';
-  for (let i = owner.transcript.length - 1; i >= 0; i--) {
-    if (owner.transcript[i].kind === 'user') { prompt = String((owner.transcript[i] as { text?: unknown }).text ?? ''); break; }
-  }
-  let slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  slug = slug.split('-').filter(Boolean).slice(0, 6).join('-');
-  if (slug.length > 48) slug = slug.slice(0, 48).replace(/-+$/, '');
-  if (!slug) {
-    let h = 0;
-    for (let i = 0; i < prompt.length; i++) h = (Math.imul(h, 31) + prompt.charCodeAt(i)) >>> 0;
-    slug = 'flow-' + h.toString(36).slice(0, 6);
-  }
-  return slug;
-}
 
 async function saveSpec(nameArg?: string, overwrite = false): Promise<void> {
   // Save crystallizes the VISIBLE session's last run.
@@ -1168,11 +1172,20 @@ export function activate(context: vscode.ExtensionContext): void {
   const settings = registerSettingsView({
     getAgents: () => ({ current: activeAgentId(), list: allAgents() }),
     getByok: () => readByok(),
+    getAgentContext: () => extContext?.globalState.get<string>('hover.agentContext', 'shared') ?? 'shared',
     onChange: async (change) => {
       const cfg = vscode.workspace.getConfiguration('hover');
       if (typeof change.agent === 'string') await setAgent(change.agent);
       if (typeof change.speech === 'boolean') await safeUpdate('speech', change.speech, vscode.ConfigurationTarget.Global);
       if (typeof change.browser === 'string') await safeUpdate('browser', change.browser);
+      // Memory mode lives in extension globalState, NOT VS Code config: config
+      // scope precedence (a stale Workspace value outranking Global) made the
+      // dropdown snap back. globalState is extension-owned, always writable, no
+      // precedence — so it sticks. refresh() re-reads it into the dropdown.
+      if (typeof change.agentContext === 'string') {
+        await extContext?.globalState.update('hover.agentContext', change.agentContext);
+        settingsProvider?.refresh();
+      }
       if (typeof change.model === 'string') {
         await safeUpdate('model', change.model);
         pool?.setModel(change.model);

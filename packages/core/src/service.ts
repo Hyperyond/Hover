@@ -34,6 +34,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { readdirSync, statSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { runSession } from './runSession.js';
 import { readConventions } from './service/conventions.js';
 import { optimizeSpecWithAgent } from './specs/optimizeSpecWithAgent.js';
@@ -191,30 +193,40 @@ const REPORTING_DIRECTIVE =
   'silently; it is NOT an app bug and must never appear as a finding. NEVER ' +
   'propose changes to Hover or its tools, and do not narrate your own environment, ' +
   'capabilities, or memory. Report only what a user of the app would care about.\n\n' +
-  'STRUCTURED REPORT — YOUR FINAL MESSAGE IS EXACTLY ONE FENCED ```json BLOCK, ' +
-  'with NOTHING before or after it: no prose summary, no Markdown headings or ' +
-  'bullets. The editor renders the report from this JSON and DISCARDS anything ' +
-  'outside it, so a prose write-up is wasted and will not be shown. Shape:\n' +
-  '```json\n' +
-  '{ "summary": "<readable Markdown, NOT a run-on paragraph>",\n' +
-  '  "findings": [\n' +
-  '    { "severity": "high|medium|low|info", "title": "<short headline>", "detail": "<what + why it matters>", "endpoint": "<path, if an API call>", "method": "<HTTP method, if any>" }\n' +
-  '  ] }\n' +
-  '```\n' +
-  'FORMAT THE `summary` FOR READING: write it as Markdown with real line breaks ' +
-  '(use \\n in the JSON string). One short outcome sentence on the first line, then ' +
-  'a blank line, then concise `- ` bullet points for the key things you checked ' +
-  '(one per step / area / flow). NEVER cram everything into a single long ' +
-  'paragraph. One object per real defect; `endpoint`/`method` only when the ' +
-  'finding is about a specific API call. If there are no real defects, use ' +
-  '"findings": []. Put the entire human-readable wrap-up inside `summary` — do NOT ' +
-  'also write it as prose outside the block; the JSON block is the one and only report.';
+  'WRITE YOUR FINAL REPORT AS PLAIN MARKDOWN — NOT JSON, and NOT wrapped in any ' +
+  'fenced code block. Structure it exactly so:\n' +
+  '• ONE short outcome sentence on the first line.\n' +
+  '• Then a blank line, then concise `- ` bullets for the key things you checked ' +
+  '(one per step / area / flow). Never cram it all into one paragraph.\n' +
+  '• ONLY if you found real defects, add a line `## Findings` followed by one ' +
+  '`- ` bullet per defect, each written as `- **severity** — what happened and why ' +
+  'it matters` (severity = high / medium / low / info; name the endpoint + method ' +
+  'inline when the defect is about a specific API call). No real defects → omit ' +
+  'the Findings section entirely.\n' +
+  'Use real line breaks (a literal newline, NEVER the characters backslash-n). ' +
+  'Do not output JSON, a "summary"/"findings" object, or any ```fenced``` wrapper — ' +
+  'just the Markdown report itself.';
 const NARRATION_DIRECTIVE =
   'NARRATION — As you work, keep each interim status to ONE short present-tense ' +
   'line stating your immediate intent before you act ("Filling the address ' +
   'fields", "Now testing an underage date of birth"). Do not write paragraphs ' +
   'between actions and do not restate what just happened — the steps are already ' +
   'shown. Save the full wrap-up for the final JSON report only.';
+const ASK_FORMAT_DIRECTIVE =
+  'OFFERING CHOICES — if the user\'s request is NOT a concrete instruction you ' +
+  'can act on (a concrete instruction looks like "test the login flow", "log ' +
+  'in", "register an account", "complete checkout", "run the X flow", "fill the ' +
+  'form") — i.e. it is vague, conversational, or just asks you to ask (e.g. ' +
+  '"ask me a question", "what can you do", "test this") — do NOT reply with an ' +
+  'open-ended question like "what would you like me to test?". Instead, LOOK at ' +
+  'the current page first, then PROPOSE 2-4 concrete things you could test on ' +
+  'THIS page. Whenever you offer the user a choice, write the question as a ' +
+  'normal sentence, then put ONLY the options in a fenced block tagged ' +
+  'hover-ask, one per line with a leading "- ":\n' +
+  '```hover-ask\n- first concrete option\n- second concrete option\n```\n' +
+  'Each line becomes a clickable button, so keep options short, specific to this ' +
+  'page, and directly actionable. ALWAYS give concrete options this way — never ' +
+  'a bare open question, a numbered list, or inline "A or B".';
 const EXPLORATION_CHECKPOINT_DIRECTIVE =
   'OPEN-ENDED TASKS — CHECK IN BEFORE YOU STOP. When the request is vague or ' +
   'unscoped (e.g. just "test", "test this", "check the app") YOU chose what to ' +
@@ -256,20 +268,60 @@ const GROUNDED_ACTUATION_DIRECTIVE =
   'take a browser_take_screenshot to SEE the real visual layout (the ' +
   'accessibility tree omits display:none inputs, canvas, and can\'t convey ' +
   'spatial grouping — the screenshot shows what the user actually sees), and ' +
-  'read the component source if you\'re unsure how it\'s built. Perceive with the ' +
+  'read the component source if you\'re unsure how it\'s built. Take just ONE ' +
+  'screenshot per view, with fullPage:true — do not also take a viewport shot ' +
+  'of the same view (the extra image only costs tokens). Perceive with the ' +
   'screenshot; ACT through the grounded *_control tools. This is routine; work it ' +
   'out and keep going rather than reporting it as a limitation.\n\n' +
   'WHEN YOU ARE TRULY BLOCKED — ASK, DON\'T STOP: only after you\'ve tried to ' +
   'work it out yourself (re-read the snapshot, scope with `within`, read the ' +
   'component source), if something genuinely needs the user — credentials you ' +
   'don\'t have, a file only they can provide, a choice only they can make — call ' +
-  'mcp__hovercontrol__ask_user. Propose 2-4 concrete options you could actually ' +
-  'carry out (not a vague question), act on the choice, and ask a follow-up ' +
-  'ask_user if you need more detail. Available engine helpers when relevant: ' +
-  'mcp__hovercontrol__upload_file (path or placeholder) is how you set a file on ' +
-  'an upload control, since you have no filesystem access yourself. NEVER ' +
-  'silently stop and report a limitation when working it out — or asking — could ' +
-  'unblock you.';
+  'mcp__hovercontrol__ask_user. This applies from the very START: if the request ' +
+  'does not name what to test — a page, feature, or flow (e.g. "test something", ' +
+  '"ask me a question", or just a greeting) — call mcp__hovercontrol__ask_user to ' +
+  'pin down the target FIRST, then proceed. Do NOT reply with a plain clarifying ' +
+  'question and end your turn: that dead-ends the run — the user cannot answer a ' +
+  'chat message inline, only an ask_user card. Propose 2-4 concrete options you ' +
+  'could actually carry out (not a vague question), act on the choice, and ask a ' +
+  'follow-up ask_user if you need more detail. Available engine helpers when ' +
+  'relevant: mcp__hovercontrol__upload_file (path or placeholder) is how you set ' +
+  'a file on an upload control, since you have no filesystem access yourself. ' +
+  'NEVER end your turn with a question or a reported limitation when asking via ' +
+  'ask_user — or working it out — could keep going.';
+
+/** An isolated, empty cwd for the agent when the user picks "Isolated" memory.
+ *  `claude` keys its auto-memory by the absolute cwd path and discovers CLAUDE.md
+ *  by walking up from cwd — so running in a throwaway temp dir (no .git / no
+ *  ancestor CLAUDE.md) loads NONE of the user's project memory or CLAUDE.md,
+ *  while their ~/.claude credentials (OAuth) stay intact. The default ("shared")
+ *  keeps cwd = devRoot so the agent gets the project's context. */
+function isolatedAgentCwd(): string {
+  const dir = resolve(tmpdir(), 'hover-agent-cwd');
+  try { mkdirSync(dir, { recursive: true }); } catch { /* best-effort */ }
+  return dir;
+}
+
+/** The most-recently-written `.png` in a directory (by mtime), or null. Used to
+ *  resolve which screenshot a `browser_take_screenshot` just produced — the
+ *  agent often lets the MCP auto-name the file, so the name isn't in the tool
+ *  input; the freshest png in the run's output dir is it. Best-effort: never
+ *  throws (a missing dir / race just yields null). */
+function newestPng(dir: string): string | null {
+  try {
+    let best: string | null = null;
+    let bestMtime = -1;
+    for (const f of readdirSync(dir)) {
+      if (!f.toLowerCase().endsWith('.png')) continue;
+      const p = resolve(dir, f);
+      const mtime = statSync(p).mtimeMs;
+      if (mtime > bestMtime) { bestMtime = mtime; best = p; }
+    }
+    return best;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Try to bind a WebSocketServer to <host>:<port>. Resolves with the wss on
@@ -849,21 +901,25 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       if (msg.type === 'ask-user-request') {
         const id = msg.payload?.askId;
         if (typeof id !== 'string') return;
-        const editor = activeRun?.client;
-        if (editor && editor.readyState === WebSocket.OPEN) {
-          pendingAsks.set(id, ws);
-          send(editor, {
-            type: 'ask-user-request',
-            payload: {
-              askId: id,
-              question: msg.payload?.question,
-              options: msg.payload?.options,
-              allowFreeText: msg.payload?.allowFreeText,
-            },
-          });
-        } else {
-          sendIfOpen(ws, { type: 'ask-user-response', payload: { askId: id, cancelled: true } });
+        // Forward to EVERY connected client except the MCP that asked (the
+        // extension is one of them; other MCP sockets ignore it). This is robust
+        // to activeRun.client being a stale/closed socket in the reconnecting
+        // multi-host pool — the previous "forward only to activeRun.client, else
+        // cancel" path silently killed the prompt when that socket had cycled.
+        const payload = {
+          askId: id,
+          question: msg.payload?.question,
+          options: msg.payload?.options,
+          allowFreeText: msg.payload?.allowFreeText,
+        };
+        let delivered = 0;
+        for (const client of wss.clients) {
+          if (client === ws) continue;
+          if (client.readyState === WebSocket.OPEN) { send(client, { type: 'ask-user-request', payload }); delivered++; }
         }
+        process.stderr.write(`[hover/ask] askId=${id} delivered to ${delivered} client(s)\n`);
+        if (delivered > 0) pendingAsks.set(id, ws);
+        else sendIfOpen(ws, { type: 'ask-user-response', payload: { askId: id, cancelled: true } });
         return;
       }
       if (msg.type === 'ask-user-response') {
@@ -1271,6 +1327,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         appendSystemPrompt = `${appendSystemPrompt}\n\n${REPORTING_DIRECTIVE}`;
         // Keep interim narration to one short line per intent (all modes).
         appendSystemPrompt = `${appendSystemPrompt}\n\n${NARRATION_DIRECTIVE}`;
+        // Format any user-facing choice as a parseable hover-ask block → buttons.
+        appendSystemPrompt = `${appendSystemPrompt}\n\n${ASK_FORMAT_DIRECTIVE}`;
         // Open-ended prompts: confirm continue-vs-stop before ending with scope
         // left untested, instead of unilaterally finishing (all modes).
         appendSystemPrompt = `${appendSystemPrompt}\n\n${EXPLORATION_CHECKPOINT_DIRECTIVE}`;
@@ -1324,15 +1382,23 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             process.stderr.write(`[hover] plugin "${runStartPlugin.name}" run:start failed: ${err instanceof Error ? err.message : String(err)}\n`);
           }
         }
+        // Screenshot previews: this run's MCP output dir (same path buildMcpConfig
+        // uses) + a flag tracking whether the last tool_use was a screenshot, so
+        // we can surface the freshly-written png to the chat as a tool_result lands.
+        const runShotDir = resolve(devRoot, '.hover', 'screenshots', screenshotTag);
+        let pendingShot: { full: boolean } | null = null;
+        let lastShotPath: string | null = null;
         const runResult = await runSession(
           {
             agentId: invokedAgentId,
             prompt: text,
             sessionId: resumeSessionId,
             mcpConfig,
-            // cwd = devRoot so the agent runs against the project (and Claude
-            // Code reads its CLAUDE.md, if any).
-            cwd: devRoot,
+            // Memory setting: "shared" (default) → cwd = devRoot, so the agent
+            // gets the project's CLAUDE.md + Claude Code auto-memory. "isolated"
+            // → a throwaway temp cwd, so NONE of the user's CLAUDE.md / memory
+            // leaks into the test agent.
+            cwd: msg.payload?.isolateContext === true ? isolatedAgentCwd() : devRoot,
             appendSystemPrompt,
             // mcp__playwright covers every browser tool; active-mode plugin MCP
             // servers are appended. (Save-as-Skill retired → no Skill tool.)
@@ -1374,6 +1440,28 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
                 costUsd: ev.costUsd ?? sessionEnd.costUsd,
                 tokens: ev.tokens ?? sessionEnd.tokens,
               };
+            }
+            // Screenshot preview: a take_screenshot tool_use writes a png by the
+            // time its tool_result lands — resolve the freshest png in the run's
+            // output dir and surface it to the chat. Best-effort, never throws.
+            if (ev.kind === 'tool_use') {
+              if (String(ev.tool ?? '').replace(/^mcp__.*?__/, '') === 'browser_take_screenshot') {
+                // The agent often takes the same view twice — a full-page and a
+                // viewport shot. Carry `full` so the chat can collapse the burst
+                // and keep the full-page one.
+                pendingShot = { full: Boolean((ev.input as { fullPage?: unknown } | undefined)?.fullPage) };
+              }
+            } else if (ev.kind === 'tool_result' && pendingShot) {
+              const full = pendingShot.full;
+              pendingShot = null;
+              const shot = newestPng(runShotDir);
+              // Dedupe exact repeats by path (a duplicated tool_use/result resolves
+              // to the same freshest png); distinct full/viewport shots have
+              // distinct paths and are coalesced downstream by the chat instead.
+              if (shot && shot !== lastShotPath && !run.cancelled) {
+                lastShotPath = shot;
+                emitToRun({ type: 'screenshot', payload: { path: shot, full } });
+              }
             }
             // Stream to whichever ws is attached NOW — survives the widget
             // reconnecting mid-run (emitToRun is a no-op during a reconnect gap).

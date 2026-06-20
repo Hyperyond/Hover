@@ -39,6 +39,7 @@ export interface SettingsChange {
   agent?: string;
   speech?: boolean;
   browser?: string;
+  agentContext?: string;
   model?: string;
   localBaseUrl?: string;
   localModel?: string;
@@ -61,6 +62,9 @@ export interface SettingsHandlers {
   getAgents(): { current: string; list: AgentEntry[] };
   /** Current BYOK config (key presence only, never the key). */
   getByok(): SettingsByokState | Promise<SettingsByokState>;
+  /** Memory mode ('shared' | 'isolated') — stored in extension globalState, not
+   *  VS Code config (config scope precedence made the dropdown snap back). */
+  getAgentContext(): string;
   onChange(change: SettingsChange): void | Promise<void>;
 }
 
@@ -112,6 +116,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
       agents: list,
       speech: cfg.get<boolean>('speech', false),
       browser: cfg.get<string>('browser', 'silent'),
+      agentContext: this.handlers.getAgentContext(),
       model: cfg.get<string>('model', 'sonnet'),
       localBaseUrl: cfg.get<string>('localBaseUrl', ''),
       localModel: cfg.get<string>('localModel', ''),
@@ -288,6 +293,10 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
     <div class="label">Browser<span class="sub">Headless = no window; Normal = shown Chrome</span></div>
     <select id="browser"><option value="silent">Headless</option><option value="visible">Normal</option></select>
   </div>
+  <div class="row">
+    <div class="label">Memory<span class="sub">Shared = the agent reads your CLAUDE.md + Claude Code memory; Isolated = clean, private runs. Your login is unaffected.</span></div>
+    <select id="agentContext"><option value="shared">Same as Claude Code</option><option value="isolated">Isolated</option></select>
+  </div>
   <div class="row cloud">
     <div class="label">Hover Cloud<span class="sub">Cross-machine sync, team environments, run dashboards — coming soon.</span></div>
     <button class="cloudbtn" disabled title="Coming with Hover Cloud">☁ Sign in</button>
@@ -326,7 +335,8 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
     byokSec:document.getElementById('byok-sec'), byokCliNote:document.getElementById('byok-cli-note'),
     key:document.getElementById('byok-key'), keyShow:document.getElementById('key-show'), getkey:document.getElementById('getkey'),
     base:document.getElementById('byok-base'), max:document.getElementById('byok-max'), model:document.getElementById('byok-model'),
-    speech:document.getElementById('speech'), browser:document.getElementById('browser')
+    speech:document.getElementById('speech'), browser:document.getElementById('browser'),
+    agentContext:document.getElementById('agentContext')
   };
   function selectTab(src){
     state.modelSource = src;
@@ -460,6 +470,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
 
   els.speech.addEventListener('change', function(){ change({speech: els.speech.checked}); });
   els.browser.addEventListener('change', function(){ change({browser: els.browser.value}); });
+  els.agentContext.addEventListener('change', function(){ change({agentContext: els.agentContext.value}); });
 
   window.addEventListener('message', function(e){ var m=e.data; if(!m||m.type!=='state') return;
     state.agent = m.agent||'claude';
@@ -468,6 +479,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
     state.byok = Object.assign({ protocol:'anthropic', gateway:'none', baseUrl:'', model:'', maxTokens:0, hasKey:false }, m.byok||{});
     selectTab(m.modelSource==='byok'?'byok':'cli');
     els.speech.checked = !!m.speech; els.browser.value = m.browser||'silent';
+    if (els.agentContext) els.agentContext.value = m.agentContext||'shared';
     renderCli(); renderByokChrome(); syncByokInputs();
   });
   vscode.postMessage({type:'ready'});

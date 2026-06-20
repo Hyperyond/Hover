@@ -22,6 +22,7 @@ const OPVERB: Record<string, [string, string]> = {
   browser_tabs: ["Switching tabs", "Switched tabs"],
   browser_evaluate: ["Running a script", "Ran a script"],
   browser_fill_form: ["Filling the form", "Filled the form"],
+  upload_file: ["Uploading", "Uploaded"],
 };
 const FILLISH = new Set(["fill_control", "select_control", "browser_select_option", "browser_type"]);
 const BARE = new Set([
@@ -72,6 +73,17 @@ export function presentLabel(tool?: string, detail?: string): string {
   return pair[0].replace(/ (to|into)$/, ""); // "Navigating to" → "Navigating"
 }
 
+/** The leading verb of an op's one-liner (e.g. "Clicked", "Navigated to",
+ *  "Uploaded") — `describeOp` always starts with exactly this, so the renderer
+ *  can split it off and embolden it. */
+export function opVerb(tool?: string): string {
+  const t = strip(tool);
+  const pair = OPVERB[t];
+  if (pair) return pair[1];
+  const h = t.split("_").join(" ");
+  return h ? h.charAt(0).toUpperCase() + h.slice(1) : "";
+}
+
 /** Past-tense one-liner for an op (e.g. `Clicked "Sign in"`, `Navigated to /x`). */
 export function describeOp(tool?: string, detail?: string): string {
   const t = strip(tool);
@@ -86,6 +98,12 @@ export function describeOp(tool?: string, detail?: string): string {
   const verb = pair[1];
   if (t === "browser_navigate") return verb + (d.url ? " " + String(d.url) : "");
   if (t === "browser_press_key") return verb + (d.key ? " " + String(d.key) : "");
+  if (t === "upload_file") {
+    // Show what was uploaded: the real file path, or the approved placeholder.
+    const path = d.path ? String(d.path) : d.placeholder ? "a placeholder image" : "";
+    const where = name ? ` to ${name}` : "";
+    return verb + where + (path ? ` → ${path}` : "");
+  }
   if (BARE.has(t)) return verb;
   if (FILLISH.has(t)) {
     const lbl = name ? " " + name : " a field";

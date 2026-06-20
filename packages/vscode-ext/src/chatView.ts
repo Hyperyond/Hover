@@ -46,17 +46,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Set by the extension: the user confirmed the after-run save prompt with a
    *  filename. `mode` (null = frontend, 'api-test', 'pentest') routes the writer:
    *  api-test → request-based spec, pentest → findings report, else → normal spec. */
-  saveRunHandler?: (name: string, mode: string | null) => void;
+  saveRunHandler?: (name: string | undefined, mode: string | null) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    // Allow loading run screenshots (written by Playwright MCP under
+    // <workspace>/.hover/screenshots/<session>/) as <img> sources via
+    // asWebviewUri — a root grants all its descendants.
+    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
     view.webview.options = {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this.extensionUri, "resources"),
         vscode.Uri.joinPath(this.extensionUri, "dist", "webview"),
+        ...(wsRoot ? [vscode.Uri.joinPath(wsRoot, ".hover", "screenshots")] : []),
       ],
     };
     // The chat is the React webview (Vite build under dist/webview). The legacy
@@ -75,8 +80,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.askAnswerHandler?.(msg.askId, msg.value ?? null);
       else if (msg.type === "switchSession" && typeof msg.id === "string")
         this.sessionSwitchHandler?.(msg.id);
-      else if (msg.type === "saveRun" && typeof msg.name === "string")
-        this.saveRunHandler?.(msg.name, msg.mode ?? null);
+      else if (msg.type === "saveRun")
+        this.saveRunHandler?.(typeof msg.name === "string" ? msg.name : undefined, msg.mode ?? null);
       else if (msg.type === "ready") this.onReady?.();
     });
   }
@@ -104,7 +109,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
   /** Re-render the chat with a switched conversation's transcript. */
   loadSession(transcript: { kind: string; [k: string]: unknown }[]): void {
-    this.post({ type: "loadSession", transcript });
+    // Screenshot entries persist an absolute path; re-derive a webview-safe URI
+    // here (the webview can't), so reloaded thumbnails still load.
+    const mapped = transcript.map((e) => {
+      if (e.kind === "shot" && typeof e.path === "string") {
+        const uri = this.view?.webview.asWebviewUri(vscode.Uri.file(e.path));
+        return { ...e, uri: uri?.toString() };
+      }
+      return e;
+    });
+    this.post({ type: "loadSession", transcript: mapped });
   }
 
   updateMode(id: string | null, label: string | null): void {
@@ -159,6 +173,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** AI narration → the next step group's title. */
   pushNarration(text: string): void {
     this.post({ type: "narration", text });
+  }
+  /** Inline a run screenshot in the thread. `path` is an absolute file path
+   *  under <workspace>/.hover/screenshots; converted to a webview-safe URI.
+   *  `full` = a full-page shot (preferred over a viewport shot when the chat
+   *  collapses a full+viewport burst). */
+  pushScreenshot(path: string, full?: boolean): void {
+    const uri = this.view?.webview.asWebviewUri(vscode.Uri.file(path));
+    if (uri) this.post({ type: "screenshot", uri: uri.toString(), full: !!full });
   }
   /** Running token total (from usage events) → live group counter. */
   pushUsage(tokens: number): void {

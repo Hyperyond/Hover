@@ -901,6 +901,11 @@ header {
   line-height: 1.4;
   font-weight: 500;
 }
+/* The op's action verb, emboldened + brightened so it leads the line. */
+.op-verb {
+  font-weight: 700;
+  color: var(--text);
+}
 .node.op.live .node-body {
   color: var(--text);
 }
@@ -925,6 +930,86 @@ header {
      one tidy line. */
 .node.op.group .node-body {
   cursor: pointer;
+}
+/* Clarification block: the agent is asking the user to choose. Its OWN block
+   (question + clickable options) — NOT a Done card (no ✓, no Save). */
+.clarify {
+  margin: 4px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.clarify-q {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.clarify-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.clarify-opt {
+  max-width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.clarify-opt:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+/* Inline screenshot preview on the run rail + its full-size lightbox. */
+.shot-cap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+  color: var(--text-mute);
+  font-size: 12px;
+  font-weight: 600;
+}
+.shot-cap svg {
+  flex: none;
+  opacity: 0.85;
+}
+.shot-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 140px;
+  margin-top: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  cursor: zoom-in;
+}
+.shot-thumb:hover {
+  border-color: var(--accent);
+}
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+  box-shadow: 0 10px 50px rgba(0, 0, 0, 0.6);
 }
 .grp-head {
   display: flex;
@@ -1032,11 +1117,31 @@ header {
 .result.err .rhead .rcheck {
   color: var(--err);
 }
+/* One small line of text with an inline Save button as the verb. */
 .result .rfoot {
   font-size: 11px;
   color: var(--text-dim);
+  line-height: 1.7;
   font-variant-numeric: tabular-nums;
-  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+}
+/* Inline ghost button (mode-colored via --accent) — green text + outline,
+   transparent until hover. Light enough to sit inside the small footer line. */
+.save-btn {
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.save-btn:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
 }
 .result .finding {
   display: flex;

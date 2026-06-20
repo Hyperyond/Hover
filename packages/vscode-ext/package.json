@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.20.5",
+  "version": "0.20.38",
   "displayName": "Hover — AI Vibe Testing",
   "description": "Describe a flow in plain English; Hover's AI tests your app like a real teammate and hands you a real Playwright spec. Hands-free, local-first, on your own Claude Code or Codex CLI.",
   "keywords": [
@@ -410,11 +410,6 @@
           "type": "number",
           "default": 0,
           "description": "BYOK response length cap (max output tokens). 0 = the model's default."
-        },
-        "hover.autoSaveSpec": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically crystallize a spec / report when a run finishes with results (not cancelled or errored). The spec name is derived from your prompt; re-running the same flow overwrites the same file. Turn off to save manually with the Save button."
         }
       }
     },

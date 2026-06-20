@@ -2,8 +2,10 @@ import { Fragment, useEffect, useState } from "react";
 import type { ThreadItem } from "./useThread";
 import { inline, mdToHtml } from "./markdown";
 import { structuredRows, textRows, sevClass } from "./findings";
+import { stripHoverAsk } from "./followup";
+import { post } from "./vscode";
 
-const NODE_KINDS = new Set(["think", "op", "group", "answered"]);
+const NODE_KINDS = new Set(["think", "op", "group", "answered", "shot"]);
 
 /** Plain text from an inline()'d HTML string (for clipboard). */
 function stripHtml(s: string): string {
@@ -177,35 +179,94 @@ function Node({ item, last }: { item: ThreadItem; last: boolean }) {
     case "system":
       return <div className="msg system">{item.text}</div>;
     case "assistant":
-      return <div className="msg assistant">{item.text}</div>;
+      return <div className="msg assistant">{stripHoverAsk(item.text)}</div>;
     case "think":
       return (
         <div className="node think">
           <span className="node-rail" />
-          <div className="node-body" dangerouslySetInnerHTML={{ __html: inline(item.text) }} />
+          <div className="node-body" dangerouslySetInnerHTML={{ __html: inline(stripHoverAsk(item.text)) }} />
         </div>
       );
-    case "op":
+    case "op": {
+      // Embolden the leading verb ("Clicked", "Filled", "Uploaded" …); the rest
+      // (the target) types in for the live line.
+      const verb = item.verb && item.text.startsWith(item.verb) ? item.verb : "";
+      const rest = verb ? item.text.slice(verb.length) : item.text;
       return (
         <div className={"node op" + (item.error ? " error" : "")}>
           <span className="node-rail" />
           <div className="node-body">
-            <Typed text={item.text} animate={last} />
+            {verb && <span className="op-verb">{verb}</span>}
+            <Typed text={rest} animate={last} />
           </div>
         </div>
       );
+    }
     case "answered":
       return (
         <div className="node op answered">
           <span className="node-rail" />
-          <div className="node-body" dangerouslySetInnerHTML={{ __html: inline(item.text) }} />
+          <div className="node-body" dangerouslySetInnerHTML={{ __html: inline(stripHoverAsk(item.text)) }} />
         </div>
       );
     case "group":
       return <GroupNode label={item.label} items={item.items} />;
+    case "shot":
+      return <ShotNode uri={item.uri} />;
+    case "clarify":
+      return <ClarifyBlock question={item.question} options={item.options} />;
     case "result":
       return <ResultBlock item={item} />;
   }
+}
+
+/** The agent is asking the user to choose — its own block (question + clickable
+ *  options), NOT a Done card: no ✓, no Save. Distinct from a real summary. */
+function ClarifyBlock({ question, options }: { question: string; options: string[] }) {
+  return (
+    <div className="clarify">
+      {question && <div className="clarify-q" dangerouslySetInnerHTML={{ __html: mdToHtml(question) }} />}
+      <div className="clarify-opts">
+        {options.map((o, i) => (
+          <button key={i} className="clarify-opt" onClick={() => post({ type: "send", text: o })}>
+            {o}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** A captured screenshot inlined on the run rail: a thumbnail that opens a
+ *  full-size lightbox on click (click anywhere / Esc to close). */
+function ShotNode({ uri }: { uri: string }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+  return (
+    <div className="node op shot">
+      <span className="node-rail" />
+      <div className="node-body">
+        <div className="shot-cap">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+            <path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z" />
+            <circle cx="12" cy="12.5" r="3.2" />
+          </svg>
+          <span>Screenshot</span>
+        </div>
+        <img className="shot-thumb" src={uri} alt="screenshot" onClick={() => setOpen(true)} />
+      </div>
+      {open && (
+        <div className="lightbox" onClick={() => setOpen(false)}>
+          <img src={uri} alt="screenshot" />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function GroupNode({ label, items }: { label: string; items: string[] }) {
@@ -236,10 +297,19 @@ function GroupNode({ label, items }: { label: string; items: string[] }) {
   );
 }
 
+// Per-mode artifact noun for the after-run save line.
+const SAVE_NOUN: Record<string, string> = {
+  "api-test": "API test",
+  pentest: "report",
+};
+
 function ResultBlock({ item }: { item: Extract<ThreadItem, { kind: "result" }> }) {
   const meta: string[] = [];
   if (item.steps) meta.push(item.steps + (item.steps > 1 ? " steps" : " step"));
   if (item.tokens) meta.push(item.tokens.toLocaleString() + " tok");
+  // No auto-save: a small inline "Save" button on the footer line lets the user
+  // export on demand (routes by mode → name prompt → saves).
+  const noun = SAVE_NOUN[item.mode ?? ""] ?? "spec";
   const rows =
     item.findings.length > 0 ? structuredRows(item.findings) : item.findingsText ? textRows(item.findingsText) : [];
   return (
@@ -249,7 +319,7 @@ function ResultBlock({ item }: { item: Extract<ThreadItem, { kind: "result" }> }
         <span>{item.verdict}</span>
         <CopyBtn getText={() => item.main} />
       </div>
-      <div className="md" dangerouslySetInnerHTML={{ __html: mdToHtml(item.main) }} />
+      <div className="md" dangerouslySetInnerHTML={{ __html: mdToHtml(stripHoverAsk(item.main)) }} />
       {rows.map((r, i) => (
         <div className="finding" key={i}>
           {r.word && <span className={"badge " + sevClass(r.word)}>{r.word}</span>}
@@ -257,7 +327,17 @@ function ResultBlock({ item }: { item: Extract<ThreadItem, { kind: "result" }> }
           <CopyBtn getText={() => (r.word ? r.word + " — " : "") + stripHtml(r.html)} />
         </div>
       ))}
-      {meta.length > 0 && <div className="rfoot">{meta.join(" · ")}</div>}
+      {/* Only a run that actually did something is worth saving — a 0-step run
+          (the agent just replied / asked) shows no footer at all. */}
+      {!item.error && (item.steps ?? 0) > 0 && (
+        <div className="rfoot">
+          This run took {meta.join(" · ")}. Want to{" "}
+          <button className="save-btn" onClick={() => post({ type: "saveRun", mode: item.mode ?? null })}>
+            Save
+          </button>{" "}
+          this {noun}?
+        </div>
+      )}
     </div>
   );
 }
