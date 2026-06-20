@@ -10,11 +10,6 @@
   "exclude": [
     "src/**/*.test.ts",
     "src/**/__tests__/**",
-    "tests/**",
-    "src/scripts/detect-cli.ts",
-    "src/scripts/verify-spec.ts",
-    "src/scripts/verify-widget.ts",
-    "src/scripts/ws-smoke.ts",
-    "src/smoke.ts"
+    "tests/**"
   ]
 }

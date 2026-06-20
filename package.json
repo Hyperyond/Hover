@@ -6,12 +6,6 @@
   "description": "AI that hovers over your dev workflow. Natural language frontend testing.",
   "license": "Apache-2.0",
   "scripts": {
-    "smoke": "pnpm --filter @hover-dev/core smoke",
-    "smoke:chrome": "pnpm --filter @hover-dev/core smoke:chrome",
-    "detect": "pnpm --filter @hover-dev/core detect",
-    "ws-smoke": "pnpm --filter @hover-dev/core ws-smoke",
-    "bench-ttfb": "pnpm --filter @hover-dev/core bench-ttfb",
-    "bench-multi-tab": "pnpm --filter @hover-dev/core bench-multi-tab",
     "dev:site": "pnpm --filter @hover-dev/site dev",
     "build:site": "pnpm --filter @hover-dev/site build",
     "typecheck": "pnpm -r --filter './packages/*' --filter './examples/*' exec tsc --noEmit && pnpm --filter @hover-dev/site typecheck",
