@@ -2,8 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App, type HoverView } from "./App";
 import { maybeSeedDevThread } from "./views/chat/devMock";
-// The one stylesheet: Tailwind + theme tokens + base. (chat.css still holds the
-// run-indicator/splash keyframes until the chat view is converted.)
+// Shared base: Tailwind + theme tokens. The other views are styled with Tailwind
+// utilities; the chat view keeps a dedicated stylesheet (rail pseudo-elements,
+// run-indicator/splash keyframes, body-state cascades) that reuses theme tokens.
 import "./theme.css";
 import "./views/chat/chat.css";
 

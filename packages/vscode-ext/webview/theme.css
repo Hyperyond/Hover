@@ -48,6 +48,9 @@ body.vscode-high-contrast-light {
   html { scrollbar-gutter: stable; }
   body {
     margin: 0;
+    /* Neutralise VS Code's default webview body padding (0 20px) so panels go
+       edge-to-edge; each view supplies its own padding. */
+    padding: 0;
     height: 100vh;
     display: flex;
     flex-direction: column;
