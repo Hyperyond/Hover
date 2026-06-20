@@ -21,7 +21,8 @@
     "dev:example:stock-registration": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter stock-registration dev",
     "dev:example:canvas-paint": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter canvas-paint dev",
     "dev:example:e-commerce": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter e-commerce dev",
-    "dev:example:payment-provider": "pnpm --filter payment-provider dev"
+    "dev:example:payment-provider": "pnpm --filter payment-provider dev",
+    "dev:example:vocab": "pnpm --dir examples/3000MostCommonEnglishWords dev"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.7.0",
