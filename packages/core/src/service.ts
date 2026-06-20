@@ -1164,11 +1164,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         appendSystemPrompt = `${appendSystemPrompt}\n\n${REPORTING_DIRECTIVE}`;
         // Keep interim narration to one short line per intent (all modes).
         appendSystemPrompt = `${appendSystemPrompt}\n\n${NARRATION_DIRECTIVE}`;
-        // Format any user-facing choice as a parseable hover-ask block → buttons.
-        appendSystemPrompt = `${appendSystemPrompt}\n\n${ASK_FORMAT_DIRECTIVE}`;
-        // Open-ended prompts: confirm continue-vs-stop before ending with scope
-        // left untested, instead of unilaterally finishing (all modes).
-        appendSystemPrompt = `${appendSystemPrompt}\n\n${EXPLORATION_CHECKPOINT_DIRECTIVE}`;
+        // ASK_FORMAT (propose choices when the request is vague) + EXPLORATION_
+        // CHECKPOINT (ask before stopping with scope left) are for the DIRECTED
+        // modes. QA is autonomous: a vague request means "explore the whole app",
+        // NOT "ask what to test", and QA_EXPLORATION owns its own stop condition —
+        // so skip both for QA (they made QA ask-at-start instead of exploring).
+        if (currentModeId !== 'qa') {
+          appendSystemPrompt = `${appendSystemPrompt}\n\n${ASK_FORMAT_DIRECTIVE}`;
+          appendSystemPrompt = `${appendSystemPrompt}\n\n${EXPLORATION_CHECKPOINT_DIRECTIVE}`;
+        }
 
         // Grounded actuation — the agent uses mcp__hover-control__* instead of
         // the Playwright interaction tools, so saved selectors are role+name,

@@ -120,7 +120,16 @@ export const EXPLORATION_CHECKPOINT_DIRECTIVE =
  *  a directed run into autonomous exploratory testing. (Behavioral effect needs
  *  live verification; the wiring just appends this when mode === 'qa'.) */
 export const QA_EXPLORATION_DIRECTIVE =
-  'QA TESTING MODE — explore, don\'t just follow. Go BEYOND any single instruction: ' +
+  'QA TESTING MODE — explore, don\'t just follow. ' +
+  'OVERRIDE any earlier instruction to ask the user what to test at the start: in ' +
+  'QA mode a vague or unscoped request ("test the app", "test this", or no target ' +
+  'named) is NOT a reason to ask — it MEANS "explore the whole app". Do NOT open ' +
+  'with an ask_user or a list of choices; just START testing what you can see. ' +
+  'Even on a login/landing page, first test THAT page yourself (empty submit, bad ' +
+  'password, invalid input — negative testing) before anything else. Ask the user ' +
+  '(ask_user) ONLY when genuinely blocked (credentials/a file you cannot get) or ' +
+  'for a decisive business judgment you cannot resolve — never just to pick scope. ' +
+  'Go BEYOND any single instruction: ' +
   'systematically exercise every reachable control and state of the app to find ' +
   'real defects. Maintain a mental frontier of untried controls; try each; do NOT ' +
   'repeat a state you have already explored. Do NEGATIVE testing too — empty / ' +
