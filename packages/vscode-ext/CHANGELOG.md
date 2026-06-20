@@ -3,6 +3,15 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.21.0 — 2026-06-20
+
+**Unified panels + Tailwind refresh, light-theme fix, engine cleanup.**
+
+- **Fixed:** in a light VS Code theme the chat accent rendered as bright mint instead of the deep green, washing out the message bubble + send button. Restored.
+- **All five panels now share one React app.** Settings, Dashboard, Conversations, and Network were migrated from hand-rendered HTML to the same React + routing the chat already used — one bundle, consistent behaviour, and styling unified on Tailwind that tracks your VS Code theme (light / dark / high-contrast). No behaviour change you should notice; everything renders as before.
+- **Engine internals:** the report parser is markdown-first (no fragile JSON blob), a built-in mode-behaviour table replaces scattered conditionals (groundwork for upcoming modes), and the prompt directives were extracted for clarity.
+- **Housekeeping:** removed the obsolete CLI dev scripts (`pnpm smoke` / `detect` / `bench-*` …) now that the extension is the dev surface.
+
 ## 0.20.39 — 2026-06-20
 
 **Multi-turn chat fix + internal cleanup.**
