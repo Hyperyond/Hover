@@ -26,6 +26,7 @@ type Inbound =
   | { type: "saveRun"; name: string; mode: string | null }
   | { type: "openReport"; path: string }
   | { type: "crystallizeCandidate"; name: string; steps: unknown[] }
+  | { type: "setQaIntensity"; value: string }
   | { type: "ready" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -55,6 +56,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Set by the extension: the user clicked ✨ Crystallize on a QA candidate flow
    *  — write its (already-resolved) steps to a Playwright spec. */
   crystallizeCandidateHandler?: (name: string, steps: unknown[]) => void;
+  /** Set by the extension: the user picked a QA intensity (quick/standard/deep). */
+  qaIntensityHandler?: (value: string) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -94,6 +97,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.openReportHandler?.(msg.path);
       else if (msg.type === "crystallizeCandidate" && typeof msg.name === "string" && Array.isArray(msg.steps))
         this.crystallizeCandidateHandler?.(msg.name, msg.steps);
+      else if (msg.type === "setQaIntensity" && typeof msg.value === "string")
+        this.qaIntensityHandler?.(msg.value);
       else if (msg.type === "ready") this.onReady?.();
     });
   }
@@ -204,6 +209,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    *  its already-resolved steps; the webview posts `crystallizeCandidate` back. */
   pushCandidates(candidates: unknown[]): void {
     this.post({ type: "qa-candidates", candidates });
+  }
+  /** Reflect the stored QA intensity in the composer picker (on (re)load). */
+  pushQaIntensity(value: string): void {
+    this.post({ type: "qaIntensity", value });
   }
   /** Running token total (from usage events) → live group counter. */
   pushUsage(tokens: number): void {

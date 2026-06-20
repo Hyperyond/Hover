@@ -23,6 +23,14 @@ const StopIcon = () => (
   </svg>
 );
 
+/** QA intensity presets — mirrors core's QA_INTENSITY (label + spend ceiling).
+ *  Bounds how far an exploratory QA run goes so it can't run away on cost. */
+const QA_LEVELS = [
+  { v: "quick", label: "Quick", desc: "Fast pass over main flows · ~$0.25" },
+  { v: "standard", label: "Standard", desc: "Main flows + key negative tests · ~$0.60" },
+  { v: "deep", label: "Deep", desc: "Exhaustive — every control & state · ~$1.50" },
+];
+
 /** The input box + toolbar (browser / model / mode / send). Browser, mode and
  *  send/stop hit existing extension commands; the model + @-mention popups are
  *  a later stage. */
@@ -39,6 +47,7 @@ export function Composer({
   modelLocked,
   effortOpts,
   curEffort,
+  qaIntensity,
   accounts,
 }: {
   draft: string;
@@ -53,11 +62,13 @@ export function Composer({
   modelLocked: boolean;
   effortOpts: string[];
   curEffort: string;
+  qaIntensity: string;
   accounts: Account[];
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [modelMenu, setModelMenu] = useState(false);
   const [modeMenu, setModeMenu] = useState(false);
+  const [intensityMenu, setIntensityMenu] = useState(false);
   // @account autocomplete: the menu + which item is highlighted + where the
   // active @token starts in the text.
   const [mention, setMention] = useState<{ items: Account[]; sel: number; start: number } | null>(null);
@@ -125,6 +136,21 @@ export function Composer({
   function pickMode(value: string) {
     setModeMenu(false);
     post({ type: "setMode", modeId: value === "normal" ? null : value });
+  }
+
+  // QA intensity menu (QA mode only) — bounds how hard an exploration tries.
+  useEffect(() => {
+    if (!intensityMenu) return;
+    const close = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement)?.closest?.("#intensity-btn, #intensity-menu")) setIntensityMenu(false);
+    };
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [intensityMenu]);
+
+  function pickIntensity(value: string) {
+    setIntensityMenu(false);
+    if (value !== qaIntensity) post({ type: "setQaIntensity", value });
   }
 
   // Auto-grow the textarea up to a cap, mirroring the legacy behaviour.
@@ -300,6 +326,36 @@ export function Composer({
                   </>
                 )}
               </div>
+            )}
+            {modeId === "qa" && (
+              <>
+                <button
+                  className="barebtn"
+                  id="intensity-btn"
+                  title="QA intensity — how hard the exploration tries (bounds run cost)"
+                  onClick={() => setIntensityMenu((o) => !o)}
+                >
+                  <span>{QA_LEVELS.find((l) => l.v === qaIntensity)?.label ?? "Standard"}</span>
+                </button>
+                {intensityMenu && (
+                  <div className="popup" id="intensity-menu">
+                    <div className="p-hdr">QA intensity</div>
+                    {QA_LEVELS.map((l) => (
+                      <div
+                        key={l.v}
+                        className={"p-item" + (l.v === qaIntensity ? " active" : "")}
+                        onClick={() => pickIntensity(l.v)}
+                      >
+                        <div className="p-body">
+                          <div className="p-title">{l.label}</div>
+                          <div className="p-desc">{l.desc}</div>
+                        </div>
+                        <span className="p-check">✓</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
           <div className="right">

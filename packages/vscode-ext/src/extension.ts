@@ -475,7 +475,10 @@ async function runPrompt(prompt: string): Promise<void> {
   // user's CLAUDE.md / Claude Code auto-memory; "shared" (default) keeps the
   // project context. Stored in extension globalState (see the Settings handler).
   const isolateContext = (extContext?.globalState.get<string>('hover.agentContext', 'shared') ?? 'shared') === 'isolated';
-  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext)) {
+  // QA intensity (Quick/Standard/Deep) bounds an exploratory run's spend; only
+  // applied engine-side when the mode is QA, harmless to send otherwise.
+  const qaIntensity = extContext?.globalState.get<string>('hover.qaIntensity', 'standard') ?? 'standard';
+  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext, qaIntensity)) {
     setSessionRunning(sess, false);
     pushToSession(sess, 'system', 'Could not reach the engine.');
   }
@@ -1200,6 +1203,9 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   // The user clicked ✨ Crystallize on a QA candidate flow → write its steps to a spec.
   chatProvider.crystallizeCandidateHandler = (name, steps) => void crystallizeCandidate(name, steps);
+  // The user picked a QA intensity (quick/standard/deep) — persist it; runPrompt
+  // sends it with each run and the engine applies it in QA mode.
+  chatProvider.qaIntensityHandler = (value) => void extContext?.globalState.update('hover.qaIntensity', value);
   // The user switched the active conversation from the top-bar switcher.
   chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver
@@ -1236,6 +1242,7 @@ export function activate(context: vscode.ExtensionContext): void {
     void pushAccounts();
     void pushModels();
     void pollAppStatus();
+    chatProvider?.pushQaIntensity(extContext?.globalState.get<string>('hover.qaIntensity', 'standard') ?? 'standard');
     if (currentMode) chatProvider?.updateMode(currentMode, modeLabel(currentMode));
     // Restore the session switcher + the active conversation's transcript.
     pushSessionList();

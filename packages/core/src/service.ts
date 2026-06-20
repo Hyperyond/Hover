@@ -65,6 +65,7 @@ import {
 import { loadMemory, formatMemoryForPrompt, writeFact, type BusinessFact } from './memory/businessMemory.js';
 import { writeQaReport } from './qa/qaReport.js';
 import { resolveCandidates, type RecordedCandidate } from './qa/candidates.js';
+import { QA_INTENSITY, asQaIntensity, qaBudgetDirective } from './qa/intensity.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { handleRelayMessage } from './service/relayHandlers.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
@@ -1007,6 +1008,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // mid-run switch can't smear it; the rest are filled as the run learns
       // them). Account labels are LABELS ONLY — never the credentials.
       const runMode = currentModeId;
+      // QA intensity (per-run): Quick / Standard / Deep — bounds exploration with
+      // a hard model-spend ceiling so "explore the whole app" can't run away.
+      // Only meaningful in QA mode; ignored elsewhere.
+      const runIntensity = asQaIntensity((msg.payload as { intensity?: unknown } | undefined)?.intensity);
       const runResumeOf = resumeSessionId;
       const screenshotTag = (resumeSessionId ?? sessionStartedAt).replace(/[^a-zA-Z0-9._-]+/g, '-');
       const runEnv = ((): { id?: string; name?: string } | undefined => {
@@ -1217,9 +1222,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (groundedActuation) {
           appendSystemPrompt = `${appendSystemPrompt}\n\n${GROUNDED_ACTUATION_DIRECTIVE}`;
         }
-        // QA mode: autonomous exploratory testing on top of grounded actuation.
+        // QA mode: autonomous exploratory testing on top of grounded actuation,
+        // bounded by the run's intensity budget (so the agent paces itself and
+        // always writes a report rather than running away on cost).
         if (currentModeId === 'qa') {
           appendSystemPrompt = `${appendSystemPrompt}\n\n${QA_EXPLORATION_DIRECTIVE}`;
+          appendSystemPrompt = `${appendSystemPrompt}\n\n${qaBudgetDirective(runIntensity)}`;
         }
         // Business memory (QA + API modes only): inject what earlier runs learned
         // about THIS app so the agent doesn't re-ask answered business questions.
@@ -1295,7 +1303,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             // Normal mode: deny the Playwright interaction tools so the agent
             // must use the grounded mcp__hover-control__* actuation tools.
             disallowedToolsExtra: groundedActuation ? GROUNDED_ACTUATION_DENY : undefined,
-            maxBudgetUsd,
+            // QA runs are bounded by the chosen intensity's spend ceiling; other
+            // modes use the service-level budget (if any).
+            maxBudgetUsd: runMode === 'qa' ? QA_INTENSITY[runIntensity].maxBudgetUsd : maxBudgetUsd,
             model: effectiveModel,
             effort: currentEffort,
             // BYOK: inject the protocol's auth env (key + base URL) into the
