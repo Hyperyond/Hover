@@ -148,6 +148,15 @@ export const QA_EXPLORATION_DIRECTIVE =
   'action-type before doing them, otherwise flag-and-skip. Stay on the app under ' +
   'test (never navigate to external origins). Stop when the frontier is exhausted ' +
   'or you hit the run budget; then write the findings report.\n' +
+  'CAPTURE CLEAN FLOWS: as you exercise the app, whenever you complete a coherent ' +
+  'end-to-end flow worth keeping as a regression test (e.g. "Log in", "Add item ' +
+  'to cart", "Submit the registration form"), call record_candidate with a short ' +
+  'imperative name and the step numbers (the "· step N" tags echoed after each ' +
+  'click / fill / select / check you did for THAT flow), in order. This does NOT ' +
+  'crystallize a spec — it just offers the user a one-click "Crystallize" later, ' +
+  'so still do not write a spec yourself. Include only the steps of that one ' +
+  'flow, only successful ones; skip exploration, dead-ends, and negative-test ' +
+  'attempts. Record each distinct flow right after you finish it, while fresh.\n' +
   'REMEMBER WHAT YOU LEARN: when you confirm a durable business rule about this ' +
   'app — an expected behavior, a validation rule, an access policy, or the answer ' +
   'to a "is this a bug or by-design?" you asked the user — call record_fact to ' +

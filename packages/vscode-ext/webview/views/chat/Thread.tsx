@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useState } from "react";
-import type { ThreadItem } from "./useThread";
+import type { ThreadItem, Candidate } from "./useThread";
 import { inline, mdToHtml } from "../../shared/markdown";
 import { structuredRows, textRows, sevClass } from "./findings";
 import { stripHoverAsk } from "./followup";
 import { post } from "../../shared/vscode";
 
-const NODE_KINDS = new Set(["think", "op", "group", "answered", "shot", "report"]);
+const NODE_KINDS = new Set(["think", "op", "group", "answered", "shot", "report", "candidates"]);
 
 /** Plain text from an inline()'d HTML string (for clipboard). */
 function stripHtml(s: string): string {
@@ -215,6 +215,8 @@ function Node({ item, last }: { item: ThreadItem; last: boolean }) {
       return <ShotNode uri={item.uri} />;
     case "report":
       return <ReportNode path={item.path} />;
+    case "candidates":
+      return <CandidatesNode items={item.items} />;
     case "clarify":
       return <ClarifyBlock question={item.question} options={item.options} />;
     case "result":
@@ -285,6 +287,42 @@ function ReportNode({ path }: { path: string }) {
           </svg>
           <span>QA report · {name}</span>
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** QA Stage 4: candidate flows the run discovered. Each card → ✨ Crystallize
+ *  writes that flow's (already-resolved, record==replay) steps to a Playwright
+ *  spec. Promote-on-demand: nothing is written until the user clicks. */
+function CandidatesNode({ items }: { items: Candidate[] }) {
+  const [done, setDone] = useState<Record<number, boolean>>({});
+  return (
+    <div className="node op candidates">
+      <span className="node-rail" />
+      <div className="node-body">
+        <div className="cand-head">
+          Candidate flow{items.length === 1 ? "" : "s"} · save as a test
+        </div>
+        {items.map((c, i) => (
+          <div key={i} className="cand-row">
+            <div className="cand-info">
+              <div className="cand-name">{c.name}</div>
+              {c.description && <div className="cand-desc">{c.description}</div>}
+              {typeof c.stepCount === "number" && <div className="cand-meta">{c.stepCount} steps</div>}
+            </div>
+            <button
+              className="cand-btn"
+              disabled={done[i]}
+              onClick={() => {
+                post({ type: "crystallizeCandidate", name: c.name, steps: c.steps });
+                setDone((d) => ({ ...d, [i]: true }));
+              }}
+            >
+              {done[i] ? "✓ Saving…" : "✨ Crystallize"}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

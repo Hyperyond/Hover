@@ -57,6 +57,20 @@ function md(text: string): { content: [{ type: 'text'; text: string }] } {
   return { content: [{ type: 'text' as const, text }] };
 }
 
+/**
+ * Per-run actuation step counter. This MCP server is a fresh stdio subprocess
+ * per agent invocation, so it resets to 0 each run with no explicit signal.
+ * Every grounded actuation (click/fill/select/check/upload) bumps it and echoes
+ * "· step N" so the agent can name a flow's steps by number when it calls
+ * `record_candidate`. The service numbers recorded steps by the same set
+ * (mcp/actuationTools.ts) to map those numbers back to the real recorded steps.
+ */
+let controlSeq = 0;
+/** Tag an actuation result with its step number (so the agent can cite it). */
+function step(seq: number, text: string): { content: [{ type: 'text'; text: string }] } {
+  return md(`${text} · step ${seq}`);
+}
+
 function originOf(u: string): string | null {
   try { return new URL(u).origin; } catch { return null; }
 }
@@ -171,17 +185,18 @@ server.registerTool(
     },
   },
   async ({ role, name, checked }) => {
+    const seq = ++controlSeq;
     const picked = await pickPage();
-    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    if (!picked) return step(seq, `✗ could not reach the page over CDP (${CDP_URL}).`);
     const { page, close } = picked;
     try {
       const locator = page.getByRole(role as Parameters<Page['getByRole']>[0], { name, exact: true });
       if (checked === false) await locator.uncheck({ force: true, timeout: 5000 });
       else await locator.check({ force: true, timeout: 5000 });
       const ok = await locator.isChecked().catch(() => null);
-      return md(`✓ ${checked === false ? 'unchecked' : 'checked'} ${role} "${name}"${ok === null ? '' : ` (isChecked=${ok})`}`);
+      return step(seq, `✓ ${checked === false ? 'unchecked' : 'checked'} ${role} "${name}"${ok === null ? '' : ` (isChecked=${ok})`}`);
     } catch (e) {
-      return md(`✗ could not toggle ${role} "${name}": ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
+      return step(seq, `✗ could not toggle ${role} "${name}": ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
     } finally {
       await close();
     }
@@ -196,16 +211,17 @@ server.registerTool(
     inputSchema: { ...GROUND },
   },
   async (g) => {
+    const seq = ++controlSeq;
     const picked = await pickPage();
-    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    if (!picked) return step(seq, `✗ could not reach the page over CDP (${CDP_URL}).`);
     const { page, close } = picked;
     try {
       const loc = locate(page, g);
-      if (!loc) return md(NEED_TARGET);
+      if (!loc) return step(seq, NEED_TARGET);
       await loc.click({ timeout: 5000 });
-      return md(`✓ clicked ${describe(g)}`);
+      return step(seq, `✓ clicked ${describe(g)}`);
     } catch (e) {
-      return md(`✗ could not click ${describe(g)}: ${errLine(e)}`);
+      return step(seq, `✗ could not click ${describe(g)}: ${errLine(e)}`);
     } finally {
       await close();
     }
@@ -220,16 +236,17 @@ server.registerTool(
     inputSchema: { ...GROUND, value: z.string().describe('The text to type into the field.') },
   },
   async ({ value, ...g }) => {
+    const seq = ++controlSeq;
     const picked = await pickPage();
-    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    if (!picked) return step(seq, `✗ could not reach the page over CDP (${CDP_URL}).`);
     const { page, close } = picked;
     try {
       const loc = locate(page, g);
-      if (!loc) return md(NEED_TARGET);
+      if (!loc) return step(seq, NEED_TARGET);
       await loc.fill(value, { timeout: 5000 });
-      return md(`✓ filled ${describe(g)} = "${value}"`);
+      return step(seq, `✓ filled ${describe(g)} = "${value}"`);
     } catch (e) {
-      return md(`✗ could not fill ${describe(g)}: ${errLine(e)}`);
+      return step(seq, `✗ could not fill ${describe(g)}: ${errLine(e)}`);
     } finally {
       await close();
     }
@@ -244,17 +261,18 @@ server.registerTool(
     inputSchema: { ...GROUND, value: z.string().describe('The option label or value to choose.') },
   },
   async ({ value, ...g }) => {
+    const seq = ++controlSeq;
     const picked = await pickPage();
-    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    if (!picked) return step(seq, `✗ could not reach the page over CDP (${CDP_URL}).`);
     const { page, close } = picked;
     try {
       // A <select> is role 'combobox' — default it so the agent can pass name alone.
       const loc = locate(page, { ...g, role: g.role ?? (g.name ? 'combobox' : undefined) });
-      if (!loc) return md(NEED_TARGET);
+      if (!loc) return step(seq, NEED_TARGET);
       await loc.selectOption(value, { timeout: 5000 });
-      return md(`✓ selected "${value}" in ${describe(g)}`);
+      return step(seq, `✓ selected "${value}" in ${describe(g)}`);
     } catch (e) {
-      return md(`✗ could not select in ${describe(g)}: ${errLine(e)}`);
+      return step(seq, `✗ could not select in ${describe(g)}: ${errLine(e)}`);
     } finally {
       await close();
     }
@@ -273,8 +291,9 @@ server.registerTool(
     },
   },
   async ({ path, placeholder, ...g }) => {
+    const seq = ++controlSeq;
     const picked = await pickPage();
-    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    if (!picked) return step(seq, `✗ could not reach the page over CDP (${CDP_URL}).`);
     const { page, close } = picked;
     try {
       let absPath: string;
@@ -285,15 +304,15 @@ server.registerTool(
       } else if (path) {
         absPath = isAbsolute(path) ? path : resolve(PROJECT_ROOT, path);
       } else {
-        return md('✗ pass `path` (a real file) or `placeholder:true`.');
+        return step(seq, '✗ pass `path` (a real file) or `placeholder:true`.');
       }
       // setInputFiles on the file <input> directly — works even when the input
       // is display:none, and (unlike clicking to open a chooser) leaves no
       // dangling file-dialog state that would poison later browser_* calls.
       await fileInput(page, g).setInputFiles(absPath, { timeout: 5000 });
-      return md(`✓ uploaded ${placeholder ? 'a placeholder image' : absPath}`);
+      return step(seq, `✓ uploaded ${placeholder ? 'a placeholder image' : absPath}`);
     } catch (e) {
-      return md(`✗ could not upload: ${errLine(e)}`);
+      return step(seq, `✗ could not upload: ${errLine(e)}`);
     } finally {
       await close();
     }
@@ -439,6 +458,34 @@ server.registerTool(
     } finally {
       await close();
     }
+  },
+);
+
+// ── record_candidate: mark a clean flow worth crystallizing (QA mode) ────────
+// Fire-and-forget: send `record-candidate` over the engine channel; the engine
+// buffers it and, at run end, resolves the cited step numbers back to the real
+// recorded steps and offers the user a one-click "Crystallize" → Playwright
+// spec. The numbers come from the "· step N" tags echoed after each actuation.
+server.registerTool(
+  'record_candidate',
+  {
+    description:
+      "Record a CANDIDATE FLOW you just completed — a clean, coherent end-to-end sequence worth saving as a reusable regression test (e.g. \"Log in\", \"Add item to cart\", \"Submit the registration form\"). Call this right after you finish such a flow, while its steps are fresh. `steps` is the ordered list of step numbers — the \"· step N\" tags shown after each click / fill / select / check you performed FOR THIS FLOW. The user can then one-click crystallize it into a deterministic Playwright spec. RULES: include only steps that belong to this one flow, in order; only successful steps; skip exploration, dead-ends, and unrelated clicks.",
+    inputSchema: {
+      name: z.string().describe('Short imperative flow name, e.g. "Log in" or "Add item to cart".'),
+      description: z.string().optional().describe('One line on what this flow verifies.'),
+      steps: z.array(z.number().int().positive()).min(1)
+        .describe('The step numbers (from the "· step N" tags) that make up this flow, in order.'),
+    },
+  },
+  async ({ name, description, steps }) => {
+    const sock = ensureAskWs();
+    if (!sock) return md('✓ noted (candidate channel unavailable; continuing).');
+    const send = (): void =>
+      sock.send(JSON.stringify({ type: 'record-candidate', payload: { candidate: { name, description, steps } } }));
+    if (sock.readyState === WebSocket.OPEN) send();
+    else sock.once('open', send);
+    return md(`✓ candidate flow recorded: "${name}" (${steps.length} step${steps.length === 1 ? '' : 's'})`);
   },
 );
 

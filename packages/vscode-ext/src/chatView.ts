@@ -25,6 +25,7 @@ type Inbound =
   | { type: "switchSession"; id: string }
   | { type: "saveRun"; name: string; mode: string | null }
   | { type: "openReport"; path: string }
+  | { type: "crystallizeCandidate"; name: string; steps: unknown[] }
   | { type: "ready" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -51,6 +52,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Set by the extension: open a QA findings report (.hover/qa-reports/*.md) in
    *  the editor when the user clicks its link in the chat. */
   openReportHandler?: (path: string) => void;
+  /** Set by the extension: the user clicked ✨ Crystallize on a QA candidate flow
+   *  — write its (already-resolved) steps to a Playwright spec. */
+  crystallizeCandidateHandler?: (name: string, steps: unknown[]) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -88,6 +92,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.saveRunHandler?.(typeof msg.name === "string" ? msg.name : undefined, msg.mode ?? null);
       else if (msg.type === "openReport" && typeof msg.path === "string")
         this.openReportHandler?.(msg.path);
+      else if (msg.type === "crystallizeCandidate" && typeof msg.name === "string" && Array.isArray(msg.steps))
+        this.crystallizeCandidateHandler?.(msg.name, msg.steps);
       else if (msg.type === "ready") this.onReady?.();
     });
   }
@@ -193,6 +199,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    *  open it. */
   pushReport(path: string): void {
     this.post({ type: "report", path });
+  }
+  /** Surface QA candidate flows as ✨ Crystallize cards. Each candidate carries
+   *  its already-resolved steps; the webview posts `crystallizeCandidate` back. */
+  pushCandidates(candidates: unknown[]): void {
+    this.post({ type: "qa-candidates", candidates });
   }
   /** Running token total (from usage events) → live group counter. */
   pushUsage(tokens: number): void {

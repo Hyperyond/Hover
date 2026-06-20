@@ -979,6 +979,72 @@ header {
   flex: none;
   opacity: 0.85;
 }
+
+/* QA Stage 4 — candidate-flow cards (✨ Crystallize) */
+.node.candidates .node-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+  padding: 8px 10px;
+}
+.cand-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  margin-bottom: 2px;
+}
+.cand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+.cand-row:first-of-type {
+  border-top: none;
+}
+.cand-info {
+  min-width: 0;
+}
+.cand-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.cand-desc {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.cand-meta {
+  font-size: 11px;
+  opacity: 0.55;
+  margin-top: 1px;
+}
+.cand-btn {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cand-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.cand-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 .shot-thumb {
   display: block;
   max-width: 100%;
