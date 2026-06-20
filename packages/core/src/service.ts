@@ -365,8 +365,18 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       args: [CONTROL_MCP_SCRIPT],
       // HOVER_APPROVAL_PORT: the control MCP's ask_user tool reaches the editor
       // over the service WS. HOVER_PROJECT_ROOT: where upload_file writes its
-      // placeholder fixture and resolves relative paths.
-      env: { HOVER_CDP_URL: cdpUrl, HOVER_DEV_URL: opts.devUrl ?? cdpUrl, HOVER_APPROVAL_PORT: String(port), HOVER_PROJECT_ROOT: devRoot },
+      // placeholder fixture and resolves relative paths. HOVER_SHOT_DIR: where
+      // take_screenshot writes (the same per-run dir the service scans), so its
+      // viewport PNGs surface in the chat exactly like browser_take_screenshot's.
+      env: {
+        HOVER_CDP_URL: cdpUrl,
+        HOVER_DEV_URL: opts.devUrl ?? cdpUrl,
+        HOVER_APPROVAL_PORT: String(port),
+        HOVER_PROJECT_ROOT: devRoot,
+        ...(sessionTag
+          ? { HOVER_SHOT_DIR: resolve(devRoot, '.hover', 'screenshots', sessionTag.replace(/[^a-zA-Z0-9._-]+/g, '-')) }
+          : {}),
+      },
     });
     // Single-Chrome model: the Playwright MCP always points at the one debug
     // Chrome on the normal cdpUrl. (Pre-single-Chrome this branched to a
@@ -1303,10 +1313,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             // time its tool_result lands — resolve the freshest png in the run's
             // output dir and surface it to the chat. Best-effort, never throws.
             if (ev.kind === 'tool_use') {
-              if (String(ev.tool ?? '').replace(/^mcp__.*?__/, '') === 'browser_take_screenshot') {
-                // The agent often takes the same view twice — a full-page and a
-                // viewport shot. Carry `full` so the chat can collapse the burst
-                // and keep the full-page one.
+              const bare = String(ev.tool ?? '').replace(/^mcp__.*?__/, '');
+              // browser_take_screenshot (Playwright, plugin modes) OR take_screenshot
+              // (hover-control, grounded modes — viewport only, never resizes the
+              // page). Both write a PNG into the run's shot dir; we surface the
+              // freshest one in the chat.
+              if (bare === 'browser_take_screenshot' || bare === 'take_screenshot') {
+                // browser_take_screenshot may be full-page; take_screenshot is
+                // always viewport. Carry `full` so the chat can collapse a
+                // full+viewport burst and keep the full-page one.
                 pendingShot = { full: Boolean((ev.input as { fullPage?: unknown } | undefined)?.fullPage) };
               }
             } else if (ev.kind === 'tool_result' && pendingShot) {
