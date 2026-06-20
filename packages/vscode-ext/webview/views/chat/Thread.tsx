@@ -327,9 +327,19 @@ function ResultBlock({ item }: { item: Extract<ThreadItem, { kind: "result" }> }
           <CopyBtn getText={() => (r.word ? r.word + " — " : "") + stripHtml(r.html)} />
         </div>
       ))}
-      {/* Only a run that actually did something is worth saving — a 0-step run
-          (the agent just replied / asked) shows no footer at all. */}
-      {!item.error && (item.steps ?? 0) > 0 && (
+      {/* QA is report-first: its run is an exploration, NOT a flow to crystallize
+          — so it shows the findings + the saved report, never a "Save this spec?"
+          prompt (saving the whole exploration would be a dirty spec). */}
+      {!item.error && (item.steps ?? 0) > 0 && item.mode === "qa" && (
+        <div className="rfoot">
+          Explored {meta.join(" · ")}
+          {rows.length ? ` · ${rows.length} finding${rows.length > 1 ? "s" : ""}` : " · no issues found"}. Findings
+          report saved under .hover/qa-reports/.
+        </div>
+      )}
+      {/* Other modes: a small inline Save lets the user export the run on demand.
+          A 0-step run (the agent just replied / asked) shows no footer. */}
+      {!item.error && (item.steps ?? 0) > 0 && item.mode !== "qa" && (
         <div className="rfoot">
           This run took {meta.join(" · ")}. Want to{" "}
           <button className="save-btn" onClick={() => post({ type: "saveRun", mode: item.mode ?? null })}>
