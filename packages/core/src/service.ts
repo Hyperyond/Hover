@@ -60,7 +60,9 @@ import {
   ASK_FORMAT_DIRECTIVE,
   EXPLORATION_CHECKPOINT_DIRECTIVE,
   GROUNDED_ACTUATION_DIRECTIVE,
+  QA_EXPLORATION_DIRECTIVE,
 } from './agentDirectives.js';
+import { loadMemory, formatMemoryForPrompt } from './memory/businessMemory.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { handleRelayMessage } from './service/relayHandlers.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
@@ -1147,6 +1149,19 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         const groundedActuation = resolveModeBehavior(currentModeId).groundedActuation;
         if (groundedActuation) {
           appendSystemPrompt = `${appendSystemPrompt}\n\n${GROUNDED_ACTUATION_DIRECTIVE}`;
+        }
+        // QA mode: autonomous exploratory testing on top of grounded actuation.
+        if (currentModeId === 'qa') {
+          appendSystemPrompt = `${appendSystemPrompt}\n\n${QA_EXPLORATION_DIRECTIVE}`;
+        }
+        // Business memory (QA + API modes only): inject what earlier runs learned
+        // about THIS app so the agent doesn't re-ask answered business questions.
+        // Best-effort — a memory read must never block a run.
+        if (currentModeId === 'qa' || currentModeId === 'api-test') {
+          try {
+            const mem = formatMemoryForPrompt(await loadMemory(devRoot));
+            if (mem) appendSystemPrompt = `${appendSystemPrompt}\n\n${mem}`;
+          } catch { /* memory is best-effort */ }
         }
 
         // Snapshot the agent id so a switch-agent message during the run

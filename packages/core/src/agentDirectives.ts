@@ -116,6 +116,23 @@ export const EXPLORATION_CHECKPOINT_DIRECTIVE =
   'finished exactly what was asked) or when the user already said to stop / ' +
   'that it is enough — then just finish and report.';
 
+/** QA Testing mode — appended on top of the grounded-actuation directive. Turns
+ *  a directed run into autonomous exploratory testing. (Behavioral effect needs
+ *  live verification; the wiring just appends this when mode === 'qa'.) */
+export const QA_EXPLORATION_DIRECTIVE =
+  'QA TESTING MODE — explore, don\'t just follow. Go BEYOND any single instruction: ' +
+  'systematically exercise every reachable control and state of the app to find ' +
+  'real defects. Maintain a mental frontier of untried controls; try each; do NOT ' +
+  'repeat a state you have already explored. Do NEGATIVE testing too — empty / ' +
+  'invalid / boundary / special-character inputs on forms — to surface validation ' +
+  'gaps, not just happy paths. Flag what you find as Findings (severity high / ' +
+  'medium / low / info) in your report; DO NOT crystallize a spec unless the user ' +
+  'asks. Treat clearly DESTRUCTIVE / irreversible actions (delete account, submit ' +
+  'payment, send email, bulk delete) carefully: confirm with the user once per ' +
+  'action-type before doing them, otherwise flag-and-skip. Stay on the app under ' +
+  'test (never navigate to external origins). Stop when the frontier is exhausted ' +
+  'or you hit the run budget; then write the findings report.';
+
 export const GROUNDED_ACTUATION_DIRECTIVE =
   'INTERACTING WITH THE PAGE — IMPORTANT: You interact with the page ONLY through ' +
   'the Hover control tools: mcp__hovercontrol__click_control, fill_control, ' +
