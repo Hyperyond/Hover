@@ -13,7 +13,7 @@
  * → crystallize) is the next slice — see onSend.
  */
 import * as vscode from "vscode";
-import { randomBytes } from "node:crypto";
+import { renderWebviewHtml } from "./webviewHost.js";
 
 type Inbound =
   | { type: "send"; text: string }
@@ -64,9 +64,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         ...(wsRoot ? [vscode.Uri.joinPath(wsRoot, ".hover", "screenshots")] : []),
       ],
     };
-    // The chat is the React webview (Vite build under dist/webview). The legacy
-    // string template was removed once the React UI reached parity.
-    view.webview.html = this.reactHtml(view.webview);
+    // The chat is the React webview (Vite build under dist/webview). All Hover
+    // views share one bundle + host; `'chat'` selects this screen in the router.
+    view.webview.html = renderWebviewHtml(view.webview, this.extensionUri, "chat");
     view.webview.onDidReceiveMessage((msg: Inbound) => {
       if (msg.type === "send") void this.onSend(msg.text);
       else if (msg.type === "command" && typeof msg.id === "string")
@@ -242,35 +242,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.post({ type: "user", text: prompt });
     if (this.runHandler) this.runHandler(prompt);
     else this.post({ type: "system", text: "Engine not available." });
-  }
-
-  /** Host page for the React webview (Vite build under dist/webview). Loads the
-   *  bundled chat.js / chat.css via webview URIs; the message protocol with the
-   *  extension is unchanged. Shown when `hover.reactChat` is on. */
-  private reactHtml(webview: vscode.Webview): string {
-    const nonce = randomBytes(16).toString("base64");
-    const dist = vscode.Uri.joinPath(this.extensionUri, "dist", "webview");
-    const js = webview.asWebviewUri(vscode.Uri.joinPath(dist, "chat.js"));
-    const css = webview.asWebviewUri(vscode.Uri.joinPath(dist, "chat.css"));
-    const csp = [
-      `default-src 'none'`,
-      `img-src ${webview.cspSource} https: data:`,
-      `font-src ${webview.cspSource}`,
-      `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `script-src 'nonce-${nonce}' ${webview.cspSource}`,
-      `connect-src ${webview.cspSource}`,
-      `media-src ${webview.cspSource}`,
-    ].join("; ");
-    return `<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="${csp}" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<link rel="stylesheet" href="${css}" />
-</head><body>
-<div id="root"></div>
-<script type="module" nonce="${nonce}" src="${js}"></script>
-</body></html>`;
   }
 
 }

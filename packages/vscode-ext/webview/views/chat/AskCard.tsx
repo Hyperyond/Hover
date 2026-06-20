@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { inline } from "./markdown";
+import { inline } from "../../shared/markdown";
 
 export interface AskReq {
   askId: string;

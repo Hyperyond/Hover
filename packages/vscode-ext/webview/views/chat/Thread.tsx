@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useState } from "react";
 import type { ThreadItem } from "./useThread";
-import { inline, mdToHtml } from "./markdown";
+import { inline, mdToHtml } from "../../shared/markdown";
 import { structuredRows, textRows, sevClass } from "./findings";
 import { stripHoverAsk } from "./followup";
-import { post } from "./vscode";
+import { post } from "../../shared/vscode";
 
 const NODE_KINDS = new Set(["think", "op", "group", "answered", "shot"]);
 

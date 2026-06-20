@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { post } from "./vscode";
-import type { Account, ModelOption } from "./App";
+import { post } from "../../shared/vscode";
+import type { Account, ModelOption } from "./Chat";
 import { MODES, modeIcon } from "./modes";
 
 const SendIcon = () => (
