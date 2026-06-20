@@ -47,6 +47,7 @@ export function Chat() {
   const [modelLocked, setModelLocked] = useState(false);
   const [effortOpts, setEffortOpts] = useState<string[]>([]);
   const [curEffort, setCurEffort] = useState("");
+  const [qaIntensity, setQaIntensity] = useState("standard");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSess, setActiveSess] = useState("");
@@ -114,6 +115,9 @@ export function Chat() {
           setCurEffort(String(eff.current ?? ""));
           break;
         }
+        case "qaIntensity":
+          setQaIntensity(String(m.value ?? "standard"));
+          break;
         case "askUser":
           setAsk({
             askId: String(m.askId ?? ""),
@@ -188,6 +192,7 @@ export function Chat() {
         modelLocked={modelLocked}
         effortOpts={effortOpts}
         curEffort={curEffort}
+        qaIntensity={qaIntensity}
         accounts={accounts}
       />
     </>
