@@ -22,10 +22,14 @@
   --chat-max: 728px;
   --log-gut: 22px;
 }
-/* Light / high-contrast-light: --accent itself is retuned in theme.css; here we
-     only adjust the derived accent shades the mint buttons need. */
+/* Light / high-contrast-light: re-resolve the --accent alias HERE (at the body
+     scope) so it picks up theme.css's deepened --color-accent (#16a34a). The
+     :root alias above captured the dark-default value, and a :root var() can't
+     see a body-level override — so without this, light mode kept the bright mint
+     and read as washed-out. Plus the derived accent shades the buttons need. */
 body.vscode-light,
 body.vscode-high-contrast-light {
+  --accent: var(--color-accent);
   --accent-dim: rgba(22, 163, 74, 0.12);
   --accent-ink: #ffffff;
 }
