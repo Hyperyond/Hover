@@ -98,7 +98,7 @@ export function Chat() {
           const id = m.id ? String(m.id) : null;
           setModeId(id);
           setModeLabel(id ? String(m.label ?? id) : "Flow");
-          document.body.classList.remove("mode-api-test", "mode-pentest");
+          document.body.classList.remove("mode-api-test", "mode-pentest", "mode-qa");
           if (id) document.body.classList.add("mode-" + id);
           break;
         }
