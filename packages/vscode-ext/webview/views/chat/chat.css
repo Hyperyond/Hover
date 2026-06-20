@@ -63,6 +63,12 @@ body.mode-pentest #ask-dock {
   --accent-dim: rgba(248, 113, 113, 0.16);
   --accent-ink: #2a0d0d;
 }
+body.mode-qa #composer,
+body.mode-qa #ask-dock {
+  --accent: #22c55e;
+  --accent-dim: rgba(34, 197, 94, 0.16);
+  --accent-ink: #052e16;
+}
 /* Silent mode + running: a rotating Google-Chrome-colored border, signalling
      the invisible browser is working (the page itself you can't see). */
 @property --hov-angle {

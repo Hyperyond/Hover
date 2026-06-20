@@ -79,6 +79,7 @@ async function pushEngineConfig(): Promise<void> {
  *  mode is the extension's own state (the engine, once hosted here, reads it).
  *  A connected service's reported modes are merged on top. */
 const BUILTIN_MODES: ModeEntry[] = [
+  { id: 'qa', label: 'QA Testing', description: 'explore the whole app → findings report + promotable specs' },
   { id: 'api-test', label: 'API testing', description: 'drive & verify your API — auth, status, access control' },
   { id: 'pentest', label: 'Pentest', description: 'offensive vuln hunting — red' },
 ];
@@ -95,6 +96,7 @@ function modeLabel(id: string): string {
   // internal id + plugin stay 'api-test'. Force it so an engine-reported label
   // can't override the display name.
   if (id === 'api-test') return 'API testing';
+  if (id === 'qa') return 'QA Testing';
   return allModes().find((m) => m.id === id)?.label ?? id;
 }
 
@@ -1372,7 +1374,7 @@ async function switchMode(): Promise<void> {
   const items: Pick[] = [
     { label: '$(circle-outline) Flow', description: 'drive the flow you describe → one Playwright spec', modeId: null },
     ...allModes().map((m) => ({
-      label: `${m.id === 'pentest' ? '$(flame)' : '$(shield)'} ${m.label}`,
+      label: `${m.id === 'pentest' ? '$(flame)' : m.id === 'qa' ? '$(search)' : '$(shield)'} ${m.label}`,
       description: m.description ?? m.id,
       modeId: m.id,
     })),

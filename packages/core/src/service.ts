@@ -50,7 +50,7 @@ import { getPreflight, invalidatePreflight } from './playwright/preflightCache.j
 import { resolveMcpConfig, mcpToolPrefix } from './playwright/resolveMcpConfig.js';
 import { launchDebugChrome, closeDebugChrome } from './playwright/launchChrome.js';
 import { writeSessionRecord, parseFindings, tallyTools } from './sessions/sessions.js';
-import { resolveModeBehavior } from './modes.js';
+import { resolveModeBehavior, isBuiltinMode, BUILTIN_MODES } from './modes.js';
 import {
   CJK_RE,
   ZH_OUTPUT_DIRECTIVE,
@@ -502,7 +502,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         accent: p.mode.accent,
         pluginName: p.name,
       }));
-    const payload = { current: currentModeId, available };
+    // Built-in non-Flow modes (QA) are core-owned, not plugin-contributed —
+    // surface them in the same catalogue so the picker lists them.
+    const builtins = BUILTIN_MODES.map((m) => ({ id: m.id, label: m.label, description: m.description, accent: m.accent }));
+    const payload = { current: currentModeId, available: [...builtins, ...available] };
     const targets = target ? [target] : [...wss.clients];
     for (const client of targets) {
       if (client.readyState === WebSocket.OPEN) {
@@ -558,6 +561,14 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     if (newModeId) {
       const next = pluginsByModeId.get(newModeId);
       if (!next) {
+        // A built-in non-Flow mode (QA) is core-owned, not plugin-contributed —
+        // no activate hook / sidecars to run, just record it. Anything else is a
+        // genuinely unknown mode.
+        if (isBuiltinMode(newModeId)) {
+          currentModeId = newModeId;
+          broadcastModes();
+          return;
+        }
         throw new Error(`[hover] unknown modeId "${newModeId}"`);
       }
       currentModeId = newModeId;
@@ -741,7 +752,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           });
           return;
         }
-        if (wanted !== null && !pluginsByModeId.has(wanted)) {
+        if (wanted !== null && !isBuiltinMode(wanted) && !pluginsByModeId.has(wanted)) {
           send(ws, {
             type: 'error',
             payload: { message: `set-mode: unknown modeId "${wanted}"` },
