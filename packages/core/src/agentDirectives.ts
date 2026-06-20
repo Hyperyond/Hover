@@ -48,6 +48,13 @@ export const GROUNDED_ACTUATION_DENY = [
   // real filechooser + setFiles); Playwright's browser_file_upload would only
   // leave an untranslatable optimizable marker.
   'mcp__playwright__browser_file_upload',
+  // Screenshots go through mcp__hovercontrol__take_screenshot (viewport only).
+  // Playwright's browser_take_screenshot does a fullPage capture by RESIZING the
+  // live window, which fires a window 'resize' the app may react to (lost
+  // transient UI state — e.g. a flipped card snapping back), so the agent never
+  // sees the result of its own action. Deny it; the viewport tool has no such
+  // side effect.
+  'mcp__playwright__browser_take_screenshot',
 ];
 
 export const REPORTING_DIRECTIVE =
@@ -173,13 +180,18 @@ export const GROUNDED_ACTUATION_DIRECTIVE =
   'holds your target by passing `within` = that container\'s role + accessible ' +
   'name, then identify the target inside it (by text when its own name isn\'t ' +
   'unique). To choose the right container and approach, read the snapshot tree, ' +
-  'take a browser_take_screenshot to SEE the real visual layout (the ' +
+  'take a mcp__hovercontrol__take_screenshot to SEE the real visual layout (the ' +
   'accessibility tree omits display:none inputs, canvas, and can\'t convey ' +
   'spatial grouping — the screenshot shows what the user actually sees), and ' +
-  'read the component source if you\'re unsure how it\'s built. Take just ONE ' +
-  'screenshot per view, with fullPage:true — do not also take a viewport shot ' +
-  'of the same view (the extra image only costs tokens). Perceive with the ' +
-  'screenshot; ACT through the grounded *_control tools. This is routine; work it ' +
+  'read the component source if you\'re unsure how it\'s built. take_screenshot ' +
+  'captures the CURRENT VIEWPORT only and never resizes the page — use it, NOT ' +
+  'Playwright\'s browser_take_screenshot (disabled here: its fullPage capture ' +
+  'resizes the live window, which can reset transient app state so you\'d never ' +
+  'see the result of your own action). To see below the fold, scroll first, then ' +
+  'take_screenshot. For FINDING elements, rely on browser_snapshot — its tree ' +
+  'covers the whole page (off-screen included), so a viewport shot never makes ' +
+  'you miss a control. Perceive with the screenshot; ACT through the grounded ' +
+  '*_control tools. This is routine; work it ' +
   'out and keep going rather than reporting it as a limitation.\n\n' +
   'WHEN YOU ARE TRULY BLOCKED — ASK, DON\'T STOP: only after you\'ve tried to ' +
   'work it out yourself (re-read the snapshot, scope with `within`, read the ' +

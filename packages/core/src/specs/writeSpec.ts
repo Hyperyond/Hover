@@ -63,7 +63,9 @@ function bareTool(rawTool: string): string {
  *  the prose. (browser_* read tools are also dropped inside translateStep.) */
 function isExploratoryTool(rawTool: string): boolean {
   const tool = bareTool(rawTool);
-  return tool === 'list_source' || tool === 'read_source' || tool === 'ask_user';
+  // take_screenshot is the grounded-mode viewport screenshot (perceive-only,
+  // like browser_take_screenshot) — never a replayable spec step.
+  return tool === 'list_source' || tool === 'read_source' || tool === 'ask_user' || tool === 'take_screenshot';
 }
 
 /**

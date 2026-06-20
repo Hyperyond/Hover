@@ -38,6 +38,10 @@ const CDP_URL = process.env.HOVER_CDP_URL || 'http://localhost:9222';
 const DEV_URL = process.env.HOVER_DEV_URL || '';
 const APPROVAL_PORT = process.env.HOVER_APPROVAL_PORT;
 const PROJECT_ROOT = process.env.HOVER_PROJECT_ROOT || process.cwd();
+/** Where take_screenshot writes its PNGs — the run's `.hover/screenshots/<tag>`
+ *  dir, the same one the service scans with newestPng() to surface a shot in the
+ *  chat. Set by the host (buildMcpConfig); falls back to the project .hover. */
+const SHOT_DIR = process.env.HOVER_SHOT_DIR || join(PROJECT_ROOT, '.hover', 'screenshots');
 
 /** Stable, commit-worthy placeholder fixture path (relative to the project) —
  *  the spec references this so the upload step replays. */
@@ -398,6 +402,43 @@ server.registerTool(
     if (sock.readyState === WebSocket.OPEN) send();
     else sock.once('open', send);
     return md(`✓ remembered: ${title}`);
+  },
+);
+
+// ── take_screenshot: a VIEWPORT screenshot that never resizes the page ───────
+// Why this exists instead of Playwright's browser_take_screenshot: a fullPage
+// screenshot on a real (connectOverCDP, headed) browser captures the full
+// document by RESIZING the window, which fires a window 'resize' event. Apps
+// that re-layout on resize (responsive breakpoints, etc.) can lose transient UI
+// state — e.g. a flipped flashcard snapping back — so the agent never sees the
+// result of its own click and thrashes. A viewport screenshot uses
+// Page.captureScreenshot of the current viewport: no resize, no side effects.
+// In grounded modes the host DENIES browser_take_screenshot and routes here; the
+// PNG lands in the run's shot dir so the service surfaces it in the chat exactly
+// like before.
+let shotSeq = 0;
+server.registerTool(
+  'take_screenshot',
+  {
+    description:
+      "Take a screenshot of the CURRENT viewport to see the page as the user sees it. Use this instead of Playwright's browser_take_screenshot (disabled here): a full-page screenshot resizes the live browser window, which can reset transient page state, so Hover captures the viewport only — no resize, no side effects. To see content below the fold, scroll first, then screenshot. For finding elements to act on, rely on browser_snapshot (the accessibility tree covers the whole page, off-screen included).",
+    inputSchema: {},
+  },
+  async () => {
+    const picked = await pickPage();
+    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    const { page, close } = picked;
+    try {
+      const png = await page.screenshot({ timeout: 5000 }); // viewport only — never fullPage
+      await mkdir(SHOT_DIR, { recursive: true });
+      const file = join(SHOT_DIR, `hover-shot-${String(++shotSeq).padStart(4, '0')}.png`);
+      await writeFile(file, png);
+      return md('✓ screenshot captured (viewport).');
+    } catch (e) {
+      return md(`✗ could not take screenshot: ${errLine(e)}`);
+    } finally {
+      await close();
+    }
   },
 );
 
