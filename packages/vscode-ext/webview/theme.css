@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/*
+ * The ONE stylesheet for every Hover webview. Tailwind v4 (utility classes in
+ * JSX) replaces the former per-view .css files. Theme tokens map VS Code's live
+ * theme variables → Tailwind color utilities (bg-bg, text-fg, border-line, …),
+ * so light/dark/high-contrast "just work". The mint accent is the brand.
+ *
+ * Only things Tailwind utilities can't express live below the @theme block:
+ * the base body/#root layout and keyframe animations (chat's run indicators +
+ * splash). There are no per-view stylesheets.
+ */
+@theme {
+  --color-bg: var(--vscode-sideBar-background, #1a1a1a);
+  --color-bg2: var(--vscode-editorWidget-background, #222224);
+  --color-bg3: var(--vscode-input-background, #141414);
+  --color-line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c)));
+  --color-fg: var(--vscode-foreground, #e5e7eb);
+  --color-muted: var(--vscode-descriptionForeground, #9ca3af);
+  --color-faint: var(--vscode-disabledForeground, #6b7280);
+  --color-accent: #7cffa8;
+  --color-warn: var(--vscode-editorWarning-foreground, #fb923c);
+  --color-pass: #7cffa8;
+  --color-fail: #f87171;
+  --color-flaky: #fb923c;
+  --color-run: #3fb950;
+  --color-ok: #7cffa8;
+  --color-err: #f87171;
+  --color-link: var(--vscode-textLink-foreground, #7cc7ff);
+  --color-focus: var(--vscode-focusBorder, #4493f8);
+  --color-listhover: var(--vscode-list-hoverBackground, #2a2a2c);
+  --color-method-get: #7cc7ff;
+  --animate-dot: dot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+
+/* Light / high-contrast-light retune the mint accent + pass/ok greens (the var
+   overrides cascade into every Tailwind utility that references them). */
+body.vscode-light,
+body.vscode-high-contrast-light {
+  --color-accent: #16a34a;
+  --color-pass: #16a34a;
+  --color-ok: #16a34a;
+}
+
+@layer base {
+  html { scrollbar-gutter: stable; }
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--vscode-font-family, -apple-system, system-ui, sans-serif);
+    font-size: 13px;
+    color: var(--color-fg);
+    background: var(--color-bg);
+  }
+  /* The React app mounts into #root; it takes over the body's flex-column role
+     so each view lays out (and scrolls) within the panel. */
+  #root { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+}

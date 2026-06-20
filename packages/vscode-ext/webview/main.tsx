@@ -2,8 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App, type HoverView } from "./App";
 import { maybeSeedDevThread } from "./views/chat/devMock";
-// Chat's stylesheet (also carries the shared base/theme resets). View-specific
-// stylesheets are imported by their own view as later stages add them.
+// The one stylesheet: Tailwind + theme tokens + base. (chat.css still holds the
+// run-indicator/splash keyframes until the chat view is converted.)
+import "./theme.css";
 import "./views/chat/chat.css";
 
 // The extension injects which screen to render (window.__HOVER_VIEW__). In the
