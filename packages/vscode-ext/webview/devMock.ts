@@ -59,12 +59,24 @@ export function maybeSeedDevThread(): void {
     { type: "narration", text: "Verifying the dashboard rendered after login." },
     { type: "step", tool: "mcp__hovercontrol__click_control", detail: JSON.stringify({ name: "Dashboard" }) },
     {
+      type: "screenshot",
+      uri:
+        "data:image/svg+xml;utf8," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="#1e293b"/><rect width="320" height="32" fill="#0f172a"/><circle cx="16" cy="16" r="5" fill="#34a853"/><text x="40" y="21" fill="#cbd5e1" font-family="sans-serif" font-size="13">dashboard · localhost:5173</text><rect x="20" y="56" width="140" height="96" rx="6" fill="#334155"/><rect x="176" y="56" width="124" height="44" rx="6" fill="#334155"/><rect x="176" y="112" width="124" height="40" rx="6" fill="#334155"/></svg>',
+        ),
+    },
+    {
       type: "result",
       verdict: "Done",
       summary:
         "Logged in with the demo account and landed on the dashboard.\n\n## Findings\n- Minor — the email field has no `aria-label`.\n- Info — login took ~1.2s.",
       steps: 7,
       tokens: 1840,
+    },
+    {
+      type: "assistant",
+      text: "登录流程跑通了。接下来你想测哪个方向？\n```hover-ask\n- 完整走一遍下单结账\n- 只测表单校验（空字段、非法输入）\n- 全面探索性测试\n```",
     },
     // NOTE: not auto-firing an askUser here — an unanswered ask sets
     // body.ask-open which hides the composer (model / browser toggle). The ask

@@ -74,6 +74,9 @@ export interface ClientMessage {
      *  'always' (skip the gate), 'ask' (gate each read), 'deny' (no source MCP).
      *  Default 'ask' when absent. */
     sourceAccess?: 'always' | 'ask' | 'deny';
+    /** command only — run the agent in an isolated cwd so it loads none of the
+     *  user's CLAUDE.md / Claude Code auto-memory (Memory = "isolated"). */
+    isolateContext?: boolean;
     /** command only — the active environment, recorded in the session ledger. */
     env?: { id?: string; name?: string };
     /** source-approval-request (from the source MCP) / -response (from the

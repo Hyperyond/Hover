@@ -3,6 +3,19 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.20.38 — 2026-06-20
+
+**You decide what to save · clearer chat · stable reports · api-test control plane fixed.**
+
+- **No more auto-save — you decide.** A finished run no longer writes a spec on its own. The Done card ends with a one-liner ("This run took N steps · M tok. Want to **Save** this spec?") and a small inline Save button. Runs that took no real actions show no save prompt at all.
+- **One run → one file.** Dropped the per-feature / per-flow auto-split; a run crystallizes to a single spec. Re-running the same prompt overwrites the same file.
+- **Inline screenshot previews.** Screenshots the agent takes show as thumbnails in the chat (click to open a lightbox); the originals are kept under `.hover/screenshots/<session>/`. One screenshot per view.
+- **Clearer message stream.** Action verbs (Clicked / Filled / Selected / Checked) are bold, "Upload file" shows the file path, repeated narration is de-duplicated, and the live working indicator was polished.
+- **Clickable clarifications.** When the agent needs you to choose, it now renders the options as buttons — click one to answer and resume the run — instead of ending its turn with a plain question. Clarifications are kept distinct from a run's Done summary.
+- **Stable report format.** The agent's final report is now markdown-first (outcome sentence + bullets + an optional Findings list) instead of a fragile JSON blob, so results render reliably.
+- **Memory setting.** Settings → Memory lets you pick whether the test agent shares your Claude Code project memory ("Same as Claude Code", default) or runs in an isolated context. Fixes a case where the test agent loaded the developer's project memory.
+- **api-test / pentest control plane fixed.** The MITM proxy now boots under the bundled engine (pinned `get-port` to its last CJS release, `5.1.1`, to avoid `ERR_REQUIRE_ESM` on VS Code's Node), so api-test runs actually observe API traffic.
+
 ## 0.20.0 — 2026-06-18
 
 **Auto-saved, feature-split specs + full light/dark theming.**

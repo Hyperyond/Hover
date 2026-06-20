@@ -106,12 +106,26 @@ function parseStructuredFindings(
       /* not this block */
     }
   }
-  if (!last) return null;
+  if (!last) {
+    // A ```json block exists but none parsed cleanly — the agent emitted
+    // malformed JSON (commonly unescaped " inside the summary string). Don't
+    // leak the raw block to the UI: loosely recover the summary field (matching
+    // up to `","findings"`, which tolerates stray quotes inside) and strip the
+    // block. findings is dropped (can't trust the malformed array).
+    const block = summary.match(/```json\s*([\s\S]*?)```/i);
+    if (block) {
+      const sm = block[1].match(/"summary"\s*:\s*"([\s\S]*?)"\s*,\s*"findings"/i);
+      const recovered = sm ? deEsc(sm[1].replace(/\\"/g, '"')).trim() : '';
+      const clean = (recovered || summary.replace(block[0], '').replace(/\n{3,}/g, '\n\n').trim()) || 'Done.';
+      return { summary: clean, findings: [] };
+    }
+    return null;
+  }
   const findings: SessionFinding[] = [];
   for (const f of last.obj.findings as Record<string, unknown>[]) {
     if (!f || typeof f !== 'object') continue;
-    const title = typeof f.title === 'string' ? f.title.trim() : undefined;
-    const detail = typeof f.detail === 'string' ? f.detail.trim() : typeof f.text === 'string' ? f.text.trim() : '';
+    const title = typeof f.title === 'string' ? deEsc(f.title.trim()) : undefined;
+    const detail = typeof f.detail === 'string' ? deEsc(f.detail.trim()) : typeof f.text === 'string' ? deEsc(f.text.trim()) : '';
     const text = detail || title || '';
     if (!text) continue;
     findings.push({
@@ -123,12 +137,20 @@ function parseStructuredFindings(
     });
   }
   // Human summary = the explicit `summary` field, else the report with the JSON
-  // block stripped out.
+  // block stripped out. deEsc: agents sometimes DOUBLE-escape newlines (the JSON
+  // value holds a literal "\n", not a real newline), so unescape them or the
+  // markdown renders one run-on line with literal \n.
   const clean =
     typeof last.obj.summary === 'string' && last.obj.summary.trim()
-      ? last.obj.summary.trim()
+      ? deEsc(last.obj.summary.trim())
       : summary.replace(last.raw, '').replace(/\n{3,}/g, '\n\n').trim();
   return { summary: clean, findings };
+}
+
+/** Unescape literal "\n" / "\r\n" / "\t" sequences (e.g. an agent double-escaped
+ *  its newlines) into real whitespace so markdown renders properly. */
+function deEsc(s: string): string {
+  return s.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\t/g, '  ');
 }
 
 /** Structured-first: the agent ends its report with a fenced ```json block
