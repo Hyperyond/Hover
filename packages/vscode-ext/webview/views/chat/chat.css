@@ -1,42 +1,31 @@
+/* Chat reuses the shared theme tokens defined in webview/theme.css — no
+   duplicate :root derivation from --vscode-* here. These aliases let the
+   existing chat selectors keep using --bg / --text / --accent etc., resolved
+   from the single source of truth, plus the accent shades + layout knobs that
+   are chat-specific. */
 :root {
-  /* Structural colours follow the active VS Code theme (light / dark / high
-       contrast / custom) via its CSS tokens; the hex values are dark-theme
-       fallbacks for any token a theme leaves unset. The mint accent is the
-       brand colour — kept across themes (retuned for light below). */
-  --bg: var(--vscode-sideBar-background, #1a1a1a);
-  --bg-2: var(--vscode-editorWidget-background, #222224);
-  --bg-3: var(--vscode-input-background, #141414);
-  --line: var(
-    --vscode-widget-border,
-    var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c))
-  );
-  --text: var(--vscode-foreground, #e5e7eb);
-  --text-mute: var(--vscode-descriptionForeground, #9ca3af);
-  --text-dim: var(--vscode-disabledForeground, #6b7280);
-  --accent: #7cffa8;
+  --bg: var(--color-bg);
+  --bg-2: var(--color-bg2);
+  --bg-3: var(--color-bg3);
+  --line: var(--color-line);
+  --text: var(--color-fg);
+  --text-mute: var(--color-muted);
+  --text-dim: var(--color-faint);
+  --accent: var(--color-accent);
   --accent-dim: rgba(124, 255, 168, 0.16);
   --accent-ink: #0c2417;
-  --warn: var(--vscode-editorWarning-foreground, #fb923c);
-  --err: var(--vscode-editorError-foreground, #f87171);
-  --link: var(--vscode-textLink-foreground, #7dd3fc);
-  /* Two knobs for chat layout — dial these to taste:
-       --chat-gut: horizontal gutter (header / message column / composer all
-         use it, so input L/R == bottom and everything aligns).
-       --chat-max: max content width. On panels WIDER than this the column is
-         centered (side gaps = the centering, NOT the gutter); on narrower
-         panels it fills the width and the gutter is the only gap. Raise it to
-         keep the input tight-to-edge on a wide panel; lower it to cap sooner. */
+  --warn: var(--color-warn);
+  --err: var(--color-err);
+  --link: var(--color-link);
+  /* layout knobs — gutter, max content width, message-stream gutter */
   --chat-gut: 10px;
   --chat-max: 728px;
-  /* The message stream (#log) gets a wider gutter than the header/composer, so
-     the conversation breathes while the input/header stay tight. Dial freely. */
   --log-gut: 22px;
 }
-/* Light / high-contrast-light themes: mint-on-white has poor contrast as text,
-     so deepen the accent (button bg stays readable with white ink). */
+/* Light / high-contrast-light: --accent itself is retuned in theme.css; here we
+     only adjust the derived accent shades the mint buttons need. */
 body.vscode-light,
 body.vscode-high-contrast-light {
-  --accent: #16a34a;
   --accent-dim: rgba(22, 163, 74, 0.12);
   --accent-ink: #ffffff;
 }
@@ -69,31 +58,6 @@ body.mode-pentest #ask-dock {
   --accent: #f87171;
   --accent-dim: rgba(248, 113, 113, 0.16);
   --accent-ink: #2a0d0d;
-}
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  /* Override VS Code's default webview body padding (0 20px) so the panel goes
-     edge-to-edge like Claude Code; the chat's own gutter is --chat-gut. */
-  padding: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  font-family: var(--vscode-font-family, -apple-system, system-ui, sans-serif);
-  font-size: 13px;
-  color: var(--text);
-  background: var(--bg);
-}
-/* The React webview mounts into #root; it takes over the body's flex-column
-     role so the splash / run thread / composer lay out the same. Harmless for
-     the legacy string template (which has no #root). */
-#root {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 /* Silent mode + running: a rotating Google-Chrome-colored border, signalling
      the invisible browser is working (the page itself you can't see). */

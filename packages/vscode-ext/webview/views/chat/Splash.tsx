@@ -1,4 +1,4 @@
-import { post } from "./vscode";
+import { post } from "../../shared/vscode";
 
 const CHIPS = ["Test the login flow", "Add an item to the cart", "Find broken access control"];
 

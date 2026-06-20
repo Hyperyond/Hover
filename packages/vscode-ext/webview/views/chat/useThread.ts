@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { onMessage } from "./vscode";
+import { onMessage } from "../../shared/vscode";
 import { isQuietStep, coalesceKind, describeOp, presentLabel, opVerb, groupDetail, GROUP_LABEL, type StepMsg } from "./ops";
-import { splitFindings } from "./markdown";
+import { splitFindings } from "../../shared/markdown";
 import { dedupeThread, clarifyFrom } from "./followup";
 
 export interface Finding {

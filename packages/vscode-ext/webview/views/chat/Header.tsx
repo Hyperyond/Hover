@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { post } from "./vscode";
-import type { SessionInfo } from "./App";
+import { post } from "../../shared/vscode";
+import type { SessionInfo } from "./Chat";
 
 const LOCK =
   '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>';

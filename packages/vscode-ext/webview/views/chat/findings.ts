@@ -3,7 +3,7 @@
  * render with the same `.finding` + `.badge` markup the CSS expects. Handles
  * both structured findings (objects) and a free-form severity-prefixed text run.
  */
-import { inline } from "./markdown";
+import { inline } from "../../shared/markdown";
 import type { Finding } from "./useThread";
 
 export interface FindingRow {
