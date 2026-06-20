@@ -3,6 +3,13 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.20.39 — 2026-06-20
+
+**Multi-turn chat fix + internal cleanup.**
+
+- **Fixed:** on a 2nd or later turn in a conversation, a clarification (the agent asking you to choose) could be mis-rendered as a "Done" result card with a Save prompt, because step counting spanned the whole conversation instead of the current run. Step counting is now scoped per-run.
+- **Internal:** the chat thread is now derived from a single source of truth by one builder (the live stream and a reloaded conversation share the exact same rendering path), removing a class of live-vs-reload drift.
+
 ## 0.20.38 — 2026-06-20
 
 **You decide what to save · clearer chat · stable reports · api-test control plane fixed.**
