@@ -1,0 +1,99 @@
+/* Settings view styles — scoped under .settings so they never collide with
+   other views' CSS in the shared bundle. Theme vars are declared on the root
+   (they inherit to children); mint accent is the brand. */
+.settings {
+  --bg: var(--vscode-sideBar-background, #1a1a1a);
+  --bg-2: var(--vscode-editorWidget-background, #222224);
+  --bg-3: var(--vscode-input-background, #141414);
+  --line: var(--vscode-widget-border, var(--vscode-editorWidget-border, var(--vscode-panel-border, #2a2a2c)));
+  --text: var(--vscode-foreground, #e5e7eb);
+  --mute: var(--vscode-descriptionForeground, #9ca3af);
+  --dim: var(--vscode-disabledForeground, #6b7280);
+  --accent: #7cffa8;
+  --warn: var(--vscode-editorWarning-foreground, #fb923c);
+  padding: 12px;
+  font-family: var(--vscode-font-family);
+  font-size: 13px;
+  color: var(--text);
+  overflow-y: auto;
+}
+body.vscode-light .settings,
+body.vscode-high-contrast-light .settings { --accent: #16a34a; }
+.settings a { color: var(--vscode-textLink-foreground, #7cc7ff); text-decoration: none; }
+.settings a:hover { text-decoration: underline; }
+.settings .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.settings .row:last-child { border-bottom: none; }
+.settings .label { display: flex; flex-direction: column; gap: 2px; }
+.settings .label .sub { color: var(--dim); font-size: 11px; }
+.settings select, .settings input { background: var(--bg-3); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+.settings input { width: 100%; }
+
+/* toggle */
+.settings .switch { position: relative; width: 38px; height: 22px; flex: none; }
+.settings .switch input { display: none; }
+.settings .slider { position: absolute; inset: 0; background: var(--line); border-radius: 999px; cursor: pointer; transition: .15s; }
+.settings .slider:before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; }
+.settings .switch input:checked + .slider { background: var(--accent); }
+.settings .switch input:checked + .slider:before { transform: translateX(16px); }
+.settings .cloud .label { opacity: .65; }
+.settings .cloudbtn { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; background: var(--bg-3); color: var(--mute); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; font: inherit; font-size: 12px; opacity: .6; cursor: not-allowed; }
+.settings .txtin { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-3); color: var(--text); font: inherit; font-size: 12px; }
+.settings .txtin::placeholder { color: var(--dim); }
+.settings .txtin:focus { outline: none; border-color: var(--vscode-focusBorder); }
+
+/* section + tabs */
+.settings .sec-title { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); margin: 4px 0 8px; }
+.settings .tabs { display: flex; gap: 0; background: var(--bg-3); border: 1px solid var(--line); border-radius: 9px; padding: 3px; margin-bottom: 10px; }
+.settings .tab { flex: 1; text-align: center; padding: 7px 10px; border-radius: 6px; cursor: pointer; color: var(--mute); font-size: 12.5px; font-weight: 500; border: none; background: transparent; transition: .12s; }
+.settings .tab.active { background: var(--bg-2); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .3); }
+.settings .hint { color: var(--dim); font-size: 11px; margin: 2px 0 10px; }
+
+/* Local CLI cards */
+.settings .cli-head { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 8px; }
+.settings .cli-head .t { font-size: 12px; color: var(--mute); }
+.settings .lnkbtn { background: var(--bg-3); color: var(--mute); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; font: inherit; font-size: 11.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.settings .lnkbtn:hover { color: var(--text); border-color: var(--vscode-focusBorder); }
+.settings .card { display: flex; gap: 10px; align-items: flex-start; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); margin-bottom: 8px; cursor: pointer; position: relative; transition: .12s; }
+.settings .card:hover { border-color: var(--vscode-focusBorder); }
+.settings .card.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.settings .card .ico { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #0a0a0a; }
+.settings .card .body { flex: 1; min-width: 0; }
+.settings .card .nm { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.settings .card .nm b { font-size: 13px; }
+.settings .card .nm .pill { font-size: 9.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; letter-spacing: .02em; }
+.settings .pill.rec { background: rgba(124, 255, 168, .16); color: var(--accent); }
+.settings .pill.soft { background: rgba(251, 146, 60, .16); color: var(--warn); }
+.settings .card .tg { color: var(--dim); font-size: 11.5px; margin-top: 2px; }
+.settings .card .check { flex: none; color: var(--accent); font-size: 15px; opacity: 0; }
+.settings .card.active .check { opacity: 1; }
+.settings .local-fields { margin-top: 9px; display: flex; flex-direction: column; gap: 7px; }
+
+.settings .fold { border: 1px solid var(--line); border-radius: 9px; margin: 10px 0; overflow: hidden; }
+.settings .fold > summary { list-style: none; cursor: pointer; padding: 10px 12px; font-size: 12px; color: var(--mute); display: flex; align-items: center; gap: 7px; }
+.settings .fold > summary::-webkit-details-marker { display: none; }
+.settings .fold > summary .caret { transition: .15s; }
+.settings .fold[open] > summary .caret { transform: rotate(90deg); }
+.settings .grid { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 0 12px 12px; }
+.settings .icard { border: 1px solid var(--line); border-radius: 9px; padding: 10px; background: var(--bg-3); }
+.settings .icard .nm { display: flex; align-items: center; gap: 8px; }
+.settings .icard .nm b { font-size: 12.5px; }
+.settings .icard .tg { color: var(--dim); font-size: 11px; margin-top: 2px; }
+.settings .icard .cmd { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.settings .icard code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; color: var(--mute); }
+.settings .copy { flex: none; background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; color: var(--mute); padding: 5px 8px; cursor: pointer; font-size: 11px; }
+.settings .copy:hover { color: var(--text); }
+
+/* BYOK */
+.settings .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.settings .pchip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg-3); color: var(--mute); font-size: 12px; cursor: pointer; transition: .12s; }
+.settings .pchip:hover { color: var(--text); border-color: var(--vscode-focusBorder); }
+.settings .pchip.on { background: var(--accent); color: #0a0a0a; border-color: var(--accent); font-weight: 600; }
+.settings .flbl { font-size: 12px; color: var(--text); margin: 12px 0 5px; display: flex; align-items: center; justify-content: space-between; }
+.settings .flbl .req { color: var(--warn); }
+.settings .flbl .aux { font-size: 11px; }
+.settings .ingrp { display: flex; gap: 6px; }
+.settings .ingrp .txtin { flex: 1; }
+.settings .smbtn { flex: none; background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; color: var(--mute); padding: 0 11px; font: inherit; font-size: 12px; cursor: pointer; }
+.settings .smbtn:hover { color: var(--text); border-color: var(--vscode-focusBorder); }
+.settings .fhint { color: var(--dim); font-size: 11px; margin-top: 4px; }
+.settings .byok-sec { font-size: 13px; font-weight: 600; margin: 6px 0 2px; }

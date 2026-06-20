@@ -1171,7 +1171,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (activeChat().transcript.length) chatProvider?.loadSession(activeChat().transcript);
   };
 
-  const settings = registerSettingsView({
+  const settings = registerSettingsView(context.extensionUri, {
     getAgents: () => ({ current: activeAgentId(), list: allAgents() }),
     getByok: () => readByok(),
     getAgentContext: () => extContext?.globalState.get<string>('hover.agentContext', 'shared') ?? 'shared',
