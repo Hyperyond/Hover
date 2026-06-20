@@ -205,6 +205,7 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'run-active' ||
         msg.type === 'cdp-status' ||
         msg.type === 'screenshot' ||
+        msg.type === 'qa-report' ||
         msg.type === 'optimize-result' ||
         msg.type === 'optimize-failed' ||
         msg.type === 'source-approval-request' ||

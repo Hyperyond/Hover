@@ -1030,6 +1030,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             targetUrl: runTargetUrl,
           });
           if ('error' in r) process.stderr.write(`[hover/qa] report write failed: ${r.error}\n`);
+          // Surface the report as a clickable artifact in the chat (mirrors the
+          // screenshot event). The editor opens it on click.
+          else if (!run.cancelled) emitToRun({ type: 'qa-report', payload: { path: r.path } });
         }
         // Let the active mode's plugin persist its own per-run artifacts bound to
         // this session id (e.g. api-test writes .hover/api/<id>.json). Best-effort.

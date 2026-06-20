@@ -19,6 +19,7 @@ export type ThreadItem =
   | { kind: "answered"; text: string }
   | { kind: "group"; label: string; items: string[] }
   | { kind: "shot"; uri: string; full?: boolean }
+  | { kind: "report"; path: string }
   | { kind: "system"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "clarify"; question: string; options: string[] }
@@ -104,6 +105,11 @@ export function useThread(): { items: ThreadItem[]; workLabel: string | null } {
           const uri = String(m.uri || "");
           if (!uri) break;
           append({ kind: "shot", uri, full: Boolean(m.full) });
+          break;
+        }
+        case "report": {
+          const path = String(m.path || "");
+          if (path) append({ kind: "report", path });
           break;
         }
         case "result":
@@ -229,6 +235,11 @@ function buildThread(tx: Tx[]): ThreadItem[] {
           break;
         }
         items.push({ kind: "shot", uri, full });
+        break;
+      }
+      case "report": {
+        const path = String(e.path || "");
+        if (path) items.push({ kind: "report", path });
         break;
       }
       case "done": {

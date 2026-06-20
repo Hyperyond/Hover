@@ -5,7 +5,7 @@ import { structuredRows, textRows, sevClass } from "./findings";
 import { stripHoverAsk } from "./followup";
 import { post } from "../../shared/vscode";
 
-const NODE_KINDS = new Set(["think", "op", "group", "answered", "shot"]);
+const NODE_KINDS = new Set(["think", "op", "group", "answered", "shot", "report"]);
 
 /** Plain text from an inline()'d HTML string (for clipboard). */
 function stripHtml(s: string): string {
@@ -213,6 +213,8 @@ function Node({ item, last }: { item: ThreadItem; last: boolean }) {
       return <GroupNode label={item.label} items={item.items} />;
     case "shot":
       return <ShotNode uri={item.uri} />;
+    case "report":
+      return <ReportNode path={item.path} />;
     case "clarify":
       return <ClarifyBlock question={item.question} options={item.options} />;
     case "result":
@@ -265,6 +267,25 @@ function ShotNode({ uri }: { uri: string }) {
           <img src={uri} alt="screenshot" />
         </div>
       )}
+    </div>
+  );
+}
+
+/** A QA findings report artifact: a clickable line that opens the .md in the
+ *  editor (like Claude Code's clickable file paths). */
+function ReportNode({ path }: { path: string }) {
+  const name = path.split(/[\\/]/).pop() || path;
+  return (
+    <div className="node op report">
+      <span className="node-rail" />
+      <div className="node-body">
+        <button className="report-link" title={path} onClick={() => post({ type: "openReport", path })}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" />
+          </svg>
+          <span>QA report · {name}</span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -333,8 +354,7 @@ function ResultBlock({ item }: { item: Extract<ThreadItem, { kind: "result" }> }
       {!item.error && (item.steps ?? 0) > 0 && item.mode === "qa" && (
         <div className="rfoot">
           Explored {meta.join(" · ")}
-          {rows.length ? ` · ${rows.length} finding${rows.length > 1 ? "s" : ""}` : " · no issues found"}. Findings
-          report saved under .hover/qa-reports/.
+          {rows.length ? ` · ${rows.length} finding${rows.length > 1 ? "s" : ""}` : " · no issues found"}.
         </div>
       )}
       {/* Other modes: a small inline Save lets the user export the run on demand.
