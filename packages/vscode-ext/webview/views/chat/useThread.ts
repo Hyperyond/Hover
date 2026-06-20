@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { onMessage } from "../../shared/vscode";
 import { isQuietStep, coalesceKind, describeOp, presentLabel, opVerb, groupDetail, GROUP_LABEL, type StepMsg } from "./ops";
 import { splitFindings } from "../../shared/markdown";
-import { dedupeThread, clarifyFrom } from "./followup";
+import { dedupeThread, clarifyFrom, parseHoverAsk } from "./followup";
 
 export interface Finding {
   title?: string;
@@ -235,13 +235,17 @@ function buildThread(tx: Tx[]): ThreadItem[] {
         pending.current = null; // the summary supersedes the final thought
         const summary = String(e.summary || "");
         const steps = typeof e.steps === "number" ? e.steps : 0;
-        // A 0-action run is a clarification (question + buttons) or a plain reply;
-        // a run with real actions — or any `forceResult` (a host `result`) — is a
-        // Done card (keeps findings + Save). Never turn a worked run into a
-        // clarification.
-        if (!e.isError && steps === 0 && !e.forceResult) {
-          const c = clarifyFrom(summary);
-          items.push(c ? { kind: "clarify", question: c.question, options: c.options } : { kind: "assistant", text: summary });
+        const c = clarifyFrom(summary);
+        // A `hover-ask` block is a DEFINITIVE "the agent is asking you to choose"
+        // signal — honor it even for a worked / forceResult run (e.g. QA navigates
+        // a few steps, then asks what to test). Otherwise fall back to: a 0-action
+        // run may be a clarification (question + buttons / plain reply); a run with
+        // real actions is a Done card (keeps findings + Save).
+        const hasAskBlock = parseHoverAsk(summary).length > 0;
+        if (c && (hasAskBlock || (!e.isError && steps === 0 && !e.forceResult))) {
+          items.push({ kind: "clarify", question: c.question, options: c.options });
+        } else if (!e.isError && steps === 0 && !e.forceResult) {
+          items.push({ kind: "assistant", text: summary });
         } else {
           items.push(
             makeResult({
