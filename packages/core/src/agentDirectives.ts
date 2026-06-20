@@ -131,7 +131,14 @@ export const QA_EXPLORATION_DIRECTIVE =
   'payment, send email, bulk delete) carefully: confirm with the user once per ' +
   'action-type before doing them, otherwise flag-and-skip. Stay on the app under ' +
   'test (never navigate to external origins). Stop when the frontier is exhausted ' +
-  'or you hit the run budget; then write the findings report.';
+  'or you hit the run budget; then write the findings report.\n' +
+  'REMEMBER WHAT YOU LEARN: when you confirm a durable business rule about this ' +
+  'app — an expected behavior, a validation rule, an access policy, or the answer ' +
+  'to a "is this a bug or by-design?" you asked the user — call record_fact to ' +
+  'persist it, so neither you nor a future run re-asks it. State it as a clean ' +
+  'self-contained rule. RULES ONLY — never record secrets, passwords, tokens, or ' +
+  'personal data. (Anything in KNOWN BUSINESS KNOWLEDGE above is already ' +
+  'remembered — treat it as settled, do not re-ask it.)';
 
 export const GROUNDED_ACTUATION_DIRECTIVE =
   'INTERACTING WITH THE PAGE — IMPORTANT: You interact with the page ONLY through ' +

@@ -62,7 +62,7 @@ import {
   GROUNDED_ACTUATION_DIRECTIVE,
   QA_EXPLORATION_DIRECTIVE,
 } from './agentDirectives.js';
-import { loadMemory, formatMemoryForPrompt } from './memory/businessMemory.js';
+import { loadMemory, formatMemoryForPrompt, writeFact, type BusinessFact } from './memory/businessMemory.js';
 import { writeQaReport } from './qa/qaReport.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { handleRelayMessage } from './service/relayHandlers.js';
@@ -739,6 +739,21 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         pendingApprovals,
         pendingAsks,
       })) return;
+      // record-fact (from the control MCP's record_fact tool): persist a learned
+      // business rule into .hover/memory/. ONLY in QA/API modes — ignored
+      // elsewhere so Flow/Pentest never write business memory. Best-effort:
+      // a memory write must never break anything (it isn't even acked).
+      if (msg.type === 'record-fact') {
+        const f = msg.payload?.fact;
+        if (f && f.title && f.rule && (currentModeId === 'qa' || currentModeId === 'api-test')) {
+          const types: BusinessFact['type'][] = ['business-rule', 'expected-behavior', 'validation', 'access-policy'];
+          const type = types.includes(f.type as BusinessFact['type']) ? (f.type as BusinessFact['type']) : 'business-rule';
+          void writeFact(devRoot, { name: f.title, description: f.title, type, body: f.rule }).then((r) => {
+            if ('error' in r) process.stderr.write(`[hover/qa] record-fact write failed: ${r.error}\n`);
+          });
+        }
+        return;
+      }
       if (msg.type === 'set-mode') {
         if (activeRun) {
           send(ws, {

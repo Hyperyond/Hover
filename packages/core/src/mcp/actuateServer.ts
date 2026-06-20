@@ -375,4 +375,30 @@ server.registerTool(
   },
 );
 
+// ── record_fact: persist a learned business rule (QA / API modes) ────────────
+// Fire-and-forget: send `record-fact` over the same engine channel; the engine
+// writes it into .hover/memory/ (only in QA/API modes — ignored elsewhere) so
+// the rule isn't re-asked next run. RULES only; never secrets/PII.
+server.registerTool(
+  'record_fact',
+  {
+    description:
+      "Remember a durable BUSINESS RULE about this app so you (and future runs) never have to re-ask it — e.g. an expected behavior, a validation rule, an access policy, or a business-logic fact you confirmed (often right after the user answered an ask_user about whether something is a bug or by-design). State it as a clean, self-contained rule. RULES ONLY — never store secrets, passwords, tokens, API keys, or personal data. Use it whenever you learn something about how this app is SUPPOSED to behave; it makes Hover smarter every run.",
+    inputSchema: {
+      title: z.string().describe('A short title for the rule (becomes its filename + index entry).'),
+      rule: z.string().describe('The rule itself, stated clearly and self-contained (no secrets/PII).'),
+      type: z.enum(['business-rule', 'expected-behavior', 'validation', 'access-policy']).optional()
+        .describe('What kind of knowledge this is. Defaults to business-rule.'),
+    },
+  },
+  async ({ title, rule, type }) => {
+    const sock = ensureAskWs();
+    if (!sock) return md('✓ noted (memory channel unavailable; continuing).');
+    const send = (): void => sock.send(JSON.stringify({ type: 'record-fact', payload: { fact: { title, rule, type } } }));
+    if (sock.readyState === WebSocket.OPEN) send();
+    else sock.once('open', send);
+    return md(`✓ remembered: ${title}`);
+  },
+);
+
 await server.connect(new StdioServerTransport());

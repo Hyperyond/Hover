@@ -94,6 +94,11 @@ export interface ClientMessage {
     allowFreeText?: boolean;
     value?: string;
     cancelled?: boolean;
+    /** record-fact (from the control MCP, QA/API modes only): a business RULE
+     *  the agent learned/confirmed, to persist into `.hover/memory/` so it isn't
+     *  re-asked next run. RULES only — never secrets/PII (the tool + directive
+     *  enforce this; the engine also ignores it outside QA/API). */
+    fact?: { title: string; rule: string; type?: string };
   };
 }
 
