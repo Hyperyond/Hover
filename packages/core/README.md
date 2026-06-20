@@ -4,7 +4,6 @@ The local Node service. Owns:
 
 - **Agent invocation** (`src/agents/`) — Local CLI Agent First. Spawns `claude` / `codex` / `cursor-agent` / `aider` / `gemini-cli` / `qwen-code` and normalizes their output into a single `InvokeEvent` stream.
 - **Playwright preflight** (`src/playwright/`) — verifies CDP connection to the user's Chrome.
-- **Smoke test** (`src/smoke.ts`) — end-to-end verification of the whole chain.
 
 ## Architecture (agents/)
 
@@ -91,32 +90,11 @@ They ship inlined as the `BUILTIN_SEEDS` constant in
   Hover. Semantic / judgement-based optimizations (e.g. *which* feedback text to
   assert) are not seeds — they're standing instructions in the prompt.
 
-## Smoke test
+## Exercising the engine
 
-```bash
-# Terminal 1: run basic-app — also spawns a debug Chrome (the example sets
-# `autoLaunchChrome: true`) navigated to http://localhost:5173
-pnpm dev:example:basic-app   # from repo root
+There is no standalone CLI smoke loop — the engine is driven by the VS Code extension. Build + sideload it (`pnpm --filter hover-dev package`), open the Hover chat, and drive an example (`pnpm dev:example:basic-app`). The extension spawns the isolated debug Chrome on demand and connects to the engine over WS (ports 51789+). Env knobs the engine reads: `HOVER_CDP` (CDP URL, default `http://localhost:9222`), `HOVER_AGENT` (agent id; omit to auto-detect), `HOVER_MODEL` (default `sonnet`).
 
-# Terminal 2: run the smoke test
-pnpm smoke                   # from repo root, defaults to http://localhost:5173
-```
-
-Need the debug Chrome standalone (no example)? `pnpm smoke:chrome` (or `pnpm exec hover-chrome`).
-
-Override the target or prompt:
-
-```bash
-pnpm smoke http://localhost:5173/ "log in then add a todo named 'verify hover'"
-```
-
-Environment variables:
-
-- `HOVER_CDP` — CDP URL (default `http://localhost:9222`)
-- `HOVER_AGENT` — agent id (omit to auto-detect; tries the user's stated preference, then the first installed agent in registry order — `claude` → `codex` → `cursor-agent` → `aider` → `gemini-cli` → `qwen-code` today)
-- `HOVER_MODEL` — model for the agent (default `sonnet`, much cheaper than opus)
-
-## Sandboxing (what the smoke test enforces)
+## Sandboxing
 
 The `claude -p` invocation is locked down so Claude can only drive the browser:
 

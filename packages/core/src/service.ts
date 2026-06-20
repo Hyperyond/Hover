@@ -62,6 +62,7 @@ import {
   GROUNDED_ACTUATION_DIRECTIVE,
 } from './agentDirectives.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
+import { handleRelayMessage } from './service/relayHandlers.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
 import {
   handleLaunchChrome,
@@ -715,83 +716,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         cancel();
         return;
       }
-      if (msg.type === 'reveal-source') {
-        // F2 page→editor transport: an in-page client (widget) captured a
-        // `data-hover-source` value off a clicked element. Relay it to every
-        // OTHER connected client — the VSCode extension listens and opens the
-        // file at <rel-path>:<line>:<col>. The originating page needs no echo.
-        const source = msg.payload?.source;
-        if (typeof source !== 'string' || !source) return;
-        for (const client of wss.clients) {
-          if (client !== ws && client.readyState === WebSocket.OPEN) {
-            send(client, { type: 'reveal-source', payload: { source } });
-          }
-        }
-        return;
-      }
-      // Source-read approval gate (codeContext in 'ask' mode). The source MCP
-      // asks before each read; we relay to the editor (the active run's client)
-      // and route its decision back. No editor attached → default allow (the
-      // reader is fenced + read-only; the gate is consent UX, not a security
-      // boundary — never hang the run on it).
-      if (msg.type === 'source-approval-request') {
-        const id = msg.payload?.approvalId;
-        if (typeof id !== 'string') return;
-        const editor = activeRun?.client;
-        if (editor && editor.readyState === WebSocket.OPEN) {
-          pendingApprovals.set(id, ws);
-          send(editor, {
-            type: 'source-approval-request',
-            payload: { approvalId: id, sourcePath: msg.payload?.sourcePath, sourceKind: msg.payload?.sourceKind },
-          });
-        } else {
-          sendIfOpen(ws, { type: 'source-approval-response', payload: { approvalId: id, allow: true } });
-        }
-        return;
-      }
-      if (msg.type === 'source-approval-response') {
-        const id = msg.payload?.approvalId;
-        if (typeof id !== 'string') return;
-        const asker = pendingApprovals.get(id);
-        pendingApprovals.delete(id);
-        if (asker) sendIfOpen(asker, { type: 'source-approval-response', payload: { approvalId: id, allow: msg.payload?.allow === true } });
-        return;
-      }
-      // ask_user: the control MCP asks the human a question mid-run; relay to
-      // the editor and route the answer back (no editor attached → cancel, so
-      // the agent continues rather than hanging on a 5-min timeout).
-      if (msg.type === 'ask-user-request') {
-        const id = msg.payload?.askId;
-        if (typeof id !== 'string') return;
-        // Forward to EVERY connected client except the MCP that asked (the
-        // extension is one of them; other MCP sockets ignore it). This is robust
-        // to activeRun.client being a stale/closed socket in the reconnecting
-        // multi-host pool — the previous "forward only to activeRun.client, else
-        // cancel" path silently killed the prompt when that socket had cycled.
-        const payload = {
-          askId: id,
-          question: msg.payload?.question,
-          options: msg.payload?.options,
-          allowFreeText: msg.payload?.allowFreeText,
-        };
-        let delivered = 0;
-        for (const client of wss.clients) {
-          if (client === ws) continue;
-          if (client.readyState === WebSocket.OPEN) { send(client, { type: 'ask-user-request', payload }); delivered++; }
-        }
-        process.stderr.write(`[hover/ask] askId=${id} delivered to ${delivered} client(s)\n`);
-        if (delivered > 0) pendingAsks.set(id, ws);
-        else sendIfOpen(ws, { type: 'ask-user-response', payload: { askId: id, cancelled: true } });
-        return;
-      }
-      if (msg.type === 'ask-user-response') {
-        const id = msg.payload?.askId;
-        if (typeof id !== 'string') return;
-        const asker = pendingAsks.get(id);
-        pendingAsks.delete(id);
-        if (asker) sendIfOpen(asker, { type: 'ask-user-response', payload: msg.payload });
-        return;
-      }
+      // Stateless relays (reveal-source / source-approval-* / ask-user-*) — see
+      // service/relayHandlers.ts. They route between sockets without touching the
+      // run's mutable state, so they live outside this closure.
+      if (handleRelayMessage(ws, msg, {
+        wss,
+        activeRunClient: () => activeRun?.client,
+        pendingApprovals,
+        pendingAsks,
+      })) return;
       if (msg.type === 'set-mode') {
         if (activeRun) {
           send(ws, {

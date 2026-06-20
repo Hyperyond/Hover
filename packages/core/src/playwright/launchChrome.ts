@@ -1,9 +1,8 @@
 /**
  * Cross-platform launcher for an isolated debug Chrome on a known CDP port.
  *
- * Idempotent — if the port already responds, returns immediately. Used by:
- *   - `pnpm smoke:chrome` (monorepo) via src/scripts/start-chrome.ts
- *   - `pnpm exec hover-chrome` (npm consumers) via vite-plugin-hover's bin
+ * Idempotent — if the port already responds, returns immediately. The VS Code
+ * extension calls this on demand (first ✨ click) to bring up the debug Chrome.
  *
  * The user-data-dir is isolated under tmpdir so we never touch the user's
  * primary Chrome profile.

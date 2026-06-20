@@ -87,7 +87,7 @@ Wire protocol additions (client → server): `check-cdp { pageUrl }`, `launch-ch
 
 Origin comparison (not full-URL) is deliberate — the user might be on `/login` while the debug Chrome tab is on `/`; they're the same app and the agent can route within it.
 
-The extension launches the debug Chrome on demand (and `pnpm smoke:chrome` / `pnpm smoke` spawn it for the CLI smoke flow). On-demand launching keeps the default safe — a user who does nothing still gets guided to a working state on first ✨ click.
+The extension launches the debug Chrome on demand. On-demand launching keeps the default safe — a user who does nothing still gets guided to a working state on first ✨ click.
 
 ## Boundary constraints
 
@@ -129,24 +129,12 @@ Most Hover packages set `main` / `exports` to `src/*.ts`, so consumers' transpil
 
 ## Local lifecycle
 
-Two terminals on first run; once Chrome and Vite are up they stay running across many smoke loops:
+The extension is the dev surface — there is no standalone CLI smoke loop anymore (the old `pnpm smoke` / `smoke:chrome` / `detect` / `ws-smoke` / `bench-*` scripts were removed). To exercise the full flow end to end:
 
-1. `pnpm dev:example:basic-app` — basic-app at http://localhost:5173. (Same for `dev:example:e-commerce` / `…:stock-registration` / `…:canvas-paint` on 5174 / 5175 / 5176.) Spawn the debug Chrome (`--remote-debugging-port=9222`, isolated profile at `<tmpdir>/hover-chrome`) separately with `pnpm smoke:chrome`.
-2. `pnpm smoke` — end-to-end: detect agents → CDP preflight → invoke `claude` → stream events.
+1. `pnpm dev:example:basic-app` — basic-app at http://localhost:5173. (Same for `dev:example:e-commerce` / `…:stock-registration` / `…:canvas-paint` on 5174 / 5175 / 5176.)
+2. `pnpm --filter hover-dev package` → sideload the `.vsix` into VS Code, open the Hover chat, and drive the example. The extension spawns the isolated debug Chrome (`--remote-debugging-port=9222`, profile at `<tmpdir>/hover-chrome`) on demand on the first ✨ click.
 
-Need the debug Chrome without a Vite example? `pnpm smoke:chrome` standalone-spawns it (same `<tmpdir>/hover-chrome` profile, idempotent).
-
-Custom target / prompt:
-
-```bash
-pnpm smoke http://localhost:5173/ "log in, then add a todo named 'verify hover'"
-```
-
-Environment overrides:
-
-```bash
-HOVER_AGENT=claude HOVER_MODEL=sonnet HOVER_CDP=http://localhost:9222 pnpm smoke
-```
+Editing `core/src/` during extension dev needs a `pnpm --filter @hover-dev/core build` (or a `dev` watch terminal) so the staged engine picks it up, then re-package.
 
 ## Git commit policy
 
@@ -162,7 +150,7 @@ HOVER_AGENT=claude HOVER_MODEL=sonnet HOVER_CDP=http://localhost:9222 pnpm smoke
 
 ## Branching policy
 
-- `main` must stay runnable. Every commit pushed to `main` should, in theory, leave the basic flow (`pnpm install` → `pnpm typecheck` → `pnpm smoke`) intact. This is what makes `git bisect` meaningful.
+- `main` must stay runnable. Every commit pushed to `main` should, in theory, leave the basic flow (`pnpm install` → `pnpm typecheck` → `pnpm test`) intact. This is what makes `git bisect` meaningful.
 - Speculative or exploratory work goes on a branch: `git checkout -b experiment/<name>` (e.g. `experiment/chrome-extension`). Commit messily; if it works merge to `main`, if not delete the branch.
 - Feature work: `feat/<name>`. Bug fixes: `fix/<name>`.
 
@@ -177,7 +165,7 @@ Tag versions at meaningful milestones so the history has anchor points:
 
 - Unit tests: **Vitest**, per-package, in `packages/*/tests/` sibling to `src/`. Run with `pnpm --filter @hover-dev/core test` or `pnpm test` at the root (which fans out across the workspace). Keep `src/` source-only; do not place `*.test.ts` inside `src/`. Current coverage: `packages/core/tests/agents/` (argv dispatcher, claude descriptor, registry).
 - Integration / e2e: **Playwright dogfooding**. Crystallized specs land under `examples/basic-app/__vibe_tests__/` and run with standard `@playwright/test`. The agent must not be involved at CI time — only the Playwright script runs. Bootstrap on a fresh machine: `pnpm --filter basic-app exec playwright install chromium`. Run with `pnpm test:e2e`.
-- Smoke-level end-to-end (agent in the loop): `pnpm smoke`. This requires a running debug Chrome and the example frontend; it is not part of CI.
+- Manual end-to-end (agent in the loop): sideload the extension (`pnpm --filter hover-dev package`) and drive an example by hand. There is no scripted smoke loop; it is not part of CI.
 
 ## Validation strategy
 
@@ -185,7 +173,7 @@ Before marking work ready:
 
 1. `pnpm typecheck` — fans out to every package.
 2. `pnpm test` — Vitest, fans out across packages with tests.
-3. The package-scoped smoke or Playwright run that matches the files changed.
+3. The Playwright dogfood run (or a hand sideload of the extension) that matches the files changed.
 
 # Common commands
 
@@ -200,11 +188,6 @@ pnpm dev:example:e-commerce        # http://localhost:5174 — Amazon-style stor
 pnpm dev:example:stock-registration # http://localhost:5175 — ~50-field brokerage form
 pnpm dev:example:canvas-paint      # http://localhost:5176 — canvas + DOM toolbar
 pnpm dev:example:payment-provider  # http://localhost:5177 — mock third-party popup origin
-pnpm smoke:chrome         # launch debug-mode Chrome (--remote-debugging-port=9222)
-pnpm smoke                # end-to-end: detect agents → CDP preflight → invoke claude (core engine)
-pnpm detect               # list installed coding agents
-pnpm ws-smoke             # exercise the @hover-dev/core WebSocket bridge in isolation
-pnpm bench-ttfb [n=5]     # time the LLM-driven loop's first tool_use latency (needs Chrome on :9222 + a dev server)
 ```
 
 ```bash

@@ -35,27 +35,24 @@ pnpm dev:example:stock-registration # http://localhost:5175 — IBKR-style accou
 pnpm dev:example:canvas-paint       # http://localhost:5176 — drawing app + DOM toolbar
 pnpm dev:example:payment-provider   # http://localhost:5177 — third-party popup origin
 
-# Terminal 2 — debug Chrome + a command-line agent smoke.
-pnpm smoke:chrome                   # isolated debug Chrome on --remote-debugging-port=9222
-pnpm smoke "test the login flow"
+# Terminal 2 — build + sideload the extension, then drive the example from its
+# chat panel. The extension spawns the isolated debug Chrome on demand
+# (--remote-debugging-port=9222, profile under <tmpdir>/hover-chrome).
+pnpm --filter hover-dev package     # → hover-dev-<v>.vsix; sideload into VS Code
 ```
-
-`pnpm smoke:chrome` spawns an isolated debug Chrome (profile under `<tmpdir>/hover-chrome`), idempotent — reuses an existing one if 9222 is already alive.
 
 The Hover engine listens on `127.0.0.1` (ports 51789+); the extension's WS client connects there.
 
 ## Validation harness
 
-Each layer has its own quick check so debugging is layer-by-layer:
-
 | Command | Layer it exercises | Cost |
 |---|---|---|
 | `pnpm typecheck` | All `tsc --noEmit`. Fastest. | free |
-| `pnpm ws-smoke "<prompt>"` | Connects to the engine over WS, fires a command, prints events. Tests engine ↔ agent. | ~$0.05–0.30 |
-| `pnpm smoke "<prompt>"` | Direct call to `invokeAgent`. Tests agent ↔ Playwright MCP ↔ Chrome. | ~$0.05–0.30 |
-| Extension chat panel | Full chain through WebSocket. | ~$0.05–0.30 |
+| `pnpm test` | Vitest unit tests across packages. | free |
+| `pnpm test:e2e` | Playwright dogfood specs (no agent). | free |
+| Extension chat panel | Full chain (extension → WS → engine → agent → Playwright MCP → Chrome). | ~$0.05–0.30 |
 
-If something fails, climb the ladder: typecheck → ws-smoke → smoke → extension chat panel.
+If something fails, climb the ladder: typecheck → unit tests → sideload the extension and watch the chat panel + engine logs.
 
 ## Project layout
 
@@ -65,9 +62,7 @@ packages/
 │   ├── src/agents/         Local CLI Agent First — types, registry, detect, argv, invoke, claude.ts
 │   ├── src/playwright/     CDP preflight (lightweight HTTP probe + playwright-core handshake)
 │   ├── src/skills/         writeSkill, listSkills (write/read .claude/skills/<slug>/SKILL.md)
-│   ├── src/service.ts      WebSocket bridge (extension ↔ agent)
-│   ├── src/smoke.ts        Command-line agent smoke
-│   └── src/scripts/        start-chrome.ts, ws-smoke.ts, detect-cli.ts
+│   └── src/service.ts      WebSocket bridge (extension ↔ agent)
 ├── probe-engine/           private shared probe engine (security + pentest)
 ├── api-test/               @hover-dev/api-test — 🟠 API-testing mode plugin
 ├── pentest/                @hover-dev/pentest — 🔴 pentest mode plugin
@@ -93,7 +88,7 @@ The whole point of "Local CLI Agent First" is that a contributor can add a new a
    - `buildArgs(opts)` — return the argv array.
    - `parseEvent(line)` — translate one line of stdout into an array of normalised `InvokeEvent` (see `agents/types.ts`).
 2. Register it in `packages/core/src/agents/registry.ts`.
-3. Run `pnpm detect` to confirm Hover finds your binary; then `pnpm ws-smoke "list the open tabs"` to confirm the end-to-end loop works with your descriptor.
+3. Sideload the extension and confirm your binary shows up in Settings → Local CLI (Rescan if needed), then drive an example from the chat panel to confirm the end-to-end loop works with your descriptor.
 
 No changes are needed in `service.ts`, the extension, or any example.
 
@@ -175,7 +170,7 @@ For a fresh machine: `pnpm --filter basic-app exec playwright install chromium`.
 Open a GitHub issue. Please include:
 
 - Reproduction steps in one of the five `examples/` apps if relevant.
-- `pnpm typecheck` and `pnpm ws-smoke "<your prompt>"` output (the cost is pennies and the output is invaluable for triage).
+- `pnpm typecheck` / `pnpm test` output, and a note on what you exercised in the extension chat panel (invaluable for triage).
 - claude CLI version (`claude --version`), Node version (`node --version`), Chrome version, OS.
 
 Welcome aboard.
