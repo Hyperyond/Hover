@@ -63,6 +63,7 @@ import {
   QA_EXPLORATION_DIRECTIVE,
 } from './agentDirectives.js';
 import { loadMemory, formatMemoryForPrompt } from './memory/businessMemory.js';
+import { writeQaReport } from './qa/qaReport.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { handleRelayMessage } from './service/relayHandlers.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
@@ -1002,6 +1003,19 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           tokensUsed: sessionEnd.tokens,
           stepCount,
         });
+        // QA mode is report-first: persist a durable Markdown findings report
+        // (mirrors pentest's report file; the chat already shows the Findings
+        // card live). Best-effort — never breaks the run/ledger.
+        if (runMode === 'qa') {
+          const r = await writeQaReport(devRoot, {
+            prompt: text,
+            summary: parsed.summary,
+            findings: parsed.findings,
+            endedAt,
+            targetUrl: runTargetUrl,
+          });
+          if ('error' in r) process.stderr.write(`[hover/qa] report write failed: ${r.error}\n`);
+        }
         // Let the active mode's plugin persist its own per-run artifacts bound to
         // this session id (e.g. api-test writes .hover/api/<id>.json). Best-effort.
         const sid = rec && 'id' in rec ? rec.id : null;
