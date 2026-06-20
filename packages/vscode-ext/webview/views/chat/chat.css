@@ -952,6 +952,29 @@ header {
   font-size: 12px;
   font-weight: 600;
 }
+/* Clickable QA report link (opens the .md in the editor, like a Claude Code
+   file path). */
+.report-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--link);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.report-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.report-link svg {
+  flex: none;
+  opacity: 0.9;
+}
 .shot-cap svg {
   flex: none;
   opacity: 0.85;

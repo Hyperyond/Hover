@@ -24,6 +24,7 @@ type Inbound =
   | { type: "askUserAnswer"; askId: string; value: string | null }
   | { type: "switchSession"; id: string }
   | { type: "saveRun"; name: string; mode: string | null }
+  | { type: "openReport"; path: string }
   | { type: "ready" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -47,6 +48,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
    *  filename. `mode` (null = frontend, 'api-test', 'pentest') routes the writer:
    *  api-test → request-based spec, pentest → findings report, else → normal spec. */
   saveRunHandler?: (name: string | undefined, mode: string | null) => void;
+  /** Set by the extension: open a QA findings report (.hover/qa-reports/*.md) in
+   *  the editor when the user clicks its link in the chat. */
+  openReportHandler?: (path: string) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -82,6 +86,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.sessionSwitchHandler?.(msg.id);
       else if (msg.type === "saveRun")
         this.saveRunHandler?.(typeof msg.name === "string" ? msg.name : undefined, msg.mode ?? null);
+      else if (msg.type === "openReport" && typeof msg.path === "string")
+        this.openReportHandler?.(msg.path);
       else if (msg.type === "ready") this.onReady?.();
     });
   }
@@ -181,6 +187,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   pushScreenshot(path: string, full?: boolean): void {
     const uri = this.view?.webview.asWebviewUri(vscode.Uri.file(path));
     if (uri) this.post({ type: "screenshot", uri: uri.toString(), full: !!full });
+  }
+  /** Surface a QA findings report as a clickable link in the chat. `path` is the
+   *  absolute .hover/qa-reports/*.md file; the webview posts `openReport` back to
+   *  open it. */
+  pushReport(path: string): void {
+    this.post({ type: "report", path });
   }
   /** Running token total (from usage events) → live group counter. */
   pushUsage(tokens: number): void {

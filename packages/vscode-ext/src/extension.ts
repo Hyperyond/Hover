@@ -665,6 +665,16 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
     }
     return;
   }
+  if (msg.type === 'qa-report') {
+    // A QA run wrote its findings report — surface a clickable link in the chat
+    // (click → open the .md in the editor). Persisted so it survives reload.
+    const rp = msg.payload as { path?: string } | undefined;
+    if (rp?.path) {
+      owner.transcript.push({ kind: 'report', path: rp.path });
+      if (live) chatProvider?.pushReport(rp.path);
+    }
+    return;
+  }
   if (msg.type !== 'event') return;
   const ev = msg.payload as { kind?: string; [k: string]: unknown } | undefined;
   switch (ev?.kind) {
@@ -1131,6 +1141,11 @@ export function activate(context: vscode.ExtensionContext): void {
     mode === 'pentest' ? saveFindingsReport(name)
     : mode === 'api-test' ? saveApiTestSpec(name)
     : saveSpec(name));
+  // The user clicked a QA report link in the chat → open the .md in the editor.
+  chatProvider.openReportHandler = (path) =>
+    void vscode.window.showTextDocument(vscode.Uri.file(path)).then(undefined, () =>
+      vscode.window.showWarningMessage(`Hover: could not open ${path}`),
+    );
   // The user switched the active conversation from the top-bar switcher.
   chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver
