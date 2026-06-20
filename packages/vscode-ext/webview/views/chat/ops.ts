@@ -88,7 +88,13 @@ export function opVerb(tool?: string): string {
 export function describeOp(tool?: string, detail?: string): string {
   const t = strip(tool);
   const d = parse(detail);
-  const name = (d.name || d.text || d.element || "") as string;
+  // Target identifier, in the same preference order the grounded tools resolve:
+  // accessible name → visible text → testId → element. (Earlier this omitted
+  // testId, so a control clicked by testId rendered as a bare "Clicked" with no
+  // target — see ops.ts history.) `within` adds the scoping container.
+  let target = String(d.name || d.text || d.element || d.testId || "");
+  const within = d.within as { role?: string; name?: string } | undefined;
+  if (target && within?.name) target = `${target} (in ${within.name})`;
   const val = d.value !== undefined && d.value !== null && d.value !== "" ? String(d.value) : "";
   const pair = OPVERB[t];
   if (!pair) {
@@ -101,15 +107,17 @@ export function describeOp(tool?: string, detail?: string): string {
   if (t === "upload_file") {
     // Show what was uploaded: the real file path, or the approved placeholder.
     const path = d.path ? String(d.path) : d.placeholder ? "a placeholder image" : "";
-    const where = name ? ` to ${name}` : "";
+    const where = target ? ` to "${target}"` : "";
     return verb + where + (path ? ` → ${path}` : "");
   }
   if (BARE.has(t)) return verb;
   if (FILLISH.has(t)) {
-    const lbl = name ? " " + name : " a field";
-    return verb + lbl + (val ? " → " + val : "");
+    // Quote the field name (like clicks) so a placeholder-as-name reads clearly,
+    // and quote the value: `Filled "Type your question…" → "…"`.
+    return verb + (target ? ` "${target}"` : " a field") + (val ? ` → "${val}"` : "");
   }
-  return verb + (name ? ` "${name}"` : "");
+  // Click / hover / check / … — always show a target; never a bare verb.
+  return verb + (target ? ` "${target}"` : " an element");
 }
 
 export function coalesceKind(tool?: string): "source" | null {
