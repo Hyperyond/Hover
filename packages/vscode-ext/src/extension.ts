@@ -286,12 +286,12 @@ const NON_SAVEABLE_TOOLS = new Set([
   'browser_snapshot', 'browser_take_screenshot', 'browser_wait_for', 'mark_flow',
   'read_source', 'list_source', 'ask_user',
 ]);
-function saveableStepCount(transcript: SpecMsg[]): number {
-  return transcript.filter((m) => {
-    if (m.kind !== 'step') return false;
-    const t = String((m as { tool?: unknown }).tool ?? '').replace(/^mcp__.*?__/, '');
-    return t !== '' && !NON_SAVEABLE_TOOLS.has(t);
-  }).length;
+/** A "saveable" tool is one that crystallizes into a spec step (a real browser
+ *  action), as opposed to exploration noise (snapshot / wait / source reads /
+ *  ask_user). The per-run `stepCount` increments only on these. */
+function isSaveableTool(tool: unknown): boolean {
+  const t = String(tool ?? '').replace(/^mcp__.*?__/, '');
+  return t !== '' && !NON_SAVEABLE_TOOLS.has(t);
 }
 /** A live chat conversation: its transcript + the agent session id used to
  *  --resume follow-up turns. Multiple coexist; one is active. Persisted to
@@ -313,6 +313,9 @@ interface ChatSession {
   // session by source port (looked up live via portForSession), not the active
   // one.
   running?: boolean;
+  /** Per-run count of saveable (crystallizable) actions. Reset to 0 at each run
+   *  start; incremented only on saveable tools. Read at session_end to gate the
+   *  Done-vs-clarification branch + Save prompt. Runtime-only. */
   stepCount?: number;
   runCost?: number;
   runTokens?: number;
@@ -669,7 +672,9 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       break;
     case 'tool_use': {
       owner.transcript.push({ kind: 'step', tool: ev.tool, input: ev.input, label: humanizeTool(String(ev.tool ?? ''), ev.input) });
-      owner.stepCount = (owner.stepCount ?? 0) + 1;
+      // Per-run saveable-action counter (reset to 0 at run start). Only real
+      // browser actions count — gates the Done-vs-clarify branch + the Save prompt.
+      if (isSaveableTool(ev.tool)) owner.stepCount = (owner.stepCount ?? 0) + 1;
       if (typeof ev.costUsdSnapshot === 'number') owner.runCost = ev.costUsdSnapshot;
       if (typeof ev.tokensSnapshot === 'number') owner.runTokens = ev.tokensSnapshot;
       if (!live) break;
@@ -712,14 +717,11 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       }
       break;
     case 'session_end': {
-      // Count only saveable actions (not snapshot/ask_user/source reads) — that
-      // gates both the "Done card vs plain reply" branch and the Save prompt.
-      // Scope to the CURRENT run: the transcript is append-only across turns, so
-      // count from the last `user` seed onward — else an earlier turn's actions
-      // inflate a 0-action clarification into a (wrong) Done card.
-      let runStart = owner.transcript.length;
-      while (runStart > 0 && owner.transcript[runStart - 1].kind !== 'user') runStart--;
-      const steps = saveableStepCount(owner.transcript.slice(Math.max(0, runStart - 1)));
+      // `stepCount` is the per-run saveable-action counter — reset at run start,
+      // incremented only on saveable tools — so it's run-scoped by construction
+      // and can't be inflated by an earlier turn's actions. Gates the
+      // Done-vs-clarification branch + the Save prompt.
+      const steps = owner.stepCount ?? 0;
       owner.transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError, findings: ev.findings, mode: currentMode, steps, tokens: owner.runTokens ?? 0 });
       persistSessions();
       if (typeof ev.costUsd === 'number') owner.runCost = ev.costUsd;

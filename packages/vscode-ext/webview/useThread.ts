@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { onMessage } from "./vscode";
 import { isQuietStep, coalesceKind, describeOp, presentLabel, opVerb, groupDetail, GROUP_LABEL, type StepMsg } from "./ops";
 import { splitFindings } from "./markdown";
@@ -34,6 +34,12 @@ export type ThreadItem =
       mode?: string | null;
     };
 
+/** One persisted/normalized transcript entry. Both the live stream and a
+ *  reloaded session funnel into this single vocabulary
+ *  (user/ai/step/shot/done/system/answered) so the thread is derived by ONE
+ *  function — see `buildThread`. */
+type Tx = Record<string, unknown>;
+
 function makeResult(m: Record<string, unknown>): ThreadItem {
   const verdict = String(m.verdict || "Done");
   const summary = String(m.summary || "");
@@ -53,132 +59,101 @@ function makeResult(m: Record<string, unknown>): ThreadItem {
 }
 
 /**
- * Builds the run-thread item list from the streamed messages — the React
- * equivalent of the legacy imperative DOM builder. A narration is held PENDING
- * and only committed when its first op arrives (or dropped when the run's result
- * lands), so the final narration never flashes. Consecutive source reads/lists
- * coalesce into one expandable group.
+ * The chat thread is a PURE function of a single transcript array. The live
+ * stream and a reloaded session both normalize into one event vocabulary
+ * (user/ai/step/shot/done/system/answered) and append to `transcript`; the
+ * rendered `ThreadItem[]` is always re-derived by `buildThread`. There is no
+ * second, parallel "live builder" — that duplication was the source of
+ * live-vs-reload drift bugs.
+ *
+ * `workLabel` is ephemeral UI (the foot-of-thread "working" indicator) and is
+ * tracked separately — it is not thread content.
  */
 export function useThread(): { items: ThreadItem[]; workLabel: string | null } {
-  const [items, setItems] = useState<ThreadItem[]>([]);
+  const [transcript, setTranscript] = useState<Tx[]>([]);
   // The live operation label for the "working" indicator — tracks the agent's
   // current activity so the foot-of-thread status matches what's happening
   // (e.g. "Clicking" / "Reading source"), instead of a generic spinner word.
   const [workLabel, setWorkLabel] = useState<string | null>(null);
-  const pending = useRef<string | null>(null);
 
   useEffect(() => {
     return onMessage((raw) => {
       const m = raw as Record<string, unknown>;
+      const append = (e: Tx) => setTranscript((t) => [...t, e]);
       switch (m.type) {
         case "user":
           setWorkLabel("Thinking");
-          setItems((p) => {
-            const next = [...p];
-            flushPending(next, pending);
-            next.push({ kind: "user", text: String(m.text || "") });
-            return next;
-          });
+          append({ kind: "user", text: String(m.text || "") });
           break;
         case "narration": {
           const text = String(m.text || "").trim();
           if (!text) break;
           setWorkLabel("Thinking");
-          setItems((p) => {
-            const next = [...p];
-            flushPending(next, pending); // commit the previous thought
-            pending.current = text; // hold this one until its first op
-            return next;
-          });
+          append({ kind: "ai", text });
           break;
         }
         case "step": {
           const step = m as StepMsg;
           // Update the live label even for "quiet" steps (snapshot / wait) so the
-          // indicator reflects them, but don't add a thread item for those.
+          // indicator reflects them; buildThread filters quiet steps from render.
           setWorkLabel(presentLabel(step.tool, step.detail));
-          if (isQuietStep(step)) break;
-          setItems((p) => {
-            const next = [...p];
-            flushPending(next, pending);
-            const ck = coalesceKind(step.tool);
-            if (ck) {
-              const last = next[next.length - 1];
-              const label = GROUP_LABEL[ck];
-              if (last && last.kind === "group" && last.label === label) {
-                next[next.length - 1] = { ...last, items: [...last.items, groupDetail(step)] };
-              } else {
-                next.push({ kind: "group", label, items: [groupDetail(step)] });
-              }
-            } else {
-              next.push({ kind: "op", text: describeOp(step.tool, step.detail), verb: opVerb(step.tool), error: step.isError });
-            }
-            return next;
-          });
+          append({ kind: "step", tool: step.tool, detail: step.detail, isError: step.isError });
           break;
         }
         case "screenshot": {
           const uri = String(m.uri || "");
           if (!uri) break;
-          const full = Boolean(m.full);
-          setItems((p) => {
-            const next = [...p];
-            flushPending(next, pending);
-            // The agent often takes a full-page AND a viewport shot of the same
-            // view back-to-back. Collapse a consecutive burst into one thumbnail,
-            // preferring the full-page one. A new "moment" (an op/narration lands
-            // between shots) isn't adjacent, so it shows separately.
-            const last = next[next.length - 1];
-            if (last && last.kind === "shot") {
-              if (last.full && !full) return next; // keep the full-page, drop the viewport
-              next[next.length - 1] = { kind: "shot", uri, full };
-              return next;
-            }
-            next.push({ kind: "shot", uri, full });
-            return next;
-          });
+          append({ kind: "shot", uri, full: Boolean(m.full) });
           break;
         }
         case "result":
           // A `result` is only sent for a run with real (saveable) actions, so
-          // it's a genuine summary — always a Done card (keeps findings + Save),
-          // never a clarification. Clarifications come via `assistant` (0-action
-          // runs, below).
-          pending.current = null; // the result's summary supersedes the final thought
+          // it's a genuine summary — `forceResult` keeps it a Done card (findings
+          // + Save) even if its step count rounds to 0, never a clarification.
+          // Clarifications arrive via `assistant` (0-action runs, below).
           setWorkLabel(null);
-          setItems((p) => [...p, makeResult(m)]);
+          append({
+            kind: "done",
+            forceResult: true,
+            verdict: m.verdict,
+            summary: m.summary,
+            findings: m.findings,
+            mode: m.mode,
+            steps: m.steps,
+            tokens: m.tokens,
+            isError: /fail|error|blocked/i.test(String(m.verdict || "")),
+          });
           break;
         case "system":
-          setItems((p) => [...p, { kind: "system", text: String(m.text || "") }]);
+          append({ kind: "system", text: String(m.text || "") });
           break;
-        case "assistant": {
-          const text = String(m.text || "");
-          const c = clarifyFrom(text);
-          setItems((p) => [...p, c ? { kind: "clarify", question: c.question, options: c.options } : { kind: "assistant", text }]);
+        case "assistant":
+          // A 0-action turn: a clarification (question + buttons) or a plain
+          // reply. buildThread's `done` branch discriminates via clarifyFrom.
+          append({ kind: "done", summary: String(m.text || ""), isError: false });
           break;
-        }
         case "_answered":
-          // Local (not from the host): drop a concise "You answered: …" node
+          // Local (not from the host): a concise "You answered: …" node dropped
           // onto the thread after an ask_user card resolves.
-          setItems((p) => [...p, { kind: "answered", text: String(m.text || "") }]);
+          append({ kind: "answered", text: String(m.text || "") });
           break;
         case "loadSession":
-          pending.current = null;
           setWorkLabel(null);
-          setItems(buildFromTranscript(Array.isArray(m.transcript) ? (m.transcript as Record<string, unknown>[]) : []));
+          setTranscript(Array.isArray(m.transcript) ? (m.transcript as Tx[]) : []);
           break;
         case "reset":
-          pending.current = null;
           setWorkLabel(null);
-          setItems([]);
+          setTranscript([]);
           break;
       }
     });
   }, []);
 
-  // Dedupe at the single exit — covers both the live stream and a reloaded
-  // transcript: drop narration that duplicates the final result/assistant.
-  return { items: dedupeThread(items), workLabel };
+  // The thread is derived from the transcript on every change, then deduped
+  // (drop narration that duplicates the final result/assistant). ONE code path
+  // for live + reload.
+  const items = useMemo(() => dedupeThread(buildThread(transcript)), [transcript]);
+  return { items, workLabel };
 }
 
 function flushPending(list: ThreadItem[], pending: { current: string | null }) {
@@ -188,10 +163,17 @@ function flushPending(list: ThreadItem[], pending: { current: string | null }) {
   }
 }
 
-/** Rebuild the thread from a persisted session transcript (on conversation
- *  switch). Transcript kinds differ from the live stream: narration is `ai`,
- *  and a step carries the raw `input` object (not a JSON `detail` string). */
-function buildFromTranscript(tx: Record<string, unknown>[]): ThreadItem[] {
+/**
+ * Derive the rendered thread from a transcript — the SINGLE builder for both the
+ * live stream and a reloaded session. A narration (`ai`) is held PENDING and
+ * committed only when its first op arrives (so a trailing final thought never
+ * flashes); consecutive source reads/lists coalesce into one expandable group;
+ * a full-page + viewport screenshot burst collapses to one thumbnail.
+ *
+ * Step entries may carry either a raw `input` object (reloaded) or a JSON
+ * `detail` string (live) — both are accepted.
+ */
+function buildThread(tx: Tx[]): ThreadItem[] {
   const items: ThreadItem[] = [];
   const pending = { current: null as string | null };
   const flush = () => flushPending(items, pending);
@@ -205,7 +187,7 @@ function buildFromTranscript(tx: Record<string, unknown>[]): ThreadItem[] {
         const t = String(e.text || "").trim();
         if (t) {
           flush();
-          pending.current = t;
+          pending.current = t; // hold until its first op (or drop at `done`)
         }
         break;
       }
@@ -236,10 +218,13 @@ function buildFromTranscript(tx: Record<string, unknown>[]): ThreadItem[] {
         if (!uri) break;
         const full = Boolean(e.full);
         flush();
-        // Same full+viewport burst collapse as the live path.
+        // The agent often takes a full-page AND a viewport shot of the same view
+        // back-to-back. Collapse a consecutive burst into one thumbnail,
+        // preferring the full-page one. A new "moment" (an op/narration between
+        // shots) isn't adjacent, so it shows separately.
         const prev = items[items.length - 1];
         if (prev && prev.kind === "shot") {
-          if (prev.full && !full) break;
+          if (prev.full && !full) break; // keep the full-page, drop the viewport
           items[items.length - 1] = { kind: "shot", uri, full };
           break;
         }
@@ -247,22 +232,33 @@ function buildFromTranscript(tx: Record<string, unknown>[]): ThreadItem[] {
         break;
       }
       case "done": {
-        pending.current = null;
+        pending.current = null; // the summary supersedes the final thought
         const summary = String(e.summary || "");
         const steps = typeof e.steps === "number" ? e.steps : 0;
-        // Mirror the live path: a 0-action run is a clarification (question +
-        // buttons) or a plain reply; a run with real actions is a Done card
-        // (keeps findings + Save). Never turn a worked run into a clarification.
-        if (!e.isError && steps === 0) {
+        // A 0-action run is a clarification (question + buttons) or a plain reply;
+        // a run with real actions — or any `forceResult` (a host `result`) — is a
+        // Done card (keeps findings + Save). Never turn a worked run into a
+        // clarification.
+        if (!e.isError && steps === 0 && !e.forceResult) {
           const c = clarifyFrom(summary);
           items.push(c ? { kind: "clarify", question: c.question, options: c.options } : { kind: "assistant", text: summary });
         } else {
           items.push(
-            makeResult({ verdict: e.isError ? "Failed" : "Done", summary: e.summary, findings: e.findings, mode: e.mode, steps: e.steps, tokens: e.tokens }),
+            makeResult({
+              verdict: e.verdict ?? (e.isError ? "Failed" : "Done"),
+              summary: e.summary,
+              findings: e.findings,
+              mode: e.mode,
+              steps: e.steps,
+              tokens: e.tokens,
+            }),
           );
         }
         break;
       }
+      case "answered":
+        items.push({ kind: "answered", text: String(e.text || "") });
+        break;
       case "system":
         items.push({ kind: "system", text: String(e.text || "") });
         break;
