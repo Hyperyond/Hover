@@ -12,6 +12,14 @@ export interface Finding {
   endpoint?: string;
 }
 
+/** A QA candidate flow (Stage 4) — name + already-resolved steps to crystallize. */
+export interface Candidate {
+  name: string;
+  description?: string;
+  stepCount?: number;
+  steps: unknown[];
+}
+
 export type ThreadItem =
   | { kind: "user"; text: string }
   | { kind: "think"; text: string }
@@ -20,6 +28,7 @@ export type ThreadItem =
   | { kind: "group"; label: string; items: string[] }
   | { kind: "shot"; uri: string; full?: boolean }
   | { kind: "report"; path: string }
+  | { kind: "candidates"; items: Candidate[] }
   | { kind: "system"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "clarify"; question: string; options: string[] }
@@ -110,6 +119,11 @@ export function useThread(): { items: ThreadItem[]; workLabel: string | null } {
         case "report": {
           const path = String(m.path || "");
           if (path) append({ kind: "report", path });
+          break;
+        }
+        case "qa-candidates": {
+          const list = Array.isArray(m.candidates) ? (m.candidates as Candidate[]) : [];
+          if (list.length) append({ kind: "candidates", candidates: list });
           break;
         }
         case "result":
@@ -240,6 +254,11 @@ function buildThread(tx: Tx[]): ThreadItem[] {
       case "report": {
         const path = String(e.path || "");
         if (path) items.push({ kind: "report", path });
+        break;
+      }
+      case "candidates": {
+        const list = Array.isArray(e.candidates) ? (e.candidates as Candidate[]) : [];
+        if (list.length) items.push({ kind: "candidates", items: list });
         break;
       }
       case "done": {

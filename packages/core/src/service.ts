@@ -64,6 +64,7 @@ import {
 } from './agentDirectives.js';
 import { loadMemory, formatMemoryForPrompt, writeFact, type BusinessFact } from './memory/businessMemory.js';
 import { writeQaReport } from './qa/qaReport.js';
+import { resolveCandidates, type RecordedCandidate } from './qa/candidates.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { handleRelayMessage } from './service/relayHandlers.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
@@ -459,6 +460,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     prompt: string;
   }
   let activeRun: ActiveRun | null = null;
+  /** QA candidate flows recorded by the agent this run (via record_candidate).
+   *  Buffered here (connection scope, visible to both the message handler and
+   *  the run lifecycle); reset at each run start; resolved to real steps and
+   *  emitted as `qa-candidates` at run end. */
+  let runCandidates: RecordedCandidate[] = [];
   /** In-flight source-read approval requests: correlation id → the source-MCP
    *  socket that asked, so the editor's response can be routed back to it. */
   const pendingApprovals = new Map<string, WebSocket>();
@@ -764,6 +770,20 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         return;
       }
+      // record-candidate (from the control MCP's record_candidate tool): buffer a
+      // QA candidate flow. ONLY in QA mode. Resolved to real recorded steps and
+      // emitted as `qa-candidates` at run end — never acked, never blocks a run.
+      if (msg.type === 'record-candidate') {
+        const c = (msg.payload as { candidate?: RecordedCandidate } | undefined)?.candidate;
+        if (c && typeof c.name === 'string' && Array.isArray(c.steps) && currentModeId === 'qa') {
+          runCandidates.push({
+            name: c.name,
+            description: typeof c.description === 'string' ? c.description : undefined,
+            steps: c.steps.filter((n) => Number.isInteger(n) && (n as number) > 0),
+          });
+        }
+        return;
+      }
       if (msg.type === 'set-mode') {
         if (activeRun) {
           send(ws, {
@@ -982,6 +1002,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       const sessionStartedAt = new Date().toISOString();
       let sessionEnd: { turns?: number; costUsd?: number; tokens?: number } = {};
       let sessionRecorded = false;
+      runCandidates = []; // fresh per run — QA candidate flows accumulate below
       // Reproducibility context captured up front (snapshot the mode now so a
       // mid-run switch can't smear it; the rest are filled as the run learns
       // them). Account labels are LABELS ONLY — never the credentials.
@@ -1355,6 +1376,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             steps: runResult.steps,
           },
         );
+
+        // QA Stage 4: resolve the agent's recorded candidate flows to their real
+        // recorded steps and offer them as one-click "Crystallize" cards. Steps
+        // are the actual hover-control actuations (record==replay), so each
+        // candidate crystallizes to a clean, runnable spec.
+        if (runMode === 'qa' && runCandidates.length && !run.cancelled) {
+          const resolved = resolveCandidates(runResult.steps, runCandidates);
+          if (resolved.length) emitToRun({ type: 'qa-candidates', payload: { candidates: resolved } });
+        }
       } catch (err) {
         // A user-initiated cancel() already sent a synthetic session_end
         // {cancelled:true}. The subsequent AbortError surfacing here would

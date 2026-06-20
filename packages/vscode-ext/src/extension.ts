@@ -675,6 +675,18 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
     }
     return;
   }
+  if (msg.type === 'qa-candidates') {
+    // QA Stage 4: the run surfaced candidate flows (each already resolved to its
+    // real recorded steps). Persist them so the cards survive reload, and render
+    // a ✨ Crystallize card per candidate in the chat.
+    const cp = msg.payload as { candidates?: QaCandidate[] } | undefined;
+    const cands = Array.isArray(cp?.candidates) ? cp!.candidates : [];
+    if (cands.length) {
+      owner.transcript.push({ kind: 'candidates', candidates: cands });
+      if (live) chatProvider?.pushCandidates(cands);
+    }
+    return;
+  }
   if (msg.type !== 'event') return;
   const ev = msg.payload as { kind?: string; [k: string]: unknown } | undefined;
   switch (ev?.kind) {
@@ -1051,6 +1063,46 @@ async function saveSpec(nameArg?: string, overwrite = false): Promise<void> {
   if (!pool?.saveSpec(name, steps, redactions, overwrite)) void vscode.window.showWarningMessage('Hover: engine not connected.');
 }
 
+/** A QA candidate flow surfaced at run end — its steps are already resolved to
+ *  the real recorded hover-control actuations (record==replay), so crystallizing
+ *  is just writeSpec over those steps. */
+interface QaCandidate {
+  name: string;
+  description?: string;
+  steps: { kind: string; tool?: string; input?: unknown }[];
+  stepCount?: number;
+}
+
+/** ✨ Crystallize one QA candidate flow into a standalone Playwright spec. Unlike
+ *  saveSpec (which slices the whole last run from the transcript), a candidate
+ *  already carries its exact steps — so we write just those, after the same
+ *  goto-prepend + credential-redaction the normal save path applies. */
+async function crystallizeCandidate(candidateName: string, rawSteps: unknown[]): Promise<void> {
+  const steps = (rawSteps as QaCandidate['steps']).filter((s) => s && typeof s === 'object');
+  if (!steps.some((m) => m.kind === 'step')) {
+    void vscode.window.showWarningMessage('Hover: this candidate flow has no replayable steps.');
+    return;
+  }
+  // Guarantee the spec opens the app (the run usually had no browser_navigate —
+  // it connected to an already-open tab). Idempotent: only added if missing.
+  if (!steps.some((m) => m.kind === 'step' && m.tool === 'browser_navigate')) {
+    const url = await resolveTargetUrl();
+    if (url) steps.unshift({ kind: 'step', tool: 'browser_navigate', input: { url } });
+  }
+  const name = await vscode.window.showInputBox({
+    title: 'Crystallize candidate flow',
+    prompt: 'Spec name',
+    value: candidateName,
+  });
+  if (!name) return;
+  const redactions: { value: string; envVar: string }[] = [];
+  for (const a of activeChat().lastAccounts ?? []) {
+    if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
+    if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
+  }
+  if (!pool?.saveSpec(name, steps, redactions, false)) void vscode.window.showWarningMessage('Hover: engine not connected.');
+}
+
 /** 🔴 pentest mode: crystallize the session's recorded probes into a Markdown
  *  findings report via the pentest plugin's save handler — NOT a Playwright
  *  spec (an attack run is not a regression artifact). */
@@ -1146,6 +1198,8 @@ export function activate(context: vscode.ExtensionContext): void {
     void vscode.window.showTextDocument(vscode.Uri.file(path)).then(undefined, () =>
       vscode.window.showWarningMessage(`Hover: could not open ${path}`),
     );
+  // The user clicked ✨ Crystallize on a QA candidate flow → write its steps to a spec.
+  chatProvider.crystallizeCandidateHandler = (name, steps) => void crystallizeCandidate(name, steps);
   // The user switched the active conversation from the top-bar switcher.
   chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver
