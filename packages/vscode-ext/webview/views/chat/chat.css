@@ -1669,6 +1669,10 @@ body.ask-open #ask-dock {
 .barebtn.toggle.on {
   color: var(--accent);
 }
+/* Pentest is offensive — red when on, to read as "armed". */
+.barebtn.toggle.danger.on {
+  color: #ef4444;
+}
 .barebtn.toggle.locked {
   opacity: 0.5;
   cursor: default;

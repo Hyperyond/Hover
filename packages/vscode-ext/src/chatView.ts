@@ -28,6 +28,7 @@ type Inbound =
   | { type: "crystallizeCandidate"; name: string; steps: unknown[] }
   | { type: "setQaIntensity"; value: string }
   | { type: "setQaApi"; value: boolean }
+  | { type: "setQaPentest"; value: boolean }
   | { type: "ready" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -61,6 +62,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   qaIntensityHandler?: (value: string) => void;
   /** Set by the extension: the user toggled QA's API capability. */
   qaApiHandler?: (value: boolean) => void;
+  /** Set by the extension: the user toggled QA's Pentest capability (offensive —
+   *  the extension confirms before enabling). */
+  qaPentestHandler?: (value: boolean) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -104,6 +108,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.qaIntensityHandler?.(msg.value);
       else if (msg.type === "setQaApi" && typeof msg.value === "boolean")
         this.qaApiHandler?.(msg.value);
+      else if (msg.type === "setQaPentest" && typeof msg.value === "boolean")
+        this.qaPentestHandler?.(msg.value);
       else if (msg.type === "ready") this.onReady?.();
     });
   }
@@ -223,9 +229,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   pushQaApi(value: boolean): void {
     this.post({ type: "qaApi", value });
   }
-  /** Tell the composer whether QA's API capability can run (gates the toggle). */
-  pushQaCapabilityAvailability(apiAvailable: boolean): void {
-    this.post({ type: "qaApiAvailable", value: apiAvailable });
+  /** Reflect the stored QA Pentest-capability toggle in the composer. */
+  pushQaPentest(value: boolean): void {
+    this.post({ type: "qaPentest", value });
+  }
+  /** Tell the composer whether QA's API / Pentest capabilities can run (gate the toggles). */
+  pushQaCapabilityAvailability(apiAvailable: boolean, pentestAvailable: boolean): void {
+    this.post({ type: "qaCapabilityAvailable", api: apiAvailable, pentest: pentestAvailable });
   }
   /** Running token total (from usage events) → live group counter. */
   pushUsage(tokens: number): void {

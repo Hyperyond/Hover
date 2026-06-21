@@ -329,7 +329,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       for (const p of plugins) {
         for (const srv of p.mcpServers ?? []) {
           const scope = srv.activeInModes ?? (p.mode ? [p.mode.id] : []);
-          const inMode = scope.includes('*') || scope.includes(currentModeId) || apiScopeOk(scope);
+          const inMode = scope.includes('*') || scope.includes(currentModeId) || apiScopeOk(scope) || pentestScopeOk(scope);
           if (!inMode) continue;
           extra.push({
             id: srv.id,
@@ -507,6 +507,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
    *  plugin being composed into the current QA run. */
   const apiScopeOk = (scope: string[]): boolean => apiActiveThisRun && scope.includes('api-test');
 
+  // QA "Pentest capability": same composition as API, but the pentest plugin —
+  // offensive (attacks the OWN dev app), origin-locked, writes a findings report.
+  // Mutually exclusive with the API capability (the plugins conflict). Default
+  // OFF; the editor confirms before enabling.
+  const pentestPlugin = plugins.find((p) => p.mode?.id === 'pentest') ?? null;
+  const pentestCapabilityAvailable = (): boolean => !!pentestPlugin && residentChromeProxy !== null;
+  let pentestActiveThisRun = false;
+  const pentestScopeOk = (scope: string[]): boolean => pentestActiveThisRun && scope.includes('pentest');
+
   /** The cdp-handler extras (proxy) threaded into launch-chrome / check-cdp /
    *  focus-debug and the initial auto-launch. In the single-Chrome model this
    *  is driven purely by the RESIDENT proxy (set in `hover:service:start`),
@@ -544,9 +553,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     const payload = {
       current: currentModeId,
       available: [...builtins, ...available],
-      // Whether QA's API capability can actually run (api-test plugin loaded +
-      // MITM up). Gates the QA API toggle so "on" always works.
+      // Whether QA's API / Pentest capabilities can actually run (plugin loaded +
+      // MITM up). Gates the QA toggles so "on" always works.
       apiCapabilityAvailable: apiCapabilityAvailable(),
+      pentestCapabilityAvailable: pentestCapabilityAvailable(),
     };
     const targets = target ? [target] : [...wss.clients];
     for (const client of targets) {
@@ -1038,14 +1048,20 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // available, compose the api-test runtime into this run. The UI only lets
       // the user turn it on when available, so "on" must actually work — if it's
       // requested but unavailable, say so loudly (don't silently degrade).
-      const caps = (msg.payload as { capabilities?: { api?: unknown } } | undefined)?.capabilities;
-      const wantApi = caps?.api === true || caps?.api === undefined; // default on
+      const caps = (msg.payload as { capabilities?: { api?: unknown; pentest?: unknown } } | undefined)?.capabilities;
+      // Pentest capability (offensive, default OFF). Mutually exclusive with API
+      // (the plugins conflict): if pentest is on, API is forced off this run.
+      pentestActiveThisRun = runMode === 'qa' && caps?.pentest === true && pentestCapabilityAvailable();
+      const wantApi = !pentestActiveThisRun && (caps?.api === true || caps?.api === undefined); // default on
       apiActiveThisRun = runMode === 'qa' && wantApi && apiCapabilityAvailable();
-      // Defensive: the UI only enables the API toggle when available, so an
+      // Defensive: the UI only enables these toggles when available, so an
       // explicit "on" should always be honoured. If it somehow isn't, log it
       // (the run continues as functional-only rather than failing the run).
-      if (runMode === 'qa' && caps?.api === true && !apiCapabilityAvailable()) {
+      if (runMode === 'qa' && caps?.api === true && !pentestActiveThisRun && !apiCapabilityAvailable()) {
         process.stderr.write('[hover/qa] API capability requested but the api-test runtime is unavailable; running functional-only.\n');
+      }
+      if (runMode === 'qa' && caps?.pentest === true && !pentestCapabilityAvailable()) {
+        process.stderr.write('[hover/qa] Pentest capability requested but the pentest runtime is unavailable; running functional-only.\n');
       }
       const runResumeOf = resumeSessionId;
       const screenshotTag = (resumeSessionId ?? sessionStartedAt).replace(/[^a-zA-Z0-9._-]+/g, '-');
@@ -1127,6 +1143,16 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           }
           apiActiveThisRun = false;
         }
+        // QA + Pentest: stop recording (back to passthrough). The findings are in
+        // the agent's report; a deep PoC report is available via Save. Best-effort.
+        if (pentestActiveThisRun && pentestPlugin) {
+          try {
+            await pentestPlugin.hooks?.['hover:mode:deactivate']?.({ devRoot, broadcast: broadcastPluginEvent, modeId: 'qa' });
+          } catch (err) {
+            process.stderr.write(`[hover/qa] pentest compose (run:end) failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          pentestActiveThisRun = false;
+        }
       };
       try {
         // Build the MCP config first — it's pure local file IO and lets
@@ -1203,7 +1229,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             const inScope =
               scope.includes('*') ||
               (currentModeId !== null && scope.includes(currentModeId)) ||
-              apiScopeOk(scope);
+              apiScopeOk(scope) ||
+              pentestScopeOk(scope);
             if (inScope) {
               appendSystemPrompt = `${appendSystemPrompt}\n\n${add.text}`;
             }
@@ -1308,7 +1335,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           for (const p of plugins) {
             for (const srv of p.mcpServers ?? []) {
               const scope = srv.activeInModes ?? (p.mode ? [p.mode.id] : []);
-              if (scope.includes('*') || scope.includes(currentModeId) || apiScopeOk(scope)) {
+              if (scope.includes('*') || scope.includes(currentModeId) || apiScopeOk(scope) || pentestScopeOk(scope)) {
                 activePluginMcpIds.push(mcpToolPrefix(srv.id));
               }
             }
@@ -1342,6 +1369,24 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             await apiTestPlugin.hooks?.['hover:run:start']?.({ devRoot, broadcast: broadcastPluginEvent });
           } catch (err) {
             process.stderr.write(`[hover/qa] api-test compose (run:start) failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+        }
+        // QA + Pentest capability: compose the pentest runtime — flip the resident
+        // MITM to intercept so the agent's offensive probes are recorded. The
+        // PENTEST_SYSTEM_PROMPT (origin-locked, own-app) is added via the scope
+        // checks above. Mirror-undone at run end. Best-effort.
+        if (pentestActiveThisRun && pentestPlugin) {
+          try {
+            await pentestPlugin.hooks?.['hover:mode:activate']?.({
+              devRoot,
+              broadcast: broadcastPluginEvent,
+              modeId: 'qa',
+              setChromeProxy(proxy) { residentChromeProxy = proxy; },
+              setMcpServerEnv(id, env) { mcpEnvOverrides.set(id, env); },
+            });
+            await pentestPlugin.hooks?.['hover:run:start']?.({ devRoot, broadcast: broadcastPluginEvent });
+          } catch (err) {
+            process.stderr.write(`[hover/qa] pentest compose (run:start) failed: ${err instanceof Error ? err.message : String(err)}\n`);
           }
         }
         // Screenshot previews: this run's MCP output dir (same path buildMcpConfig

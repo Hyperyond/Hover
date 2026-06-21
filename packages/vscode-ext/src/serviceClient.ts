@@ -75,7 +75,7 @@ export interface ServerMessage {
 export interface PoolHandlers {
   onRevealSource?: (source: string) => void;
   onStatus?: (connectedCount: number) => void;
-  onModes?: (current: string | null, available: ModeEntry[], apiCapabilityAvailable?: boolean) => void;
+  onModes?: (current: string | null, available: ModeEntry[], caps?: { api: boolean; pentest: boolean }) => void;
   onAgents?: (current: string | null, available: AgentEntry[]) => void;
   /** Run lifecycle: streamed `event` payloads, plus `error` / `spec-saved`.
    *  `enginePort` is the host the message came from, so the extension can route
@@ -108,7 +108,7 @@ export interface ServiceClientPool {
    *  accounts (with creds) the agent may log in with. `enginePort` targets the
    *  session's own host (multi-host model); omit to use the first open socket.
    *  Returns false if the target isn't connected. */
-  run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number, isolateContext?: boolean, intensity?: string, capabilities?: { api?: boolean }): boolean;
+  run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number, isolateContext?: boolean, intensity?: string, capabilities?: { api?: boolean; pentest?: boolean }): boolean;
   /** Reply to a source-read approval request from the engine's source MCP. */
   sendSourceApproval(approvalId: string, allow: boolean, enginePort?: number): void;
   /** Reply to an ask_user prompt from the engine's control MCP — the user's
@@ -191,7 +191,8 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       } else if (msg.type === 'modes' && handlers.onModes) {
         const current = typeof msg.payload?.current === 'string' ? msg.payload.current : null;
         const available = Array.isArray(msg.payload?.available) ? (msg.payload!.available as ModeEntry[]) : [];
-        handlers.onModes(current, available, (msg.payload as { apiCapabilityAvailable?: boolean } | undefined)?.apiCapabilityAvailable === true);
+        const cp = msg.payload as { apiCapabilityAvailable?: boolean; pentestCapabilityAvailable?: boolean } | undefined;
+        handlers.onModes(current, available, { api: cp?.apiCapabilityAvailable === true, pentest: cp?.pentestCapabilityAvailable === true });
       } else if (msg.type === 'agents' && handlers.onAgents) {
         const current = typeof msg.payload?.current === 'string' ? msg.payload.current : null;
         const available = Array.isArray(msg.payload?.available) ? (msg.payload!.available as AgentEntry[]) : [];
@@ -251,7 +252,7 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(body);
       }
     },
-    run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number, isolateContext?: boolean, intensity?: string, capabilities?: { api?: boolean }): boolean {
+    run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number, isolateContext?: boolean, intensity?: string, capabilities?: { api?: boolean; pentest?: boolean }): boolean {
       const ws = target(enginePort);
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId, accounts, env, sourceAccess, isolateContext, intensity, capabilities } }));
