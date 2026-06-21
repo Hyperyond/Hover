@@ -1,58 +1,47 @@
 /**
- * QA candidate-flow resolution.
+ * QA candidate-flow finalization.
  *
- * During a QA run the agent calls `record_candidate(name, steps)` when it
- * completes a coherent flow; `steps` are 1-based step numbers over the run's
- * actuation steps (the "· step N" tags echoed by actuateServer). At run end the
- * service resolves each candidate's numbers back to the ACTUAL recorded steps so
- * a one-click crystallize produces a record==replay Playwright spec — never the
- * agent's re-described selectors.
+ * During a QA run the agent calls `record_candidate(name)` right after it
+ * completes a coherent flow; the hover-control MCP captures the actual grounded
+ * actuation steps since the previous marker and sends them along — so a
+ * candidate already carries its real, replayable SkillSteps (no fragile
+ * step-number citing). This module just validates + de-dupes them before they
+ * become one-click "Crystallize" cards.
  *
  * Pure + side-effect-free so it can be unit-tested without a live run.
  */
 import type { SkillStep } from '../specs/specStep.js';
-import { isActuationStep } from '../mcp/actuationTools.js';
 
-/** What the agent recorded: a flow name + the actuation step numbers (1-based). */
+/** What the agent recorded: a flow name + the real steps Hover captured for it. */
 export interface RecordedCandidate {
   name: string;
   description?: string;
-  steps: number[];
+  steps: SkillStep[];
 }
 
-/** A candidate resolved to its real recorded steps, ready to crystallize. */
+/** A candidate ready to crystallize. */
 export interface ResolvedCandidate {
   name: string;
   description?: string;
-  /** The actual recorded SkillSteps, in flow order — passed straight to writeSpec. */
   steps: SkillStep[];
   stepCount: number;
 }
 
 /**
- * Map each recorded candidate's step numbers to the run's recorded actuation
- * steps. The Nth actuation step (over `ACTUATION_TOOLS`, in order) is step N —
- * the same numbering actuateServer echoed to the agent. Out-of-range numbers are
- * dropped; a candidate that resolves to no steps, or has no name, is dropped;
- * identical candidates (same name + step set) are de-duped.
+ * Validate + de-dupe recorded candidates: drop ones with no name or no steps,
+ * collapse identical repeats (same name + same step count), and stamp stepCount.
  */
-export function resolveCandidates(
-  allSteps: readonly SkillStep[],
-  candidates: readonly RecordedCandidate[],
-): ResolvedCandidate[] {
-  const actuation = allSteps.filter((s) => s.kind === 'step' && isActuationStep(s.tool));
+export function finalizeCandidates(candidates: readonly RecordedCandidate[]): ResolvedCandidate[] {
   const out: ResolvedCandidate[] = [];
   const seen = new Set<string>();
   for (const c of candidates) {
     const name = c.name?.trim();
-    if (!name || !Array.isArray(c.steps)) continue;
-    const nums = c.steps.filter((n) => Number.isInteger(n) && n > 0);
-    const picked = nums.map((n) => actuation[n - 1]).filter((s): s is SkillStep => Boolean(s));
-    if (!picked.length) continue;
-    const key = `${name}|${nums.join(',')}`;
+    const steps = Array.isArray(c.steps) ? c.steps.filter((s) => s && s.kind === 'step') : [];
+    if (!name || !steps.length) continue;
+    const key = `${name}|${steps.length}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ name, description: c.description?.trim() || undefined, steps: picked, stepCount: picked.length });
+    out.push({ name, description: c.description?.trim() || undefined, steps, stepCount: steps.length });
   }
   return out;
 }

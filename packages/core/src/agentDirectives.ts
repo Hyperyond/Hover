@@ -156,15 +156,15 @@ export const QA_EXPLORATION_DIRECTIVE =
   'gaps, do not claim coverage you did not do.\n' +
   'CAPTURE CLEAN FLOWS: as you exercise the app, whenever you complete a coherent ' +
   'end-to-end flow worth keeping as a regression test (e.g. "Log in", "Add item ' +
-  'to cart", "Submit the registration form"), call record_candidate with a short ' +
-  'imperative name — IN ENGLISH (it becomes the spec\'s filename + test name, ' +
-  'even though your report prose is in another language) — and the step numbers ' +
-  '(the "· step N" tags echoed after each ' +
-  'click / fill / select / check you did for THAT flow), in order. This does NOT ' +
-  'crystallize a spec — it just offers the user a one-click "Crystallize" later, ' +
-  'so still do not write a spec yourself. Include only the steps of that one ' +
-  'flow, only successful ones; skip exploration, dead-ends, and negative-test ' +
-  'attempts. Record each distinct flow right after you finish it, while fresh.\n' +
+  'to cart", "Submit the registration form"), call record_candidate with just a ' +
+  'short imperative name — IN ENGLISH (it becomes the spec\'s filename + test ' +
+  'name, even though your report prose is in another language). You do NOT pass ' +
+  'steps: Hover automatically captures the successful click / fill / select / ' +
+  'check / upload actions you did since your last record_candidate, so call it ' +
+  'the MOMENT you finish each distinct flow — before starting the next one or ' +
+  'doing unrelated exploration — so its captured steps are exactly that flow. ' +
+  'This does NOT crystallize a spec; it just offers the user a one-click ' +
+  '"Crystallize" later, so still do not write a spec yourself.\n' +
   'REMEMBER WHAT YOU LEARN: when you confirm a durable business rule about this ' +
   'app — an expected behavior, a validation rule, an access policy, or the answer ' +
   'to a "is this a bug or by-design?" you asked the user — call record_fact to ' +
