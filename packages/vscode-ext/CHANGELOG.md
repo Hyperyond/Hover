@@ -3,6 +3,31 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.22.0 — 2026-06-21
+
+**QA Testing mode — autonomous exploratory testing, with API + Penetration testing as toggles.**
+
+The headline release: a new **QA Testing** mode that explores your app on its own to find defects and writes a findings report, with API and penetration testing layered on as toggles. The mode picker is now just **Flow** (AI test authoring) and **QA Testing**.
+
+- **Autonomous exploratory testing.** Point QA at a page — or just say "test the app" — and the agent systematically exercises controls, tries negative / boundary inputs, and reports real defects, instead of waiting to be told each step.
+- **Intensity presets (step budget).** Quick / Standard / Deep bound a run by step count (~45 / ~150 / ~500) so "explore everything" can't run away on cost; the agent paces itself to always finish with a report.
+- **API testing toggle.** Composes Hover's MITM proxy into a QA run so the agent's API calls are captured — functional / contract checks against real traffic.
+- **Penetration testing toggle.** An offensive, origin-locked, own-app security pass (auth / access control, IDOR, injection, endpoint abuse). It is destructive, so it always runs as a **second phase after** the functional pass, and it is OFF by default (enabling it asks for confirmation). The functional pass now stays functional-only when a pentest pass is queued, so the two never double up on security work.
+- **Findings report + coverage.** Every QA run writes a durable Markdown report with findings by severity and a `## Coverage` section (what was tested vs. left open).
+- **Candidate flows → one-click Crystallize.** As QA completes a clean end-to-end flow it offers it as a ✨ Crystallize card, so a good run becomes a saved Playwright spec.
+- **Business memory.** QA persists durable business rules it confirms (or that you answer) so neither it nor a future run re-asks them.
+- **Pre-flight request classifier.** Before a QA run, a quick check routes your request: a concrete test runs; a vague one offers clickable options; an off-task / out-of-scope one is redirected — so the heavy exploration only kicks in for an actual test, and "read the page" is treated as "test the page".
+
+**Speech & chat polish**
+
+- **Voice narration** restored, with voice pickers (Chinese defaults to **Tingting**; English keeps Auto) and the novelty system voices filtered out.
+- The Done card now renders markdown (headings, bold / italic, dot bullets); the QA report link is aligned.
+- **Auto-scroll** follows the live run only while you're at the bottom — scroll up to read history and new output won't yank you down; sending a message re-pins you, and the live working indicator stays in view.
+
+**Data model**
+
+- One run-folder per agent run, grouped by conversation (`.hover/conversations/<conversationId>/<runId>/{meta.json, report.md, screenshots/}`) — deleting a conversation cleanly removes all of its runs.
+
 ## 0.21.0 — 2026-06-20
 
 **Unified panels + Tailwind refresh, light-theme fix, engine cleanup.**

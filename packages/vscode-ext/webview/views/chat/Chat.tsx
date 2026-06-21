@@ -120,6 +120,12 @@ export function Chat() {
   const stuckRef = useRef(true); // is the view pinned to (near) the bottom?
   const prevLenRef = useRef(0);
 
+  // The live working indicator (spinner + icon + label) renders BELOW the items,
+  // so its appearance / label change grows the log too — fold it into the scroll
+  // trigger, or it lands below the fold right after a send (the bottom icon you
+  // couldn't see).
+  const workingKey = working ? working.text : null;
+
   // Follow the stream only while the user is at the bottom. If they scrolled up
   // to read history, new content does NOT yank them down — UNLESS they just sent
   // a message (then re-pin). Scrolling is smooth.
@@ -131,7 +137,7 @@ export function Chat() {
     const userSent = grew && items[items.length - 1]?.kind === "user";
     if (userSent) stuckRef.current = true; // a fresh send always re-pins
     if (userSent || stuckRef.current) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [items]);
+  }, [items, workingKey]);
 
   // Track whether the user is near the bottom (so streaming can stop following
   // once they scroll up).

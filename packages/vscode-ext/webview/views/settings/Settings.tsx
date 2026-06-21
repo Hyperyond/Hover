@@ -90,6 +90,19 @@ export function Settings() {
   }, []);
 
   const change = (patch: Record<string, unknown>) => post({ type: "change", ...patch });
+  // Default the Chinese narration voice to Tingting (the smoothest zh voice) when
+  // the user hasn't picked one yet — once per mount, persisted so playback uses it
+  // explicitly instead of relying on the auto-pick fallback.
+  const zhDefaulted = useRef(false);
+  useEffect(() => {
+    if (zhDefaulted.current) return;
+    if (s.voiceZh) { zhDefaulted.current = true; return; }
+    const tt = voices.find((v) => v.lang.toLowerCase().startsWith("zh") && /tingting|婷婷/i.test(v.name));
+    if (!tt) return; // voices not loaded yet — wait for voiceschanged
+    zhDefaulted.current = true;
+    setS((p) => ({ ...p, voiceZh: tt.name }));
+    change({ voiceZh: tt.name });
+  }, [voices, s.voiceZh]);
   const setByok = (patch: Partial<ByokState>) => setS((p) => ({ ...p, byok: { ...p.byok, ...patch } }));
   const selectTab = (src: "cli" | "byok") => { setS((p) => ({ ...p, modelSource: src })); change({ modelSource: src }); };
   const pickAgent = (id: string) => { setS((p) => ({ ...p, modelSource: "cli", agent: id })); change({ modelSource: "cli", agent: id }); };
@@ -219,7 +232,6 @@ export function Settings() {
             <div className="flex flex-col gap-0.5">Chinese voice<span className="text-faint text-[11px]">For Chinese narration (e.g. Tingting)</span></div>
             <select className="bg-bg3 text-fg border border-line rounded-md px-2 py-[5px] max-w-[150px]" value={s.voiceZh}
               onChange={(e) => { setS((p2) => ({ ...p2, voiceZh: e.target.value })); change({ voiceZh: e.target.value }); }}>
-              <option value="">Auto</option>
               {voices
                 .filter((v) => v.lang.toLowerCase().startsWith("zh") && /tingting|婷婷|meijia|美佳/i.test(v.name))
                 .map((v) => (
