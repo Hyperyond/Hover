@@ -972,7 +972,14 @@ header {
   font: inherit;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1; /* tighten so the text glyph centres with the icons, not its line box */
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.report-link svg {
+  display: block; /* drop the baseline gap so svgs sit flush with align-items:center */
+}
+.report-link .rl-text {
+  line-height: 1;
 }
 .report-link:hover {
   border-color: var(--accent);
