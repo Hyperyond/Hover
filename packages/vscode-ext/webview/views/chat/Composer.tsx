@@ -26,9 +26,9 @@ const StopIcon = () => (
 /** QA intensity presets — mirrors core's QA_INTENSITY (label + spend ceiling).
  *  Bounds how far an exploratory QA run goes so it can't run away on cost. */
 const QA_LEVELS = [
-  { v: "quick", label: "Quick", desc: "Fast pass over main flows · ~$0.25" },
-  { v: "standard", label: "Standard", desc: "Main flows + key negative tests · ~$0.60" },
-  { v: "deep", label: "Deep", desc: "Exhaustive — every control & state · ~$1.50" },
+  { v: "quick", label: "Quick", desc: "Fast pass over main flows · ~20–45 steps" },
+  { v: "standard", label: "Standard", desc: "Main flows + key negative tests · ~45–150 steps" },
+  { v: "deep", label: "Deep", desc: "Exhaustive — every control & state · ~150–500 steps" },
 ];
 
 /** The input box + toolbar (browser / model / mode / send). Browser, mode and

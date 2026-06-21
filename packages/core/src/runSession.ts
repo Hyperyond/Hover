@@ -35,6 +35,8 @@ export interface RunSessionOptions {
   /** Extra env for the spawned CLI (Local LLM: OPENAI_BASE_URL / _API_KEY). */
   env?: Record<string, string>;
   maxBudgetUsd?: number;
+  /** Hard ceiling on agent turns (~steps) — QA intensity step budget. */
+  maxTurns?: number;
   /** Agent cwd (project root) — where Claude Code reads CLAUDE.md and where a
    *  `--save` / re-record writes the spec. Defaults to the process cwd. */
   cwd?: string;
@@ -118,6 +120,7 @@ export async function runSession(
       ? [...(descriptor?.defaultDisallowedTools ?? []), ...(opts.disallowedToolsExtra ?? [])]
       : undefined,
     maxBudgetUsd: opts.maxBudgetUsd,
+    maxTurns: opts.maxTurns,
     model: opts.model,
     effort: opts.effort,
     env: opts.env,

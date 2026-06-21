@@ -152,6 +152,9 @@ export const claudeAgent: AgentDescriptor = {
     if (opts.maxBudgetUsd != null) {
       args.push('--max-budget-usd', String(opts.maxBudgetUsd));
     }
+    if (opts.maxTurns != null) {
+      args.push('--max-turns', String(opts.maxTurns));
+    }
     if (opts.model) {
       args.push('--model', opts.model);
     }

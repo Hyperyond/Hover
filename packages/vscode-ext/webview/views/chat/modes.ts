@@ -27,13 +27,9 @@ export const MODES: ModeDef[] = [
     tag: "Experimental",
     desc: "Explore the whole app → findings report + promotable specs",
   },
-  {
-    value: "api-test",
-    icon: MODE_ICONS["api-test"],
-    title: "API testing",
-    tag: "Experimental",
-    desc: "Drive & verify your API — auth, status codes, access control",
-  },
+  // API testing is no longer a standalone mode — it's a capability toggle inside
+  // QA Testing (compose the api-test MITM). Kept out of the picker; the plugin
+  // still loads so QA can compose it.
   {
     value: "pentest",
     icon: MODE_ICONS.pentest,

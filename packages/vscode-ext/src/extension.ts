@@ -1211,10 +1211,16 @@ export function activate(context: vscode.ExtensionContext): void {
   chatProvider.crystallizeCandidateHandler = (name, steps) => void crystallizeCandidate(name, steps);
   // The user picked a QA intensity (quick/standard/deep) — persist it; runPrompt
   // sends it with each run and the engine applies it in QA mode.
-  chatProvider.qaIntensityHandler = (value) => void extContext?.globalState.update('hover.qaIntensity', value);
+  chatProvider.qaIntensityHandler = (value) => {
+    void extContext?.globalState.update('hover.qaIntensity', value);
+    chatProvider?.pushQaIntensity(value); // echo so the composer picker reflects it
+  };
   // The user toggled QA's API capability — persist it; runPrompt sends it and
   // the engine composes the api-test runtime when on (+ available).
-  chatProvider.qaApiHandler = (value) => void extContext?.globalState.update('hover.qaApi', value);
+  chatProvider.qaApiHandler = (value) => {
+    void extContext?.globalState.update('hover.qaApi', value);
+    chatProvider?.pushQaApi(value); // echo so the toggle flips in the UI
+  };
   // The user switched the active conversation from the top-bar switcher.
   chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver

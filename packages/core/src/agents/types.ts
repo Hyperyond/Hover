@@ -41,6 +41,9 @@ export interface InvokeOptions {
   allowedTools?: string[];
   disallowedTools?: string[];
   maxBudgetUsd?: number;
+  /** Hard ceiling on agent turns (~steps) — claude `--max-turns`. Used by QA
+   *  intensity to bound an exploratory run by step count. */
+  maxTurns?: number;
   model?: string;
   /** Reasoning-effort level for the run. claude → `--effort <level>` (low /
    *  medium / high / xhigh / max); codex → `-c model_reasoning_effort=<level>`
