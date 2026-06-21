@@ -1368,9 +1368,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             // Normal mode: deny the Playwright interaction tools so the agent
             // must use the grounded mcp__hover-control__* actuation tools.
             disallowedToolsExtra: groundedActuation ? GROUNDED_ACTUATION_DENY : undefined,
-            // QA runs are bounded by the chosen intensity's spend ceiling; other
-            // modes use the service-level budget (if any).
-            maxBudgetUsd: runMode === 'qa' ? QA_INTENSITY[runIntensity].maxBudgetUsd : maxBudgetUsd,
+            maxBudgetUsd,
+            // QA runs are bounded by the chosen intensity's STEP ceiling
+            // (--max-turns); the prompt paces against the same number.
+            maxTurns: runMode === 'qa' ? QA_INTENSITY[runIntensity].maxSteps : undefined,
             model: effectiveModel,
             effort: currentEffort,
             // BYOK: inject the protocol's auth env (key + base URL) into the
