@@ -7,6 +7,24 @@ import { Thread } from "./Thread";
 import { useThread } from "./useThread";
 import { AskCard, type AskReq } from "./AskCard";
 
+/** Pick the smoothest available voice for the language, preferring known
+ *  natural (usually female) system voices by name and avoiding the robotic
+ *  "compact"/novelty ones the OS otherwise returns first. */
+function pickVoice(voices: SpeechSynthesisVoice[], zh: boolean): SpeechSynthesisVoice | undefined {
+  const inLang = voices.filter((v) => v.lang?.toLowerCase().startsWith(zh ? "zh" : "en"));
+  if (!inLang.length) return undefined;
+  // Preferred smooth voices, in order (macOS + Chromium common names).
+  const prefer = zh
+    ? ["tingting", "ting-ting", "婷婷", "meijia", "美佳", "sinji", "google 普通话", "google 国语", "yue", "huihui"]
+    : ["samantha", "google us english", "karen", "aria", "jenny", "alex", "daniel"];
+  for (const needle of prefer) {
+    const v = inLang.find((x) => x.name?.toLowerCase().includes(needle));
+    if (v) return v;
+  }
+  // Otherwise avoid the obviously robotic/novelty ones.
+  return inLang.find((v) => !/compact|eloquence|fred|albert|zarvox|whisper/i.test(v.name || "")) || inLang[0];
+}
+
 /** Voice narration — speak one interim line via the webview's SpeechSynthesis
  *  when the speech setting is on. Chinese text picks a Chinese voice, else
  *  English (mirrors the engine's CJK prose detection). Best-effort: a no-op if
@@ -19,8 +37,9 @@ function speakLine(text: string): void {
     const zh = /[一-鿿]/.test(t);
     const u = new SpeechSynthesisUtterance(t);
     u.lang = zh ? "zh-CN" : "en-US";
-    const voice = synth.getVoices().find((v) => v.lang?.toLowerCase().startsWith(zh ? "zh" : "en"));
+    const voice = pickVoice(synth.getVoices(), zh);
     if (voice) u.voice = voice;
+    u.rate = 1.05; // a touch quicker reads more natural for short status lines
     synth.speak(u);
   } catch {
     /* speech unavailable in this host — ignore */
