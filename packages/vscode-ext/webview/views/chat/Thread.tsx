@@ -179,7 +179,9 @@ function Node({ item, last }: { item: ThreadItem; last: boolean }) {
     case "system":
       return <div className="msg system">{item.text}</div>;
     case "assistant":
-      return <div className="msg assistant">{stripHoverAsk(item.text)}</div>;
+      // Render markdown (bold / italic / bullets / headings) like the Done card
+      // and clarify question — a 0-action reply often contains **bold** etc.
+      return <div className="msg assistant md" dangerouslySetInnerHTML={{ __html: mdToHtml(stripHoverAsk(item.text)) }} />;
     case "think":
       return (
         <div className="node think">

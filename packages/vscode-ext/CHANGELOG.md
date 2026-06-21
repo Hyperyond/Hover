@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.22.1 — 2026-06-21
+
+- **Fixed:** a 0-action assistant reply (a clarification, or a short wrap-up like a security-test conclusion) rendered raw text, so `**bold**` showed its literal asterisks. The assistant bubble now renders markdown (bold / italic / bullets / headings) like the Done card and the clarify question.
+
 ## 0.22.0 — 2026-06-21
 
 **QA Testing mode — autonomous exploratory testing, with API + Penetration testing as toggles.**
