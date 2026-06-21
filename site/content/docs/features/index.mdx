@@ -4,7 +4,8 @@ What Hover does today, in the VS Code extension and its living surfaces.
 
 ## Modes
 
-- **[API & security testing](/docs/features/api-test/)** — 🟠 **API testing** mode routes the debug Chrome through a local HTTPS MITM; the agent lists / inspects / replays captured API calls with mutations, probing for IDOR / broken authorization / parameter tampering. 🔴 **Pentest** mode runs offensive checks (SQLi / XSS / SSTI / SSRF / open-redirect / IDOR) against your **own** dev app. Findings crystallize into `.api-test.spec.ts` CI gates or a report.
+- **Flow** — describe a flow; the agent drives your app and crystallizes the verified run into a `.spec.ts` for CI.
+- **🟢 QA Testing** — autonomously explores the whole app to find defects → a findings report (with a coverage map) and ✨ promotable specs, bounded by an intensity budget (Quick / Standard / Deep). Two **[API & security](/docs/features/api-test/)** capability toggles ride on top: **API testing** routes the debug Chrome through a local HTTPS MITM and replays captured calls with mutations, probing IDOR / broken authorization / parameter tampering (→ `.api-test.spec.ts` CI gates); **penetration testing** runs offensive checks (SQLi / XSS / SSTI / SSRF / open-redirect / IDOR) against your **own** dev app, as a separate destructive pass (off by default) → a report.
 
 ## Authoring
 

@@ -1,17 +1,17 @@
 # API & security testing
 
-Hover covers API and application-security testing in the **same chat** as functional testing — flip a mode switch. There are two modes:
+Hover covers API and application-security testing inside **QA Testing** mode, as two capability toggles you turn on (they are not standalone modes — the mode picker is just **Flow** + **QA Testing**):
 
 - 🟠 **API testing** — functional + business/authorization testing of your API surface. Hover routes the debug Chrome through a local HTTPS MITM and lets the agent re-issue captured API calls with mutations to verify auth / status codes / access control and probe for IDOR / authentication bypass / parameter tampering. Confirmed findings crystallize into `.api-test.spec.ts` regression specs that run in CI without the proxy.
-- 🔴 **Pentest** — offensive, white-box testing against your **own** dev app: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR. The output is a findings report that says what it did *and didn't* test. Authorized own-app testing only.
+- 🔴 **Penetration testing** — offensive, white-box testing against your **own** dev app: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR. Because it is destructive it runs as a **separate second pass** after the functional verify pass, and it is **off by default** (enabling it asks for confirmation). The output is a findings report that says what it did *and didn't* test. Authorized own-app testing only.
 
 Both are taught by **seeds** — small probe recipes (8 access-control classes + 9 vulnerability classes). The full catalogue ships built-in.
 
-Both modes run inside the VS Code extension: `@hover-dev/api-test` and `@hover-dev/pentest` are packed into the extension's staged engine, so flipping the mode switch is all it takes — no separate install.
+Both capabilities run inside the VS Code extension: `@hover-dev/api-test` and `@hover-dev/pentest` are packed into the extension's staged engine, so flipping a QA toggle is all it takes — no separate install.
 
-## Why a separate mode
+## Why a gated capability
 
-Hover's normal mode is for *building features*. Security testing is for *attacking what you just built* — the agent's prompt is different ("look for authz bypass", not "test the happy path"), its captured traffic is routed through a local MITM proxy, and the **mode switch tints orange** (red for pentest) so you can never forget you're in altered state.
+Hover's **Flow** mode is for *building features*, and **QA Testing** explores for functional defects. Security testing is for *attacking what you just built* — the agent's prompt is different ("look for authz bypass", not "test the happy path"), its captured traffic is routed through a local MITM proxy, and the chat **tints orange** for API (red for penetration) so you can never forget you're in altered state. Penetration testing is destructive, so it is gated behind an explicit toggle + confirmation and runs as its own pass.
 
 ## How the MITM works
 
@@ -27,7 +27,7 @@ The CA private key persists under `<your-project>/.hover/ca/ca.key`. The shipped
 
 ## Usage
 
-1. In the Hover chat, flip the **mode switch** to **🟠 API testing**.
+1. In the Hover chat, switch to **🟢 QA Testing** and turn on the **🟠 API testing** toggle.
 2. The chat's running border turns orange to signal altered state. No new browser opens — the same debug Chrome (already routed through the resident proxy) simply starts having its traffic recorded.
 3. Drive the page as a normal user would — log in (mention `@account` to have the agent sign in), navigate, submit forms. Every HTTPS request is captured.
 4. Ask the agent to probe, for example:

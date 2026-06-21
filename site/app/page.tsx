@@ -51,7 +51,7 @@ const JSON_LD = {
   applicationSubCategory: 'Test automation',
   operatingSystem: 'Visual Studio Code (macOS, Windows, Linux)',
   description:
-    'Hover is an open-source VS Code extension for AI vibe-testing web apps. You describe a flow in plain English; Hover drives your real Chrome over CDP using the coding-agent CLI already on your machine (Claude Code, OpenAI Codex, Gemini, or Qwen) on your own subscription or your own API key (BYOK), then crystallizes the verified run into a plain @playwright/test spec that runs in CI with zero AI and zero tokens. The same chat also flips into API-testing and pentest modes.',
+    'Hover is an open-source VS Code extension for AI vibe-testing web apps. You describe a flow in plain English; Hover drives your real Chrome over CDP using the coding-agent CLI already on your machine (Claude Code, OpenAI Codex, Gemini, or Qwen) on your own subscription or your own API key (BYOK), then crystallizes the verified run into a plain @playwright/test spec that runs in CI with zero AI and zero tokens. Or switch to QA Testing mode, where the agent autonomously explores your whole app to find defects and can layer API and penetration testing on top.',
   url: 'https://gethover.dev/',
   downloadUrl: MARKETPLACE_URL,
   softwareHelp: 'https://gethover.dev/docs/',
@@ -68,8 +68,8 @@ const JSON_LD = {
     'Runs on the coding-agent CLI already on your PATH (Claude Code, OpenAI Codex, Gemini, Qwen) on your subscription, or BYOK with your own API key / gateway, or a local model',
     'Asks you in the chat when a step is ambiguous or destructive instead of guessing',
     'Multi-environment @account login; passwords stay in SecretStorage and parameterize into process.env',
-    'API-testing mode replays captured API calls with mutations to catch IDOR and broken access control',
-    'Pentest mode runs offensive checks (SQLi, XSS, SSTI, SSRF) against your own dev app and writes a report',
+    'QA Testing mode autonomously explores the whole app to find defects, writes a findings report with a coverage map, and promotes clean flows to specs',
+    'QA can turn on API testing (replays captured API calls with mutations to catch IDOR and broken access control → .api-test.spec.ts gates) and penetration testing (offensive SQLi, XSS, SSTI, SSRF on your own dev app → a findings report)',
     'Optional AI optimize pass proposes a polished spec you accept via diff, original always kept',
   ],
   sameAs: [GITHUB, MARKETPLACE_URL],
@@ -184,9 +184,10 @@ function Hero() {
 
           <p className="mt-3 text-[13px] text-text-dim">
             Page objects, <span className="text-text-mute">test.step</span>{' '}
-            stages, a built-in pattern library. Switch the same chat to{' '}
-            <span style={{ color: '#fb923c' }}>🟠 API &amp; security</span> or{' '}
-            <span style={{ color: '#f87171' }}>🔴 pentest</span> when you need it.{' '}
+            stages, a built-in pattern library. Or switch to{' '}
+            <span style={{ color: '#22c55e' }}>🟢 QA Testing</span> — explore the
+            whole app, with <span style={{ color: '#fb923c' }}>API</span> and{' '}
+            <span style={{ color: '#f87171' }}>pentest</span> as toggles.{' '}
             <a href="#roadmap" className="text-text underline-offset-2 hover:underline">
               See what shipped
             </a>.
@@ -203,47 +204,48 @@ function Hero() {
   );
 }
 
-/* ── The triad: one widget, three AI jobs ───────────────────────────────
- * The page's organizing thesis. The three things the agent does for you —
- * author, optimize, secure — over ONE chat in your editor, with the crystallize
+/* ── The triad: one chat, every kind of test ────────────────────────────
+ * The page's organizing thesis. The kinds of testing one chat covers —
+ * author a flow (Flow), explore the whole app (QA Testing), and turn on
+ * security (API + pentest, which ride on QA as toggles) — with the crystallize
  * moat as the shared through-line: whatever the AI does, the artifact that lands
- * in your repo is plain @playwright/test that runs in CI with no AI. The
- * "secure" card is orange to match the 🟠 API testing mode; red is 🔴 Pentest. */
+ * in your repo is plain @playwright/test that runs in CI with no AI. Flow + QA
+ * are green; the security card is orange/red. */
 const TRIAD = [
   {
     k: 'frontend',
-    tag: 'Frontend testing',
+    tag: 'Flow',
     accent: '#7CFFA8',
     title: 'Describe a flow → a plain Playwright spec',
     body: 'Type a flow in plain English. AI drives your real Chrome once to explore it, then crystallizes the run into a standard @playwright/test file — semantic getByRole / getByLabel selectors, page objects, named test.step stages.',
   },
   {
-    k: 'api-security',
-    tag: 'API & security',
-    accent: '#fb923c',
-    title: 'Probe your API for IDOR and authz gaps',
-    body: 'Switch to orange. A local HTTPS MITM captures API calls; the agent replays them with mutations to find broken access control and IDOR. Confirmed findings crystallize into .api-test.spec.ts CI gates — no proxy, no Python.',
+    k: 'qa',
+    tag: 'QA Testing',
+    accent: '#22c55e',
+    title: 'Explore the whole app → a findings report',
+    body: 'Point QA at your app — or just say "test it". The agent autonomously exercises controls and negative inputs to find defects, paces itself by an intensity budget (Quick / Standard / Deep), writes a findings report with a coverage map, and offers each clean flow as a one-click ✨ Crystallize spec.',
   },
   {
-    k: 'pentest',
-    tag: 'Pentest',
-    accent: '#dc2626',
-    title: 'Attack your own dev app for real vulns',
-    body: 'Switch to red. The agent drives your app to capture traffic, then attacks the flows — SQLi, XSS, SSTI, SSRF, open redirect — on your own dev server. Writes a findings report with severity, PoC, and what was not tested.',
+    k: 'security',
+    tag: 'API & security',
+    accent: '#fb923c',
+    title: 'Turn on API + penetration testing',
+    body: 'Toggle security on inside QA. A local HTTPS MITM replays your API calls with mutations to catch IDOR and broken access (→ .api-test.spec.ts gates); penetration testing then attacks your own dev app — SQLi, XSS, SSTI, SSRF — and writes a findings report. No proxy, no Python.',
   },
 ];
 
 function Triad() {
   return (
     <section className="relative z-10 mx-auto max-w-6xl px-6 pb-8 pt-4 md:pt-8">
-      <SectionLabel>One chat, three modes</SectionLabel>
+      <SectionLabel>One chat, every kind of test</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[26px] font-semibold leading-tight tracking-tight md:text-[34px]">
-        <span className="text-mint">Frontend testing</span>,{' '}
-        <span style={{ color: '#fb923c' }}>API &amp; security</span>, and{' '}
-        <span style={{ color: '#dc2626' }}>pentest</span> — in one chat.
+        <span className="text-mint">Frontend flows</span>,{' '}
+        <span style={{ color: '#22c55e' }}>QA exploration</span>, and{' '}
+        <span style={{ color: '#fb923c' }}>security</span> — in one chat.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Switch modes as your needs grow. Whatever the AI does, the artifact in git is plain{' '}
+        Author one spec, or let QA explore the whole app and turn on API + pentest when you need them. Whatever the AI does, the artifact in git is plain{' '}
         <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">
           @playwright/test
         </code>{' '}
@@ -294,8 +296,8 @@ const PILLARS = [
   },
   {
     k: 'allinone',
-    title: 'One extension for UI, API, and security.',
-    body: 'Switch the same chat between three modes. Green drives the browser and writes a UI spec, orange replays your API to catch IDOR and broken access, red attacks your own dev app for real vulnerabilities. One install covers all three.',
+    title: 'One extension for UI, QA, and security.',
+    body: 'Two modes in one chat. Flow drives the browser and writes a UI spec; QA Testing explores the whole app to find bugs, and can turn on API replay (IDOR, broken access) and offensive pentest (SQLi, XSS) against your own dev app. One install covers all of it.',
   },
 ];
 
@@ -411,8 +413,8 @@ const ROADMAP = [
   },
   {
     status: 'shipped',
-    title: 'API testing & pentest modes',
-    body: 'Orange: MITM-captured API calls replayed with mutations; findings crystallize into .api-test.spec.ts. Red: offensive vuln scan (SQLi / XSS / SSTI / SSRF) on your own app; writes a findings report.',
+    title: 'QA Testing mode',
+    body: 'Autonomously explores the app → a findings report with a coverage map, an intensity budget (Quick / Standard / Deep), and ✨ promotable specs. API testing (MITM-replayed calls → .api-test.spec.ts) and penetration testing (SQLi / XSS / SSTI / SSRF on your own app → report) ride on as toggles.',
   },
   {
     status: 'shipped',

@@ -92,15 +92,16 @@ const ITEMS: Item[] = [
     ),
   },
   {
-    q: 'Is it safe to run the API testing and pentest modes?',
-    a: 'Both modes run only against your own dev server and stay origin-locked to it. They need no mitmproxy, no Python, and no system CA. API testing replays captured API calls with mutations and crystallizes confirmed findings into .api-test.spec.ts gates; pentest is offensive and writes a report that states what it did and did not test.',
+    q: 'Is it safe to run the API testing and pentest capabilities in QA?',
+    a: 'Yes. Both are QA Testing toggles and run only against your own dev server, origin-locked to it. They need no mitmproxy, no Python, and no system CA. API testing replays captured API calls with mutations and crystallizes confirmed findings into .api-test.spec.ts gates; penetration testing is offensive, so it runs as a separate pass (off by default) and writes a report that states what it did and did not test.',
     answer: (
       <>
-        Both modes run only against your own dev server and stay origin-locked to
-        it. They need no mitmproxy, no Python, and no system CA. API testing
-        replays captured API calls with mutations and crystallizes confirmed
-        findings into <Code>.api-test.spec.ts</Code> gates; pentest is offensive
-        and writes a report that states what it did and did not test.
+        Yes. Both are QA Testing toggles and run only against your own dev server,
+        origin-locked to it. They need no mitmproxy, no Python, and no system CA.
+        API testing replays captured API calls with mutations and crystallizes
+        confirmed findings into <Code>.api-test.spec.ts</Code> gates; penetration
+        testing is offensive, so it runs as a separate pass (off by default) and
+        writes a report that states what it did and did not test.
       </>
     ),
   },

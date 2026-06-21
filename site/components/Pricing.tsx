@@ -10,7 +10,7 @@ const OSS_INCLUDES = [
   'The VS Code extension — chat, Specs, Sessions, Environments',
   'Chat any flow in plain English → a Playwright spec',
   '@account multi-environment credential vault',
-  '🟠 Security + 🔴 Pentest modes in the same chat',
+  '🟢 QA Testing — autonomous exploration + API & pentest toggles',
   'BYO local CLI — claude / codex, your plan or your key',
   'Self-hosted, Apache-2.0, no telemetry',
 ];
