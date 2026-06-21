@@ -1748,10 +1748,13 @@ body.ask-open #ask-dock {
   margin: 1px auto 0;
 }
 /* While a run is active, the target can't change mid-flight — lock the
-     browser / model / mode pickers (send becomes the stop control). */
+     browser / model / mode pickers + the QA settings (intensity / API /
+     pentest, which are read at run start so a mid-run change is meaningless).
+     Send becomes the stop control. */
 body.running #browser-toggle,
 body.running #model-btn,
-body.running #mode {
+body.running #mode,
+body.running #qa-menu-btn {
   pointer-events: none;
   opacity: 0.4;
 }
