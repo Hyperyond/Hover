@@ -59,10 +59,15 @@ async function pushAccounts(): Promise<void> {
   chatProvider?.updateAccounts(list);
 }
 
-/** Push speech + silent flags to the chat (drives voice + the running border). */
+/** Push speech + silent flags + chosen narration voices to the chat. */
 function pushChatConfig(): void {
   const cfg = vscode.workspace.getConfiguration('hover');
-  chatProvider?.updateConfig(cfg.get<boolean>('speech', false), cfg.get<string>('browser', 'silent') !== 'visible');
+  chatProvider?.updateConfig(
+    cfg.get<boolean>('speech', false),
+    cfg.get<string>('browser', 'silent') !== 'visible',
+    extContext?.globalState.get<string>('hover.speechVoiceZh', '') ?? '',
+    extContext?.globalState.get<string>('hover.speechVoiceEn', '') ?? '',
+  );
 }
 
 /** When the engine (re)connects, hand it the persisted agent / model config. */
@@ -1304,10 +1309,17 @@ export function activate(context: vscode.ExtensionContext): void {
     getAgents: () => ({ current: activeAgentId(), list: allAgents() }),
     getByok: () => readByok(),
     getAgentContext: () => extContext?.globalState.get<string>('hover.agentContext', 'shared') ?? 'shared',
+    getSpeechVoices: () => ({
+      zh: extContext?.globalState.get<string>('hover.speechVoiceZh', '') ?? '',
+      en: extContext?.globalState.get<string>('hover.speechVoiceEn', '') ?? '',
+    }),
     onChange: async (change) => {
       const cfg = vscode.workspace.getConfiguration('hover');
       if (typeof change.agent === 'string') await setAgent(change.agent);
       if (typeof change.speech === 'boolean') await safeUpdate('speech', change.speech, vscode.ConfigurationTarget.Global);
+      // Narration voice choices (globalState, like agentContext) → push to chat.
+      if (typeof change.voiceZh === 'string') { await extContext?.globalState.update('hover.speechVoiceZh', change.voiceZh); pushChatConfig(); }
+      if (typeof change.voiceEn === 'string') { await extContext?.globalState.update('hover.speechVoiceEn', change.voiceEn); pushChatConfig(); }
       if (typeof change.browser === 'string') await safeUpdate('browser', change.browser);
       // Memory mode lives in extension globalState, NOT VS Code config: config
       // scope precedence (a stale Workspace value outranking Global) made the
