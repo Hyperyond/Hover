@@ -37,6 +37,9 @@ import { candidateUri, uriExists } from './optimized.js';
 
 let pool: ServiceClientPool | undefined;
 let currentMode: string | null = null;
+// Whether QA's API capability can run (api-test runtime up) — from the engine's
+// `modes` broadcast. Gates the QA API toggle so "on" always works.
+let apiCapabilityAvailable = false;
 let availableModes: ModeEntry[] = [];
 let connectedServices = 0;
 let modeStatus: vscode.StatusBarItem;
@@ -478,7 +481,10 @@ async function runPrompt(prompt: string): Promise<void> {
   // QA intensity (Quick/Standard/Deep) bounds an exploratory run's spend; only
   // applied engine-side when the mode is QA, harmless to send otherwise.
   const qaIntensity = extContext?.globalState.get<string>('hover.qaIntensity', 'standard') ?? 'standard';
-  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext, qaIntensity)) {
+  // QA API capability toggle (default on). Only effective in QA mode when the
+  // api-test runtime is available; the engine gates the rest.
+  const qaApi = extContext?.globalState.get<boolean>('hover.qaApi', true) ?? true;
+  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext, qaIntensity, { api: qaApi })) {
     setSessionRunning(sess, false);
     pushToSession(sess, 'system', 'Could not reach the engine.');
   }
@@ -1206,6 +1212,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // The user picked a QA intensity (quick/standard/deep) — persist it; runPrompt
   // sends it with each run and the engine applies it in QA mode.
   chatProvider.qaIntensityHandler = (value) => void extContext?.globalState.update('hover.qaIntensity', value);
+  // The user toggled QA's API capability — persist it; runPrompt sends it and
+  // the engine composes the api-test runtime when on (+ available).
+  chatProvider.qaApiHandler = (value) => void extContext?.globalState.update('hover.qaApi', value);
   // The user switched the active conversation from the top-bar switcher.
   chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver
@@ -1243,6 +1252,8 @@ export function activate(context: vscode.ExtensionContext): void {
     void pushModels();
     void pollAppStatus();
     chatProvider?.pushQaIntensity(extContext?.globalState.get<string>('hover.qaIntensity', 'standard') ?? 'standard');
+    chatProvider?.pushQaApi(extContext?.globalState.get<boolean>('hover.qaApi', true) ?? true);
+    chatProvider?.pushQaCapabilityAvailability(apiCapabilityAvailable);
     if (currentMode) chatProvider?.updateMode(currentMode, modeLabel(currentMode));
     // Restore the session switcher + the active conversation's transcript.
     pushSessionList();
@@ -1344,11 +1355,13 @@ export function activate(context: vscode.ExtensionContext): void {
       renderModeStatus();
       if (was === 0 && connected > 0) void pushEngineConfig();
     },
-    onModes: (current, available) => {
+    onModes: (current, available, apiAvailable) => {
       currentMode = current;
       availableModes = available;
+      apiCapabilityAvailable = apiAvailable === true;
       renderModeStatus();
       chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
+      chatProvider?.pushQaCapabilityAvailability(apiCapabilityAvailable);
     },
     onAgents: (current, available) => {
       currentAgent = current;

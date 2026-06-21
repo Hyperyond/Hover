@@ -329,7 +329,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       for (const p of plugins) {
         for (const srv of p.mcpServers ?? []) {
           const scope = srv.activeInModes ?? (p.mode ? [p.mode.id] : []);
-          const inMode = scope.includes('*') || scope.includes(currentModeId);
+          const inMode = scope.includes('*') || scope.includes(currentModeId) || apiScopeOk(scope);
           if (!inMode) continue;
           extra.push({
             id: srv.id,
@@ -491,6 +491,22 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
    *  MCP config is built. */
   const mcpEnvOverrides = new Map<string, Record<string, string>>();
 
+  // QA "API capability": QA is a built-in mode, but when its API capability is
+  // on it COMPOSES the api-test plugin's runtime — flips the resident MITM to
+  // intercept, exposes the api-test MCP tools, and adds its prompt — so the QA
+  // agent can inspect/replay/test the app's API calls alongside the UI flows.
+  const apiTestPlugin = plugins.find((p) => p.mode?.id === 'api-test') ?? null;
+  /** Is the API capability ACTUALLY usable? The plugin must be loaded AND its
+   *  resident MITM proxy must be up (set at service:start). "Available" gates the
+   *  UI toggle so a user can never turn ON something that would then fail. */
+  const apiCapabilityAvailable = (): boolean => !!apiTestPlugin && residentChromeProxy !== null;
+  /** Set per QA run when the API capability is on + available — drives the MCP
+   *  config, the prompt, and the activate/deactivate of the resident proxy. */
+  let apiActiveThisRun = false;
+  /** A plugin's mode-scoped contribution also applies when it's the api-test
+   *  plugin being composed into the current QA run. */
+  const apiScopeOk = (scope: string[]): boolean => apiActiveThisRun && scope.includes('api-test');
+
   /** The cdp-handler extras (proxy) threaded into launch-chrome / check-cdp /
    *  focus-debug and the initial auto-launch. In the single-Chrome model this
    *  is driven purely by the RESIDENT proxy (set in `hover:service:start`),
@@ -525,7 +541,13 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
     // Built-in non-Flow modes (QA) are core-owned, not plugin-contributed —
     // surface them in the same catalogue so the picker lists them.
     const builtins = BUILTIN_MODES.map((m) => ({ id: m.id, label: m.label, description: m.description, accent: m.accent }));
-    const payload = { current: currentModeId, available: [...builtins, ...available] };
+    const payload = {
+      current: currentModeId,
+      available: [...builtins, ...available],
+      // Whether QA's API capability can actually run (api-test plugin loaded +
+      // MITM up). Gates the QA API toggle so "on" always works.
+      apiCapabilityAvailable: apiCapabilityAvailable(),
+    };
     const targets = target ? [target] : [...wss.clients];
     for (const client of targets) {
       if (client.readyState === WebSocket.OPEN) {
@@ -1012,6 +1034,19 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // a hard model-spend ceiling so "explore the whole app" can't run away.
       // Only meaningful in QA mode; ignored elsewhere.
       const runIntensity = asQaIntensity((msg.payload as { intensity?: unknown } | undefined)?.intensity);
+      // QA API capability (per-run): when QA's API toggle is on AND the MITM is
+      // available, compose the api-test runtime into this run. The UI only lets
+      // the user turn it on when available, so "on" must actually work — if it's
+      // requested but unavailable, say so loudly (don't silently degrade).
+      const caps = (msg.payload as { capabilities?: { api?: unknown } } | undefined)?.capabilities;
+      const wantApi = caps?.api === true || caps?.api === undefined; // default on
+      apiActiveThisRun = runMode === 'qa' && wantApi && apiCapabilityAvailable();
+      // Defensive: the UI only enables the API toggle when available, so an
+      // explicit "on" should always be honoured. If it somehow isn't, log it
+      // (the run continues as functional-only rather than failing the run).
+      if (runMode === 'qa' && caps?.api === true && !apiCapabilityAvailable()) {
+        process.stderr.write('[hover/qa] API capability requested but the api-test runtime is unavailable; running functional-only.\n');
+      }
       const runResumeOf = resumeSessionId;
       const screenshotTag = (resumeSessionId ?? sessionStartedAt).replace(/[^a-zA-Z0-9._-]+/g, '-');
       const runEnv = ((): { id?: string; name?: string } | undefined => {
@@ -1080,6 +1115,17 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           } catch (err) {
             process.stderr.write(`[hover] plugin "${runEndPlugin.name}" run:end failed: ${err instanceof Error ? err.message : String(err)}\n`);
           }
+        }
+        // QA + API: persist this run's captured API traffic/checks, then flip the
+        // resident MITM back to passthrough (stop recording). Best-effort.
+        if (apiActiveThisRun && apiTestPlugin) {
+          try {
+            if (sid) await apiTestPlugin.hooks?.['hover:run:end']?.({ devRoot, broadcast: broadcastPluginEvent, sessionId: sid });
+            await apiTestPlugin.hooks?.['hover:mode:deactivate']?.({ devRoot, broadcast: broadcastPluginEvent, modeId: 'qa' });
+          } catch (err) {
+            process.stderr.write(`[hover/qa] api-test compose (run:end) failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          apiActiveThisRun = false;
         }
       };
       try {
@@ -1156,7 +1202,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             const scope = add.activeInModes ?? (p.mode ? [p.mode.id] : ['*']);
             const inScope =
               scope.includes('*') ||
-              (currentModeId !== null && scope.includes(currentModeId));
+              (currentModeId !== null && scope.includes(currentModeId)) ||
+              apiScopeOk(scope);
             if (inScope) {
               appendSystemPrompt = `${appendSystemPrompt}\n\n${add.text}`;
             }
@@ -1261,7 +1308,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           for (const p of plugins) {
             for (const srv of p.mcpServers ?? []) {
               const scope = srv.activeInModes ?? (p.mode ? [p.mode.id] : []);
-              if (scope.includes('*') || scope.includes(currentModeId)) {
+              if (scope.includes('*') || scope.includes(currentModeId) || apiScopeOk(scope)) {
                 activePluginMcpIds.push(mcpToolPrefix(srv.id));
               }
             }
@@ -1277,6 +1324,24 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             await runStartPlugin.hooks['hover:run:start']({ devRoot, broadcast: broadcastPluginEvent });
           } catch (err) {
             process.stderr.write(`[hover] plugin "${runStartPlugin.name}" run:start failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+        }
+        // QA + API capability: compose the api-test runtime into this QA run —
+        // flip the resident MITM to intercept (activate) + mark its run boundary,
+        // so the QA agent's API calls are captured/replayable. Mirror-undone at
+        // run end. Best-effort: a hook failure must not break the functional run.
+        if (apiActiveThisRun && apiTestPlugin) {
+          try {
+            await apiTestPlugin.hooks?.['hover:mode:activate']?.({
+              devRoot,
+              broadcast: broadcastPluginEvent,
+              modeId: 'qa',
+              setChromeProxy(proxy) { residentChromeProxy = proxy; },
+              setMcpServerEnv(id, env) { mcpEnvOverrides.set(id, env); },
+            });
+            await apiTestPlugin.hooks?.['hover:run:start']?.({ devRoot, broadcast: broadcastPluginEvent });
+          } catch (err) {
+            process.stderr.write(`[hover/qa] api-test compose (run:start) failed: ${err instanceof Error ? err.message : String(err)}\n`);
           }
         }
         // Screenshot previews: this run's MCP output dir (same path buildMcpConfig
