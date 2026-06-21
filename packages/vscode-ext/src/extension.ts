@@ -1150,6 +1150,10 @@ async function saveApiTestSpec(nameArg?: string, overwrite = false): Promise<voi
 
 export function activate(context: vscode.ExtensionContext): void {
   extContext = context;
+  // Pentest is OFFENSIVE — it must never stay silently armed across sessions.
+  // Reset it OFF on every activation so QA always defaults to API (non-
+  // destructive); the user re-enables + re-confirms pentest per session.
+  void context.globalState.update('hover.qaPentest', false);
   context.subscriptions.push(
     vscode.commands.registerCommand('hover.reviewOptimizationCandidate', (arg?: vscode.TreeItem | vscode.Uri) =>
       reviewOptimizationCandidate(arg),
