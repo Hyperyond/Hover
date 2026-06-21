@@ -38,9 +38,30 @@ export interface SpecSidecar {
 }
 
 /** Project-root `.hover/` directory — the single home for Hover-derived data
- *  (sidecars, sessions, rules, conventions). */
+ *  (sidecars, runs, rules, conventions). */
 export function hoverDir(devRoot: string): string {
   return join(devRoot, '.hover');
+}
+
+/** Sanitize an id segment for use as a directory name (conversation / run id). */
+export function safeSeg(s: string): string {
+  return (s || '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'unknown';
+}
+
+/** Per-run home: `<devRoot>/.hover/conversations/<conversationId>/<runId>/`.
+ *  Everything a single agent run produces — meta.json (the ledger record),
+ *  report.md (QA), screenshots/ — lives here, grouped under its conversation so
+ *  deleting a conversation is one `rm -rf .hover/conversations/<conversationId>`.
+ *  (Distinct from `.hover/runs/`, which is the Playwright spec-run-results
+ *  ledger written by ▶ Run.) */
+export function conversationsDir(devRoot: string): string {
+  return join(hoverDir(devRoot), 'conversations');
+}
+export function conversationDir(devRoot: string, conversationId: string): string {
+  return join(conversationsDir(devRoot), safeSeg(conversationId));
+}
+export function runDir(devRoot: string, conversationId: string, runId: string): string {
+  return join(conversationDir(devRoot, conversationId), safeSeg(runId));
 }
 
 /** Sidecar directory: `<devRoot>/.hover/sidecars`. Outside `__vibe_tests__/`,

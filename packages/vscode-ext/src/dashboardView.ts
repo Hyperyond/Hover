@@ -135,8 +135,8 @@ async function gather(): Promise<DashboardData> {
     if (vals.length) passRate = Math.round((vals.filter((s) => s === 'pass').length / vals.length) * 100);
   }
 
-  // Sessions → 7-day token spend.
-  const sessUris = (await vscode.workspace.findFiles('**/.hover/sessions/*.json', '**/node_modules/**'))
+  // Agent runs (one meta.json per run, grouped by conversation) → 7-day token spend.
+  const sessUris = (await vscode.workspace.findFiles('**/.hover/conversations/*/*/meta.json', '**/node_modules/**'))
     .sort((a, b) => b.path.localeCompare(a.path))
     .slice(0, 40);
   const weekAgo = Date.now() - 7 * 864e5;
@@ -197,7 +197,7 @@ export function registerDashboardView(extensionUri: vscode.Uri): vscode.Disposab
     webviewOptions: { retainContextWhenHidden: true },
   });
   const refresh = vscode.commands.registerCommand('hover.refreshDashboard', () => provider.refresh());
-  const watcher = vscode.workspace.createFileSystemWatcher('**/.hover/{runs,sessions}/*.json');
+  const watcher = vscode.workspace.createFileSystemWatcher('**/.hover/{runs/*.json,conversations/**}');
   watcher.onDidCreate(() => provider.refresh());
   watcher.onDidChange(() => provider.refresh());
   watcher.onDidDelete(() => provider.refresh());

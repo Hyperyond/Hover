@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeQaReport, renderQaReport, qaReportsDir } from '../../src/qa/qaReport.js';
+import { writeQaReport, renderQaReport } from '../../src/qa/qaReport.js';
 
 let devRoot: string;
 beforeEach(() => { devRoot = mkdtempSync(join(tmpdir(), 'hover-qa-')); });
@@ -40,25 +40,20 @@ describe('renderQaReport', () => {
 });
 
 describe('writeQaReport', () => {
-  it('writes .hover/qa-reports/<slug>.md and overwrites on re-run', async () => {
-    const r1 = await writeQaReport(devRoot, { ...base, findings: [{ severity: 'high', text: 'bug A' }] });
+  it('writes report.md into the given run folder', async () => {
+    const runDirPath = join(devRoot, '.hover', 'conversations', 'conv-1', 'run-1');
+    const r1 = await writeQaReport(runDirPath, { ...base, findings: [{ severity: 'high', text: 'bug A' }] });
     expect('path' in r1).toBe(true);
-    const p = join(qaReportsDir(devRoot), 'test-the-checkout-flow.md');
+    const p = join(runDirPath, 'report.md');
     expect(readFileSync(p, 'utf-8')).toContain('bug A');
-    // Re-run same prompt → same file overwritten (latest wins).
-    await writeQaReport(devRoot, { ...base, findings: [{ severity: 'low', text: 'bug B' }] });
-    const after = readFileSync(p, 'utf-8');
-    expect(after).toContain('bug B');
-    expect(after).not.toContain('bug A');
   });
 
-  it('suffixes a phase so a two-pass run keeps both reports (verify + pentest)', async () => {
-    await writeQaReport(devRoot, { ...base, findings: [{ severity: 'high', text: 'verify finding' }] });
-    await writeQaReport(devRoot, { ...base, phase: 'pentest', findings: [{ severity: 'high', text: 'pentest finding' }] });
-    const verify = join(qaReportsDir(devRoot), 'test-the-checkout-flow.md');
-    const pentest = join(qaReportsDir(devRoot), 'test-the-checkout-flow-pentest.md');
-    // The pentest phase did NOT overwrite the verify report — both survive.
-    expect(readFileSync(verify, 'utf-8')).toContain('verify finding');
-    expect(readFileSync(pentest, 'utf-8')).toContain('pentest finding');
+  it('each run (incl. each two-pass phase) has its own folder → no collision', async () => {
+    const verifyDir = join(devRoot, '.hover', 'conversations', 'conv-1', 'run-verify');
+    const pentestDir = join(devRoot, '.hover', 'conversations', 'conv-1', 'run-pentest');
+    await writeQaReport(verifyDir, { ...base, findings: [{ severity: 'high', text: 'verify finding' }] });
+    await writeQaReport(pentestDir, { ...base, findings: [{ severity: 'high', text: 'pentest finding' }] });
+    expect(readFileSync(join(verifyDir, 'report.md'), 'utf-8')).toContain('verify finding');
+    expect(readFileSync(join(pentestDir, 'report.md'), 'utf-8')).toContain('pentest finding');
   });
 });

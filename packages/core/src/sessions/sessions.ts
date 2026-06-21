@@ -11,7 +11,7 @@
  */
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { hoverDir } from '../specs/sidecar.js';
+import { runDir, conversationsDir } from '../specs/sidecar.js';
 
 export const SESSION_RECORD_VERSION = 2;
 
@@ -34,8 +34,12 @@ export interface SessionRecord {
   /** Bumped to 2 when the reproducibility + outcome fields below were added.
    *  Readers must tolerate v1 records (every new field is optional). */
   version: number;
-  /** `<ISO-ts>-<rand>` — also the filename stem. */
+  /** `<sanitized-startedAt>-<rand>` — the runId, generated at run start; names
+   *  the run folder `.hover/runs/<conversationId>/<id>/` and is the meta.json id. */
   id: string;
+  /** The chat conversation this run belongs to — the folder it's grouped under,
+   *  so deleting a conversation removes all its runs. */
+  conversationId?: string;
   startedAt: string;
   endedAt: string;
   /** Real wall-clock of the agent run (endedAt − startedAt in ms). The bare
@@ -145,27 +149,57 @@ export function tallyTools(steps: { kind: string; tool?: string }[]): Record<str
   return counts;
 }
 
-export function sessionsDir(devRoot: string): string {
-  return join(hoverDir(devRoot), 'sessions');
-}
-
-/** Write one session record. NEVER throws; returns the path or an error
- *  string for the caller to log. */
+/** Write one session record as `<runDir>/meta.json`. The id (runId) + the
+ *  conversation are decided by the caller at run start (so screenshots + report
+ *  share the folder). NEVER throws; returns the path or an error string. */
 export async function writeSessionRecord(
   devRoot: string,
-  rec: Omit<SessionRecord, 'version' | 'id'>,
+  conversationId: string,
+  runId: string,
+  rec: Omit<SessionRecord, 'version' | 'id' | 'conversationId'>,
 ): Promise<{ path: string; id: string } | { error: string }> {
   try {
-    const dir = sessionsDir(devRoot);
+    const dir = runDir(devRoot, conversationId, runId);
     await mkdir(dir, { recursive: true });
-    const id = `${rec.endedAt.replace(/[:.]/g, '-')}-${Math.random().toString(16).slice(2, 6)}`;
-    const record: SessionRecord = { version: SESSION_RECORD_VERSION, id, ...rec };
-    const path = join(dir, `${id}.json`);
+    const record: SessionRecord = { version: SESSION_RECORD_VERSION, id: runId, conversationId, ...rec };
+    const path = join(dir, 'meta.json');
     await writeFile(path, JSON.stringify(record, null, 2) + '\n', 'utf-8');
-    return { path, id };
+    return { path, id: runId };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/** List every run's meta.json across all conversations: `.hover/runs/<conv>/<run>/meta.json`.
+ *  Best-effort; returns [] if no runs yet. */
+export async function listSessionRecords(
+  devRoot: string,
+): Promise<{ path: string; rec: SessionRecord }[]> {
+  const out: { path: string; rec: SessionRecord }[] = [];
+  const root = conversationsDir(devRoot);
+  let convs: string[];
+  try {
+    convs = await readdir(root);
+  } catch {
+    return out;
+  }
+  for (const conv of convs) {
+    let runIds: string[];
+    try {
+      runIds = await readdir(join(root, conv));
+    } catch {
+      continue;
+    }
+    for (const rid of runIds) {
+      const path = join(root, conv, rid, 'meta.json');
+      try {
+        out.push({ path, rec: JSON.parse(await readFile(path, 'utf-8')) as SessionRecord });
+      } catch {
+        /* not a run dir / unreadable — skip */
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -182,16 +216,10 @@ export async function markSessionSaved(
   specSlug: string,
 ): Promise<void> {
   try {
-    const dir = sessionsDir(devRoot);
-    const entries = (await readdir(dir)).filter(e => e.endsWith('.json')).sort().reverse();
-    for (const entry of entries) {
-      const path = join(dir, entry);
-      let rec: SessionRecord;
-      try {
-        rec = JSON.parse(await readFile(path, 'utf-8')) as SessionRecord;
-      } catch {
-        continue;
-      }
+    const records = (await listSessionRecords(devRoot)).sort((a, b) =>
+      String(b.rec.startedAt).localeCompare(String(a.rec.startedAt)),
+    );
+    for (const { path, rec } of records) {
       if (rec.specSlug || rec.prompt !== promptText) continue;
       rec.outcome = 'saved';
       rec.specSlug = specSlug;

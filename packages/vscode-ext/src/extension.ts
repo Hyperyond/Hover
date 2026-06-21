@@ -487,7 +487,7 @@ async function runPrompt(prompt: string): Promise<void> {
   const qaApi = extContext?.globalState.get<boolean>('hover.qaApi', true) ?? true;
   // Pentest is offensive — default OFF, mutually exclusive with API (engine enforces).
   const qaPentest = extContext?.globalState.get<boolean>('hover.qaPentest', false) ?? false;
-  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext, qaIntensity, { api: qaApi, pentest: qaPentest })) {
+  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext, qaIntensity, { api: qaApi, pentest: qaPentest }, sess.id)) {
     setSessionRunning(sess, false);
     pushToSession(sess, 'system', 'Could not reach the engine.');
   }
@@ -1652,6 +1652,17 @@ async function deleteSession(id: string): Promise<void> {
   if (pick !== 'Delete') return;
   if (s.running) { pool?.cancel(portForSession(id)); }
   releaseSession(id); // kill its engine host + browser
+  // Precise cleanup: every run this conversation produced lives under
+  // .hover/conversations/<id>/ (meta.json + report.md + screenshots). Remove it.
+  // (Crystallized specs in __vibe_tests__/ + their sidecars are intentional
+  // outputs and are NOT touched.) Best-effort — the seg sanitization mirrors
+  // core's safeSeg() so we hit the same folder the engine wrote.
+  const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+  if (wsRoot) {
+    const seg = (id.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)) || 'unknown';
+    const convDir = vscode.Uri.joinPath(wsRoot, '.hover', 'conversations', seg);
+    await vscode.workspace.fs.delete(convDir, { recursive: true, useTrash: false }).then(undefined, () => { /* none yet — fine */ });
+  }
   sessions = sessions.filter((x) => x.id !== id);
   if (activeSessionId === id) {
     activeSessionId = sessions[sessions.length - 1]?.id ?? '';

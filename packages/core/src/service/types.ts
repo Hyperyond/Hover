@@ -19,6 +19,9 @@ export interface ClientMessage {
   payload?: {
     text?: string;
     sessionId?: string;
+    /** The chat conversation a run belongs to — groups its run folders under
+     *  `.hover/runs/<conversationId>/`. */
+    conversationId?: string;
     name?: string;
     description?: string;
     steps?: SkillStep[];

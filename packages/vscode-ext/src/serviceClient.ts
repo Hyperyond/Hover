@@ -108,7 +108,7 @@ export interface ServiceClientPool {
    *  accounts (with creds) the agent may log in with. `enginePort` targets the
    *  session's own host (multi-host model); omit to use the first open socket.
    *  Returns false if the target isn't connected. */
-  run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number, isolateContext?: boolean, intensity?: string, capabilities?: { api?: boolean; pentest?: boolean }): boolean;
+  run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number, isolateContext?: boolean, intensity?: string, capabilities?: { api?: boolean; pentest?: boolean }, conversationId?: string): boolean;
   /** Reply to a source-read approval request from the engine's source MCP. */
   sendSourceApproval(approvalId: string, allow: boolean, enginePort?: number): void;
   /** Reply to an ask_user prompt from the engine's control MCP — the user's
@@ -252,10 +252,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(body);
       }
     },
-    run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number, isolateContext?: boolean, intensity?: string, capabilities?: { api?: boolean; pentest?: boolean }): boolean {
+    run(text: string, sessionId?: string, accounts?: RunAccount[], env?: { id?: string; name?: string }, sourceAccess?: 'always' | 'ask' | 'deny', enginePort?: number, isolateContext?: boolean, intensity?: string, capabilities?: { api?: boolean; pentest?: boolean }, conversationId?: string): boolean {
       const ws = target(enginePort);
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId, accounts, env, sourceAccess, isolateContext, intensity, capabilities } }));
+      ws.send(JSON.stringify({ type: 'command', payload: { text, sessionId, accounts, env, sourceAccess, isolateContext, intensity, capabilities, conversationId } }));
       return true;
     },
     sendSourceApproval(approvalId: string, allow: boolean, enginePort?: number): void {
