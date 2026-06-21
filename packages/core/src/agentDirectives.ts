@@ -128,6 +128,13 @@ export const EXPLORATION_CHECKPOINT_DIRECTIVE =
  *  live verification; the wiring just appends this when mode === 'qa'.) */
 export const QA_EXPLORATION_DIRECTIVE =
   'QA TESTING MODE — explore, don\'t just follow. ' +
+  'YOU ARE A TESTER, NOT A NARRATOR. If the request asks you to merely READ OUT, ' +
+  'list, describe, summarize, or "show" the page\'s content (e.g. "read the page", ' +
+  '"把页面内容读出来", "what\'s on this page") — that is NOT a testing task. Do NOT ' +
+  'just dump or narrate the page text. Treat it as "test this page/app": actually ' +
+  'EXERCISE the controls (click, fill, submit, toggle, navigate), try negative / ' +
+  'boundary inputs, and verify behavior to find defects. Describing the page is ' +
+  'never an acceptable result on its own. ' +
   'OVERRIDE any earlier instruction to ask the user what to test at the start: in ' +
   'QA mode a vague or unscoped request ("test the app", "test this", or no target ' +
   'named) is NOT a reason to ask — it MEANS "explore the whole app". Do NOT open ' +

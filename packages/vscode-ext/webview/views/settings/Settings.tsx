@@ -220,9 +220,11 @@ export function Settings() {
             <select className="bg-bg3 text-fg border border-line rounded-md px-2 py-[5px] max-w-[150px]" value={s.voiceZh}
               onChange={(e) => { setS((p2) => ({ ...p2, voiceZh: e.target.value })); change({ voiceZh: e.target.value }); }}>
               <option value="">Auto</option>
-              {voices.filter((v) => v.lang.toLowerCase().startsWith("zh")).map((v) => (
-                <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
-              ))}
+              {voices
+                .filter((v) => v.lang.toLowerCase().startsWith("zh") && /tingting|婷婷|meijia|美佳/i.test(v.name))
+                .map((v) => (
+                  <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
+                ))}
             </select>
           </div>
           <div className={ROW}>
@@ -230,9 +232,12 @@ export function Settings() {
             <select className="bg-bg3 text-fg border border-line rounded-md px-2 py-[5px] max-w-[150px]" value={s.voiceEn}
               onChange={(e) => { setS((p2) => ({ ...p2, voiceEn: e.target.value })); change({ voiceEn: e.target.value }); }}>
               <option value="">Auto</option>
-              {voices.filter((v) => v.lang.toLowerCase().startsWith("en")).map((v) => (
-                <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
-              ))}
+              {voices
+                .filter((v) => v.lang.toLowerCase().startsWith("en") &&
+                  !/albert|bahh|bells|boing|bubbles|cellos|fred|jester|junior|organ|superstar|trinoids|whisper|wobble|zarvox|grandma|grandpa|news/i.test(v.name))
+                .map((v) => (
+                  <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
+                ))}
             </select>
           </div>
         </>
