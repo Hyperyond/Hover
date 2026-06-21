@@ -37,9 +37,10 @@ import { candidateUri, uriExists } from './optimized.js';
 
 let pool: ServiceClientPool | undefined;
 let currentMode: string | null = null;
-// Whether QA's API capability can run (api-test runtime up) — from the engine's
-// `modes` broadcast. Gates the QA API toggle so "on" always works.
+// Whether QA's API / Pentest capabilities can run (their runtimes up) — from the
+// engine's `modes` broadcast. Gate the QA toggles so "on" always works.
 let apiCapabilityAvailable = false;
+let pentestCapabilityAvailable = false;
 let availableModes: ModeEntry[] = [];
 let connectedServices = 0;
 let modeStatus: vscode.StatusBarItem;
@@ -484,7 +485,9 @@ async function runPrompt(prompt: string): Promise<void> {
   // QA API capability toggle (default on). Only effective in QA mode when the
   // api-test runtime is available; the engine gates the rest.
   const qaApi = extContext?.globalState.get<boolean>('hover.qaApi', true) ?? true;
-  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext, qaIntensity, { api: qaApi })) {
+  // Pentest is offensive — default OFF, mutually exclusive with API (engine enforces).
+  const qaPentest = extContext?.globalState.get<boolean>('hover.qaPentest', false) ?? false;
+  if (!pool?.run(prompt, sess.agentSessionId, accounts, activeEnv ? { id: activeEnv.id, name: activeEnv.name } : undefined, sourceAccessForRun(), enginePort, isolateContext, qaIntensity, { api: qaApi, pentest: qaPentest })) {
     setSessionRunning(sess, false);
     pushToSession(sess, 'system', 'Could not reach the engine.');
   }
@@ -1221,6 +1224,31 @@ export function activate(context: vscode.ExtensionContext): void {
     void extContext?.globalState.update('hover.qaApi', value);
     chatProvider?.pushQaApi(value); // echo so the toggle flips in the UI
   };
+  // Pentest is OFFENSIVE — enabling it confirms first (own-app only), and is
+  // mutually exclusive with API. Disabling needs no confirm.
+  chatProvider.qaPentestHandler = (value) => {
+    if (!value) {
+      void extContext?.globalState.update('hover.qaPentest', false);
+      chatProvider?.pushQaPentest(false);
+      return;
+    }
+    void vscode.window
+      .showWarningMessage(
+        'Enable Pentest in QA? This runs REAL attacks (injection, IDOR, SSRF, …) against the app under test. Only enable for an app you own and are authorized to test.',
+        { modal: true },
+        'Enable Pentest',
+      )
+      .then((pick) => {
+        if (pick === 'Enable Pentest') {
+          void extContext?.globalState.update('hover.qaPentest', true);
+          void extContext?.globalState.update('hover.qaApi', false); // exclusive with API
+          chatProvider?.pushQaPentest(true);
+          chatProvider?.pushQaApi(false);
+        } else {
+          chatProvider?.pushQaPentest(false); // revert the toggle in the UI
+        }
+      });
+  };
   // The user switched the active conversation from the top-bar switcher.
   chatProvider.sessionSwitchHandler = (id) => switchSession(id);
   // The user answered an in-chat prompt card → run that card's resolver
@@ -1259,7 +1287,8 @@ export function activate(context: vscode.ExtensionContext): void {
     void pollAppStatus();
     chatProvider?.pushQaIntensity(extContext?.globalState.get<string>('hover.qaIntensity', 'standard') ?? 'standard');
     chatProvider?.pushQaApi(extContext?.globalState.get<boolean>('hover.qaApi', true) ?? true);
-    chatProvider?.pushQaCapabilityAvailability(apiCapabilityAvailable);
+    chatProvider?.pushQaPentest(extContext?.globalState.get<boolean>('hover.qaPentest', false) ?? false);
+    chatProvider?.pushQaCapabilityAvailability(apiCapabilityAvailable, pentestCapabilityAvailable);
     if (currentMode) chatProvider?.updateMode(currentMode, modeLabel(currentMode));
     // Restore the session switcher + the active conversation's transcript.
     pushSessionList();
@@ -1361,13 +1390,14 @@ export function activate(context: vscode.ExtensionContext): void {
       renderModeStatus();
       if (was === 0 && connected > 0) void pushEngineConfig();
     },
-    onModes: (current, available, apiAvailable) => {
+    onModes: (current, available, caps) => {
       currentMode = current;
       availableModes = available;
-      apiCapabilityAvailable = apiAvailable === true;
+      apiCapabilityAvailable = caps?.api === true;
+      pentestCapabilityAvailable = caps?.pentest === true;
       renderModeStatus();
       chatProvider?.updateMode(currentMode, currentMode ? modeLabel(currentMode) : null);
-      chatProvider?.pushQaCapabilityAvailability(apiCapabilityAvailable);
+      chatProvider?.pushQaCapabilityAvailability(apiCapabilityAvailable, pentestCapabilityAvailable);
     },
     onAgents: (current, available) => {
       currentAgent = current;

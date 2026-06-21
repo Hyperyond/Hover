@@ -50,6 +50,8 @@ export function Chat() {
   const [qaIntensity, setQaIntensity] = useState("standard");
   const [qaApi, setQaApi] = useState(true);
   const [qaApiAvailable, setQaApiAvailable] = useState(false);
+  const [qaPentest, setQaPentest] = useState(false);
+  const [qaPentestAvailable, setQaPentestAvailable] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSess, setActiveSess] = useState("");
@@ -123,8 +125,12 @@ export function Chat() {
         case "qaApi":
           setQaApi(m.value !== false);
           break;
-        case "qaApiAvailable":
-          setQaApiAvailable(m.value === true);
+        case "qaPentest":
+          setQaPentest(m.value === true);
+          break;
+        case "qaCapabilityAvailable":
+          setQaApiAvailable(m.api === true);
+          setQaPentestAvailable(m.pentest === true);
           break;
         case "askUser":
           setAsk({
@@ -203,6 +209,8 @@ export function Chat() {
         qaIntensity={qaIntensity}
         qaApi={qaApi}
         qaApiAvailable={qaApiAvailable}
+        qaPentest={qaPentest}
+        qaPentestAvailable={qaPentestAvailable}
         accounts={accounts}
       />
     </>

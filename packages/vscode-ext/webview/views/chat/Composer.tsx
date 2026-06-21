@@ -50,6 +50,8 @@ export function Composer({
   qaIntensity,
   qaApi,
   qaApiAvailable,
+  qaPentest,
+  qaPentestAvailable,
   accounts,
 }: {
   draft: string;
@@ -67,6 +69,8 @@ export function Composer({
   qaIntensity: string;
   qaApi: boolean;
   qaApiAvailable: boolean;
+  qaPentest: boolean;
+  qaPentestAvailable: boolean;
   accounts: Account[];
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -372,6 +376,20 @@ export function Composer({
                   }}
                 >
                   <span>API {qaApiAvailable ? (qaApi ? "on" : "off") : "n/a"}</span>
+                </button>
+                <button
+                  className={"barebtn toggle danger" + (qaPentest && qaPentestAvailable ? " on" : "") + (qaPentestAvailable ? "" : " locked")}
+                  id="qa-pentest-btn"
+                  title={
+                    qaPentestAvailable
+                      ? "Pentest — offensive scan of your OWN app (injection / IDOR / SSRF …). Mutually exclusive with API. Confirms before enabling."
+                      : "Pentest unavailable — the pentest runtime isn't running"
+                  }
+                  onClick={() => {
+                    if (qaPentestAvailable) post({ type: "setQaPentest", value: !qaPentest });
+                  }}
+                >
+                  <span>Pentest {qaPentestAvailable ? (qaPentest ? "on" : "off") : "n/a"}</span>
                 </button>
               </>
             )}
