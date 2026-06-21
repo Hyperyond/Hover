@@ -29,7 +29,7 @@ function pickVoice(voices: SpeechSynthesisVoice[], zh: boolean): SpeechSynthesis
  *  when the speech setting is on. Chinese text picks a Chinese voice, else
  *  English (mirrors the engine's CJK prose detection). Best-effort: a no-op if
  *  the host has no speech synthesis. */
-function speakLine(text: string): void {
+function speakLine(text: string, chosenZh = "", chosenEn = ""): void {
   try {
     const synth = window.speechSynthesis;
     const t = text.trim();
@@ -37,7 +37,10 @@ function speakLine(text: string): void {
     const zh = /[一-鿿]/.test(t);
     const u = new SpeechSynthesisUtterance(t);
     u.lang = zh ? "zh-CN" : "en-US";
-    const voice = pickVoice(synth.getVoices(), zh);
+    const voices = synth.getVoices();
+    // The user's explicit pick for this language wins; else auto-pick a smooth one.
+    const chosen = zh ? chosenZh : chosenEn;
+    const voice = (chosen && voices.find((v) => v.name === chosen)) || pickVoice(voices, zh);
     if (voice) u.voice = voice;
     u.rate = 1.05; // a touch quicker reads more natural for short status lines
     synth.speak(u);
@@ -91,9 +94,11 @@ export function Chat() {
   const [qaApiAvailable, setQaApiAvailable] = useState(false);
   const [qaPentest, setQaPentest] = useState(false);
   const [qaPentestAvailable, setQaPentestAvailable] = useState(false);
-  // Speech-narration flag as a ref — the onMessage handler is set up once, so it
-  // reads the live value here rather than a stale closure.
+  // Speech-narration flag + chosen voices as refs — the onMessage handler is set
+  // up once, so it reads the live values here rather than a stale closure.
   const speechRef = useRef(false);
+  const voiceZhRef = useRef("");
+  const voiceEnRef = useRef("");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSess, setActiveSess] = useState("");
@@ -185,11 +190,13 @@ export function Chat() {
         case "config":
           setSilent(!!m.silent);
           speechRef.current = !!m.speech;
+          voiceZhRef.current = String(m.voiceZh || "");
+          voiceEnRef.current = String(m.voiceEn || "");
           if (!m.speech) window.speechSynthesis?.cancel?.();
           break;
         case "narration":
           // Voice narration: speak the agent's interim status line aloud.
-          if (speechRef.current) speakLine(String(m.text || ""));
+          if (speechRef.current) speakLine(String(m.text || ""), voiceZhRef.current, voiceEnRef.current);
           break;
         case "sessions": {
           const list = Array.isArray(m.list) ? (m.list as SessionInfo[]) : [];

@@ -169,9 +169,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ): void {
     this.post({ type: "accounts", accounts });
   }
-  /** Push live config to the webview (drives voice + the silent-run border). */
-  updateConfig(speech: boolean, silent: boolean): void {
-    this.post({ type: "config", speech, silent });
+  /** Push live config to the webview (drives voice + the silent-run border).
+   *  voiceZh/voiceEn are the chosen narration voice names ('' = auto). */
+  updateConfig(speech: boolean, silent: boolean, voiceZh = "", voiceEn = ""): void {
+    this.post({ type: "config", speech, silent, voiceZh, voiceEn });
   }
   /** Push the model picker's list for the current agent + the active model,
    *  plus the reasoning-effort options for that model (empty = no effort

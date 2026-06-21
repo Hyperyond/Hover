@@ -38,6 +38,8 @@ export interface SettingsByokState {
 export interface SettingsChange {
   agent?: string;
   speech?: boolean;
+  voiceZh?: string;
+  voiceEn?: string;
   browser?: string;
   agentContext?: string;
   model?: string;
@@ -65,6 +67,8 @@ export interface SettingsHandlers {
   /** Memory mode ('shared' | 'isolated') — stored in extension globalState, not
    *  VS Code config (config scope precedence made the dropdown snap back). */
   getAgentContext(): string;
+  /** Chosen TTS narration voices (by name) — '' = auto. globalState-backed. */
+  getSpeechVoices(): { zh: string; en: string };
   onChange(change: SettingsChange): void | Promise<void>;
 }
 
@@ -121,6 +125,8 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
       agent: agents.current,
       agents: list,
       speech: cfg.get<boolean>('speech', false),
+      voiceZh: this.handlers.getSpeechVoices().zh,
+      voiceEn: this.handlers.getSpeechVoices().en,
       browser: cfg.get<string>('browser', 'silent'),
       agentContext: this.handlers.getAgentContext(),
       model: cfg.get<string>('model', 'sonnet'),

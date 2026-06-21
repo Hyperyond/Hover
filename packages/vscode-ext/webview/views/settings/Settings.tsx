@@ -14,6 +14,8 @@ interface State {
   agent: string;
   agents: AgentItem[];
   speech: boolean;
+  voiceZh: string;
+  voiceEn: string;
   browser: string;
   agentContext: string;
   localBaseUrl: string;
@@ -44,9 +46,20 @@ const ROW = "flex items-center justify-between gap-3 py-2.5 border-b border-line
 
 export function Settings() {
   const [s, setS] = useState<State>({
-    modelSource: "cli", agent: "claude", agents: [], speech: false, browser: "silent",
+    modelSource: "cli", agent: "claude", agents: [], speech: false, voiceZh: "", voiceEn: "", browser: "silent",
     agentContext: "shared", localBaseUrl: "", localModel: "", byok: DEFAULT_BYOK,
   });
+  // System TTS voices (for the narration voice pickers). Populated async — the
+  // first getVoices() is often empty until the engine fires voiceschanged.
+  const [voices, setVoices] = useState<{ name: string; lang: string }[]>([]);
+  useEffect(() => {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    const load = () => setVoices(synth.getVoices().map((v) => ({ name: v.name, lang: v.lang })));
+    load();
+    synth.addEventListener?.("voiceschanged", load);
+    return () => synth.removeEventListener?.("voiceschanged", load);
+  }, []);
   const [keyText, setKeyText] = useState("");
   const [keyShown, setKeyShown] = useState(false);
   const keyTouched = useRef(false);
@@ -59,6 +72,8 @@ export function Settings() {
         agent: (m.agent as string) || "claude",
         agents: (m.agents as AgentItem[]) || [],
         speech: !!m.speech,
+        voiceZh: (m.voiceZh as string) || "",
+        voiceEn: (m.voiceEn as string) || "",
         browser: (m.browser as string) || "silent",
         agentContext: (m.agentContext as string) || "shared",
         localBaseUrl: (m.localBaseUrl as string) || "",
@@ -198,6 +213,30 @@ export function Settings() {
         <div className="flex flex-col gap-0.5">Speech narration<span className="text-faint text-[11px]">Speak tool calls + the summary aloud</span></div>
         <Toggle checked={s.speech} onChange={(v) => { setS((p2) => ({ ...p2, speech: v })); change({ speech: v }); }} />
       </div>
+      {s.speech && (
+        <>
+          <div className={ROW}>
+            <div className="flex flex-col gap-0.5">Chinese voice<span className="text-faint text-[11px]">For Chinese narration (e.g. Tingting)</span></div>
+            <select className="bg-bg3 text-fg border border-line rounded-md px-2 py-[5px] max-w-[150px]" value={s.voiceZh}
+              onChange={(e) => { setS((p2) => ({ ...p2, voiceZh: e.target.value })); change({ voiceZh: e.target.value }); }}>
+              <option value="">Auto</option>
+              {voices.filter((v) => v.lang.toLowerCase().startsWith("zh")).map((v) => (
+                <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
+              ))}
+            </select>
+          </div>
+          <div className={ROW}>
+            <div className="flex flex-col gap-0.5">English voice<span className="text-faint text-[11px]">For English narration (e.g. Samantha)</span></div>
+            <select className="bg-bg3 text-fg border border-line rounded-md px-2 py-[5px] max-w-[150px]" value={s.voiceEn}
+              onChange={(e) => { setS((p2) => ({ ...p2, voiceEn: e.target.value })); change({ voiceEn: e.target.value }); }}>
+              <option value="">Auto</option>
+              {voices.filter((v) => v.lang.toLowerCase().startsWith("en")).map((v) => (
+                <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
       <div className={ROW}>
         <div className="flex flex-col gap-0.5">Browser<span className="text-faint text-[11px]">Headless = no window; Normal = shown Chrome</span></div>
         <select className="bg-bg3 text-fg border border-line rounded-md px-2 py-[5px]" value={s.browser} onChange={(e) => { setS((p2) => ({ ...p2, browser: e.target.value })); change({ browser: e.target.value }); }}>
