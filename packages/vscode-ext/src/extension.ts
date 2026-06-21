@@ -684,6 +684,7 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
     if (rp?.path) {
       owner.transcript.push({ kind: 'report', path: rp.path });
       if (live) chatProvider?.pushReport(rp.path);
+      persistSessions(); // arrives AFTER the run's `done` → re-persist or it's lost on reload
     }
     return;
   }
@@ -696,6 +697,7 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
     if (cands.length) {
       owner.transcript.push({ kind: 'candidates', candidates: cands });
       if (live) chatProvider?.pushCandidates(cands);
+      persistSessions(); // arrives AFTER the run's `done` → re-persist or it's lost on reload
     }
     return;
   }
