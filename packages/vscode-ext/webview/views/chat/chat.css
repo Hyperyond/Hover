@@ -730,6 +730,11 @@ header {
   bottom: auto;
   height: 9px;
 }
+/* A lone node (only one on its rail — e.g. a standalone QA-report link) gets
+   just its dot, no dangling connector stub above or below it. */
+.node:first-child:last-child .node-rail::before {
+  display: none;
+}
 /* The node right before the live spinner: stop its rail line at its own dot so
    no grey connector runs down into the detached working spinner. */
 .node:has(+ .node.op.working) .node-rail::before {
@@ -957,23 +962,34 @@ header {
 .report-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 9px;
+  gap: 7px;
+  padding: 6px 10px 6px 9px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--bg-2);
-  color: var(--link);
+  color: var(--text);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
+  font-weight: 600;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 .report-link:hover {
   border-color: var(--accent);
+  background: var(--accent-dim);
   color: var(--accent);
 }
-.report-link svg {
+.report-link .rl-doc {
   flex: none;
-  opacity: 0.9;
+  color: var(--accent);
+}
+.report-link .rl-arrow {
+  flex: none;
+  opacity: 0.5;
+  margin-left: 1px;
+}
+.report-link:hover .rl-arrow {
+  opacity: 1;
 }
 .shot-cap svg {
   flex: none;

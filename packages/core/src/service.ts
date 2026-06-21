@@ -1054,6 +1054,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       const runDirPath = runDir(devRoot, conversationId, runId);
       const runShotDir = join(runDirPath, 'screenshots');
       let sessionEnd: { turns?: number; costUsd?: number; tokens?: number } = {};
+      // Findings + clean summary parsed from the ORIGINAL session_end summary,
+      // captured before that summary is stripped of its ## Findings block for the
+      // chat. recordSession reuses these so the ledger record + QA report keep the
+      // findings (re-parsing the stripped summary would lose them).
+      let runParsed: ReturnType<typeof parseFindings> | null = null;
       let sessionRecorded = false;
       runCandidates = []; // fresh per run — QA candidate flows accumulate below
       pendingPhase2 = null; // cleared each run; the phase split below may re-arm it
@@ -1115,7 +1120,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (sessionRecorded) return;
         sessionRecorded = true;
         const endedAt = new Date().toISOString();
-        const parsed = detail?.summary ? parseFindings(detail.summary) : { summary: '', findings: [] };
+        // Prefer the findings captured at session_end (from the un-stripped
+        // summary); fall back to parsing detail.summary (error/abort paths).
+        const parsed = runParsed ?? (detail?.summary ? parseFindings(detail.summary) : { summary: '', findings: [] });
         const toolCounts = detail?.steps ? tallyTools(detail.steps) : undefined;
         const target =
           runTargetUrl || runEnv ? { url: runTargetUrl, id: runEnv?.id, name: runEnv?.name } : undefined;
@@ -1475,6 +1482,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
               // card renders from data, not a Markdown scrape). All modes.
               if (typeof ev.summary === 'string' && ev.summary) {
                 const parsed = parseFindings(ev.summary);
+                runParsed = parsed; // keep for the ledger record + QA report
                 ev.summary = parsed.summary;
                 (ev as { findings?: unknown }).findings = parsed.findings;
               }

@@ -276,16 +276,19 @@ function ShotNode({ uri }: { uri: string }) {
 /** A QA findings report artifact: a clickable line that opens the .md in the
  *  editor (like Claude Code's clickable file paths). */
 function ReportNode({ path }: { path: string }) {
-  const name = path.split(/[\\/]/).pop() || path;
   return (
     <div className="node op report">
       <span className="node-rail" />
       <div className="node-body">
         <button className="report-link" title={path} onClick={() => post({ type: "openReport", path })}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+          <svg className="rl-doc" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" />
+            <path d="M9 13h6M9 17h4" />
           </svg>
-          <span>QA report · {name}</span>
+          <span className="rl-text">QA report</span>
+          <svg className="rl-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
         </button>
       </div>
     </div>
