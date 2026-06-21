@@ -7,6 +7,26 @@ import { Thread } from "./Thread";
 import { useThread } from "./useThread";
 import { AskCard, type AskReq } from "./AskCard";
 
+/** Voice narration — speak one interim line via the webview's SpeechSynthesis
+ *  when the speech setting is on. Chinese text picks a Chinese voice, else
+ *  English (mirrors the engine's CJK prose detection). Best-effort: a no-op if
+ *  the host has no speech synthesis. */
+function speakLine(text: string): void {
+  try {
+    const synth = window.speechSynthesis;
+    const t = text.trim();
+    if (!synth || !t) return;
+    const zh = /[一-鿿]/.test(t);
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = zh ? "zh-CN" : "en-US";
+    const voice = synth.getVoices().find((v) => v.lang?.toLowerCase().startsWith(zh ? "zh" : "en"));
+    if (voice) u.voice = voice;
+    synth.speak(u);
+  } catch {
+    /* speech unavailable in this host — ignore */
+  }
+}
+
 export interface ModelOption {
   value: string;
   label: string;
@@ -52,6 +72,9 @@ export function Chat() {
   const [qaApiAvailable, setQaApiAvailable] = useState(false);
   const [qaPentest, setQaPentest] = useState(false);
   const [qaPentestAvailable, setQaPentestAvailable] = useState(false);
+  // Speech-narration flag as a ref — the onMessage handler is set up once, so it
+  // reads the live value here rather than a stale closure.
+  const speechRef = useRef(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSess, setActiveSess] = useState("");
@@ -142,6 +165,12 @@ export function Chat() {
           break;
         case "config":
           setSilent(!!m.silent);
+          speechRef.current = !!m.speech;
+          if (!m.speech) window.speechSynthesis?.cancel?.();
+          break;
+        case "narration":
+          // Voice narration: speak the agent's interim status line aloud.
+          if (speechRef.current) speakLine(String(m.text || ""));
           break;
         case "sessions": {
           const list = Array.isArray(m.list) ? (m.list as SessionInfo[]) : [];
@@ -157,6 +186,7 @@ export function Chat() {
           break;
         case "running":
           setRunning(!!m.running);
+          if (!m.running) window.speechSynthesis?.cancel?.(); // run ended — stop any backlog
           break;
         case "busy":
           setBusy(m.done ? null : String(m.text || "Working…"));
@@ -169,6 +199,7 @@ export function Chat() {
           setRunning(false);
           setAsk(null);
           setBusy(null);
+          window.speechSynthesis?.cancel?.();
           break;
       }
     });
