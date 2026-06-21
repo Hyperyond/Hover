@@ -9,7 +9,7 @@
 [![Playwright](https://img.shields.io/badge/output-%40playwright%2Ftest-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-**Hover's AI tests your app like a real teammate and ships a real Playwright spec — a local-first, open-source VS Code extension.** Describe a flow in plain English; Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex / Gemini / Qwen, or a local model) to drive your real Chrome via Playwright MCP, then crystallizes clean runs into plain `@playwright/test` specs that pass CI with **zero AI**. ✦ optimize pass · 🟠 API testing (auth / status / authz) · 🔴 pentest (offensive, white-box).
+**Hover's AI tests your app like a real teammate and ships a real Playwright spec — a local-first, open-source VS Code extension.** Describe a flow in plain English; Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex / Gemini / Qwen, or a local model) to drive your real Chrome via Playwright MCP, then crystallizes clean runs into plain `@playwright/test` specs that pass CI with **zero AI**. Or switch to 🟢 **QA Testing** — the agent explores your whole app on its own, writes a findings report, and layers **API** and **penetration** testing on as toggles. ✦ optional AI optimize pass.
 
 ## Install
 
@@ -24,7 +24,7 @@ You also need **one coding-agent CLI** on your `PATH`: [Claude Code](https://cla
 - **Multi-environment accounts, `@`-mentionable** — Define test accounts per environment (local / staging / prod) once, then just mention `@account` in chat — the agent logs in for you. Credentials are parameterized into `process.env` references: never written into the spec, the JSDoc, or the sidecar, and the same names export to your CI secrets in one click.
 - **Your model — Local CLI or BYOK** — Two ways to provide a model, switchable in Settings. *Local CLI*: drive runs with a coding-agent CLI on your PATH (Claude Code, Codex, Gemini, Qwen) on the subscription you already pay for. *BYOK*: bring your own API key — pick a protocol (Anthropic / OpenAI / Azure OpenAI / Gemini) or an OpenAI-compatible gateway (Ollama Cloud, AIHubMix, …), and Hover injects the key + base URL + model into the matching CLI. Either can point at a self-hosted endpoint for a local model. Keys live in VS Code SecretStorage. No SDK, nothing leaves your computer (`@hover-dev/core` binds `127.0.0.1`, no telemetry, no upload path).
 - **Nothing new to learn** — The chat looks and works like Claude Code or Codex, so there's no new tool to learn. Install it, open the panel, describe a flow. No setup in your app, no bundler plugin, no config.
-- **API testing & pentest in the same chat** — Flip into 🟠 **API testing** (auth / status codes / access control / IDOR / broken authorization / business-logic, via a local HTTPS MITM that replays captured API calls with mutations) or 🔴 **Pentest** (offensive, white-box: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR) against your **own** app. Confirmed findings become regression specs (CI gates) or a report that says what it did *and didn't* test. No mitmproxy, no Python, no system CA.
+- **QA Testing — explore, don't just script** — Switch from Flow (author one spec) to 🟢 **QA Testing**: the agent autonomously explores your app to find defects, paces itself by an intensity budget (Quick / Standard / Deep), writes a Markdown findings report with a coverage map, and offers each clean flow it completes as a one-click "Crystallize" spec. Two capability toggles ride on top: **API testing** (auth / status codes / access control / IDOR / broken authorization, via a local HTTPS MITM that replays captured API calls with mutations → `.api-test.spec.ts` CI gates) and **Penetration testing** (offensive, white-box: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR against your **own** app — destructive, so it runs as a separate second pass, off by default). It remembers business rules it confirms so neither it nor a future run re-asks. No mitmproxy, no Python, no system CA.
 - **Deterministic, portable specs** — Every spec is plain Playwright that checks into git and runs without Hover. An optional, off-by-default **AI optimize pass** polishes a draft into a candidate you accept via diff (original always kept).
 
 ## How it works
@@ -55,13 +55,19 @@ Point them at any environment with `BASE_URL` (and the `HOVER_<LABEL>_*` account
 
 ## Modes
 
+Two modes in the same chat:
+
 | Mode | What it does |
 |---|---|
-| **Normal** | AI authors / runs functional E2E flows → `.spec.ts` |
-| 🟠 **API testing** | Business / authz — MITM-replay IDOR / auth-bypass / parameter-tampering → `.api-test.spec.ts` CI gates |
-| 🔴 **Pentest** | Offensive — SQLi / XSS / SSTI / SSRF / IDOR on your **own** dev app → a findings report |
+| **Flow** | Describe a flow; the AI drives your app and crystallizes the verified run → a `.spec.ts` you run in CI |
+| 🟢 **QA Testing** | Autonomously explores the whole app → a findings report (+ coverage map) and promotable ✨ specs, bounded by an intensity budget (Quick / Standard / Deep) |
 
-Both run off a built-in **probe catalogue** — small recipes covering 8 access-control + 9 vulnerability classes, curated and shipped with Hover.
+QA Testing has two **capability toggles**:
+
+- 🟠 **API testing** — MITM-replay auth-bypass / IDOR / broken-authz / parameter-tampering; confirmed findings → `.api-test.spec.ts` CI gates.
+- 🔴 **Penetration testing** — offensive, white-box (SQLi / XSS / SSTI / SSRF / IDOR) on your **own** app → a findings report. Destructive, so it always runs as a separate second pass; off by default (enabling it asks for confirmation).
+
+The API + Penetration capabilities run off a built-in **probe catalogue** — small recipes covering 8 access-control + 9 vulnerability classes, curated and shipped with Hover.
 
 ## Examples
 
