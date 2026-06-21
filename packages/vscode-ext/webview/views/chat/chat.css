@@ -1665,6 +1665,18 @@ body.ask-open #ask-dock {
   background: none;
   color: var(--text-mute);
 }
+/* QA API capability toggle: accent when on, dimmed/locked when unavailable. */
+.barebtn.toggle.on {
+  color: var(--accent);
+}
+.barebtn.toggle.locked {
+  opacity: 0.5;
+  cursor: default;
+}
+.barebtn.toggle.locked:hover {
+  background: none;
+  color: var(--text-mute);
+}
 .barebtn .caret {
   color: var(--text-dim);
   font-size: 10px;

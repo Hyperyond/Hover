@@ -48,6 +48,8 @@ export function Composer({
   effortOpts,
   curEffort,
   qaIntensity,
+  qaApi,
+  qaApiAvailable,
   accounts,
 }: {
   draft: string;
@@ -63,6 +65,8 @@ export function Composer({
   effortOpts: string[];
   curEffort: string;
   qaIntensity: string;
+  qaApi: boolean;
+  qaApiAvailable: boolean;
   accounts: Account[];
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -355,6 +359,20 @@ export function Composer({
                     ))}
                   </div>
                 )}
+                <button
+                  className={"barebtn toggle" + (qaApi && qaApiAvailable ? " on" : "") + (qaApiAvailable ? "" : " locked")}
+                  id="qa-api-btn"
+                  title={
+                    qaApiAvailable
+                      ? "API testing — also inspect/replay/test the app's API calls (click to toggle)"
+                      : "API testing unavailable — the api-test runtime isn't running"
+                  }
+                  onClick={() => {
+                    if (qaApiAvailable) post({ type: "setQaApi", value: !qaApi });
+                  }}
+                >
+                  <span>API {qaApiAvailable ? (qaApi ? "on" : "off") : "n/a"}</span>
+                </button>
               </>
             )}
           </div>

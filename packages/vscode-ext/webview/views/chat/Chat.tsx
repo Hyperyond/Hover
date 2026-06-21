@@ -48,6 +48,8 @@ export function Chat() {
   const [effortOpts, setEffortOpts] = useState<string[]>([]);
   const [curEffort, setCurEffort] = useState("");
   const [qaIntensity, setQaIntensity] = useState("standard");
+  const [qaApi, setQaApi] = useState(true);
+  const [qaApiAvailable, setQaApiAvailable] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [activeSess, setActiveSess] = useState("");
@@ -117,6 +119,12 @@ export function Chat() {
         }
         case "qaIntensity":
           setQaIntensity(String(m.value ?? "standard"));
+          break;
+        case "qaApi":
+          setQaApi(m.value !== false);
+          break;
+        case "qaApiAvailable":
+          setQaApiAvailable(m.value === true);
           break;
         case "askUser":
           setAsk({
@@ -193,6 +201,8 @@ export function Chat() {
         effortOpts={effortOpts}
         curEffort={curEffort}
         qaIntensity={qaIntensity}
+        qaApi={qaApi}
+        qaApiAvailable={qaApiAvailable}
         accounts={accounts}
       />
     </>

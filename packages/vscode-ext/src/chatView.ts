@@ -27,6 +27,7 @@ type Inbound =
   | { type: "openReport"; path: string }
   | { type: "crystallizeCandidate"; name: string; steps: unknown[] }
   | { type: "setQaIntensity"; value: string }
+  | { type: "setQaApi"; value: boolean }
   | { type: "ready" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -58,6 +59,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   crystallizeCandidateHandler?: (name: string, steps: unknown[]) => void;
   /** Set by the extension: the user picked a QA intensity (quick/standard/deep). */
   qaIntensityHandler?: (value: string) => void;
+  /** Set by the extension: the user toggled QA's API capability. */
+  qaApiHandler?: (value: boolean) => void;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -99,6 +102,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.crystallizeCandidateHandler?.(msg.name, msg.steps);
       else if (msg.type === "setQaIntensity" && typeof msg.value === "string")
         this.qaIntensityHandler?.(msg.value);
+      else if (msg.type === "setQaApi" && typeof msg.value === "boolean")
+        this.qaApiHandler?.(msg.value);
       else if (msg.type === "ready") this.onReady?.();
     });
   }
@@ -213,6 +218,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** Reflect the stored QA intensity in the composer picker (on (re)load). */
   pushQaIntensity(value: string): void {
     this.post({ type: "qaIntensity", value });
+  }
+  /** Reflect the stored QA API-capability toggle in the composer (on (re)load). */
+  pushQaApi(value: boolean): void {
+    this.post({ type: "qaApi", value });
+  }
+  /** Tell the composer whether QA's API capability can run (gates the toggle). */
+  pushQaCapabilityAvailability(apiAvailable: boolean): void {
+    this.post({ type: "qaApiAvailable", value: apiAvailable });
   }
   /** Running token total (from usage events) → live group counter. */
   pushUsage(tokens: number): void {
