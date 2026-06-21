@@ -51,4 +51,14 @@ describe('writeQaReport', () => {
     expect(after).toContain('bug B');
     expect(after).not.toContain('bug A');
   });
+
+  it('suffixes a phase so a two-pass run keeps both reports (verify + pentest)', async () => {
+    await writeQaReport(devRoot, { ...base, findings: [{ severity: 'high', text: 'verify finding' }] });
+    await writeQaReport(devRoot, { ...base, phase: 'pentest', findings: [{ severity: 'high', text: 'pentest finding' }] });
+    const verify = join(qaReportsDir(devRoot), 'test-the-checkout-flow.md');
+    const pentest = join(qaReportsDir(devRoot), 'test-the-checkout-flow-pentest.md');
+    // The pentest phase did NOT overwrite the verify report — both survive.
+    expect(readFileSync(verify, 'utf-8')).toContain('verify finding');
+    expect(readFileSync(pentest, 'utf-8')).toContain('pentest finding');
+  });
 });

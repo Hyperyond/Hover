@@ -31,6 +31,9 @@ export interface QaReportInput {
   findings: SessionFinding[];
   endedAt: string;
   targetUrl?: string;
+  /** Distinguishes phases of one two-pass run (e.g. 'pentest') so the second
+   *  phase's report doesn't overwrite the first's — they share the prompt. */
+  phase?: string;
 }
 
 /** Render the report Markdown (pure — exported for testing). */
@@ -63,7 +66,8 @@ export async function writeQaReport(
   try {
     const dir = qaReportsDir(devRoot);
     await mkdir(dir, { recursive: true });
-    const path = join(dir, `${slug(input.prompt)}.md`);
+    const suffix = input.phase ? `-${slug(input.phase)}` : '';
+    const path = join(dir, `${slug(input.prompt)}${suffix}.md`);
     await writeFile(path, renderQaReport(input), 'utf-8');
     return { path };
   } catch (err) {

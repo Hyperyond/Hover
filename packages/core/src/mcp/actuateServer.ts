@@ -472,7 +472,7 @@ server.registerTool(
     description:
       "Record a CANDIDATE FLOW you just completed — a clean, coherent end-to-end sequence worth saving as a reusable regression test (e.g. \"Log in\", \"Add item to cart\", \"Submit the registration form\"). Call this right after you finish such a flow, while its steps are fresh. `steps` is the ordered list of step numbers — the \"· step N\" tags shown after each click / fill / select / check you performed FOR THIS FLOW. The user can then one-click crystallize it into a deterministic Playwright spec. RULES: include only steps that belong to this one flow, in order; only successful steps; skip exploration, dead-ends, and unrelated clicks.",
     inputSchema: {
-      name: z.string().describe('Short imperative flow name, e.g. "Log in" or "Add item to cart".'),
+      name: z.string().describe('Short imperative flow name IN ENGLISH (becomes the spec filename + test name), e.g. "Log in" or "Add item to cart".'),
       description: z.string().optional().describe('One line on what this flow verifies.'),
       steps: z.array(z.number().int().positive()).min(1)
         .describe('The step numbers (from the "· step N" tags) that make up this flow, in order.'),

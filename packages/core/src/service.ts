@@ -1141,6 +1141,9 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
             findings: parsed.findings,
             endedAt,
             targetUrl: runTargetUrl,
+            // Two-pass: the pentest phase shares the prompt with the verify phase,
+            // so suffix its report or it would overwrite the verify report.
+            phase: pentestActiveThisRun ? 'pentest' : undefined,
           });
           if ('error' in r) process.stderr.write(`[hover/qa] report write failed: ${r.error}\n`);
           // Surface the report as a clickable artifact in the chat (mirrors the
@@ -1527,8 +1530,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // QA Stage 4: resolve the agent's recorded candidate flows to their real
         // recorded steps and offer them as one-click "Crystallize" cards. Steps
         // are the actual hover-control actuations (record==replay), so each
-        // candidate crystallizes to a clean, runnable spec.
-        if (runMode === 'qa' && runCandidates.length && !run.cancelled) {
+        // candidate crystallizes to a clean, runnable spec. Candidates are
+        // functional regression artifacts — the pentest phase produces a findings
+        // report, not specs, so it never offers them (and avoids duplicating the
+        // verify phase's candidates).
+        if (runMode === 'qa' && !pentestActiveThisRun && runCandidates.length && !run.cancelled) {
           const resolved = resolveCandidates(runResult.steps, runCandidates);
           if (resolved.length) emitToRun({ type: 'qa-candidates', payload: { candidates: resolved } });
         }
