@@ -1224,8 +1224,9 @@ export function activate(context: vscode.ExtensionContext): void {
     void extContext?.globalState.update('hover.qaApi', value);
     chatProvider?.pushQaApi(value); // echo so the toggle flips in the UI
   };
-  // Pentest is OFFENSIVE — enabling it confirms first (own-app only), and is
-  // mutually exclusive with API. Disabling needs no confirm.
+  // Pentest is OFFENSIVE — enabling it confirms first (own-app only). It can run
+  // alongside API: the engine sequences them as two phases (verify, then pentest)
+  // so the destructive pass runs last. Disabling needs no confirm.
   chatProvider.qaPentestHandler = (value) => {
     if (!value) {
       void extContext?.globalState.update('hover.qaPentest', false);
@@ -1234,16 +1235,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }
     void vscode.window
       .showWarningMessage(
-        'Enable Pentest in QA? This runs REAL attacks (injection, IDOR, SSRF, …) against the app under test. Only enable for an app you own and are authorized to test.',
+        'Enable Pentest in QA? This runs REAL attacks (injection, IDOR, SSRF, …) against the app under test. Only enable for an app you own and are authorized to test. If API is also on, Hover runs functional + API first, then pentest last.',
         { modal: true },
         'Enable Pentest',
       )
       .then((pick) => {
         if (pick === 'Enable Pentest') {
           void extContext?.globalState.update('hover.qaPentest', true);
-          void extContext?.globalState.update('hover.qaApi', false); // exclusive with API
           chatProvider?.pushQaPentest(true);
-          chatProvider?.pushQaApi(false);
         } else {
           chatProvider?.pushQaPentest(false); // revert the toggle in the UI
         }

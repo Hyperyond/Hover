@@ -31,7 +31,7 @@
  *   client → server (plugin-aware additions):
  *     { type: 'set-mode',      payload: { modeId: string|null } }   // null = exit moded operation
  */
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { readdirSync, statSync, mkdirSync } from 'node:fs';
@@ -515,6 +515,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   const pentestCapabilityAvailable = (): boolean => !!pentestPlugin && residentChromeProxy !== null;
   let pentestActiveThisRun = false;
   const pentestScopeOk = (scope: string[]): boolean => pentestActiveThisRun && scope.includes('pentest');
+  // QA two-pass: when a QA run has BOTH API + Pentest on, run two sequenced
+  // phases (verify first, pentest last) so the destructive pentest can't corrupt
+  // the verification and each phase gets a fresh, budget-bounded context. The
+  // verify phase runs first; this holds the queued pentest-phase command, which
+  // the verify run's finally re-dispatches.
+  let pendingPhase2: ClientMessage | null = null;
 
   /** The cdp-handler extras (proxy) threaded into launch-chrome / check-cdp /
    *  focus-debug and the initial auto-launch. In the single-Chrome model this
@@ -768,7 +774,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       });
     };
 
-    ws.on('message', async data => {
+    // Named (not an inline arrow) so a QA run with both API + Pentest on can
+    // re-enter it for a sequenced second phase — see the phase split + the
+    // re-dispatch in the command path's finally.
+    const onClientMessage = async (data: RawData): Promise<void> => {
       let msg: ClientMessage;
       try {
         msg = JSON.parse(data.toString()) as ClientMessage;
@@ -1036,6 +1045,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       let sessionEnd: { turns?: number; costUsd?: number; tokens?: number } = {};
       let sessionRecorded = false;
       runCandidates = []; // fresh per run — QA candidate flows accumulate below
+      pendingPhase2 = null; // cleared each run; the phase split below may re-arm it
       // Reproducibility context captured up front (snapshot the mode now so a
       // mid-run switch can't smear it; the rest are filled as the run learns
       // them). Account labels are LABELS ONLY — never the credentials.
@@ -1049,15 +1059,31 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // the user turn it on when available, so "on" must actually work — if it's
       // requested but unavailable, say so loudly (don't silently degrade).
       const caps = (msg.payload as { capabilities?: { api?: unknown; pentest?: unknown } } | undefined)?.capabilities;
-      // Pentest capability (offensive, default OFF). Mutually exclusive with API
-      // (the plugins conflict): if pentest is on, API is forced off this run.
-      pentestActiveThisRun = runMode === 'qa' && caps?.pentest === true && pentestCapabilityAvailable();
-      const wantApi = !pentestActiveThisRun && (caps?.api === true || caps?.api === undefined); // default on
-      apiActiveThisRun = runMode === 'qa' && wantApi && apiCapabilityAvailable();
+      const isPhase2 = (msg.payload as { __phase2?: unknown } | undefined)?.__phase2 === true;
+      const pentestWanted = runMode === 'qa' && caps?.pentest === true && pentestCapabilityAvailable();
+      const apiWanted = runMode === 'qa' && (caps?.api === true || caps?.api === undefined) && apiCapabilityAvailable();
+      // Two-pass: pentest is destructive, so it always runs as a SECOND phase
+      // after the verify phase (functional [+ API]). A first QA run with pentest
+      // on runs verify now and queues a fresh-session pentest phase; the pentest
+      // phase (isPhase2) then runs pentest alone.
+      const splitting = !isPhase2 && pentestWanted;
+      if (splitting) {
+        pentestActiveThisRun = false; // phase 1 = verify (functional + API if on)
+        apiActiveThisRun = apiWanted;
+        pendingPhase2 = {
+          type: 'command',
+          payload: { ...(msg.payload as Record<string, unknown>), capabilities: { api: false, pentest: true }, sessionId: undefined, __phase2: true },
+        } as ClientMessage;
+      } else {
+        // Normal QA (no pentest), OR the queued pentest phase itself. Pentest and
+        // API never run in the same phase.
+        pentestActiveThisRun = pentestWanted;
+        apiActiveThisRun = !pentestActiveThisRun && apiWanted;
+      }
       // Defensive: the UI only enables these toggles when available, so an
       // explicit "on" should always be honoured. If it somehow isn't, log it
       // (the run continues as functional-only rather than failing the run).
-      if (runMode === 'qa' && caps?.api === true && !pentestActiveThisRun && !apiCapabilityAvailable()) {
+      if (runMode === 'qa' && caps?.api === true && !apiActiveThisRun && !pentestActiveThisRun && !splitting && !apiCapabilityAvailable()) {
         process.stderr.write('[hover/qa] API capability requested but the api-test runtime is unavailable; running functional-only.\n');
       }
       if (runMode === 'qa' && caps?.pentest === true && !pentestCapabilityAvailable()) {
@@ -1535,7 +1561,20 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (run.graceTimer) clearTimeout(run.graceTimer);
         activeRun = null;
       }
-    });
+      // QA two-pass: a verify run with a pentest phase queued behind it. Now that
+      // this (verify) run has finished and activeRun is clear, kick off the
+      // pentest phase as a fresh re-entry — UNLESS the user cancelled. Each phase
+      // is its own agent session (fresh context), so this is the token-cheap way
+      // to sequence them; the pentest phase carries __phase2 so it can't re-split.
+      if (pendingPhase2 && !run.cancelled) {
+        const next = pendingPhase2;
+        pendingPhase2 = null;
+        void onClientMessage(Buffer.from(JSON.stringify(next)));
+      } else {
+        pendingPhase2 = null;
+      }
+    };
+    ws.on('message', onClientMessage);
   });
 
   // ───────────────────────── service:start + single Chrome ─────────────────
