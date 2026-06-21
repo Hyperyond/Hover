@@ -6,7 +6,7 @@
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/hyperyond.hover-dev?label=installs&color=1f9cf0)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 
-**Hover 的 AI 像真人同事一样测你的应用,解放你的双手,产出真正的 Playwright spec —— 一个本地优先、开源的 VS Code 插件。** 用大白话描述一个流程;Hover 调用你本机已有的编码 Agent CLI(Claude Code / OpenAI Codex / Gemini / Qwen,或本地模型),通过 Playwright MCP 操作你真实的 Chrome,再把跑通的流程结晶成纯 `@playwright/test` 用例 —— **CI 里零 AI** 就能跑。✦ 优化 pass · 🟠 API & 安全测试(接口 / 越权)· 🔴 渗透测试(攻击性、白盒)。
+**Hover 的 AI 像真人同事一样测你的应用,解放你的双手,产出真正的 Playwright spec —— 一个本地优先、开源的 VS Code 插件。** 用大白话描述一个流程;Hover 调用你本机已有的编码 Agent CLI(Claude Code / OpenAI Codex / Gemini / Qwen,或本地模型),通过 Playwright MCP 操作你真实的 Chrome,再把跑通的流程结晶成纯 `@playwright/test` 用例 —— **CI 里零 AI** 就能跑。或切到 🟢 **QA 测试**模式 —— Agent 自主探索整个应用、产出发现报告,并把 **API** 与**渗透**测试作为开关叠加其上。✦ 可选 AI 优化 pass。
 
 ## 安装
 
@@ -21,7 +21,7 @@
 - **多环境账户,`@` 即用** —— 给每个环境(本地 / staging / prod)配一次测试账户,在对话里写 `@账户名`,Agent 就替你登录。密码存在 VS Code SecretStorage,**参数化成 spec 里的 `process.env` 引用**,一键导出到 CI secrets。绝不写进 spec、JSDoc 或 sidecar。
 - **你的模型 —— 本机 CLI 或 BYOK** —— 两种供模型方式,在 Settings 里切换。*本机 CLI*:用 `PATH` 上的编码 Agent CLI(Claude Code、Codex、Gemini、Qwen)驱动,跑你本就付费的订阅。*BYOK*:自带 API key —— 选协议(Anthropic / OpenAI / Azure OpenAI / Gemini)或 OpenAI 兼容网关(Ollama Cloud、AIHubMix 等),Hover 把 key + base URL + model 注入对应 CLI。任一方式都能指向自建 endpoint 跑本地模型。Key 存在 VS Code SecretStorage。没有 SDK,数据不出本机(`@hover-dev/core` 只绑 `127.0.0.1`,无遥测、无上传)。
 - **零学习成本** —— 对话界面长得、用起来都像 Claude Code / Codex,没有新工具要学。装好、打开面板、描述一个流程就行。不用改你的应用、不用 bundler 插件、不用配置。
-- **API & 安全测试 + 渗透,同一个对话框** —— 切到 🟠 **API & 安全测试**(接口校验 / IDOR / 越权 / 业务逻辑,靠本地 HTTPS MITM 把抓到的 API 改参重放)或 🔴 **渗透测试**(攻击性、白盒:SQLi / XSS / SSTI / SSRF / 开放重定向 / IDOR),只对你**自己的**应用。确认的发现会变成 `.api-test.spec.ts` 的 CI 关卡,或一份“测了什么、没测什么”的报告。不需要 mitmproxy、不需要 Python、不需要装系统 CA。
+- **QA 测试 —— 自主探索,不只是照着脚本走** —— 从 Flow(写一个 spec)切到 🟢 **QA 测试**:Agent 自主探索你的应用找缺陷,按强度预算(Quick / Standard / Deep)自我控量,产出带覆盖范围(coverage)的 Markdown 发现报告,并把每个跑通的干净流程作为一键 ✨ 结晶 spec 提供给你。两个能力开关叠加其上 —— **API 测试**(接口校验 / 越权 / IDOR / 参数篡改,靠本地 HTTPS MITM 把抓到的 API 改参重放 → `.api-test.spec.ts` CI 关卡)和**渗透测试**(攻击性、白盒:SQLi / XSS / SSTI / SSRF / IDOR,只对你**自己的**应用 —— 有破坏性,所以作为单独的第二趟跑,默认关闭)。它还会记住自己确认过的业务规则,以后不再反复问你。不需要 mitmproxy、不需要 Python、不需要装系统 CA。
 - **确定性、可移植的 spec** —— 每个 spec 都是普通 Playwright,进 git、脱离 Hover 也能跑。可选、默认关闭的 **AI 优化 pass** 会把草稿打磨成候选,用 diff 让你采纳(原件永远保留)。
 
 ## 工作原理
@@ -52,13 +52,19 @@ npx playwright test __vibe_tests__
 
 ## 模式
 
+同一个对话框里两种模式:
+
 | 模式 | 做什么 |
 |---|---|
-| **普通** | AI 编写 / 运行功能 E2E 流程 → `.spec.ts` |
-| 🟠 **API & 安全测试** | 业务 / 越权 —— MITM 重放 IDOR / 越权 / 参数篡改 → `.api-test.spec.ts` CI 关卡 |
-| 🔴 **渗透测试** | 攻击性 —— SQLi / XSS / SSTI / SSRF / IDOR,只打你**自己的** dev 应用 → 一份发现报告 |
+| **Flow** | 描述一个流程;AI 操作你的应用,把跑通的流程结晶成 `.spec.ts`,在 CI 里跑 |
+| 🟢 **QA 测试** | 自主探索整个应用 → 发现报告(含 coverage 覆盖范围)+ 可一键结晶的 ✨ spec,由强度预算(Quick / Standard / Deep)控量 |
 
-两种安全模式都由内置的**探测规则**(seeds:8 类访问控制 + 9 类漏洞)驱动,开箱即用,无需配置。
+QA 测试有两个**能力开关**:
+
+- 🟠 **API 测试** —— MITM 重放越权 / IDOR / 越权访问 / 参数篡改;确认的发现 → `.api-test.spec.ts` CI 关卡。
+- 🔴 **渗透测试** —— 攻击性、白盒(SQLi / XSS / SSTI / SSRF / IDOR),只打你**自己的**应用 → 一份发现报告。有破坏性,所以总是作为单独的第二趟跑;默认关闭(开启时会要你确认)。
+
+API 与渗透两个能力都由内置的**探测规则**(seeds:8 类访问控制 + 9 类漏洞)驱动,开箱即用,无需配置。
 
 ## 示例
 
