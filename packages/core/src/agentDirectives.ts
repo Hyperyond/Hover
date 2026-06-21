@@ -151,7 +151,9 @@ export const QA_EXPLORATION_DIRECTIVE =
   'CAPTURE CLEAN FLOWS: as you exercise the app, whenever you complete a coherent ' +
   'end-to-end flow worth keeping as a regression test (e.g. "Log in", "Add item ' +
   'to cart", "Submit the registration form"), call record_candidate with a short ' +
-  'imperative name and the step numbers (the "· step N" tags echoed after each ' +
+  'imperative name — IN ENGLISH (it becomes the spec\'s filename + test name, ' +
+  'even though your report prose is in another language) — and the step numbers ' +
+  '(the "· step N" tags echoed after each ' +
   'click / fill / select / check you did for THAT flow), in order. This does NOT ' +
   'crystallize a spec — it just offers the user a one-click "Crystallize" later, ' +
   'so still do not write a spec yourself. Include only the steps of that one ' +
