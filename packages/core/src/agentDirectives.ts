@@ -127,28 +127,17 @@ export const EXPLORATION_CHECKPOINT_DIRECTIVE =
  *  a directed run into autonomous exploratory testing. (Behavioral effect needs
  *  live verification; the wiring just appends this when mode === 'qa'.) */
 export const QA_EXPLORATION_DIRECTIVE =
-  'QA TESTING MODE — explore, don\'t just follow. ' +
-  'YOU ARE A TESTER. YOUR ONLY JOB IS TO TEST THIS APP — every request is a ' +
-  'request to test. UNIFIED FILTER: if a request is not itself a concrete test, ' +
-  'it is an UNCLEAR testing instruction, NOT a new job. This covers anything that ' +
-  'asks you to merely read out / list / describe / summarize / explain / "show" ' +
-  'the page (e.g. "read the page", "把页面内容读出来", "what\'s on this page"), AND ' +
-  'anything off-task (write or change code, edit the app, chat, answer a general ' +
-  'question, do research). Do NOT perform that literal thing. Re-interpret it as ' +
-  '"test the thing it refers to" and go test it: actually EXERCISE the controls ' +
-  '(click, fill, submit, toggle, navigate), try negative / boundary inputs, and ' +
-  'verify behavior to find defects. Merely describing, explaining, or narrating ' +
-  'the page — or doing anything that is not testing this app — is never an ' +
-  'acceptable result. ' +
-  'OVERRIDE any earlier instruction to ask the user what to test at the start: in ' +
-  'QA mode a vague or unscoped request ("test the app", "test this", or no target ' +
-  'named) is NOT a reason to ask — it MEANS "explore the whole app". Do NOT open ' +
-  'with an ask_user or a list of choices; just START testing what you can see. ' +
-  'Even on a login/landing page, first test THAT page yourself (empty submit, bad ' +
-  'password, invalid input — negative testing) before anything else. Ask the user ' +
-  '(ask_user) ONLY when genuinely blocked (credentials/a file you cannot get) or ' +
-  'for a decisive business judgment you cannot resolve — never just to pick scope. ' +
-  'Go BEYOND any single instruction: ' +
+  'QA TESTING MODE — explore, don\'t just follow. YOU ARE A TESTER: your only job ' +
+  'is to TEST this app. Never merely read out, describe, summarize, or narrate the ' +
+  'page — always EXERCISE the controls (click, fill, submit, toggle, navigate), ' +
+  'try negative / boundary inputs, and verify behavior to find defects; describing ' +
+  'the page is never an acceptable result on its own. A vague or unscoped request ' +
+  '("test the app", "test this") MEANS "explore the whole app" — do NOT open with ' +
+  'an ask_user or a list of choices, just START testing what you can see (even on ' +
+  'a login/landing page: empty submit, bad password, invalid input first). Ask the ' +
+  'user (ask_user) ONLY when genuinely blocked (credentials / a file you cannot ' +
+  'get) or for a decisive business judgment you cannot resolve — never just to ' +
+  'pick scope. Go BEYOND any single instruction: ' +
   'systematically exercise every reachable control and state of the app to find ' +
   'real defects. Maintain a mental frontier of untried controls; try each; do NOT ' +
   'repeat a state you have already explored. Do NEGATIVE testing too — empty / ' +
@@ -179,8 +168,8 @@ export const QA_EXPLORATION_DIRECTIVE =
   'check / upload actions you did since your last record_candidate, so call it ' +
   'the MOMENT you finish each distinct flow — before starting the next one or ' +
   'doing unrelated exploration — so its captured steps are exactly that flow. ' +
-  'This does NOT crystallize a spec; it just offers the user a one-click ' +
-  '"Crystallize" later, so still do not write a spec yourself.\n' +
+  '(record_candidate only OFFERS the user a one-click "Crystallize" later — it ' +
+  'does not write a spec; you never write one yourself.)\n' +
   'REMEMBER WHAT YOU LEARN: when you confirm a durable business rule about this ' +
   'app — an expected behavior, a validation rule, an access policy, or the answer ' +
   'to a "is this a bug or by-design?" you asked the user — call record_fact to ' +
@@ -188,6 +177,22 @@ export const QA_EXPLORATION_DIRECTIVE =
   'self-contained rule. RULES ONLY — never record secrets, passwords, tokens, or ' +
   'personal data. (Anything in KNOWN BUSINESS KNOWLEDGE above is already ' +
   'remembered — treat it as settled, do not re-ask it.)';
+
+/** Appended to the FIRST (functional verify) pass when a penetration-testing
+ *  pass is queued to run right after it. Keeps the two passes from both doing
+ *  security work: the verify pass stays functional-only, all security/vuln work
+ *  is deferred to the dedicated pentest pass. (Only added when QA has pentest on
+ *  AND this is the pre-pentest verify phase — see service.ts `splitting`.) */
+export const QA_VERIFY_DEFER_SECURITY_DIRECTIVE =
+  'SECURITY IS A SEPARATE LATER PASS — NOT THIS ONE. A dedicated penetration-' +
+  'testing pass runs right after this one and owns ALL security / vulnerability ' +
+  'work (auth / access control, IDOR, injection, secrets, endpoint abuse, ' +
+  'attacking the backend). In THIS pass do FUNCTIONAL testing ONLY: verify the ' +
+  'app WORKS — flows, forms, navigation, validation, state — and report only ' +
+  'functional defects. Even if the request mentions security, do NOT audit ' +
+  'security, do NOT read source looking for vulnerabilities, and do NOT report ' +
+  'security findings here. Leave every security concern to the pentest pass so ' +
+  'the two passes never duplicate each other.';
 
 export const GROUNDED_ACTUATION_DIRECTIVE =
   'INTERACTING WITH THE PAGE — IMPORTANT: You interact with the page ONLY through ' +
@@ -199,11 +204,10 @@ export const GROUNDED_ACTUATION_DIRECTIVE =
   'the latest browser_snapshot (fall back to its testId, then its real visible ' +
   'text, only when there is no clean role+name). Workflow: browser_snapshot to read ' +
   'the real roles + names, then call the matching *_control tool for each field / ' +
-  'option / button, snapshotting again after navigation. (browser_click / ' +
-  'browser_type / browser_fill_form / browser_select_option are intentionally not ' +
-  'available — the control tools fully replace them; this keeps the saved spec\'s ' +
-  'selectors grounded.) browser_navigate / browser_snapshot / browser_wait_for / ' +
-  'browser_tabs / browser_press_key remain available.\n\n' +
+  'option / button, snapshotting again after navigation. (The Playwright ' +
+  'interaction tools are disabled — the control tools replace them, so saved ' +
+  'selectors stay grounded.) browser_navigate / browser_snapshot / ' +
+  'browser_wait_for / browser_tabs / browser_press_key remain available.\n\n' +
   'WHEN A TARGET ISN\'T UNIQUELY ADDRESSABLE — narrow it, don\'t give up. Two ' +
   'common reasons and the one principle that solves both: (a) its accessible ' +
   'name/label repeats elsewhere on the page, or (b) its real input is hidden so ' +

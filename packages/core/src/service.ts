@@ -62,11 +62,13 @@ import {
   EXPLORATION_CHECKPOINT_DIRECTIVE,
   GROUNDED_ACTUATION_DIRECTIVE,
   QA_EXPLORATION_DIRECTIVE,
+  QA_VERIFY_DEFER_SECURITY_DIRECTIVE,
 } from './agentDirectives.js';
 import { loadMemory, formatMemoryForPrompt, writeFact, type BusinessFact } from './memory/businessMemory.js';
 import { writeQaReport } from './qa/qaReport.js';
 import { finalizeCandidates, type RecordedCandidate } from './qa/candidates.js';
 import { QA_INTENSITY, asQaIntensity, qaBudgetDirective } from './qa/intensity.js';
+import { classifyInstruction } from './qa/classify.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { handleRelayMessage } from './service/relayHandlers.js';
 import { buildCdpHint, buildCdpHintResume } from './service/cdpHint.js';
@@ -1016,12 +1018,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         return;
       }
       if (msg.type !== 'command') return;
-      const text = msg.payload?.text;
+      const rawText = msg.payload?.text;
       const resumeSessionId =
         typeof msg.payload?.sessionId === 'string' && msg.payload.sessionId.length > 0
           ? msg.payload.sessionId
           : undefined;
-      if (typeof text !== 'string' || !text.trim()) return;
+      if (typeof rawText !== 'string' || !rawText.trim()) return;
+      // `let` (typed string): the classify gate (below) may substitute a refined
+      // instruction (e.g. "read the page" → "test this page") before the run uses it.
+      let text: string = rawText;
       if (activeRun) {
         send(ws, {
           type: 'error',
@@ -1232,6 +1237,66 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         runTargetUrl =
           cdp.tabs?.find((t) => /localhost|127\.0\.0\.1/.test(t.url))?.url ?? cdp.tabs?.[0]?.url;
 
+        // ── Pre-flight classify gate (QA only) ──────────────────────────────
+        // Route the instruction with a cheap one-shot call BEFORE paying for the
+        // full exploratory run. Fresh user instructions only — skip on resume and
+        // on the internal pentest phase-2 re-dispatch (both already vetted).
+        // Fail-open (→ go) lives inside classifyInstruction, so a hiccup never
+        // blocks a legitimate run. 'refuse' / 'clarify' emit a 0-step session_end
+        // and return WITHOUT creating a run folder or ledger record (ephemeral,
+        // like the CDP check); the extension renders a plain reply / clickable
+        // options from the same event a 0-action run produces.
+        if (runMode === 'qa' && !resumeSessionId && !isPhase2 && typeof text === 'string') {
+          // Show immediate activity for the ~1s classify (flips the UI to
+          // "Working"); the real run emits its own session_start on 'go'.
+          emitToRun({ type: 'event', payload: { kind: 'session_start', sessionId: '' } satisfies InvokeEvent });
+          const classifyAgentId = currentByok ? byokAgentFor(currentByok.protocol) : currentAgentId;
+          let classifyMemory: string | undefined;
+          try { classifyMemory = formatMemoryForPrompt(await loadMemory(devRoot)) || undefined; } catch { /* best-effort */ }
+          const verdict = await classifyInstruction({
+            agentId: classifyAgentId,
+            instruction: text,
+            pageUrl: runTargetUrl,
+            pageTitle: cdp.tabs?.find((t) => t.url === runTargetUrl)?.title,
+            memory: classifyMemory,
+            // Cheap + fast for claude; BYOK / other agents use their configured model.
+            model: classifyAgentId === 'claude' && !currentByok ? 'haiku' : currentByok?.model || model,
+            effort: currentEffort,
+            cwd: msg.payload?.isolateContext === true ? isolatedAgentCwd() : devRoot,
+            env: currentByok
+              ? byokEnvFor(currentByok)
+              : classifyAgentId === 'qwen' && currentLocalBaseUrl
+                ? { OPENAI_BASE_URL: currentLocalBaseUrl, OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'local' }
+                : undefined,
+            signal: run.abort.signal,
+          });
+          if (run.cancelled) return; // user hit Stop during classify
+          if (verdict.route === 'refuse') {
+            pendingPhase2 = null; // don't let a queued pentest phase fire on a refused instruction
+            emitToRun({
+              type: 'event',
+              payload: {
+                kind: 'session_end',
+                isError: false,
+                summary: verdict.reason || 'I can only help test this app — tell me a page, feature, or flow to test.',
+              } satisfies InvokeEvent,
+            });
+            return;
+          }
+          if (verdict.route === 'clarify' && verdict.options && verdict.options.length >= 2) {
+            pendingPhase2 = null;
+            const question = verdict.reason || 'What would you like me to test?';
+            const block = ['```hover-ask', ...verdict.options.map((o) => `- ${o}`), '```'].join('\n');
+            emitToRun({
+              type: 'event',
+              payload: { kind: 'session_end', isError: false, summary: `${question}\n\n${block}` } satisfies InvokeEvent,
+            });
+            return;
+          }
+          // 'go' — run it, substituting the re-interpreted instruction if any.
+          if (verdict.refinedInstruction) text = verdict.refinedInstruction;
+        }
+
         // Build a system-prompt addendum telling the agent about the user's
         // current tab. The most common waste we observed: agent calls
         // browser_navigate to the same URL the user is already on, triggering
@@ -1343,6 +1408,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (currentModeId === 'qa') {
           appendSystemPrompt = `${appendSystemPrompt}\n\n${QA_EXPLORATION_DIRECTIVE}`;
           appendSystemPrompt = `${appendSystemPrompt}\n\n${qaBudgetDirective(runIntensity)}`;
+          // Two-pass: this is the functional verify pass with a pentest pass
+          // queued behind it — keep it functional-only so it doesn't duplicate
+          // the pentest pass's security work (the overlap that read like a
+          // double security run).
+          if (splitting) appendSystemPrompt = `${appendSystemPrompt}\n\n${QA_VERIFY_DEFER_SECURITY_DIRECTIVE}`;
         }
         // Business memory (QA + API modes only): inject what earlier runs learned
         // about THIS app so the agent doesn't re-ask answered business questions.
