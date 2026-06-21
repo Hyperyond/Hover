@@ -148,6 +148,12 @@ export const QA_EXPLORATION_DIRECTIVE =
   'action-type before doing them, otherwise flag-and-skip. Stay on the app under ' +
   'test (never navigate to external origins). Stop when the frontier is exhausted ' +
   'or you hit the run budget; then write the findings report.\n' +
+  'REPORT COVERAGE: end your report with a `## Coverage` section — first a short ' +
+  '`Tested:` list of the main areas / flows / controls you DID exercise, then a ' +
+  '`Not covered:` list of anything you saw but did NOT test (and a few words on ' +
+  'why: out of scope, blocked, ran out of budget, destructive-and-skipped). This ' +
+  'tells the developer exactly what is verified vs still open — be honest about ' +
+  'gaps, do not claim coverage you did not do.\n' +
   'CAPTURE CLEAN FLOWS: as you exercise the app, whenever you complete a coherent ' +
   'end-to-end flow worth keeping as a regression test (e.g. "Log in", "Add item ' +
   'to cart", "Submit the registration form"), call record_candidate with a short ' +

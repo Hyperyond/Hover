@@ -384,7 +384,7 @@ export function Composer({
                       onClick={() => { if (qaPentestAvailable) post({ type: "setQaPentest", value: !qaPentest }); }}
                     >
                       <div className="p-body">
-                        <div className="p-title">Pentest</div>
+                        <div className="p-title">Penetration testing</div>
                         <div className="p-desc">{qaPentestAvailable ? "Offensive scan of your OWN app · confirms before enabling · runs last (after functional + API)" : "Runtime not running"}</div>
                       </div>
                       <span className={"cap-state" + (qaPentestAvailable && qaPentest ? " on-danger" : "")}>
