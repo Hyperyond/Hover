@@ -8,9 +8,11 @@ import { useInView, usePrefersReducedMotion } from '@/lib/useInView';
  * packages/vscode-ext/src/chatView.ts (linear thread, header, composer toolbar).
  *
  * Loops three scripted sessions:
- *   1. Default (mint)    — login → add todo → Save as spec
- *   2. API testing (orange) — IDOR probe → api-test spec
- *   3. Pentest (red)     — XSS pentest → findings report
+ *   1. Flow (mint)        — login → add todo → Save as spec
+ *   2. QA · API (orange)  — IDOR probe → api-test spec
+ *   3. QA · Pentest (red) — XSS pentest → findings report
+ * (API + pentest are QA capability toggles in the product; shown here as their
+ *  own scenes so each capability reads clearly.)
  */
 
 type Mode = 'default' | 'api-test' | 'pentest';
@@ -26,9 +28,9 @@ const ACCENT_INK: Record<Mode, string> = {
   pentest: '#2a0d0d',
 };
 const MODE_LABEL: Record<Mode, string> = {
-  default: 'Frontend',
-  'api-test': 'API testing',
-  pentest: 'Pentest',
+  default: 'Flow',
+  'api-test': 'QA · API',
+  pentest: 'QA · Pentest',
 };
 const SESSION_LABEL: Record<Mode, string> = {
   default: 'Todo flow',
@@ -250,9 +252,9 @@ export function WidgetDemo() {
               padding: '0 26px', lineHeight: 1.55, fontSize: 12,
             }}>
               {scene.mode === 'pentest'
-                ? 'Pentest mode — attack your own dev app for vulns.'
+                ? 'QA · Pentest — attack your own dev app for vulns.'
                 : scene.mode === 'api-test'
-                ? 'API testing — probe captured API calls for IDOR & authz.'
+                ? 'QA · API — probe captured API calls for IDOR & authz.'
                 : 'Describe a flow in plain English. Hover drives your real Chrome.'}
             </div>
           )}

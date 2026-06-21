@@ -14,11 +14,11 @@ Click the **Hover** icon in the Activity Bar to open the chat webview.
 
 You'll see:
 - A header pill `claude ▾` showing the active coding agent
-- A mode switch — Normal / 🟠 API testing / 🔴 Pentest
+- A mode switch — Flow / 🟢 QA Testing (QA carries API + penetration toggles)
 - An empty conversation body
 - A composer with a textarea, a model pill, a voice (speech) toggle, and **Send**
 
-Alongside the chat, the `hover` container has these views: **Dashboard** (your saved `__vibe_tests__/` specs, folder-grouped, with pass/fail and ✨ Optimize), **Conversations** (one record per agent run — agent, model, cost, outcome), **Network** (captured API calls; shown in API-testing / Pentest modes), and **Environments** (Local + remote targets and their accounts). A **Settings** view covers agent / model / browser visibility / speech / model API key.
+Alongside the chat, the `hover` container has these views: **Dashboard** (your saved `__vibe_tests__/` specs, folder-grouped, with pass/fail and ✨ Optimize), **Conversations** (one record per agent run — agent, model, cost, outcome), **Network** (captured API calls; shown when QA's API / penetration toggles are on), and **Environments** (Local + remote targets and their accounts). A **Settings** view covers agent / model / browser visibility / speech / model API key.
 
 ## Step 2 — Set up an environment (optional)
 
@@ -79,5 +79,5 @@ This is the point of crystallization: the AI authored the test once, but the sav
 
 ## What's next
 
-- [API & security testing](/docs/features/api-test/) — 🟠 API testing and 🔴 Pentest modes in the same chat
+- [API & security testing](/docs/features/api-test/) — QA Testing's 🟠 API and 🔴 penetration capabilities
 - [Optimize a spec](/docs/features/optimization-pass/) — the optional diff-reviewed AI polish pass

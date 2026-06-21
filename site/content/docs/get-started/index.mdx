@@ -15,7 +15,7 @@ Nothing changes in your app, your bundler config, or your dependencies — the e
 
 
 
-Hover also covers **application security testing** in the same chat — flip into 🟠 **[API testing](/docs/features/api-test/)** mode (IDOR / broken authorization / parameter-tampering, via a local HTTPS MITM) or 🔴 **Pentest** mode (offensive SQLi / XSS / SSTI / SSRF / IDOR against your **own** dev app). Confirmed findings crystallize into `.api-test.spec.ts` CI gates or a findings report.
+Hover also has a 🟢 **[QA Testing](/docs/features/api-test/)** mode that autonomously explores your app to find defects — and it can turn on **API testing** (IDOR / broken authorization / parameter-tampering, via a local HTTPS MITM) and **penetration testing** (offensive SQLi / XSS / SSTI / SSRF / IDOR against your **own** dev app) as toggles. Confirmed API findings crystallize into `.api-test.spec.ts` CI gates; penetration testing writes a findings report.
 
 Building Hover itself? See **[Development](/docs/development/)** for the monorepo workflow.
 
