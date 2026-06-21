@@ -10,6 +10,10 @@ export function esc(t: string): string {
 export function inline(t: string): string {
   return esc(t)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+    // *italic* / _italic_ — only when clearly delimited, so snake_case
+    // identifiers (word_progress, user_id) and stray asterisks aren't mangled.
+    .replace(/(^|[\s([{>])([*_])(?=\S)([^\n]+?)\2(?=[\s)\]}.,!?:;'"]|$)/g, "$1<em>$3</em>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
 
@@ -41,7 +45,8 @@ export function mdToHtml(md: string): string {
     }
     const hm = line.match(/^(#{1,6})\s+(.*)$/);
     if (hm) {
-      out.push("<h4>" + inline(hm[2]) + "</h4>");
+      const lvl = hm[1].length; // 1–6 → real heading level (sized in chat.css)
+      out.push(`<h${lvl}>` + inline(hm[2]) + `</h${lvl}>`);
       i++;
       continue;
     }
