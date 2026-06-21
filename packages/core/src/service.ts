@@ -65,8 +65,7 @@ import {
 } from './agentDirectives.js';
 import { loadMemory, formatMemoryForPrompt, writeFact, type BusinessFact } from './memory/businessMemory.js';
 import { writeQaReport } from './qa/qaReport.js';
-import { resolveCandidates, type RecordedCandidate } from './qa/candidates.js';
-import { isActuationStep } from './mcp/actuationTools.js';
+import { finalizeCandidates, type RecordedCandidate } from './qa/candidates.js';
 import { QA_INTENSITY, asQaIntensity, qaBudgetDirective } from './qa/intensity.js';
 import { send, sendIfOpen, type ClientMessage } from './service/types.js';
 import { handleRelayMessage } from './service/relayHandlers.js';
@@ -812,15 +811,16 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         return;
       }
       // record-candidate (from the control MCP's record_candidate tool): buffer a
-      // QA candidate flow. ONLY in QA mode. Resolved to real recorded steps and
-      // emitted as `qa-candidates` at run end — never acked, never blocks a run.
+      // QA candidate flow. The MCP already captured the flow's real grounded
+      // steps, so we just hold them. ONLY in QA mode; emitted as `qa-candidates`
+      // at run end — never acked, never blocks a run.
       if (msg.type === 'record-candidate') {
         const c = (msg.payload as { candidate?: RecordedCandidate } | undefined)?.candidate;
         if (c && typeof c.name === 'string' && Array.isArray(c.steps) && currentModeId === 'qa') {
           runCandidates.push({
             name: c.name,
             description: typeof c.description === 'string' ? c.description : undefined,
-            steps: c.steps.filter((n) => Number.isInteger(n) && (n as number) > 0),
+            steps: c.steps,
           });
         }
         return;
@@ -1540,18 +1540,8 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // report, not specs, so it never offers them (and avoids duplicating the
         // verify phase's candidates).
         if (runMode === 'qa' && !pentestActiveThisRun && runCandidates.length && !run.cancelled) {
-          const resolved = resolveCandidates(runResult.steps, runCandidates);
+          const resolved = finalizeCandidates(runCandidates);
           if (resolved.length) emitToRun({ type: 'qa-candidates', payload: { candidates: resolved } });
-          else {
-            // The agent recorded candidates but none resolved to real steps —
-            // usually it cited step numbers that don't match the "· step N" tags
-            // (drift over a long run). Log it so the gap is visible, not silent.
-            const actuation = runResult.steps.filter((s) => s.kind === 'step' && isActuationStep(s.tool)).length;
-            process.stderr.write(
-              `[hover/qa] ${runCandidates.length} candidate flow(s) recorded but none resolved ` +
-                `(cited steps: ${runCandidates.map((c) => `[${c.steps.join(',')}]`).join(' ')}; ${actuation} actuation steps this run).\n`,
-            );
-          }
         }
       } catch (err) {
         // A user-initiated cancel() already sent a synthetic session_end
