@@ -33,7 +33,8 @@
  */
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { runDir } from './specs/sidecar.js';
 import { readdirSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { runSession } from './runSession.js';
@@ -310,7 +311,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
   // forced an explicit one, but in that case mode-contributed servers
   // are silently dropped — we log a warning the first time it happens.
   let warnedExplicitMcpOverride = false;
-  const buildMcpConfig = (sessionTag?: string, sourceGate: 'always' | 'ask' | 'deny' = 'ask'): string => {
+  const buildMcpConfig = (shotDir?: string, sourceGate: 'always' | 'ask' | 'deny' = 'ask'): string => {
     if (opts.mcpConfig) {
       const activePlugin = currentModeId ? pluginsByModeId.get(currentModeId) : null;
       if (activePlugin?.mcpServers?.length && !warnedExplicitMcpOverride) {
@@ -375,9 +376,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         HOVER_DEV_URL: opts.devUrl ?? cdpUrl,
         HOVER_APPROVAL_PORT: String(port),
         HOVER_PROJECT_ROOT: devRoot,
-        ...(sessionTag
-          ? { HOVER_SHOT_DIR: resolve(devRoot, '.hover', 'screenshots', sessionTag.replace(/[^a-zA-Z0-9._-]+/g, '-')) }
-          : {}),
+        ...(shotDir ? { HOVER_SHOT_DIR: shotDir } : {}),
       },
     });
     // Single-Chrome model: the Playwright MCP always points at the one debug
@@ -390,11 +389,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // Suffix the filename by the mode so different mode toggles within
       // one service produce distinct config files (debugging aid).
       suffix: currentModeId ?? undefined,
-      // Screenshots / traces land under the project's .hover home, grouped
-      // per run, instead of the MCP server's default OS temp dir.
-      outputDir: sessionTag
-        ? resolve(devRoot, '.hover', 'screenshots', sessionTag.replace(/[^a-zA-Z0-9._-]+/g, '-'))
-        : undefined,
+      // Screenshots / traces land in the run's own folder
+      // (.hover/runs/<conv>/<runId>/screenshots), grouped per run, instead of
+      // the MCP server's default OS temp dir.
+      outputDir: shotDir,
     });
   };
 
@@ -1042,6 +1040,18 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       // Session-ledger state — declared outside the try so the catch path can
       // still record an aborted / thrown run (the spend view wants those too).
       const sessionStartedAt = new Date().toISOString();
+      // One id per run, generated NOW (run start), so the ledger record, the
+      // screenshots, and the QA report all share one folder. Replaces the old
+      // split between an end-based record id and a start-based screenshotTag.
+      const runId = `${sessionStartedAt.replace(/[:.]/g, '-')}-${Math.random().toString(16).slice(2, 6)}`;
+      // The chat conversation this run belongs to (from the editor); groups all
+      // its runs under one folder so deleting a conversation removes them.
+      const conversationId =
+        typeof msg.payload?.conversationId === 'string' && msg.payload.conversationId
+          ? msg.payload.conversationId
+          : 'default';
+      const runDirPath = runDir(devRoot, conversationId, runId);
+      const runShotDir = join(runDirPath, 'screenshots');
       let sessionEnd: { turns?: number; costUsd?: number; tokens?: number } = {};
       let sessionRecorded = false;
       runCandidates = []; // fresh per run — QA candidate flows accumulate below
@@ -1090,7 +1100,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         process.stderr.write('[hover/qa] Pentest capability requested but the pentest runtime is unavailable; running functional-only.\n');
       }
       const runResumeOf = resumeSessionId;
-      const screenshotTag = (resumeSessionId ?? sessionStartedAt).replace(/[^a-zA-Z0-9._-]+/g, '-');
       const runEnv = ((): { id?: string; name?: string } | undefined => {
         const e = (msg.payload as { env?: { id?: string; name?: string } } | undefined)?.env;
         return e && typeof e === 'object' ? { id: e.id, name: e.name } : undefined;
@@ -1109,7 +1118,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         const toolCounts = detail?.steps ? tallyTools(detail.steps) : undefined;
         const target =
           runTargetUrl || runEnv ? { url: runTargetUrl, id: runEnv?.id, name: runEnv?.name } : undefined;
-        const rec = await writeSessionRecord(devRoot, {
+        const rec = await writeSessionRecord(devRoot, conversationId, runId, {
           startedAt: sessionStartedAt,
           endedAt,
           durationMs: Date.parse(endedAt) - Date.parse(sessionStartedAt),
@@ -1124,7 +1133,6 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           toolCounts: toolCounts && Object.keys(toolCounts).length ? toolCounts : undefined,
           target: target ? { url: target.url, envId: target.id, envName: target.name } : undefined,
           accountLabels: runAccountLabels,
-          screenshotTag,
           resumeOf: runResumeOf,
           turns: sessionEnd.turns,
           costUsd: sessionEnd.costUsd,
@@ -1135,15 +1143,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // (mirrors pentest's report file; the chat already shows the Findings
         // card live). Best-effort — never breaks the run/ledger.
         if (runMode === 'qa') {
-          const r = await writeQaReport(devRoot, {
+          const r = await writeQaReport(runDirPath, {
             prompt: text,
             summary: parsed.summary,
             findings: parsed.findings,
             endedAt,
             targetUrl: runTargetUrl,
-            // Two-pass: the pentest phase shares the prompt with the verify phase,
-            // so suffix its report or it would overwrite the verify report.
-            phase: pentestActiveThisRun ? 'pentest' : undefined,
           });
           if ('error' in r) process.stderr.write(`[hover/qa] report write failed: ${r.error}\n`);
           // Surface the report as a clickable artifact in the chat (mirrors the
@@ -1188,12 +1193,11 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // us assert plugin-contributed servers landed in the config even
         // when CDP preflight subsequently fails (useful for smoke tests
         // that don't have a real debug Chrome wired up).
-        // Group this run's screenshots under .hover/screenshots/<tag>. A
-        // resumed session reuses its id so follow-up turns share one dir;
-        // a first turn keys on its start timestamp (the agent's own
-        // sessionId isn't known until session_start, after the MCP launches).
+        // This run's screenshots go in its own folder
+        // (.hover/conversations/<conversationId>/<runId>/screenshots) — runShotDir,
+        // computed at run start so the ledger record + report + shots all share it.
         const sourceGate = msg.payload?.sourceAccess ?? 'ask';
-        const mcpConfig = buildMcpConfig(screenshotTag, sourceGate);
+        const mcpConfig = buildMcpConfig(runShotDir, sourceGate);
 
         // Preflight: refuse to invoke if CDP isn't reachable. Otherwise the
         // Playwright MCP server would silently launch its own Chromium —
@@ -1421,7 +1425,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // Screenshot previews: this run's MCP output dir (same path buildMcpConfig
         // uses) + a flag tracking whether the last tool_use was a screenshot, so
         // we can surface the freshly-written png to the chat as a tool_result lands.
-        const runShotDir = resolve(devRoot, '.hover', 'screenshots', screenshotTag);
+        // (runShotDir is the run folder's screenshots/, computed at run start.)
         let pendingShot: { full: boolean } | null = null;
         let lastShotPath: string | null = null;
         const runResult = await runSession(

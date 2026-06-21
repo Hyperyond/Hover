@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   writeSessionRecord,
   markSessionSaved,
-  sessionsDir,
+  listSessionRecords,
   parseFindings,
   tallyTools,
   type SessionRecord,
@@ -31,18 +31,22 @@ const base = {
   stepCount: 5,
 };
 
-function readAll(): SessionRecord[] {
-  return readdirSync(sessionsDir(devRoot))
-    .filter(f => f.endsWith('.json'))
-    .map(f => JSON.parse(readFileSync(join(sessionsDir(devRoot), f), 'utf-8')) as SessionRecord);
+async function readAll(): Promise<SessionRecord[]> {
+  return (await listSessionRecords(devRoot)).map(x => x.rec);
 }
 
 describe('writeSessionRecord', () => {
-  it('appends one summary file per run under .hover/sessions/', async () => {
-    const res = await writeSessionRecord(devRoot, base);
+  it('writes one meta.json per run under .hover/runs/<conv>/<runId>/', async () => {
+    const res = await writeSessionRecord(devRoot, 'conv-1', 'run-1', base);
     expect('path' in res).toBe(true);
-    const [rec] = readAll();
+    if ('path' in res) {
+      expect(res.path.replace(/\\/g, '/')).toContain('/.hover/conversations/conv-1/run-1/meta.json');
+      expect(res.id).toBe('run-1');
+    }
+    const [rec] = await readAll();
     expect(rec.version).toBe(2);
+    expect(rec.id).toBe('run-1');
+    expect(rec.conversationId).toBe('conv-1');
     expect(rec.prompt).toBe(base.prompt);
     expect(rec.costUsd).toBe(0.08);
     expect(rec.specSlug).toBeUndefined();
@@ -93,28 +97,28 @@ describe('tallyTools', () => {
 
 describe('markSessionSaved', () => {
   it('patches the matching record with outcome=saved + specSlug', async () => {
-    await writeSessionRecord(devRoot, base);
+    await writeSessionRecord(devRoot, 'c1', '2026-06-12T10-00-00-aaaa', base);
     await markSessionSaved(devRoot, base.prompt, 'login-and-todo');
-    const [rec] = readAll();
+    const [rec] = await readAll();
     expect(rec.outcome).toBe('saved');
     expect(rec.specSlug).toBe('login-and-todo');
   });
 
   it('is a tolerant no-op when nothing matches (or no ledger exists)', async () => {
-    await markSessionSaved(devRoot, 'never ran', 'x'); // no dir — must not throw
-    await writeSessionRecord(devRoot, base);
+    await markSessionSaved(devRoot, 'never ran', 'x'); // no runs yet — must not throw
+    await writeSessionRecord(devRoot, 'c1', '2026-06-12T10-00-00-bbbb', base);
     await markSessionSaved(devRoot, 'different prompt', 'x');
-    const [rec] = readAll();
+    const [rec] = await readAll();
     expect(rec.outcome).toBe('completed');
     expect(rec.specSlug).toBeUndefined();
   });
 
-  it('does not re-patch a record that already has a specSlug', async () => {
-    await writeSessionRecord(devRoot, base);
-    await markSessionSaved(devRoot, base.prompt, 'first');
-    await writeSessionRecord(devRoot, base); // second run, same prompt
-    await markSessionSaved(devRoot, base.prompt, 'second');
-    const slugs = readAll().map(r => r.specSlug).sort();
-    expect(slugs).toEqual(['first', 'second']);
+  it('patches the most recent matching record (newest startedAt) once', async () => {
+    await writeSessionRecord(devRoot, 'c1', 'r-old', { ...base, startedAt: '2026-06-12T10:00:00.000Z' });
+    await writeSessionRecord(devRoot, 'c1', 'r-new', { ...base, startedAt: '2026-06-12T11:00:00.000Z' });
+    await markSessionSaved(devRoot, base.prompt, 'the-spec');
+    const saved = (await readAll()).filter(r => r.specSlug === 'the-spec');
+    expect(saved).toHaveLength(1);
+    expect(saved[0].id).toBe('r-new'); // newest
   });
 });

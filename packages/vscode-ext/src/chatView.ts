@@ -70,16 +70,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    // Allow loading run screenshots (written by Playwright MCP under
-    // <workspace>/.hover/screenshots/<session>/) as <img> sources via
-    // asWebviewUri — a root grants all its descendants.
+    // Allow loading run screenshots (written under each run's folder
+    // <workspace>/.hover/conversations/<conv>/<runId>/screenshots/) as <img>
+    // sources via asWebviewUri — a root grants all its descendants.
     const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
     view.webview.options = {
       enableScripts: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this.extensionUri, "resources"),
         vscode.Uri.joinPath(this.extensionUri, "dist", "webview"),
-        ...(wsRoot ? [vscode.Uri.joinPath(wsRoot, ".hover", "screenshots")] : []),
+        // .hover root covers conversations/<...>/screenshots (current) + the
+        // legacy .hover/screenshots path for old transcripts.
+        ...(wsRoot ? [vscode.Uri.joinPath(wsRoot, ".hover")] : []),
       ],
     };
     // The chat is the React webview (Vite build under dist/webview). All Hover

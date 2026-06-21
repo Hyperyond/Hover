@@ -12,18 +12,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { hoverDir } from '../specs/sidecar.js';
 import type { SessionFinding } from '../sessions/sessions.js';
-
-export function qaReportsDir(devRoot: string): string {
-  return join(hoverDir(devRoot), 'qa-reports');
-}
-
-function slug(s: string): string {
-  return (
-    s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'qa-run'
-  );
-}
 
 export interface QaReportInput {
   prompt: string;
@@ -31,9 +20,6 @@ export interface QaReportInput {
   findings: SessionFinding[];
   endedAt: string;
   targetUrl?: string;
-  /** Distinguishes phases of one two-pass run (e.g. 'pentest') so the second
-   *  phase's report doesn't overwrite the first's — they share the prompt. */
-  phase?: string;
 }
 
 /** Render the report Markdown (pure — exported for testing). */
@@ -57,17 +43,16 @@ export function renderQaReport(input: QaReportInput): string {
   return body.join('\n') + '\n';
 }
 
-/** Write the QA report for a run. NEVER throws; returns the path or an error
- *  string for the caller to log. */
+/** Write the QA report into the run's folder as `report.md`. Each run (incl.
+ *  each phase of a two-pass run) has its own folder, so there's no name
+ *  collision. NEVER throws; returns the path or an error string. */
 export async function writeQaReport(
-  devRoot: string,
+  runDirPath: string,
   input: QaReportInput,
 ): Promise<{ path: string } | { error: string }> {
   try {
-    const dir = qaReportsDir(devRoot);
-    await mkdir(dir, { recursive: true });
-    const suffix = input.phase ? `-${slug(input.phase)}` : '';
-    const path = join(dir, `${slug(input.prompt)}${suffix}.md`);
+    await mkdir(runDirPath, { recursive: true });
+    const path = join(runDirPath, 'report.md');
     await writeFile(path, renderQaReport(input), 'utf-8');
     return { path };
   } catch (err) {
