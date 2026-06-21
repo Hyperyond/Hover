@@ -117,12 +117,33 @@ export function Chat() {
     document.body.classList.toggle("silent-running", running && silent);
   }, [running, silent]);
   const logRef = useRef<HTMLDivElement>(null);
+  const stuckRef = useRef(true); // is the view pinned to (near) the bottom?
+  const prevLenRef = useRef(0);
 
-  // Keep the thread pinned to the bottom as it streams.
+  // Follow the stream only while the user is at the bottom. If they scrolled up
+  // to read history, new content does NOT yank them down — UNLESS they just sent
+  // a message (then re-pin). Scrolling is smooth.
   useLayoutEffect(() => {
     const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const grew = items.length > prevLenRef.current;
+    prevLenRef.current = items.length;
+    const userSent = grew && items[items.length - 1]?.kind === "user";
+    if (userSent) stuckRef.current = true; // a fresh send always re-pins
+    if (userSent || stuckRef.current) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [items]);
+
+  // Track whether the user is near the bottom (so streaming can stop following
+  // once they scroll up).
+  useEffect(() => {
+    const el = logRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      stuckRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
 
   // While an ask is open the composer is hidden and the ask-dock takes its place
   // (the CSS keys off body.ask-open, matching the legacy webview).
