@@ -1673,6 +1673,30 @@ body.ask-open #ask-dock {
 .barebtn.toggle.danger.on {
   color: #ef4444;
 }
+/* Capability rows inside the combined QA popup (API / Pentest on-off state). */
+.p-item.cap {
+  cursor: pointer;
+}
+.p-item.cap.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cap-state {
+  flex: none;
+  align-self: center;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.55;
+  padding-left: 8px;
+}
+.cap-state.on {
+  color: var(--accent);
+  opacity: 1;
+}
+.cap-state.on-danger {
+  color: #ef4444;
+  opacity: 1;
+}
 .barebtn.toggle.locked {
   opacity: 0.5;
   cursor: default;

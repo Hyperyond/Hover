@@ -150,14 +150,14 @@ export function Composer({
   useEffect(() => {
     if (!intensityMenu) return;
     const close = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement)?.closest?.("#intensity-btn, #intensity-menu")) setIntensityMenu(false);
+      if (!(e.target as HTMLElement)?.closest?.("#qa-menu-btn, #qa-menu")) setIntensityMenu(false);
     };
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [intensityMenu]);
 
   function pickIntensity(value: string) {
-    setIntensityMenu(false);
+    // Keep the combined panel open so the user can also flip capabilities.
     if (value !== qaIntensity) post({ type: "setQaIntensity", value });
   }
 
@@ -339,14 +339,19 @@ export function Composer({
               <>
                 <button
                   className="barebtn"
-                  id="intensity-btn"
-                  title="QA intensity — how hard the exploration tries (bounds run cost)"
+                  id="qa-menu-btn"
+                  title="QA run settings — intensity + API / Pentest capabilities"
                   onClick={() => setIntensityMenu((o) => !o)}
                 >
-                  <span>{QA_LEVELS.find((l) => l.v === qaIntensity)?.label ?? "Standard"}</span>
+                  <span>
+                    {QA_LEVELS.find((l) => l.v === qaIntensity)?.label ?? "Standard"}
+                    {qaApiAvailable && qaApi ? " · API" : ""}
+                    {qaPentestAvailable && qaPentest ? " · Pentest" : ""}
+                    <span className="caret"> ▾</span>
+                  </span>
                 </button>
                 {intensityMenu && (
-                  <div className="popup" id="intensity-menu">
+                  <div className="popup" id="qa-menu">
                     <div className="p-hdr">QA intensity</div>
                     {QA_LEVELS.map((l) => (
                       <div
@@ -361,36 +366,33 @@ export function Composer({
                         <span className="p-check">✓</span>
                       </div>
                     ))}
+                    <div className="p-hdr">Capabilities</div>
+                    <div
+                      className={"p-item cap" + (qaApiAvailable ? "" : " disabled")}
+                      onClick={() => { if (qaApiAvailable) post({ type: "setQaApi", value: !qaApi }); }}
+                    >
+                      <div className="p-body">
+                        <div className="p-title">API testing</div>
+                        <div className="p-desc">{qaApiAvailable ? "Inspect / replay / test the app's API calls" : "Runtime not running"}</div>
+                      </div>
+                      <span className={"cap-state" + (qaApiAvailable && qaApi ? " on" : "")}>
+                        {qaApiAvailable ? (qaApi ? "On" : "Off") : "n/a"}
+                      </span>
+                    </div>
+                    <div
+                      className={"p-item cap" + (qaPentestAvailable ? "" : " disabled")}
+                      onClick={() => { if (qaPentestAvailable) post({ type: "setQaPentest", value: !qaPentest }); }}
+                    >
+                      <div className="p-body">
+                        <div className="p-title">Pentest</div>
+                        <div className="p-desc">{qaPentestAvailable ? "Offensive scan of your OWN app · confirms before enabling · excludes API" : "Runtime not running"}</div>
+                      </div>
+                      <span className={"cap-state" + (qaPentestAvailable && qaPentest ? " on-danger" : "")}>
+                        {qaPentestAvailable ? (qaPentest ? "On" : "Off") : "n/a"}
+                      </span>
+                    </div>
                   </div>
                 )}
-                <button
-                  className={"barebtn toggle" + (qaApi && qaApiAvailable ? " on" : "") + (qaApiAvailable ? "" : " locked")}
-                  id="qa-api-btn"
-                  title={
-                    qaApiAvailable
-                      ? "API testing — also inspect/replay/test the app's API calls (click to toggle)"
-                      : "API testing unavailable — the api-test runtime isn't running"
-                  }
-                  onClick={() => {
-                    if (qaApiAvailable) post({ type: "setQaApi", value: !qaApi });
-                  }}
-                >
-                  <span>API {qaApiAvailable ? (qaApi ? "on" : "off") : "n/a"}</span>
-                </button>
-                <button
-                  className={"barebtn toggle danger" + (qaPentest && qaPentestAvailable ? " on" : "") + (qaPentestAvailable ? "" : " locked")}
-                  id="qa-pentest-btn"
-                  title={
-                    qaPentestAvailable
-                      ? "Pentest — offensive scan of your OWN app (injection / IDOR / SSRF …). Mutually exclusive with API. Confirms before enabling."
-                      : "Pentest unavailable — the pentest runtime isn't running"
-                  }
-                  onClick={() => {
-                    if (qaPentestAvailable) post({ type: "setQaPentest", value: !qaPentest });
-                  }}
-                >
-                  <span>Pentest {qaPentestAvailable ? (qaPentest ? "on" : "off") : "n/a"}</span>
-                </button>
               </>
             )}
           </div>
