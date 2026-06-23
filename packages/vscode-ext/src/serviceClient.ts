@@ -208,6 +208,7 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'screenshot' ||
         msg.type === 'qa-report' ||
         msg.type === 'qa-candidates' ||
+        msg.type === 'reset-recipe' ||
         msg.type === 'optimize-result' ||
         msg.type === 'optimize-failed' ||
         msg.type === 'source-approval-request' ||

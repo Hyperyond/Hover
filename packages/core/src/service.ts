@@ -61,6 +61,7 @@ import {
   ASK_FORMAT_DIRECTIVE,
   EXPLORATION_CHECKPOINT_DIRECTIVE,
   GROUNDED_ACTUATION_DIRECTIVE,
+  RECON_DIRECTIVE,
   QA_EXPLORATION_DIRECTIVE,
   QA_VERIFY_DEFER_SECURITY_DIRECTIVE,
 } from './agentDirectives.js';
@@ -466,6 +467,10 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
    *  the run lifecycle); reset at each run start; resolved to real steps and
    *  emitted as `qa-candidates` at run end. */
   let runCandidates: RecordedCandidate[] = [];
+  /** Reset recipe discovered by recon this run (via record_reset_recipe). Buffered
+   *  here, forwarded to the extension's env store (.hover/environments.json, which
+   *  the extension owns) at run end, keyed to the run's env. */
+  let runResetRecipe: { tier: number; storageKeys?: string[]; verified?: boolean; note?: string } | null = null;
   /** In-flight source-read approval requests: correlation id → the source-MCP
    *  socket that asked, so the editor's response can be routed back to it. */
   const pendingApprovals = new Map<string, WebSocket>();
@@ -827,6 +832,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         }
         return;
       }
+      // record-reset-recipe (from the control MCP's record_reset_recipe tool): the
+      // agent's state-reset classification for this app/env, discovered during
+      // recon. Buffer it; forwarded to the extension at run end (it owns
+      // .hover/environments.json), keyed to runEnv. Best-effort, never acked.
+      if (msg.type === 'record-reset-recipe') {
+        const r = (msg.payload as { recipe?: typeof runResetRecipe } | undefined)?.recipe;
+        if (r && typeof r.tier === 'number') runResetRecipe = r;
+        return;
+      }
       if (msg.type === 'set-mode') {
         if (activeRun) {
           send(ws, {
@@ -1066,6 +1080,7 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
       let runParsed: ReturnType<typeof parseFindings> | null = null;
       let sessionRecorded = false;
       runCandidates = []; // fresh per run — QA candidate flows accumulate below
+      runResetRecipe = null; // fresh per run — recon may set it
       pendingPhase2 = null; // cleared each run; the phase split below may re-arm it
       // Reproducibility context captured up front (snapshot the mode now so a
       // mid-run switch can't smear it; the rest are filled as the run learns
@@ -1402,6 +1417,14 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (groundedActuation) {
           appendSystemPrompt = `${appendSystemPrompt}\n\n${GROUNDED_ACTUATION_DIRECTIVE}`;
         }
+        // State-reset recon (debt-2 reproducible-state-isolation): ONLY when the
+        // extension explicitly asks (it knows whether this env already has a
+        // recipe). Off by default — recon clears client state, which would wipe a
+        // logged-in session, so it must never run unsolicited or on a plain Flow
+        // recording. (Engine plumbing is live; the extension opt-in is piece C.)
+        if (groundedActuation && msg.payload?.reconReset === true) {
+          appendSystemPrompt = `${appendSystemPrompt}\n\n${RECON_DIRECTIVE}`;
+        }
         // QA mode: autonomous exploratory testing on top of grounded actuation,
         // bounded by the run's intensity budget (so the agent paces itself and
         // always writes a report rather than running away on cost).
@@ -1620,6 +1643,12 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         if (runMode === 'qa' && !pentestActiveThisRun && runCandidates.length && !run.cancelled) {
           const resolved = finalizeCandidates(runCandidates);
           if (resolved.length) emitToRun({ type: 'qa-candidates', payload: { candidates: resolved } });
+        }
+        // Forward a recon-discovered reset recipe to the extension (it owns
+        // .hover/environments.json), keyed to this run's env. The extension
+        // persists it onto the env record (piece C); harmless if unhandled.
+        if (runResetRecipe && runEnv && !run.cancelled) {
+          emitToRun({ type: 'reset-recipe', payload: { envId: runEnv.id, recipe: runResetRecipe } });
         }
       } catch (err) {
         // A user-initiated cancel() already sent a synthetic session_end

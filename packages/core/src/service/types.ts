@@ -34,6 +34,11 @@ export interface ClientMessage {
      *  into the agent's system prompt (ephemeral, not the saved transcript) so
      *  it can log in; the recorded fill values get redacted on save. */
     accounts?: { label: string; username?: string; password?: string; role?: string }[];
+    /** command only — ask the agent to run state-reset recon this run (debt-2
+     *  reproducible-state-isolation). Off unless the extension sets it (e.g. the
+     *  active env has no reset recipe yet); recon clears client state, so it must
+     *  be opt-in, never on a plain Flow recording. */
+    reconReset?: boolean;
     /** check-cdp / launch-chrome / focus-debug — the widget's
      *  window.location.href so service can compare origins or navigate the
      *  newly-launched debug Chrome to the same URL. */

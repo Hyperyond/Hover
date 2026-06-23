@@ -29,7 +29,7 @@ import { registerTrafficView, type TrafficViewProvider, type Flow } from './traf
 import { registerConversationsView, type ConversationsViewProvider } from './conversationsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
 import { registerSettingsView, type SettingsViewProvider, type SettingsByokState } from './settingsView.js';
-import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar, type ResolvedAccount } from './environments.js';
+import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar, type ResolvedAccount, type ResetRecipe } from './environments.js';
 import { registerEnvironmentsView } from './environmentsView.js';
 import { buildWorkflowYaml } from './ciWorkflow.js';
 import { acquireEngine, releaseSession, portForSession, sessionForPort, stopEngine } from './engine.js';
@@ -703,6 +703,16 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       owner.transcript.push({ kind: 'candidates', candidates: cands });
       if (live) chatProvider?.pushCandidates(cands);
       persistSessions(); // arrives AFTER the run's `done` → re-persist or it's lost on reload
+    }
+    return;
+  }
+  if (msg.type === 'reset-recipe') {
+    // Recon (debt-2 reproducible-state-isolation) discovered how to reset this
+    // app to a clean state — persist it onto the env record so future runs and
+    // the resetState() codegen reuse it. Best-effort; keyed to the run's env.
+    const rp = msg.payload as { envId?: string; recipe?: ResetRecipe } | undefined;
+    if (rp?.envId && rp.recipe && typeof rp.recipe.tier === 'number') {
+      void envStore?.setResetRecipe(rp.envId, rp.recipe);
     }
     return;
   }

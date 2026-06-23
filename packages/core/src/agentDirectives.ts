@@ -123,6 +123,26 @@ export const EXPLORATION_CHECKPOINT_DIRECTIVE =
   'finished exactly what was asked) or when the user already said to stop / ' +
   'that it is enough — then just finish and report.';
 
+/** State-reset recon (debt-2 reproducible-state-isolation). Appended for grounded
+ *  modes ONLY when the extension explicitly requests it (run payload `reconReset`)
+ *  — recon clears client state, which would wipe a logged-in session, so it never
+ *  runs unsolicited and never on a plain Flow recording. The agent discovers +
+ *  validates the reset recipe ONCE, then reports it via record_reset_recipe for
+ *  the engine to forward to the environment store. */
+export const RECON_DIRECTIVE =
+  'STATE-RESET RECON — do this ONCE, before you start testing. For saved tests to ' +
+  'be reproducible, Hover needs to know how to reset this app to a clean start. ' +
+  '(1) Note which controls/screens reflect the app\'s stored state. (2) Call ' +
+  'mcp__hovercontrol__clear_client_state, then look at the page after it reloads. ' +
+  '(3) Decide: did the app return to its INITIAL state (its state is client-side ' +
+  '— Tier 1) or did your prior progress come BACK (it is re-hydrated from a ' +
+  'backend / your logged-in account — Tier 2)? (4) Report it with ' +
+  'mcp__hovercontrol__record_reset_recipe: tier 1 (optionally with the ' +
+  'storageKeys that gate the state; omit to clear everything), or tier 2 (not ' +
+  'client-resettable). If clearing logged you out and the app needs auth, log ' +
+  'back in before you continue. Do this recon only once, at the start; then test ' +
+  'normally.';
+
 /** QA Testing mode — appended on top of the grounded-actuation directive. Turns
  *  a directed run into autonomous exploratory testing. (Behavioral effect needs
  *  live verification; the wiring just appends this when mode === 'qa'.) */

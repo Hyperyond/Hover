@@ -508,6 +508,84 @@ server.registerTool(
   },
 );
 
+// ── clear_client_state: reset the app to a clean slate for reproducible runs ─
+// Used during RECON (debt-2 reproducible-state-isolation): the agent clears
+// client state, reloads, and observes whether the consumed state came back —
+// client-side state resets (Tier 1), backend-synced state re-hydrates (Tier 2).
+// The full-wipe path is exactly what the generated resetState() helper mirrors,
+// so what recon verifies here is what runs in CI. NOT buffered as a candidate
+// step — reset is emitted by the helper / beforeEach, not as an inline flow step.
+server.registerTool(
+  'clear_client_state',
+  {
+    description:
+      "Reset the app's CLIENT-side state to a clean slate, then reload. Use this during RECON to learn whether a flow can re-enter from a fresh state: clear → reload → check if the consumed state came back. If the app returns to its initial state, its state is client-side and resettable; if the consumed state is re-hydrated (from a backend / logged-in account), it is NOT — report that. Pass `keys` to remove ONLY those localStorage keys (leaves a logged-in session intact); omit to clear everything (cookies + localStorage + sessionStorage + IndexedDB). This is the same operation a saved test's resetState() will mirror, so what you verify here is what runs in CI.",
+    inputSchema: {
+      keys: z.array(z.string()).optional().describe('localStorage keys to remove (scoped clear, keeps session/cookies). Omit to clear ALL client storage.'),
+    },
+  },
+  async ({ keys }) => {
+    const picked = await pickPage();
+    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    const { page, close } = picked;
+    try {
+      if (keys && keys.length > 0) {
+        await page.evaluate((ks: string[]) => { for (const k of ks) localStorage.removeItem(k); }, keys);
+      } else {
+        await page.context().clearCookies();
+        await page.evaluate(async () => {
+          localStorage.clear();
+          sessionStorage.clear();
+          // Best-effort IndexedDB wipe (Chromium exposes databases()).
+          const idb = indexedDB as IDBFactory & { databases?: () => Promise<{ name?: string }[]> };
+          if (typeof idb.databases === 'function') {
+            const dbs = await idb.databases();
+            await Promise.all(dbs.map(d => d.name
+              ? new Promise<void>((res) => {
+                  const req = indexedDB.deleteDatabase(d.name!);
+                  req.onsuccess = req.onerror = req.onblocked = () => res();
+                })
+              : Promise.resolve()));
+          }
+        });
+      }
+      await page.reload({ timeout: 10000, waitUntil: 'domcontentloaded' });
+      return md(`✓ cleared client state${keys?.length ? ` (keys: ${keys.join(', ')})` : ' (cookies + storage + IndexedDB)'} and reloaded.`);
+    } catch (e) {
+      return md(`✗ could not clear client state: ${errLine(e)}`);
+    } finally {
+      await close();
+    }
+  },
+);
+
+// ── record_reset_recipe: persist how this app resets to a clean state (recon) ─
+// Fire-and-forget over the engine channel; the engine forwards it to the
+// extension's environment store (.hover/environments.json), keyed to the active
+// env. The classification is made by clear_client_state + observation in recon.
+server.registerTool(
+  'record_reset_recipe',
+  {
+    description:
+      "Record HOW this app resets to a clean starting state, so saved tests can re-enter deterministically. Call it ONCE after probing with clear_client_state during recon. tier 1 = client-side state (resettable by clearing storage) — pass `storageKeys` if only specific localStorage keys gate the flow's state, omit to clear all. tier 2 = state is re-hydrated from a backend / logged-in account (NOT client-resettable) — Hover flags affected tests as needing a fixture. tier 3 = needs an external setup hook. Set verified:true only if you actually saw the reset work. CONFIG only — never secrets.",
+    inputSchema: {
+      tier: z.number().int().min(1).max(3).describe('1 = client-side resettable; 2 = backend-synced (not client-resettable); 3 = needs an external setup hook.'),
+      storageKeys: z.array(z.string()).optional().describe('Tier 1: the localStorage keys that gate the flow state. Omit to clear all client storage.'),
+      verified: z.boolean().optional().describe('true if you confirmed the reset actually returns the app to a clean state.'),
+      note: z.string().optional().describe('One line on what you observed (no secrets).'),
+    },
+  },
+  async ({ tier, storageKeys, verified, note }) => {
+    const sock = ensureAskWs();
+    if (!sock) return md('✓ noted (recipe channel unavailable; continuing).');
+    const send = (): void =>
+      sock.send(JSON.stringify({ type: 'record-reset-recipe', payload: { recipe: { tier, storageKeys, verified, note } } }));
+    if (sock.readyState === WebSocket.OPEN) send();
+    else sock.once('open', send);
+    return md(`✓ recorded reset recipe (tier ${tier}${verified ? ', verified' : ''}).`);
+  },
+);
+
 // ── record_candidate: mark a clean flow worth crystallizing (QA mode) ────────
 // You just name the flow — the engine captures the actual grounded steps you
 // performed since your LAST record_candidate (or run start), so there's no

@@ -827,6 +827,54 @@ describe('writeSpec — Playwright config scaffolding (bug A)', () => {
   });
 });
 
+describe('writeSpec — reset helper (debt-2 reproducible state)', () => {
+  const nav = { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } } as const;
+  const click = { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Flip' } } as const;
+
+  it('tier-1 recipe → generates support/resetState.ts + beforeEach call', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'flip with reset',
+      steps: [nav, click],
+      resetRecipe: { tier: 1 },
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`import { resetState } from './support/resetState'`);
+    expect(src).toContain('test.beforeEach(async ({ page, context }) => {');
+    expect(src).toContain('await resetState(page, context);');
+    const helper = readFileSync(join(devRoot, '__vibe_tests__', 'support', 'resetState.ts'), 'utf-8');
+    expect(helper).toContain('export async function resetState');
+    expect(helper).toContain("await page.goto('/')"); // goto before clearing (per-origin storage)
+    expect(helper).toContain('localStorage.clear()');
+    expect(helper).toContain('const KEYS: string[] = []');
+  });
+
+  it('tier-1 with storageKeys → bakes the scoped keys into the helper', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'flip scoped reset',
+      steps: [nav, click],
+      resetRecipe: { tier: 1, storageKeys: ['progress', 'daily_tasks'] },
+    });
+    const helper = readFileSync(join(devRoot, '__vibe_tests__', 'support', 'resetState.ts'), 'utf-8');
+    expect(helper).toContain('const KEYS: string[] = ["progress","daily_tasks"]');
+    expect(readFileSync(r.path, 'utf-8')).toContain('await resetState(page, context);');
+  });
+
+  it('tier-2 recipe → NO reset emitted, NO helper file', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'no reset tier2',
+      steps: [nav, click],
+      resetRecipe: { tier: 2 },
+    });
+    expect(readFileSync(r.path, 'utf-8')).not.toContain('resetState');
+    expect(existsSync(join(devRoot, '__vibe_tests__', 'support', 'resetState.ts'))).toBe(false);
+  });
+
+  it('no recipe → unchanged (no reset)', async () => {
+    const r = await writeSpec({ devRoot, name: 'no recipe', steps: [nav, click] });
+    expect(readFileSync(r.path, 'utf-8')).not.toContain('resetState');
+  });
+});
+
 describe('writeSpec — dynamic content (invariant vs instance)', () => {
   // A flag the agent sets when name/text is page CONTENT that varies run-to-run
   // (a drawn flashcard word). The anchor must NOT freeze the literal.
