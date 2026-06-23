@@ -577,6 +577,31 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
       const rel = input.placeholder ? '__vibe_tests__/fixtures/hover-placeholder.png' : String(input.path ?? '');
       return [`await ${sel}.setInputFiles(${JSON.stringify(rel)});`];
     }
+    case 'assert_visible': {
+      // A captured verification → an expect(...). groundedSelector already
+      // swaps a dynamic name/text for a stable anchor, so the locator is sound;
+      // here we pick the MATCHER by volatility — a dynamic value never freezes
+      // to a literal even if the agent passed matcher 'text-exact'.
+      const sel = `${groundedSelector(input, pageVar)}.first()`;
+      const dynamic = input.dynamic === true;
+      const expected = input.expected != null ? String(input.expected)
+        : input.observed != null ? String(input.observed) : '';
+      switch (String(input.matcher ?? 'visible')) {
+        case 'non-empty':
+          return [`await expect(${sel}).not.toHaveText('');`];
+        case 'text-contains':
+          return [`await expect(${sel}).toContainText(${JSON.stringify(expected)});`];
+        case 'text-exact':
+          return dynamic
+            ? [`await expect(${sel}).not.toHaveText('');`]
+            : [`await expect(${sel}).toHaveText(${JSON.stringify(expected)});`];
+        case 'count':
+          return [`await expect(${groundedSelector(input, pageVar)}).toHaveCount(${Number(input.count ?? 1)});`];
+        case 'visible':
+        default:
+          return [`await expect(${sel}).toBeVisible();`];
+      }
+    }
     case 'browser_navigate': {
       const url = String(input.url ?? '');
       const path = stripBaseUrl(url);
@@ -639,7 +664,7 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
       // A real action with no single-step translation. Leave a structured
       // marker (not a TODO) so the optimization pass / seed library can
       // complete it; the deterministic draft stays runnable around it.
-      return [`${OPTIMIZABLE_MARKER}: ${tool} — no single-step translation; the optimization pass or a .hover/rules/ seed can complete this`];
+      return [`${OPTIMIZABLE_MARKER}: ${tool} — no single-step translation; the optimization pass can complete this`];
   }
 }
 
@@ -726,6 +751,16 @@ function groundedSelector(input: Record<string, unknown>, pageVar = 'page'): str
   const base = w && typeof w.role === 'string' && typeof w.name === 'string'
     ? `${pageVar}.getByRole(${JSON.stringify(w.role)}, { name: ${JSON.stringify(w.name)}, exact: true })`
     : pageVar;
+  // dynamic: the agent flagged `name`/`text` as content that varies run-to-run
+  // (a drawn word, a generated id), so freezing it as an exact-name selector
+  // would miss next run. Anchor on something stable instead: testId, then a
+  // content-free role (scoped by `within` when present), then `.first()`.
+  if (input.dynamic === true) {
+    if (testId) return `${base}.getByTestId(${JSON.stringify(testId)})`;
+    if (role) return `${base}.getByRole(${JSON.stringify(role)}).first()`;
+    // No stable anchor available — fall through to the literal logic below; the
+    // step is still recorded but brittle (a later anchor pass can harden it).
+  }
   // exact: true — the agent passed the exact accessible name from the snapshot,
   // so match it exactly. Without it, getByRole's default substring match makes
   // "street" also resolve "previous street" → strict-mode violation on replay.

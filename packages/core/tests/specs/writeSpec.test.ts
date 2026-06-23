@@ -826,3 +826,111 @@ describe('writeSpec — Playwright config scaffolding (bug A)', () => {
     expect(existsSync(join(devRoot, 'playwright.config.ts'))).toBe(false);
   });
 });
+
+describe('writeSpec — dynamic content (invariant vs instance)', () => {
+  // A flag the agent sets when name/text is page CONTENT that varies run-to-run
+  // (a drawn flashcard word). The anchor must NOT freeze the literal.
+  it('dynamic click_control anchors on role, not the volatile name', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'flip card',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'apple', dynamic: true } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByRole("button").first()`);
+    expect(src).not.toContain('"apple"');
+  });
+
+  it('dynamic prefers testId over the volatile name', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'flip card by testid',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'banana', testId: 'flip', dynamic: true } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByTestId("flip")`);
+    expect(src).not.toContain('"banana"');
+  });
+
+  it('non-dynamic name is unchanged (still exact)', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'click submit',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Submit' } },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`page.getByRole("button", { name: "Submit", exact: true })`);
+  });
+});
+
+describe('writeSpec — assert_visible crystallization', () => {
+  const nav = { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } } as const;
+
+  it('dynamic word → non-empty invariant, not the literal', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'a word is shown',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible',
+          input: { testId: 'word', matcher: 'non-empty', dynamic: true, observed: 'apple' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`expect(page.getByTestId("word").first()).not.toHaveText('')`);
+    expect(src).not.toContain('"apple"');
+  });
+
+  it('dynamic downgrades a text-exact request to non-empty (never freezes the value)', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'word exact guard',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible',
+          input: { testId: 'word', matcher: 'text-exact', dynamic: true, observed: 'cherry' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`.not.toHaveText('')`);
+    expect(src).not.toContain('"cherry"');
+  });
+
+  it('text-exact on fixed text keeps the literal', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'heading',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible',
+          input: { role: 'heading', name: 'Welcome', matcher: 'text-exact', expected: 'Welcome' } },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`.toHaveText("Welcome")`);
+  });
+
+  it('count matcher → toHaveCount', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'three cards',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible',
+          input: { role: 'listitem', matcher: 'count', count: 3 } },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`.toHaveCount(3)`);
+  });
+
+  it('default matcher → toBeVisible', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'greeting visible',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible', input: { testId: 'greeting' } },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`expect(page.getByTestId("greeting").first()).toBeVisible()`);
+  });
+});

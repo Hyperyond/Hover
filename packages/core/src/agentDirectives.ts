@@ -240,4 +240,21 @@ export const GROUNDED_ACTUATION_DIRECTIVE =
   'your own — and how to start and stop — is governed by the mode directive ' +
   'below; this paragraph only fixes HOW to ask.) Engine helper: ' +
   'mcp__hovercontrol__upload_file (path or placeholder) sets a file on an upload ' +
-  'control, since you have no filesystem access yourself.';
+  'control, since you have no filesystem access yourself.\n\n' +
+  'VOLATILE CONTENT — FLAG IT, DON\'T FREEZE IT: when the accessible name or ' +
+  'visible text you ground on is page CONTENT that varies run-to-run rather than ' +
+  'a fixed UI label, pass dynamic:true on the *_control call AND prefer a stable ' +
+  'anchor — a testId, the `within` container, or just the role — over that ' +
+  'changing name. "Varies run-to-run" = anything generated or drawn per session: ' +
+  'an id, an order number, a date/time, a price, a username, a result count, a ' +
+  'one-time code. A fixed label ("Submit", "Email", "Add to cart") is NOT ' +
+  'dynamic. Otherwise the saved test hard-codes this run\'s value and fails the ' +
+  'next.\n\n' +
+  'CAPTURE THE INVARIANT — assert what the flow PROVES, not this run\'s value: ' +
+  'when a flow reaches a state worth verifying, call ' +
+  'mcp__hovercontrol__assert_visible to record an assertion, and capture at least ' +
+  'the key one before record_candidate. Assert the CONTRACT (a result appears, a ' +
+  'confirmation shows, the expected number of items render) — not the incidental ' +
+  'value. If the asserted content varies run-to-run, set dynamic:true with ' +
+  'matcher \'non-empty\' or \'text-contains\' so the test checks the invariant, ' +
+  'not the literal; use \'text-exact\' only for genuinely fixed text.';

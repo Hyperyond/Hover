@@ -168,6 +168,7 @@ const GROUND = {
     role: z.string().describe("The container's role from the snapshot, e.g. 'radiogroup' or 'group'."),
     name: z.string().describe("The container's accessible name, e.g. the group/question name."),
   }).optional().describe('Scope the search to a container first. Use when an option label repeats across groups (e.g. "No" in several Yes/No groups) or the real input is hidden — target the visible label inside the right group.'),
+  dynamic: z.boolean().optional().describe("Set true when `name`/`text` is page CONTENT that varies run-to-run (a drawn word, a generated id, a date, a counter) rather than a stable UI label like 'Submit' or 'Email'. Tells Hover to anchor on something stable (testId / role / the `within` container) instead of freezing this run's literal value — so the saved test still passes next run."),
 };
 
 const NEED_TARGET = '✗ pass role+name (preferred), or testId, or text — taken from the snapshot.';
@@ -183,9 +184,10 @@ server.registerTool(
       role: z.string().describe("The control's ARIA role, e.g. 'radio', 'checkbox', 'switch'."),
       name: z.string().describe("The control's accessible name exactly as shown in the snapshot, e.g. 'sex male'."),
       checked: z.boolean().optional().describe('true (default) = select/check; false = uncheck a checkbox.'),
+      dynamic: z.boolean().optional().describe("Set true when `name` is content that varies run-to-run rather than a fixed label — Hover then anchors stably instead of freezing this run's literal."),
     },
   },
-  async ({ role, name, checked }) => {
+  async ({ role, name, checked, dynamic }) => {
     const picked = await pickPage();
     if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
     const { page, close } = picked;
@@ -194,7 +196,7 @@ server.registerTool(
       if (checked === false) await locator.uncheck({ force: true, timeout: 5000 });
       else await locator.check({ force: true, timeout: 5000 });
       const ok = await locator.isChecked().catch(() => null);
-      noteActuation('check_control', { role, name, checked });
+      noteActuation('check_control', { role, name, checked, dynamic });
       return md(`✓ ${checked === false ? 'unchecked' : 'checked'} ${role} "${name}"${ok === null ? '' : ` (isChecked=${ok})`}`);
     } catch (e) {
       return md(`✗ could not toggle ${role} "${name}": ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
@@ -456,6 +458,50 @@ server.registerTool(
       return md('✓ screenshot captured (viewport).');
     } catch (e) {
       return md(`✗ could not take screenshot: ${errLine(e)}`);
+    } finally {
+      await close();
+    }
+  },
+);
+
+// ── assert_visible: record a verification (the invariant a flow proves) ──────
+// Captured into the same candidate buffer as actuations, so it crystallizes
+// inline with the flow (writeSpec translates it to an expect(...) line). We
+// confirm the assertion holds NOW before recording — record==replay means we
+// never save an assertion that already fails. For content that varies run-to-run
+// the agent sets dynamic:true + a non-literal matcher so the spec asserts the
+// invariant ("a word is shown"), not this run's value ("apple").
+server.registerTool(
+  'assert_visible',
+  {
+    description:
+      "Record a VERIFICATION at the current checkpoint — the invariant a flow proves — as a Playwright assertion saved inline with the flow. Call it when a flow reaches a state worth checking (after login a greeting shows; after flipping a flashcard a word/definition is visible). Target the element by role+name / testId / text from the snapshot, exactly like the *_control tools. Pick `matcher`: 'visible' (default — the element is present), 'non-empty' (it shows SOME text), 'text-contains' (its text contains `expected`), 'text-exact' (equals `expected`), 'count' (`count` matches). CRUCIAL — if the asserted content varies run-to-run (a drawn word, a generated id, a date), set dynamic:true and use 'non-empty' or 'text-contains', NEVER 'text-exact' on the literal. Record at least one assertion per flow, before record_candidate.",
+    inputSchema: {
+      ...GROUND,
+      matcher: z.enum(['visible', 'non-empty', 'text-contains', 'text-exact', 'count']).optional()
+        .describe("What to assert. Default 'visible'."),
+      expected: z.string().optional().describe("For text-contains / text-exact: the (stable) text to assert. Omit text-exact's value to use what's observed now."),
+      count: z.number().optional().describe("For matcher 'count': how many matches to expect."),
+    },
+  },
+  async ({ matcher, expected, count, ...g }) => {
+    const picked = await pickPage();
+    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    const { page, close } = picked;
+    try {
+      const loc = locate(page, g);
+      if (!loc) return md(NEED_TARGET);
+      const m = matcher ?? 'visible';
+      const target = loc.first();
+      // Confirm the assertion holds NOW — never record one that already fails.
+      const visible = await target.isVisible({ timeout: 5000 }).catch(() => false);
+      if (!visible) return md(`✗ ${describe(g)} is not visible now — not recording an assertion that would fail on replay.`);
+      const observed = (await target.textContent().catch(() => null))?.trim() || undefined;
+      if (m === 'non-empty' && !observed) return md(`✗ ${describe(g)} shows no text — pick matcher 'visible' instead.`);
+      noteActuation('assert_visible', { ...g, matcher: m, expected, count, observed });
+      return md(`✓ asserted ${describe(g)} — ${m}${g.dynamic ? ' (dynamic → invariant)' : ''}`);
+    } catch (e) {
+      return md(`✗ could not assert ${describe(g)}: ${errLine(e)}`);
     } finally {
       await close();
     }

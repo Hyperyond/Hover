@@ -8,8 +8,8 @@
  *   - F4 cross-session extraction signature-matches `steps` across sidecars.
  *   - F7 optimization pass feeds the draft + this sidecar to the LLM.
  *
- * Home is the project-root `.hover/` directory (same home as `.hover/rules/`
- * seeds and `.hover/conventions.md`) — Hover-derived data lives outside
+ * Home is the project-root `.hover/` directory (the same home as
+ * `.hover/conventions.md`) — Hover-derived data lives outside
  * `__vibe_tests__/`, which stays 100% user-owned Playwright code. Sidecars
  * historically lived nested at `__vibe_tests__/.hover/<slug>.json`; readers
  * fall back to that legacy path and lazily copy-forward, so pre-existing
