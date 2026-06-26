@@ -1006,8 +1006,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           return;
         }
         try {
+          // Optimize is text-only refinement — run it on a CHEAP model: the
+          // user's `hover.optimizeModel` setting if set, else the agent's
+          // cheapModel (e.g. claude → haiku), else the session model. Keeps the
+          // refinement affordable (and viable to run often) without a big model.
+          const optimizeModel = (typeof msg.payload?.optimizeModel === 'string' && msg.payload.optimizeModel)
+            || getAgent(currentAgentId)?.cheapModel
+            || model;
           const res = await optimizeSpecWithAgent(devRoot, slug, {
-            agentId: currentAgentId, model, maxBudgetUsd,
+            agentId: currentAgentId, model: optimizeModel, maxBudgetUsd,
           });
           send(ws, { type: 'optimize-result', payload: { slug, original: res.original, candidate: res.code } });
         } catch (err) {

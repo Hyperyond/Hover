@@ -134,6 +134,8 @@ export const claudeAgent: AgentDescriptor = {
   streamFormat: 'stream-json',
   sandboxStrength: 'hard',
   defaultDisallowedTools: CLAUDE_DEFAULT_DISALLOWED_TOOLS,
+  // F7 optimize is text-in/text-out refinement — haiku is plenty and ~cheap.
+  cheapModel: 'haiku',
   display: {
     label: 'Claude Code',
     tagline: 'Anthropic — best-in-class browser driving, hard tool sandbox',

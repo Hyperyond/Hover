@@ -2011,7 +2011,10 @@ async function optimizeSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
     return;
   }
   const slug = specSlug(uri);
-  if (pool.optimizeSpec(slug)) {
+  // Optimize is cheap text-refinement — let the user pin a small model for it
+  // (empty → the engine falls back to the agent's cheap default, e.g. haiku).
+  const optimizeModel = vscode.workspace.getConfiguration('hover').get<string>('optimizeModel')?.trim() || undefined;
+  if (pool.optimizeSpec(slug, optimizeModel)) {
     pendingOptimizeUri = uri;
     await chatProvider?.reveal();
     chatProvider?.pushBusy(`Optimizing "${slug}" — an LLM is adding assertions (no browser). The diff opens automatically when it's ready.`);

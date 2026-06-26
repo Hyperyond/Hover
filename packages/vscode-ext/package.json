@@ -345,6 +345,11 @@
           "default": "",
           "description": "Reasoning-effort level for runs, set from the chat model menu. Options depend on the model (Claude: low / medium / high / xhigh / max; Codex: minimal / low / medium / high / xhigh). Empty = the model's default."
         },
+        "hover.optimizeModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the ✨ Optimize refinement pass (text-only, no browser). A small/cheap model is plenty — e.g. Claude: haiku. Empty = the active agent's cheap default (Claude → haiku), or the run model if it has none."
+        },
         "hover.localBaseUrl": {
           "type": "string",
           "default": "",

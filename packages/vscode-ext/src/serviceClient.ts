@@ -127,8 +127,9 @@ export interface ServiceClientPool {
   /** Ask the engine to launch the isolated debug Chrome at `pageUrl`
    *  (headless = silent, no window). `enginePort` targets the session's host. */
   launchChrome(pageUrl: string, headless: boolean, force?: boolean, enginePort?: number): boolean;
-  /** Run the deterministic + LLM optimization pass on a saved spec. */
-  optimizeSpec(slug: string, enginePort?: number): boolean;
+  /** Run the deterministic + LLM optimization pass on a saved spec.
+   *  `optimizeModel` pins a cheap model for the pass (empty → agent default). */
+  optimizeSpec(slug: string, optimizeModel?: string, enginePort?: number): boolean;
   /** Eagerly connect to a just-spawned host's port (skip the reconnect delay). */
   ensureConnected(port: number): void;
   /** Resolve once a socket to `port` is OPEN (or false on timeout). */
@@ -297,10 +298,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       ws.send(JSON.stringify({ type: 'launch-chrome', payload: { pageUrl, headless, force } }));
       return true;
     },
-    optimizeSpec(slug: string, enginePort?: number): boolean {
+    optimizeSpec(slug: string, optimizeModel?: string, enginePort?: number): boolean {
       const ws = target(enginePort);
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug } }));
+      ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug, optimizeModel } }));
       return true;
     },
     ensureConnected(port: number): void {

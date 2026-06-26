@@ -54,6 +54,9 @@ export interface ClientMessage {
     agentId?: string;
     /** set-model only — the model id to use for subsequent runs (e.g. opus). */
     model?: string;
+    /** optimize-spec only — override model for the F7 refinement pass (the
+     *  `hover.optimizeModel` setting). Empty → the agent's cheap default. */
+    optimizeModel?: string;
     /** set-effort only — reasoning-effort level for subsequent runs (empty
      *  string clears it → agent/model default). */
     effort?: string;
