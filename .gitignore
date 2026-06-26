@@ -62,3 +62,9 @@ superpowers
 # vscode-ext: generated, staged engine for the .vsix (Path A) — see scripts/stage-engine.mjs
 packages/vscode-ext/engine/node_modules/
 packages/vscode-ext/engine/*.tgz
+
+# Root-level dogfood artifacts from driving the example apps locally (ad-hoc
+# crystallized specs + a scaffolded config). Root-anchored so the committed
+# dogfood under examples/*/__vibe_tests__/ is unaffected.
+/__vibe_tests__/
+/playwright.config.ts

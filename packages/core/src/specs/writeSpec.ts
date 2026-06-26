@@ -17,7 +17,7 @@
  * `assertions` field on the input.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SkillStep } from '../specs/specStep.js';
 import { humanSteps, humanStep } from './humanSteps.js';
@@ -30,6 +30,7 @@ import {
 import { stepSignature } from './detectSharedFlows.js';
 import { slugify, firstSentence } from './text.js';
 import { markSessionSaved } from '../sessions/sessions.js';
+import { authPrefixLength, addSetupProjectToConfig } from './authFixture.js';
 
 export type SpecStep = SkillStep;
 
@@ -81,6 +82,10 @@ function filterDirtySteps(steps: SpecStep[]): { clean: SpecStep[]; omitted: numb
   const clean = steps.filter(s => {
     if (s.kind !== 'step' || !s.tool) return true; // non-action entries pass through
     if (isFlowMarker(s)) return false; // mark_flow is a split boundary, not an action — drop, don't count
+    // record_candidate is a QA capture signal, not a replayable browser action —
+    // drop it (silently, like mark_flow) so it never renders as a junk
+    // `hover:optimizable` step in the crystallized spec.
+    if (bareTool(s.tool) === 'record_candidate') return false;
     if (s.isError || isExploratoryTool(s.tool)) { omitted++; return false; }
     return true;
   });
@@ -129,6 +134,18 @@ export interface WriteSpecOptions {
    *  browser_navigate), a leading `page.goto()` is synthesized from this, and
    *  it's the fallback origin for the scaffolded playwright config. */
   startUrl?: string;
+  /** Recon-discovered reset recipe for the run's environment (debt-2 reproducible
+   *  state isolation). When tier 1, a shared `support/resetState.ts` helper is
+   *  generated and called in a `beforeEach` so the spec re-enters from a clean
+   *  client state every run. Tier 2/3 (backend-state) emit no reset here. (Engine
+   *  shape, decoupled from the extension's ResetRecipe — only tier/keys matter.) */
+  resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string };
+  /** Auth-as-fixture (debt 3): engage the fixture EVEN WHEN a user playwright.config
+   *  already exists — i.e. the user approved Hover editing their config (Stage 4).
+   *  Without it, an existing config keeps login inline (Hover never edits a user's
+   *  config unprompted). When true, writeSpec also applies the setup-project edit
+   *  to the config. No effect when no login prefix is detected. */
+  authFixture?: boolean;
 }
 
 /** Stored-step form of a redacted credential — a code expression, so it both
@@ -147,10 +164,17 @@ function redactSteps(steps: SpecStep[], redactions: Redaction[]): SpecStep[] {
   return steps.map(s => {
     if (s.kind !== 'step' || !s.input) return s;
     const input = s.input as Record<string, unknown>;
-    if (s.tool === 'browser_type' && typeof input.text === 'string' && map.has(input.text)) {
-      return { ...s, input: { ...input, text: envExpr(map.get(input.text)!) } };
+    // Match on the BARE tool name — grounded fills arrive as
+    // `mcp__hover-control__fill_control`, playwright ones as bare `browser_type`.
+    const tool = (s.tool ?? '').replace(/^mcp__[a-z0-9_-]+?__/, '');
+    // A single typed/filled value: browser_type uses `text`, the grounded
+    // fill_control uses `value`. WITHOUT the fill_control case, credentials typed
+    // via grounded actuation (the default mode) leaked into the spec unredacted.
+    const valueKey = tool === 'browser_type' ? 'text' : tool === 'fill_control' ? 'value' : null;
+    if (valueKey && typeof input[valueKey] === 'string' && map.has(input[valueKey] as string)) {
+      return { ...s, input: { ...input, [valueKey]: envExpr(map.get(input[valueKey] as string)!) } };
     }
-    if (s.tool === 'browser_fill_form' && Array.isArray(input.fields)) {
+    if (tool === 'browser_fill_form' && Array.isArray(input.fields)) {
       let changed = false;
       const fields = (input.fields as Array<Record<string, unknown>>).map(f => {
         if (f && typeof f.value === 'string' && map.has(f.value)) {
@@ -177,6 +201,13 @@ export interface WriteSpecResult {
   slug: string;
   /** Every file written — one per `mark_flow` feature when the run was split. */
   files: { path: string; slug: string; flow: string }[];
+  /** Auth-as-fixture (debt 3, Stage 4): a login was detected but a USER
+   *  playwright.config already exists, so Hover left login inline rather than
+   *  edit their config unprompted. This is the proposed edit to offer for
+   *  approval — on approval the caller re-saves with `authFixture: true`, which
+   *  applies it. Absent when there's no login, no user config, or the config
+   *  can't be safely edited (already has `projects`). */
+  authFixtureOffer?: { configPath: string; proposedConfig: string };
 }
 
 /** True for a `mark_flow` boundary step (the agent's per-feature split marker).
@@ -234,8 +265,66 @@ async function writeOneSpec(
   // JSDoc note of how many were omitted.
   const { clean: cleanSteps, omitted } = filterDirtySteps(steps);
   const manifest = await readPageObjectManifest(opts.devRoot);
-  const match = manifest ? matchPageObject(cleanSteps, manifest) : null;
-  const source = renderSpec(slug, displayName, opts.description ?? '', cleanSteps, opts.assertions ?? [], match, omitted, opts.startUrl);
+  let match = manifest ? matchPageObject(cleanSteps, manifest) : null;
+  // Auth-as-fixture (debt 3): when the recorded login is detectable (credentials
+  // were redacted to process.env refs), lift it into auth.setup.ts and start
+  // specs authenticated via storageState — login then runs ONCE, not per test.
+  // Auto-on is gated to the scaffold case: with NO existing playwright.config we
+  // write one that registers the setup project, so it's self-contained. With an
+  // existing user config we can't register the setup project without editing
+  // their file (the Stage-4 approval flow), so keep today's inline login there.
+  const cleanActions = cleanSteps.filter(s => s.kind === 'step' && !!s.tool);
+  const envVars = (opts.redactions ?? []).map(r => r.envVar);
+  const detectedPrefix = authPrefixLength(cleanActions, envVars);
+  const userConfigName = PLAYWRIGHT_CONFIG_NAMES.find(n => existsSync(join(opts.devRoot, n)));
+  // Already opted in: auth.setup.ts exists from a prior approval (and the config
+  // already registers it), so engage AUTOMATICALLY — don't re-ask or re-edit.
+  const authSetupExists = existsSync(join(dir, 'auth.setup.ts'));
+  // Engage the fixture when a login is detected AND we can register the setup
+  // project: we scaffold the config (no user config), the caller approved editing
+  // it (opts.authFixture, Stage 4), or the fixture was already set up earlier.
+  const engage = detectedPrefix > 0 && (!userConfigName || opts.authFixture === true || authSetupExists);
+  const authPrefix = engage ? detectedPrefix : 0;
+  const authFile = engage ? AUTH_STATE_FILE : undefined;
+  let authFixtureOffer: WriteSpecResult['authFixtureOffer'];
+  if (authFile) {
+    // Login lifted to setup.ts → a login Page Object fold would double it up.
+    match = null;
+    try {
+      await writeFile(
+        join(dir, 'auth.setup.ts'),
+        renderAuthSetup(cleanActions.slice(0, authPrefix), authFile, opts.startUrl),
+        'utf-8',
+      );
+    } catch { /* auth.setup generation is best-effort, never breaks Save */ }
+    // Approved edit to an EXISTING user config → register the setup project.
+    if (userConfigName && opts.authFixture) {
+      try {
+        const p = join(opts.devRoot, userConfigName);
+        const edited = addSetupProjectToConfig(readFileSync(p, 'utf-8'));
+        if (edited) await writeFile(p, edited, 'utf-8');
+      } catch { /* config edit is best-effort; the spec still has the paste hint */ }
+    }
+  } else if (detectedPrefix > 0 && userConfigName && !opts.authFixture) {
+    // Login detected but a user config exists and edit wasn't approved → keep
+    // login inline, and surface the proposed config edit for the UI to offer.
+    try {
+      const proposed = addSetupProjectToConfig(readFileSync(join(opts.devRoot, userConfigName), 'utf-8'));
+      // Absolute path so the extension can read the file directly (for the diff
+      // preview) without knowing the project root.
+      if (proposed) authFixtureOffer = { configPath: join(opts.devRoot, userConfigName), proposedConfig: proposed };
+    } catch { /* offer is best-effort */ }
+  }
+  // Debt-2: a Tier-1 (client-resettable) recipe → generate the shared
+  // resetState() helper and call it in a beforeEach so the spec re-enters from a
+  // clean state every run. Tier 2/3 emit no reset (backend state isn't
+  // client-resettable). Best-effort: helper generation must never break Save.
+  const emitReset = opts.resetRecipe?.tier === 1;
+  if (emitReset) {
+    try { await ensureResetStateHelper(opts.devRoot, opts.resetRecipe!.storageKeys ?? []); }
+    catch { /* helper generation is best-effort */ }
+  }
+  const source = renderSpec(slug, displayName, opts.description ?? '', cleanSteps, opts.assertions ?? [], match, omitted, opts.startUrl, emitReset, authPrefix, authFile);
   await writeFile(path, source, 'utf-8');
   // Specs use relative URLs (page.goto("/")), which need a `baseURL` in the
   // project's Playwright config. If the project has NO config at all, the saved
@@ -244,7 +333,7 @@ async function writeOneSpec(
   // just runs. Scaffold a minimal config in that case. Best-effort: it must
   // never break Save-as-spec, and it never overwrites an existing config.
   try {
-    await ensurePlaywrightConfig(opts.devRoot, steps, opts.startUrl);
+    await ensurePlaywrightConfig(opts.devRoot, steps, opts.startUrl, authFile);
   } catch { /* config scaffolding is best-effort */ }
   // Persist the structured session next to the spec so cross-session
   // extraction (F4) and the optimization pass (F7) read real SpecStep[]
@@ -260,7 +349,7 @@ async function writeOneSpec(
   // its own failures — it must never break Save-as-spec.
   const promptText = rawSteps.find(s => s.kind === 'user')?.text;
   if (promptText) await markSessionSaved(opts.devRoot, promptText, slug);
-  return { path, slug, files: [{ path, slug, flow: displayName }] };
+  return { path, slug, files: [{ path, slug, flow: displayName }], authFixtureOffer };
 }
 
 // Escape sequences that would prematurely terminate the JSDoc block.
@@ -302,6 +391,13 @@ function renderSpec(
   match: PageObjectMatch | null,
   omitted = 0,
   startUrl?: string,
+  emitReset = false,
+  // Auth-as-fixture: number of leading ACTION steps that form the login flow
+  // (lifted into auth.setup.ts) and the storageState path the spec reuses. When
+  // authFile is set, the login prefix is skipped from the body and the spec
+  // starts already authenticated via `test.use({ storageState })`.
+  authPrefix = 0,
+  authFile?: string,
 ): string {
   const userMsg = steps.find(s => s.kind === 'user');
   const doneMsg = [...steps].reverse().find(s => s.kind === 'done');
@@ -323,7 +419,12 @@ function renderSpec(
   let popupCount = 0;
   let usesContext = false;
 
-  const actions = steps.filter(s => s.kind === 'step' && !!s.tool);
+  // Auth-as-fixture: drop the leading login steps from the business spec — they
+  // run once in auth.setup.ts, and `test.use({ storageState })` (added below)
+  // makes this spec start authenticated. Slicing keeps the popup/tab-pairing
+  // logic below operating on the business flow only.
+  const allActions = steps.filter(s => s.kind === 'step' && !!s.tool);
+  const actions = authFile && authPrefix > 0 ? allActions.slice(authPrefix) : allActions;
   for (let i = 0; i < actions.length; i++) {
     const s = actions[i];
     const next = actions[i + 1];
@@ -380,11 +481,18 @@ function renderSpec(
   // captured session can lack any navigation — a spec with no page.goto() runs
   // against about:blank and every locator fails. When no navigation was
   // captured, synthesize a leading goto from the run's target URL.
-  const hasNavigate = steps.some(s => s.kind === 'step' && s.tool === 'browser_navigate');
-  if (!hasNavigate && startUrl) {
+  // Check the BUSINESS actions (login prefix already sliced out): when auth was
+  // lifted to setup.ts, its navigate goes with it, so the spec must synthesize
+  // its own goto to land on the (now authenticated) app.
+  const hasNavigate = actions.some(s => s.tool === 'browser_navigate');
+  // Fall back to the lifted login's navigate URL: with auth-as-fixture the app's
+  // goto went into auth.setup.ts, so the business spec would otherwise start on
+  // about:blank. (storageState restores the session but does NOT navigate.)
+  const gotoTarget = startUrl ?? (authFile ? firstNavigateUrl(steps) : null);
+  if (!hasNavigate && gotoTarget) {
     const gotoBlock: string[] = [];
-    pushTestStep(gotoBlock, `Given · Open ${startUrl}`,
-      [`await page.goto(${JSON.stringify(stripBaseUrl(startUrl))});`]);
+    pushTestStep(gotoBlock, `Given · Open ${gotoTarget}`,
+      [`await page.goto(${JSON.stringify(stripBaseUrl(gotoTarget))});`]);
     body.unshift(...gotoBlock);
   }
 
@@ -402,6 +510,22 @@ function renderSpec(
       ? `import { test, expect } from './fixtures';`
       : `import { test, expect } from '@playwright/test';`,
   );
+  // Auth-as-fixture: reuse the session captured once by auth.setup.ts, so this
+  // spec starts already logged in (the recorded login steps live in the setup
+  // project, not inline here).
+  if (authFile) {
+    lines.push('');
+    lines.push(`test.use({ storageState: ${JSON.stringify(authFile)} });`);
+  }
+  // Debt-2: shared reset helper + a beforeEach so every run starts from a clean
+  // client state (the recipe was confirmed reproducible during recon).
+  if (emitReset) {
+    lines.push(`import { resetState } from './support/resetState';`);
+    lines.push('');
+    lines.push(`test.beforeEach(async ({ page, context }) => {`);
+    lines.push(`  await resetState(page, context);`);
+    lines.push(`});`);
+  }
   lines.push('');
   lines.push('/**');
   lines.push(` * Generated by Hover on ${new Date().toISOString().slice(0, 10)}.`);
@@ -415,7 +539,13 @@ function renderSpec(
   if (expectedLines.length > 0) {
     lines.push(' *');
     lines.push(' * Expected:');
-    for (const e of expectedLines) lines.push(` *   • ${jsdocEscape(e)}`);
+    for (const e of expectedLines) {
+      // Prefix EVERY line — a multi-line entry must not break out of the JSDoc
+      // block (an unprefixed continuation line escapes the comment).
+      const [head, ...rest] = jsdocEscape(e).split('\n');
+      lines.push(` *   • ${head}`);
+      for (const cont of rest) lines.push(` *     ${cont}`);
+    }
   }
   if (omitted > 0) {
     lines.push(' *');
@@ -441,6 +571,58 @@ function renderSpec(
   lines.push('});');
   lines.push('');
   return lines.join('\n');
+}
+
+/** Where the auth-fixture saves/reuses the authenticated session. */
+const AUTH_STATE_FILE = 'playwright/.auth/user.json';
+
+/**
+ * Auth-as-fixture (debt 3): render the `auth.setup.ts` Playwright setup project
+ * from the recorded login prefix. It replays the login ONCE and saves
+ * `storageState`, which every spec then reuses via `test.use({ storageState })`
+ * — so login isn't re-run per test. `authActions` are the leading (already
+ * redacted) login steps; `startUrl` synthesizes a leading goto when the captured
+ * login lacked its own navigation (agent connected to an open tab).
+ */
+function renderAuthSetup(authActions: SpecStep[], authFile: string, startUrl?: string): string {
+  const body: string[] = [];
+  if (!authActions.some(s => s.tool === 'browser_navigate') && startUrl) {
+    body.push(`  await page.goto(${JSON.stringify(stripBaseUrl(startUrl))});`);
+  }
+  for (const s of authActions) {
+    const lines = translateStep(s.tool!, s.input, 'page');
+    if (lines.length === 0) continue;
+    // Block-scope each step: every translated interaction declares its own
+    // `const el`, so without a block the second step redeclares it (a JS error).
+    body.push('  {');
+    for (const line of lines) body.push(`    ${line}`);
+    body.push('  }');
+  }
+  body.push(`  await context.storageState({ path: authFile });`);
+  return [
+    // `expect` is used by each step's visibility prelude — import it too.
+    `import { test as setup, expect } from '@playwright/test';`,
+    ``,
+    `/**`,
+    ` * Generated by Hover — authenticates ONCE, then specs reuse the saved`,
+    ` * session via test.use({ storageState }). Login was lifted out of the specs`,
+    ` * so it no longer re-runs per test.`,
+    ` *`,
+    ` * If you have your OWN playwright.config, register this setup project so it`,
+    ` * runs before your specs:`,
+    ` *`,
+    ` *   projects: [`,
+    ` *     { name: 'setup', testMatch: /.*\\.setup\\.ts$/ },`,
+    ` *     { name: 'chromium', dependencies: ['setup'] },`,
+    ` *   ]`,
+    ` */`,
+    `const authFile = ${JSON.stringify(authFile)};`,
+    ``,
+    `setup('authenticate', async ({ page, context }) => {`,
+    ...body,
+    `});`,
+    ``,
+  ].join('\n');
 }
 
 /** Push one `await test.step('<label>', async () => { … })` block (4-space
@@ -577,6 +759,34 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
       const rel = input.placeholder ? '__vibe_tests__/fixtures/hover-placeholder.png' : String(input.path ?? '');
       return [`await ${sel}.setInputFiles(${JSON.stringify(rel)});`];
     }
+    case 'assert_visible': {
+      // A captured verification → an expect(...). groundedSelector already
+      // swaps a dynamic name/text for a stable anchor, so the locator is sound;
+      // here we pick the MATCHER by volatility — a dynamic value never freezes
+      // to a literal even if the agent passed matcher 'text-exact'.
+      // groundedSelector ALREADY appends `.first()` for text / dynamic-role
+      // anchors, so only add one when it didn't (avoid `.first().first()`).
+      const groundExpr = groundedSelector(input, pageVar);
+      const sel = groundExpr.endsWith('.first()') ? groundExpr : `${groundExpr}.first()`;
+      const dynamic = input.dynamic === true;
+      const expected = input.expected != null ? String(input.expected)
+        : input.observed != null ? String(input.observed) : '';
+      switch (String(input.matcher ?? 'visible')) {
+        case 'non-empty':
+          return [`await expect(${sel}).not.toHaveText('');`];
+        case 'text-contains':
+          return [`await expect(${sel}).toContainText(${JSON.stringify(expected)});`];
+        case 'text-exact':
+          return dynamic
+            ? [`await expect(${sel}).not.toHaveText('');`]
+            : [`await expect(${sel}).toHaveText(${JSON.stringify(expected)});`];
+        case 'count':
+          return [`await expect(${groundedSelector(input, pageVar)}).toHaveCount(${Number(input.count ?? 1)});`];
+        case 'visible':
+        default:
+          return [`await expect(${sel}).toBeVisible();`];
+      }
+    }
     case 'browser_navigate': {
       const url = String(input.url ?? '');
       const path = stripBaseUrl(url);
@@ -639,7 +849,7 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
       // A real action with no single-step translation. Leave a structured
       // marker (not a TODO) so the optimization pass / seed library can
       // complete it; the deterministic draft stays runnable around it.
-      return [`${OPTIMIZABLE_MARKER}: ${tool} — no single-step translation; the optimization pass or a .hover/rules/ seed can complete this`];
+      return [`${OPTIMIZABLE_MARKER}: ${tool} — no single-step translation; the optimization pass can complete this`];
   }
 }
 
@@ -726,6 +936,16 @@ function groundedSelector(input: Record<string, unknown>, pageVar = 'page'): str
   const base = w && typeof w.role === 'string' && typeof w.name === 'string'
     ? `${pageVar}.getByRole(${JSON.stringify(w.role)}, { name: ${JSON.stringify(w.name)}, exact: true })`
     : pageVar;
+  // dynamic: the agent flagged `name`/`text` as content that varies run-to-run
+  // (a drawn word, a generated id), so freezing it as an exact-name selector
+  // would miss next run. Anchor on something stable instead: testId, then a
+  // content-free role (scoped by `within` when present), then `.first()`.
+  if (input.dynamic === true) {
+    if (testId) return `${base}.getByTestId(${JSON.stringify(testId)})`;
+    if (role) return `${base}.getByRole(${JSON.stringify(role)}).first()`;
+    // No stable anchor available — fall through to the literal logic below; the
+    // step is still recorded but brittle (a later anchor pass can harden it).
+  }
   // exact: true — the agent passed the exact accessible name from the snapshot,
   // so match it exactly. Without it, getByRole's default substring match makes
   // "street" also resolve "previous street" → strict-mode violation on replay.
@@ -829,6 +1049,19 @@ function firstNavigateOrigin(steps: SpecStep[]): string | null {
   return null;
 }
 
+/** The FULL url of the first browser_navigate in the session (not just origin).
+ *  Used to seed the business spec's goto when auth-as-fixture lifted the login's
+ *  navigation into auth.setup.ts and no explicit startUrl was supplied. */
+function firstNavigateUrl(steps: SpecStep[]): string | null {
+  for (const s of steps) {
+    if (s.kind === 'step' && s.tool === 'browser_navigate') {
+      const url = String((s.input as Record<string, unknown> | undefined)?.url ?? '');
+      if (url) return url;
+    }
+  }
+  return null;
+}
+
 /**
  * Bug A fix: crystallized specs use relative URLs, so a project with no
  * Playwright config (hence no baseURL) can't run them — `page.goto("/")` throws
@@ -837,10 +1070,61 @@ function firstNavigateOrigin(steps: SpecStep[]): string | null {
  * an existing config (the user owns it), and skips silently if no origin can be
  * inferred (leaves it to the user rather than guessing).
  */
-async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[], startUrl?: string): Promise<void> {
+/**
+ * Debt-2 (reproducible state isolation): write the shared `support/resetState.ts`
+ * helper that crystallized specs call in a beforeEach. It navigates to the app
+ * (baseURL), clears client state, and reloads — so each run starts clean. The
+ * goto-first ordering matters: localStorage is per-origin, so clearing it on the
+ * initial about:blank would be a no-op. `keys` (the recipe's storageKeys) scopes
+ * the localStorage clear when only some keys gate state (leaving e.g. an auth
+ * token); empty = clear all web storage. Regenerated on every save so it tracks
+ * the current recipe. User-facing Playwright code → lives under __vibe_tests__/.
+ */
+async function ensureResetStateHelper(devRoot: string, keys: string[]): Promise<void> {
+  const dir = join(devRoot, '__vibe_tests__', 'support');
+  await mkdir(dir, { recursive: true });
+  const source = [
+    `import type { Page, BrowserContext } from '@playwright/test';`,
+    ``,
+    `/**`,
+    ` * Generated by Hover — resets the app to a clean client-side state before`,
+    ` * each test, so runs are reproducible. The reset recipe was discovered (and`,
+    ` * verified) during exploration and lives in .hover/environments.json;`,
+    ` * re-crystallize to regenerate this file.`,
+    ` */`,
+    `const KEYS: string[] = ${JSON.stringify(keys)};`,
+    ``,
+    `export async function resetState(page: Page, context: BrowserContext): Promise<void> {`,
+    `  // goto first: localStorage is per-origin, so it can only be cleared once`,
+    `  // the app's origin is loaded (baseURL comes from the Playwright config).`,
+    `  await page.goto('/');`,
+    `  await context.clearCookies();`,
+    `  await page.evaluate((keys) => {`,
+    `    if (keys.length) { for (const k of keys) localStorage.removeItem(k); }`,
+    `    else { localStorage.clear(); sessionStorage.clear(); }`,
+    `  }, KEYS);`,
+    `  await page.reload();`,
+    `}`,
+    ``,
+  ].join('\n');
+  await writeFile(join(dir, 'resetState.ts'), source, 'utf-8');
+}
+
+async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[], startUrl?: string, authFile?: string): Promise<void> {
   if (PLAYWRIGHT_CONFIG_NAMES.some(n => existsSync(join(devRoot, n)))) return;
   const origin = firstNavigateOrigin(steps) ?? originOf(startUrl);
   if (!origin) return;
+  // Auth-as-fixture: register a `setup` project (matches auth.setup.ts) that the
+  // main project depends on, so login runs ONCE before the specs. Only emitted
+  // when scaffolding our own config (we never touch a user's existing one).
+  const projects = authFile
+    ? [
+        `  projects: [`,
+        `    { name: 'setup', testMatch: /.*\\.setup\\.ts$/ },`,
+        `    { name: 'chromium', dependencies: ['setup'] },`,
+        `  ],`,
+      ]
+    : [];
   const source = [
     `import { defineConfig } from '@playwright/test';`,
     ``,
@@ -854,6 +1138,7 @@ async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[], startU
     `  use: {`,
     `    baseURL: process.env.HOVER_BASE_URL ?? ${JSON.stringify(origin)},`,
     `  },`,
+    ...projects,
     `});`,
     ``,
   ].join('\n');

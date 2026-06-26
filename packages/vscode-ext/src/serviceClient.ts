@@ -117,16 +117,19 @@ export interface ServiceClientPool {
   /** Cancel a run. `enginePort` cancels one host; omit to cancel all. */
   cancel(enginePort?: number): void;
   /** Crystallize the accumulated steps into a spec. `redactions` parameterize
-   *  credential fill values into process.env refs so secrets stay out of the spec. */
-  saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, enginePort?: number): boolean;
+   *  credential fill values into process.env refs so secrets stay out of the spec.
+   *  `resetRecipe` (active env's, debt-2) → a tier-1 recipe makes the spec emit a
+   *  resetState() beforeEach for reproducible runs. */
+  saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string }, enginePort?: number, authFixture?: boolean): boolean;
   /** Invoke a plugin-contributed save handler (e.g. `save:pentest:report`,
    *  `save:security:spec`). The engine replies with `<type>:saved` or `error`. */
   pluginSave(type: string, payload: Record<string, unknown>, enginePort?: number): boolean;
   /** Ask the engine to launch the isolated debug Chrome at `pageUrl`
    *  (headless = silent, no window). `enginePort` targets the session's host. */
   launchChrome(pageUrl: string, headless: boolean, force?: boolean, enginePort?: number): boolean;
-  /** Run the deterministic + LLM optimization pass on a saved spec. */
-  optimizeSpec(slug: string, enginePort?: number): boolean;
+  /** Run the deterministic + LLM optimization pass on a saved spec.
+   *  `optimizeModel` pins a cheap model for the pass (empty → agent default). */
+  optimizeSpec(slug: string, optimizeModel?: string, enginePort?: number): boolean;
   /** Eagerly connect to a just-spawned host's port (skip the reconnect delay). */
   ensureConnected(port: number): void;
   /** Resolve once a socket to `port` is OPEN (or false on timeout). */
@@ -208,6 +211,7 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'screenshot' ||
         msg.type === 'qa-report' ||
         msg.type === 'qa-candidates' ||
+        msg.type === 'reset-recipe' ||
         msg.type === 'optimize-result' ||
         msg.type === 'optimize-failed' ||
         msg.type === 'source-approval-request' ||
@@ -276,10 +280,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel' }));
       }
     },
-    saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, enginePort?: number): boolean {
+    saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string }, enginePort?: number, authFixture?: boolean): boolean {
       const ws = target(enginePort);
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions, overwrite } }));
+      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions, overwrite, resetRecipe, authFixture } }));
       return true;
     },
     pluginSave(type: string, payload: Record<string, unknown>, enginePort?: number): boolean {
@@ -294,10 +298,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       ws.send(JSON.stringify({ type: 'launch-chrome', payload: { pageUrl, headless, force } }));
       return true;
     },
-    optimizeSpec(slug: string, enginePort?: number): boolean {
+    optimizeSpec(slug: string, optimizeModel?: string, enginePort?: number): boolean {
       const ws = target(enginePort);
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug } }));
+      ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug, optimizeModel } }));
       return true;
     },
     ensureConnected(port: number): void {

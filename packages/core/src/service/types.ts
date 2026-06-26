@@ -30,10 +30,22 @@ export interface ClientMessage {
     /** save-spec only — credentials to parameterize into process.env.<envVar>
      *  references so secrets never land in the spec / sidecar. */
     redactions?: { value: string; envVar: string }[];
+    /** save-spec only — the active env's recon-discovered reset recipe (debt-2).
+     *  A tier-1 recipe makes the spec generate + call a resetState() beforeEach. */
+    resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string };
+    /** save-spec only — auth-as-fixture (debt 3). The user approved Hover editing
+     *  their existing playwright.config; engage the fixture (lift login into
+     *  auth.setup.ts) and apply the setup-project edit. Absent on a normal save. */
+    authFixture?: boolean;
     /** command only — test accounts the prompt referenced via @label. Injected
      *  into the agent's system prompt (ephemeral, not the saved transcript) so
      *  it can log in; the recorded fill values get redacted on save. */
     accounts?: { label: string; username?: string; password?: string; role?: string }[];
+    /** command only — ask the agent to run state-reset recon this run (debt-2
+     *  reproducible-state-isolation). Off unless the extension sets it (e.g. the
+     *  active env has no reset recipe yet); recon clears client state, so it must
+     *  be opt-in, never on a plain Flow recording. */
+    reconReset?: boolean;
     /** check-cdp / launch-chrome / focus-debug — the widget's
      *  window.location.href so service can compare origins or navigate the
      *  newly-launched debug Chrome to the same URL. */
@@ -42,6 +54,9 @@ export interface ClientMessage {
     agentId?: string;
     /** set-model only — the model id to use for subsequent runs (e.g. opus). */
     model?: string;
+    /** optimize-spec only — override model for the F7 refinement pass (the
+     *  `hover.optimizeModel` setting). Empty → the agent's cheap default. */
+    optimizeModel?: string;
     /** set-effort only — reasoning-effort level for subsequent runs (empty
      *  string clears it → agent/model default). */
     effort?: string;

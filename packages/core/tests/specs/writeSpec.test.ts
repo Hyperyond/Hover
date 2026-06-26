@@ -643,15 +643,20 @@ describe('writeSpec — credential redaction', () => {
 
   it('parameterizes matched fill values into process.env and never writes the secret', async () => {
     const r = await writeSpec({ devRoot, name: 'login paid', steps: loginSession, redactions });
-    const src = readFileSync(r.path, 'utf-8');
-    // Emitted as code, not a string literal.
-    expect(src).toContain("fill(process.env.HOVER_AUSER_PASS ?? '')");
-    expect(src).toContain("fill(process.env.HOVER_AUSER_USER ?? '')");
-    // The secret appears NOWHERE — not in code, not in the JSDoc header.
-    expect(src).not.toContain('hunter2-secret');
-    expect(src).not.toContain('paid@example.com');
-    // The prose masks it rather than quoting the value.
-    expect(src).toContain('$HOVER_AUSER_PASS');
+    const spec = readFileSync(r.path, 'utf-8');
+    // This session is a pure login → auth-fixture lifts it into auth.setup.ts
+    // (fresh devRoot has no playwright.config, so the fixture auto-engages).
+    const setup = readFileSync(join(devRoot, '__vibe_tests__', 'auth.setup.ts'), 'utf-8');
+    // Credentials are emitted as code (process.env), in the setup project.
+    expect(setup).toContain("process.env.HOVER_AUSER_PASS ?? ''");
+    expect(setup).toContain("process.env.HOVER_AUSER_USER ?? ''");
+    // The spec reuses the saved session instead of logging in inline.
+    expect(spec).toContain('test.use({ storageState:');
+    // The secret appears NOWHERE — neither file, code nor prose.
+    for (const src of [spec, setup]) {
+      expect(src).not.toContain('hunter2-secret');
+      expect(src).not.toContain('paid@example.com');
+    }
   });
 
   it('keeps the secret out of the .hover sidecar too', async () => {
@@ -824,5 +829,363 @@ describe('writeSpec — Playwright config scaffolding (bug A)', () => {
     ];
     await writeSpec({ devRoot, name: 'no nav', steps });
     expect(existsSync(join(devRoot, 'playwright.config.ts'))).toBe(false);
+  });
+});
+
+describe('writeSpec — reset helper (debt-2 reproducible state)', () => {
+  const nav = { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } } as const;
+  const click = { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Flip' } } as const;
+
+  it('tier-1 recipe → generates support/resetState.ts + beforeEach call', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'flip with reset',
+      steps: [nav, click],
+      resetRecipe: { tier: 1 },
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`import { resetState } from './support/resetState'`);
+    expect(src).toContain('test.beforeEach(async ({ page, context }) => {');
+    expect(src).toContain('await resetState(page, context);');
+    const helper = readFileSync(join(devRoot, '__vibe_tests__', 'support', 'resetState.ts'), 'utf-8');
+    expect(helper).toContain('export async function resetState');
+    expect(helper).toContain("await page.goto('/')"); // goto before clearing (per-origin storage)
+    expect(helper).toContain('localStorage.clear()');
+    expect(helper).toContain('const KEYS: string[] = []');
+  });
+
+  it('tier-1 with storageKeys → bakes the scoped keys into the helper', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'flip scoped reset',
+      steps: [nav, click],
+      resetRecipe: { tier: 1, storageKeys: ['progress', 'daily_tasks'] },
+    });
+    const helper = readFileSync(join(devRoot, '__vibe_tests__', 'support', 'resetState.ts'), 'utf-8');
+    expect(helper).toContain('const KEYS: string[] = ["progress","daily_tasks"]');
+    expect(readFileSync(r.path, 'utf-8')).toContain('await resetState(page, context);');
+  });
+
+  it('tier-2 recipe → NO reset emitted, NO helper file', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'no reset tier2',
+      steps: [nav, click],
+      resetRecipe: { tier: 2 },
+    });
+    expect(readFileSync(r.path, 'utf-8')).not.toContain('resetState');
+    expect(existsSync(join(devRoot, '__vibe_tests__', 'support', 'resetState.ts'))).toBe(false);
+  });
+
+  it('no recipe → unchanged (no reset)', async () => {
+    const r = await writeSpec({ devRoot, name: 'no recipe', steps: [nav, click] });
+    expect(readFileSync(r.path, 'utf-8')).not.toContain('resetState');
+  });
+});
+
+describe('writeSpec — dynamic content (invariant vs instance)', () => {
+  // A flag the agent sets when name/text is page CONTENT that varies run-to-run
+  // (a drawn flashcard word). The anchor must NOT freeze the literal.
+  it('dynamic click_control anchors on role, not the volatile name', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'flip card',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'apple', dynamic: true } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByRole("button").first()`);
+    expect(src).not.toContain('"apple"');
+  });
+
+  it('dynamic prefers testId over the volatile name', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'flip card by testid',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'banana', testId: 'flip', dynamic: true } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`page.getByTestId("flip")`);
+    expect(src).not.toContain('"banana"');
+  });
+
+  it('non-dynamic name is unchanged (still exact)', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'click submit',
+      steps: [
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Submit' } },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`page.getByRole("button", { name: "Submit", exact: true })`);
+  });
+});
+
+describe('writeSpec — assert_visible crystallization', () => {
+  const nav = { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5176/' } } as const;
+
+  it('dynamic word → non-empty invariant, not the literal', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'a word is shown',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible',
+          input: { testId: 'word', matcher: 'non-empty', dynamic: true, observed: 'apple' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`expect(page.getByTestId("word").first()).not.toHaveText('')`);
+    expect(src).not.toContain('"apple"');
+  });
+
+  it('dynamic downgrades a text-exact request to non-empty (never freezes the value)', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'word exact guard',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible',
+          input: { testId: 'word', matcher: 'text-exact', dynamic: true, observed: 'cherry' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain(`.not.toHaveText('')`);
+    expect(src).not.toContain('"cherry"');
+  });
+
+  it('text-exact on fixed text keeps the literal', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'heading',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible',
+          input: { role: 'heading', name: 'Welcome', matcher: 'text-exact', expected: 'Welcome' } },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`.toHaveText("Welcome")`);
+  });
+
+  it('count matcher → toHaveCount', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'three cards',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible',
+          input: { role: 'listitem', matcher: 'count', count: 3 } },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`.toHaveCount(3)`);
+  });
+
+  it('default matcher → toBeVisible', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'greeting visible',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible', input: { testId: 'greeting' } },
+      ],
+    });
+    expect(readFileSync(r.path, 'utf-8')).toContain(`expect(page.getByTestId("greeting").first()).toBeVisible()`);
+  });
+
+  it('text-anchored assert_visible does not double .first()', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'instruction visible',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible', input: { text: 'Press space to flip' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('.first())');
+    expect(src).not.toContain('.first().first()');
+  });
+});
+
+describe('writeSpec — auth-as-fixture (debt 3)', () => {
+  const creds = [
+    { value: 'paid@example.com', envVar: 'HOVER_USER' },
+    { value: 'pw-secret-xyz', envVar: 'HOVER_PASS' },
+  ];
+  // navigate → fill email → fill password → submit → THEN a business step.
+  const loginThenBuy: SkillStep[] = [
+    { kind: 'user', text: 'log in and add to cart' },
+    { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/login' } },
+    { kind: 'step', tool: 'mcp__hover-control__fill_control', input: { role: 'textbox', name: 'Email', value: 'paid@example.com' } },
+    { kind: 'step', tool: 'mcp__hover-control__fill_control', input: { role: 'textbox', name: 'Password', value: 'pw-secret-xyz' } },
+    { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Sign in' } },
+    { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Add to cart' } },
+    { kind: 'done', summary: 'Added to cart.' },
+  ];
+  const setupPath = () => join(devRoot, '__vibe_tests__', 'auth.setup.ts');
+
+  it('lifts login into auth.setup.ts and the spec starts authenticated', async () => {
+    const r = await writeSpec({ devRoot, name: 'buy', steps: loginThenBuy, redactions: creds });
+    const spec = readFileSync(r.path, 'utf-8');
+    const setup = readFileSync(setupPath(), 'utf-8');
+    // setup.ts replays login (redacted) + saves storageState, with `expect`
+    // imported and each step block-scoped so the per-step `const el` never collides.
+    expect(setup).toContain("import { test as setup, expect } from '@playwright/test'");
+    expect(setup).toContain('getByRole("textbox", { name: "Password", exact: true })');
+    expect(setup).toContain("el.fill(process.env.HOVER_PASS ?? '')");
+    expect(setup).toContain('context.storageState({ path:');
+    expect(setup).toContain('  {'); // block-scoping present
+    // The spec drops the login, reuses the session, keeps the business step, and
+    // still navigates (the login's goto was lifted, so it synthesizes its own).
+    expect(spec).toContain('test.use({ storageState:');
+    expect(spec).toContain('page.goto(');
+    expect(spec).toContain('getByRole("button", { name: "Add to cart", exact: true })');
+    expect(spec).not.toContain('Sign in');
+    expect(spec).not.toContain('Password');
+  });
+
+  it('registers a setup project in the scaffolded playwright.config', async () => {
+    await writeSpec({ devRoot, name: 'buy', steps: loginThenBuy, redactions: creds });
+    const cfg = readFileSync(join(devRoot, 'playwright.config.ts'), 'utf-8');
+    expect(cfg).toContain("name: 'setup'");
+    expect(cfg).toContain("dependencies: ['setup']");
+  });
+
+  it('does NOT engage when a user playwright.config already exists (login stays inline)', async () => {
+    writeFileSync(join(devRoot, 'playwright.config.ts'), 'export default {};');
+    const r = await writeSpec({ devRoot, name: 'buy', steps: loginThenBuy, redactions: creds });
+    const spec = readFileSync(r.path, 'utf-8');
+    expect(existsSync(setupPath())).toBe(false);
+    expect(spec).not.toContain('test.use({ storageState:');
+    // login is still inline in the spec
+    expect(spec).toContain('getByRole("button", { name: "Sign in", exact: true })');
+  });
+
+  it('is inert without redactions (no credentials → no auth prefix)', async () => {
+    const r = await writeSpec({ devRoot, name: 'buy', steps: loginThenBuy });
+    expect(existsSync(setupPath())).toBe(false);
+    expect(readFileSync(r.path, 'utf-8')).not.toContain('test.use({ storageState:');
+  });
+});
+
+describe('writeSpec — auth-fixture w/ existing config (Stage 4b core)', () => {
+  const creds = [
+    { value: 'paid@example.com', envVar: 'HOVER_USER' },
+    { value: 'pw-secret-xyz', envVar: 'HOVER_PASS' },
+  ];
+  const login: SkillStep[] = [
+    { kind: 'user', text: 'log in' },
+    { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/login' } },
+    { kind: 'step', tool: 'mcp__hover-control__fill_control', input: { role: 'textbox', name: 'Email', value: 'paid@example.com' } },
+    { kind: 'step', tool: 'mcp__hover-control__fill_control', input: { role: 'textbox', name: 'Password', value: 'pw-secret-xyz' } },
+    { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Sign in' } },
+    { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Add to cart' } },
+    { kind: 'done', summary: 'done' },
+  ];
+  const scaffoldedConfig = [
+    "import { defineConfig } from '@playwright/test';",
+    "export default defineConfig({ testDir: './__vibe_tests__', use: { baseURL: 'http://x' } });",
+  ].join('\n');
+  const setupPath = () => join(devRoot, '__vibe_tests__', 'auth.setup.ts');
+
+  it('without approval: keeps login inline + returns the proposed config edit as an offer', async () => {
+    writeFileSync(join(devRoot, 'playwright.config.ts'), scaffoldedConfig);
+    const r = await writeSpec({ devRoot, name: 'buy', steps: login, redactions: creds });
+    expect(existsSync(setupPath())).toBe(false);                // not engaged
+    expect(readFileSync(r.path, 'utf-8')).not.toContain('test.use({ storageState:');
+    // The offer carries the AST-edited config for the approval UI to preview.
+    expect(r.authFixtureOffer?.configPath).toContain('playwright.config.ts');
+    expect(r.authFixtureOffer?.proposedConfig).toContain("name: 'setup'");
+  });
+
+  it('with approval (authFixture:true): engages + applies the config edit', async () => {
+    writeFileSync(join(devRoot, 'playwright.config.ts'), scaffoldedConfig);
+    const r = await writeSpec({ devRoot, name: 'buy', steps: login, redactions: creds, authFixture: true, overwrite: true });
+    // Spec slimmed + auth.setup.ts written.
+    expect(existsSync(setupPath())).toBe(true);
+    expect(readFileSync(r.path, 'utf-8')).toContain('test.use({ storageState:');
+    // The USER's config now has the setup project applied.
+    const cfg = readFileSync(join(devRoot, 'playwright.config.ts'), 'utf-8');
+    expect(cfg).toContain("name: 'setup'");
+    expect(cfg).toContain("dependencies: ['setup']");
+    // And the original config content is preserved.
+    expect(cfg).toContain("testDir: './__vibe_tests__'");
+    // No offer once engaged.
+    expect(r.authFixtureOffer).toBeUndefined();
+  });
+
+  it('no offer when the config already has projects (cannot safely edit)', async () => {
+    writeFileSync(join(devRoot, 'playwright.config.ts'),
+      "import { defineConfig } from '@playwright/test';\nexport default defineConfig({ projects: [{ name: 'x' }] });");
+    const r = await writeSpec({ devRoot, name: 'buy', steps: login, redactions: creds });
+    expect(r.authFixtureOffer).toBeUndefined();
+  });
+});
+
+describe('writeSpec — QA marker + JSDoc cleanup (flow-3 bugs)', () => {
+  it('drops record_candidate (QA capture signal) — no junk optimizable step in the spec', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'learn',
+      steps: [
+        { kind: 'user', text: 'learn words' },
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5178/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: '认识' } },
+        { kind: 'step', tool: 'mcp__hover-control__record_candidate', input: { name: 'Learn words' } },
+        { kind: 'done', summary: 'Done.' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).not.toContain('record_candidate');
+    expect(countOptimizableMarkers(src)).toBe(0);
+    // The real action is still there.
+    expect(src).toContain('getByRole("button", { name: "认识", exact: true })');
+  });
+
+  it('keeps a multi-line CJK summary from breaking the JSDoc block', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'cjk',
+      steps: [
+        { kind: 'user', text: '学习' },
+        { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5178/' } },
+        { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: '认识' } },
+        { kind: 'done', summary: '已成功登录并学完今天的全部单词。\n\n- 用测试账户登录\n- 调高每日目标\n- 学完 5 个新词' },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    const jsdoc = src.split("test('")[0].split('/**')[1];
+    // EVERY non-empty line inside the JSDoc must stay prefixed with ` *`.
+    for (const line of jsdoc.split('\n')) {
+      if (line.trim() === '') continue;
+      expect(line.startsWith(' *')).toBe(true);
+    }
+    // Expected shows only the lead sentence, not the bullet body.
+    expect(src).toContain(' *   • 已成功登录并学完今天的全部单词。');
+    expect(src).not.toContain(' *   • 已成功登录并学完今天的全部单词。\n- 用测试账户登录');
+  });
+});
+
+describe('writeSpec — auth-fixture auto-engages once set up (flow-5 gap)', () => {
+  const creds = [
+    { value: 'paid@example.com', envVar: 'HOVER_USER' },
+    { value: 'pw-secret-xyz', envVar: 'HOVER_PASS' },
+  ];
+  const login: SkillStep[] = [
+    { kind: 'user', text: '登录并学习' },
+    { kind: 'step', tool: 'browser_navigate', input: { url: 'http://localhost:5173/login' } },
+    { kind: 'step', tool: 'mcp__hover-control__fill_control', input: { role: 'textbox', name: 'Email', value: 'paid@example.com' } },
+    { kind: 'step', tool: 'mcp__hover-control__fill_control', input: { role: 'textbox', name: 'Password', value: 'pw-secret-xyz' } },
+    { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Sign in' } },
+    { kind: 'step', tool: 'mcp__hover-control__click_control', input: { role: 'button', name: 'Start' } },
+    { kind: 'done', summary: 'done' },
+  ];
+
+  it('engages WITHOUT re-approval when auth.setup.ts already exists', async () => {
+    // Simulate a prior approval: config has projects + auth.setup.ts present.
+    writeFileSync(join(devRoot, 'playwright.config.ts'),
+      "import { defineConfig } from '@playwright/test';\nexport default defineConfig({ projects: [{ name: 'setup' }] });");
+    const setupDir = join(devRoot, '__vibe_tests__');
+    require('node:fs').mkdirSync(setupDir, { recursive: true });
+    writeFileSync(join(setupDir, 'auth.setup.ts'), '// existing setup');
+
+    const r = await writeSpec({ devRoot, name: 'flow5', steps: login, redactions: creds });
+    const spec = readFileSync(r.path, 'utf-8');
+    // Auto-engaged: login lifted, session reused — no re-offer needed.
+    expect(spec).toContain('test.use({ storageState:');
+    expect(spec).not.toContain('Sign in');
+    expect(r.authFixtureOffer).toBeUndefined();
   });
 });

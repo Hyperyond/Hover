@@ -158,6 +158,10 @@ export interface AgentDescriptor {
    *  per-CLI deny list live alongside its descriptor instead of as a magic
    *  array in the service. Soft-sandbox agents leave this undefined. */
   defaultDisallowedTools?: readonly string[];
+  /** A cheap/fast model id for non-interactive refinement work (the F7 optimize
+   *  pass) where the big model isn't worth the cost. Used when the user hasn't
+   *  set `hover.optimizeModel`; undefined → fall back to the session model. */
+  cheapModel?: string;
   buildArgs(opts: InvokeOptions): string[];
   /**
    * Parse a single line of agent stdout into normalised InvokeEvents.

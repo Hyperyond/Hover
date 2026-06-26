@@ -31,6 +31,22 @@ export interface HoverAccount {
   username?: string;
 }
 
+/** How this app resets to a clean starting state (debt-2 reproducible-state-
+ *  isolation), discovered by recon and reused by the generated resetState()
+ *  helper. tier 1 = client-side resettable (clear storage); 2 = backend-synced,
+ *  not client-resettable (affected specs are flagged needs-fixture); 3 = needs an
+ *  external setup hook (seed endpoint / fresh account / storageState). */
+export interface ResetRecipe {
+  tier: 1 | 2 | 3;
+  /** Tier 1: localStorage keys that gate the flow state (empty/absent = clear all). */
+  storageKeys?: string[];
+  /** Tier 3: the user-supplied command or URL to establish a clean state. */
+  hook?: string;
+  /** Recon confirmed the reset actually returns the app to a clean state. */
+  verified?: boolean;
+  note?: string;
+}
+
 export interface HoverEnvironment {
   id: string;
   name: string;
@@ -38,6 +54,8 @@ export interface HoverEnvironment {
   /** Domain ownership verified (real verification needs Hover Cloud). */
   verified?: boolean;
   accounts: HoverAccount[];
+  /** How to reset this env to a clean start (recon-discovered; see ResetRecipe). */
+  resetRecipe?: ResetRecipe;
 }
 
 interface EnvironmentsFile {
@@ -139,6 +157,16 @@ export class EnvironmentStore {
     }
     env.accounts.push(account);
     if (password) await this.setPassword(envId, account.label, password);
+    await this.save(envs);
+  }
+
+  /** Persist a recon-discovered reset recipe onto an env (debt-2). Keyed to the
+   *  env because reset differs guest-vs-logged-in. Best-effort like addAccount. */
+  async setResetRecipe(envId: string, recipe: ResetRecipe): Promise<void> {
+    const envs = await this.load();
+    const env = envs.find((e) => e.id === envId);
+    if (!env) return;
+    env.resetRecipe = recipe;
     await this.save(envs);
   }
 

@@ -121,7 +121,37 @@ export const EXPLORATION_CHECKPOINT_DIRECTIVE =
   '(a finished chunk), not after every step, and ask once per checkpoint — do ' +
   'not loop. Skip this entirely when the task was explicit and bounded (you ' +
   'finished exactly what was asked) or when the user already said to stop / ' +
-  'that it is enough — then just finish and report.';
+  'that it is enough — then just finish and report. ' +
+  'IN-APP LIMITS ARE NOT BLOCKERS. When an EXPLICIT task is stopped by something ' +
+  'you can change inside the app — a daily quota reached, a feature behind a ' +
+  'setting/toggle, a smaller default that a control can raise — do the in-app ' +
+  'workaround yourself (open settings, raise the limit, flip the toggle) and ' +
+  'COMPLETE the task. Do NOT stop to offer a menu of choices. Only a truly ' +
+  'EXTERNAL blocker (missing credentials, a file you cannot obtain) justifies ' +
+  'asking; and if the explicit task is already satisfied, just conclude and ' +
+  'report it — never end an explicit task with a "what next?" option list.';
+
+/** State-reset recon (debt-2 reproducible-state-isolation). Appended for grounded
+ *  modes ONLY when the extension explicitly requests it (run payload `reconReset`)
+ *  — recon clears client state, which would wipe a logged-in session, so it never
+ *  runs unsolicited and never on a plain Flow recording. The agent discovers +
+ *  validates the reset recipe ONCE, then reports it via record_reset_recipe for
+ *  the engine to forward to the environment store. */
+export const RECON_DIRECTIVE =
+  'STATE-RESET RECON — do this ONCE, before you start testing. For saved tests to ' +
+  'be reproducible, Hover needs to know how to reset this app to a clean start. ' +
+  '(1) Note which controls/screens reflect the app\'s stored state. (2) Call ' +
+  'mcp__hovercontrol__clear_client_state, then look at the page after it reloads. ' +
+  '(3) Decide: did the app return to its INITIAL state (its state is client-side ' +
+  '— Tier 1) or did your prior progress come BACK (it is re-hydrated from a ' +
+  'backend / your logged-in account — Tier 2)? Prefer a FULL clear (clear ' +
+  'everything) — if that logged you out and the app needs auth, log back in ' +
+  'using the test account credentials provided for this run, then continue. Only ' +
+  'fall back to naming specific storageKeys if a full clear breaks something you ' +
+  'cannot re-establish. (4) Report it with mcp__hovercontrol__record_reset_recipe: ' +
+  'tier 1 (clear-all, the default; or with storageKeys only if you had to scope), ' +
+  'or tier 2 (not client-resettable). Do this recon only once, at the start; ' +
+  'then test normally.';
 
 /** QA Testing mode — appended on top of the grounded-actuation directive. Turns
  *  a directed run into autonomous exploratory testing. (Behavioral effect needs
@@ -135,9 +165,11 @@ export const QA_EXPLORATION_DIRECTIVE =
   '("test the app", "test this") MEANS "explore the whole app" — do NOT open with ' +
   'an ask_user or a list of choices, just START testing what you can see (even on ' +
   'a login/landing page: empty submit, bad password, invalid input first). Ask the ' +
-  'user (ask_user) ONLY when genuinely blocked (credentials / a file you cannot ' +
+  'user (ask_user) ONLY when EXTERNALLY blocked (credentials / a file you cannot ' +
   'get) or for a decisive business judgment you cannot resolve — never just to ' +
-  'pick scope. Go BEYOND any single instruction: ' +
+  'pick scope. An IN-APP limit you can change yourself (a daily quota, a ' +
+  'setting/toggle, a raisable default) is NOT "blocked": adjust it in the app and ' +
+  'finish the task — do not stop to ask. Go BEYOND any single instruction: ' +
   'systematically exercise every reachable control and state of the app to find ' +
   'real defects. Maintain a mental frontier of untried controls; try each; do NOT ' +
   'repeat a state you have already explored. Do NEGATIVE testing too — empty / ' +
@@ -240,4 +272,25 @@ export const GROUNDED_ACTUATION_DIRECTIVE =
   'your own — and how to start and stop — is governed by the mode directive ' +
   'below; this paragraph only fixes HOW to ask.) Engine helper: ' +
   'mcp__hovercontrol__upload_file (path or placeholder) sets a file on an upload ' +
-  'control, since you have no filesystem access yourself.';
+  'control, since you have no filesystem access yourself.\n\n' +
+  'VOLATILE CONTENT — FLAG IT, DON\'T FREEZE IT. Two kinds of text live on a ' +
+  'page: FIXED UI labels the app ships (button / field / menu text like ' +
+  '"Submit", "Email", "Add to cart") and APP DATA the page draws from its ' +
+  'content or state (a word on a card, a product or item title, a person\'s ' +
+  'name, a generated id, an order number, a date, a price, a count). Whenever the ' +
+  'name / text you ground on is APP DATA — NOT a fixed label — you MUST pass ' +
+  'dynamic:true AND anchor on something stable (a testId, the `within` container, ' +
+  'or just the role), never the changing text itself. Quick test before every ' +
+  'click/assert: "would this EXACT text be on the page on a fresh run with ' +
+  'different data?" If no → it is dynamic. (Example: a flashcard heading showing ' +
+  'the current word is APP DATA — click_control({ role: "heading", dynamic: true ' +
+  '}), NOT { name: "bathroom" }.) A frozen data value makes the saved test pass ' +
+  'once and fail every run after.\n\n' +
+  'CAPTURE THE INVARIANT — assert what the flow PROVES, not this run\'s value: ' +
+  'when a flow reaches a state worth verifying, call ' +
+  'mcp__hovercontrol__assert_visible, and capture at least the key one before ' +
+  'record_candidate. Assert the CONTRACT (a result appears, a confirmation shows, ' +
+  'the expected number of items render). When the proof is that some APP DATA ' +
+  'showed up (a word, a row, a result), assert THAT element with dynamic:true + ' +
+  'matcher \'non-empty\' or \'text-contains\' — NOT a fixed button sitting next to ' +
+  'it, and NOT the literal value. Use \'text-exact\' only for genuinely fixed text.';

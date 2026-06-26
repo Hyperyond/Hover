@@ -77,12 +77,17 @@ export async function handleSaveArtifact<TWriteResult extends { slug: string; pa
   // When the run was split into several feature files, report all their slugs
   // so the widget can confirm "Saved 3 specs: login, checkout, …".
   const files = (result as { files?: { slug: string }[] }).files;
+  // Auth-as-fixture (debt 3): a login was detected but a user playwright.config
+  // exists — forward the proposed config edit so the extension can offer it for
+  // approval (Stage 4b). Absent on a normal save.
+  const authFixtureOffer = (result as { authFixtureOffer?: unknown }).authFixtureOffer;
   send(ws, {
     type: cfg.savedType,
     payload: {
       name: result.slug,
       path: result.path,
       ...(files && files.length > 1 ? { files: files.map((f) => f.slug) } : {}),
+      ...(authFixtureOffer ? { authFixtureOffer } : {}),
     },
   });
   // The artifact is already on disk; an onSaved failure (e.g. a follow-up
@@ -103,6 +108,6 @@ export const SPEC_CONFIG: SaveArtifactConfig<Awaited<ReturnType<typeof writeSpec
   existsType: 'spec-exists',
   ExistsError: SpecExistsError,
   write: ({ devRoot, name, description, steps, assertions, payload, overwrite }) =>
-    writeSpec({ devRoot, name, description, steps, assertions, overwrite, redactions: payload.redactions }),
+    writeSpec({ devRoot, name, description, steps, assertions, overwrite, redactions: payload.redactions, resetRecipe: payload.resetRecipe, authFixture: payload.authFixture }),
 };
 

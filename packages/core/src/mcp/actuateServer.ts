@@ -168,6 +168,7 @@ const GROUND = {
     role: z.string().describe("The container's role from the snapshot, e.g. 'radiogroup' or 'group'."),
     name: z.string().describe("The container's accessible name, e.g. the group/question name."),
   }).optional().describe('Scope the search to a container first. Use when an option label repeats across groups (e.g. "No" in several Yes/No groups) or the real input is hidden — target the visible label inside the right group.'),
+  dynamic: z.boolean().optional().describe("Set true when `name`/`text` is page CONTENT that varies run-to-run (a drawn word, a generated id, a date, a counter) rather than a stable UI label like 'Submit' or 'Email'. Tells Hover to anchor on something stable (testId / role / the `within` container) instead of freezing this run's literal value — so the saved test still passes next run."),
 };
 
 const NEED_TARGET = '✗ pass role+name (preferred), or testId, or text — taken from the snapshot.';
@@ -183,9 +184,10 @@ server.registerTool(
       role: z.string().describe("The control's ARIA role, e.g. 'radio', 'checkbox', 'switch'."),
       name: z.string().describe("The control's accessible name exactly as shown in the snapshot, e.g. 'sex male'."),
       checked: z.boolean().optional().describe('true (default) = select/check; false = uncheck a checkbox.'),
+      dynamic: z.boolean().optional().describe("Set true when `name` is content that varies run-to-run rather than a fixed label — Hover then anchors stably instead of freezing this run's literal."),
     },
   },
-  async ({ role, name, checked }) => {
+  async ({ role, name, checked, dynamic }) => {
     const picked = await pickPage();
     if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
     const { page, close } = picked;
@@ -194,7 +196,7 @@ server.registerTool(
       if (checked === false) await locator.uncheck({ force: true, timeout: 5000 });
       else await locator.check({ force: true, timeout: 5000 });
       const ok = await locator.isChecked().catch(() => null);
-      noteActuation('check_control', { role, name, checked });
+      noteActuation('check_control', { role, name, checked, dynamic });
       return md(`✓ ${checked === false ? 'unchecked' : 'checked'} ${role} "${name}"${ok === null ? '' : ` (isChecked=${ok})`}`);
     } catch (e) {
       return md(`✗ could not toggle ${role} "${name}": ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`);
@@ -459,6 +461,128 @@ server.registerTool(
     } finally {
       await close();
     }
+  },
+);
+
+// ── assert_visible: record a verification (the invariant a flow proves) ──────
+// Captured into the same candidate buffer as actuations, so it crystallizes
+// inline with the flow (writeSpec translates it to an expect(...) line). We
+// confirm the assertion holds NOW before recording — record==replay means we
+// never save an assertion that already fails. For content that varies run-to-run
+// the agent sets dynamic:true + a non-literal matcher so the spec asserts the
+// invariant ("a word is shown"), not this run's value ("apple").
+server.registerTool(
+  'assert_visible',
+  {
+    description:
+      "Record a VERIFICATION at the current checkpoint — the invariant a flow proves — as a Playwright assertion saved inline with the flow. Call it when a flow reaches a state worth checking (after login a greeting shows; after flipping a flashcard a word/definition is visible). Target the element by role+name / testId / text from the snapshot, exactly like the *_control tools. Pick `matcher`: 'visible' (default — the element is present), 'non-empty' (it shows SOME text), 'text-contains' (its text contains `expected`), 'text-exact' (equals `expected`), 'count' (`count` matches). CRUCIAL — if the asserted content varies run-to-run (a drawn word, a generated id, a date), set dynamic:true and use 'non-empty' or 'text-contains', NEVER 'text-exact' on the literal. Record at least one assertion per flow, before record_candidate.",
+    inputSchema: {
+      ...GROUND,
+      matcher: z.enum(['visible', 'non-empty', 'text-contains', 'text-exact', 'count']).optional()
+        .describe("What to assert. Default 'visible'."),
+      expected: z.string().optional().describe("For text-contains / text-exact: the (stable) text to assert. Omit text-exact's value to use what's observed now."),
+      count: z.number().optional().describe("For matcher 'count': how many matches to expect."),
+    },
+  },
+  async ({ matcher, expected, count, ...g }) => {
+    const picked = await pickPage();
+    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    const { page, close } = picked;
+    try {
+      const loc = locate(page, g);
+      if (!loc) return md(NEED_TARGET);
+      const m = matcher ?? 'visible';
+      const target = loc.first();
+      // Confirm the assertion holds NOW — never record one that already fails.
+      const visible = await target.isVisible({ timeout: 5000 }).catch(() => false);
+      if (!visible) return md(`✗ ${describe(g)} is not visible now — not recording an assertion that would fail on replay.`);
+      const observed = (await target.textContent().catch(() => null))?.trim() || undefined;
+      if (m === 'non-empty' && !observed) return md(`✗ ${describe(g)} shows no text — pick matcher 'visible' instead.`);
+      noteActuation('assert_visible', { ...g, matcher: m, expected, count, observed });
+      return md(`✓ asserted ${describe(g)} — ${m}${g.dynamic ? ' (dynamic → invariant)' : ''}`);
+    } catch (e) {
+      return md(`✗ could not assert ${describe(g)}: ${errLine(e)}`);
+    } finally {
+      await close();
+    }
+  },
+);
+
+// ── clear_client_state: reset the app to a clean slate for reproducible runs ─
+// Used during RECON (debt-2 reproducible-state-isolation): the agent clears
+// client state, reloads, and observes whether the consumed state came back —
+// client-side state resets (Tier 1), backend-synced state re-hydrates (Tier 2).
+// The full-wipe path is exactly what the generated resetState() helper mirrors,
+// so what recon verifies here is what runs in CI. NOT buffered as a candidate
+// step — reset is emitted by the helper / beforeEach, not as an inline flow step.
+server.registerTool(
+  'clear_client_state',
+  {
+    description:
+      "Reset the app's CLIENT-side state to a clean slate, then reload. Use this during RECON to learn whether a flow can re-enter from a fresh state: clear → reload → check if the consumed state came back. If the app returns to its initial state, its state is client-side and resettable; if the consumed state is re-hydrated (from a backend / logged-in account), it is NOT — report that. Pass `keys` to remove ONLY those localStorage keys (leaves a logged-in session intact); omit to clear everything (cookies + localStorage + sessionStorage + IndexedDB). This is the same operation a saved test's resetState() will mirror, so what you verify here is what runs in CI.",
+    inputSchema: {
+      keys: z.array(z.string()).optional().describe('localStorage keys to remove (scoped clear, keeps session/cookies). Omit to clear ALL client storage.'),
+    },
+  },
+  async ({ keys }) => {
+    const picked = await pickPage();
+    if (!picked) return md(`✗ could not reach the page over CDP (${CDP_URL}).`);
+    const { page, close } = picked;
+    try {
+      if (keys && keys.length > 0) {
+        await page.evaluate((ks: string[]) => { for (const k of ks) localStorage.removeItem(k); }, keys);
+      } else {
+        await page.context().clearCookies();
+        await page.evaluate(async () => {
+          localStorage.clear();
+          sessionStorage.clear();
+          // Best-effort IndexedDB wipe (Chromium exposes databases()).
+          const idb = indexedDB as IDBFactory & { databases?: () => Promise<{ name?: string }[]> };
+          if (typeof idb.databases === 'function') {
+            const dbs = await idb.databases();
+            await Promise.all(dbs.map(d => d.name
+              ? new Promise<void>((res) => {
+                  const req = indexedDB.deleteDatabase(d.name!);
+                  req.onsuccess = req.onerror = req.onblocked = () => res();
+                })
+              : Promise.resolve()));
+          }
+        });
+      }
+      await page.reload({ timeout: 10000, waitUntil: 'domcontentloaded' });
+      return md(`✓ cleared client state${keys?.length ? ` (keys: ${keys.join(', ')})` : ' (cookies + storage + IndexedDB)'} and reloaded.`);
+    } catch (e) {
+      return md(`✗ could not clear client state: ${errLine(e)}`);
+    } finally {
+      await close();
+    }
+  },
+);
+
+// ── record_reset_recipe: persist how this app resets to a clean state (recon) ─
+// Fire-and-forget over the engine channel; the engine forwards it to the
+// extension's environment store (.hover/environments.json), keyed to the active
+// env. The classification is made by clear_client_state + observation in recon.
+server.registerTool(
+  'record_reset_recipe',
+  {
+    description:
+      "Record HOW this app resets to a clean starting state, so saved tests can re-enter deterministically. Call it ONCE after probing with clear_client_state during recon. tier 1 = client-side state (resettable by clearing storage) — pass `storageKeys` if only specific localStorage keys gate the flow's state, omit to clear all. tier 2 = state is re-hydrated from a backend / logged-in account (NOT client-resettable) — Hover flags affected tests as needing a fixture. tier 3 = needs an external setup hook. Set verified:true only if you actually saw the reset work. CONFIG only — never secrets.",
+    inputSchema: {
+      tier: z.number().int().min(1).max(3).describe('1 = client-side resettable; 2 = backend-synced (not client-resettable); 3 = needs an external setup hook.'),
+      storageKeys: z.array(z.string()).optional().describe('Tier 1: the localStorage keys that gate the flow state. Omit to clear all client storage.'),
+      verified: z.boolean().optional().describe('true if you confirmed the reset actually returns the app to a clean state.'),
+      note: z.string().optional().describe('One line on what you observed (no secrets).'),
+    },
+  },
+  async ({ tier, storageKeys, verified, note }) => {
+    const sock = ensureAskWs();
+    if (!sock) return md('✓ noted (recipe channel unavailable; continuing).');
+    const send = (): void =>
+      sock.send(JSON.stringify({ type: 'record-reset-recipe', payload: { recipe: { tier, storageKeys, verified, note } } }));
+    if (sock.readyState === WebSocket.OPEN) send();
+    else sock.once('open', send);
+    return md(`✓ recorded reset recipe (tier ${tier}${verified ? ', verified' : ''}).`);
   },
 );
 

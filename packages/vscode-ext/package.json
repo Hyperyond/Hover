@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.22.1",
+  "version": "0.23.0",
   "displayName": "Hover — AI Vibe Testing",
   "description": "Describe a flow in plain English; Hover's AI tests your app like a real teammate and hands you a real Playwright spec. Hands-free, local-first, on your own Claude Code or Codex CLI.",
   "keywords": [
@@ -344,6 +344,11 @@
           "type": "string",
           "default": "",
           "description": "Reasoning-effort level for runs, set from the chat model menu. Options depend on the model (Claude: low / medium / high / xhigh / max; Codex: minimal / low / medium / high / xhigh). Empty = the model's default."
+        },
+        "hover.optimizeModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the ✨ Optimize refinement pass (text-only, no browser). A small/cheap model is plenty — e.g. Claude: haiku. Empty = the active agent's cheap default (Claude → haiku), or the run model if it has none."
         },
         "hover.localBaseUrl": {
           "type": "string",

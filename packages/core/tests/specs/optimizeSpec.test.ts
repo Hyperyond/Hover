@@ -5,7 +5,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  optimizeSpec, buildOptimizePrompt, extractCode, validateSpecCode, OptimizeError,
+  optimizeSpec, buildOptimizePrompt, extractCode, validateSpecCode, OptimizeError, gatherSuiteContext,
 } from '../../src/specs/optimizeSpec.js';
 import type { SpecSidecar } from '../../src/specs/sidecar.js';
 
@@ -60,6 +60,54 @@ describe('buildOptimizePrompt', () => {
     const p = buildOptimizePrompt('DRAFT', null);
     expect(p).toContain('KNOWN BUG');
     expect(p).toContain('looks like a BUG');
+  });
+
+  it('instructs de-literalizing volatile values even when not pre-flagged', () => {
+    const p = buildOptimizePrompt('DRAFT', null);
+    expect(p).toContain('DE-LITERALIZE VOLATILE VALUES');
+    expect(p).toContain('NOT pre-flagged');
+  });
+
+  it('injects suite conventions + reusable Page Objects when provided', () => {
+    const suite = {
+      conventions: 'Always use data-testid for actions.',
+      pages: [{ name: 'LoginPage.ts', source: 'export class LoginPage { async login() {} }' }],
+    };
+    const p = buildOptimizePrompt('DRAFT', null, [], suite);
+    expect(p).toContain('PROJECT CONVENTIONS');
+    expect(p).toContain('Always use data-testid');
+    expect(p).toContain('REUSABLE PAGE OBJECTS');
+    expect(p).toContain('LoginPage.ts');
+    expect(p).toContain('class LoginPage');
+  });
+
+  it('omits the context sections when no suite context is available', () => {
+    const p = buildOptimizePrompt('DRAFT', null);
+    expect(p).not.toContain('PROJECT CONVENTIONS');
+    expect(p).not.toContain('REUSABLE PAGE OBJECTS');
+  });
+});
+
+describe('gatherSuiteContext', () => {
+  let devRoot: string;
+  beforeEach(() => { devRoot = mkdtempSync(join(tmpdir(), 'hover-suite-')); });
+  afterEach(() => { rmSync(devRoot, { recursive: true, force: true }); });
+
+  it('reads conventions.md + __vibe_tests__/pages/*.ts', async () => {
+    mkdirSync(join(devRoot, '.hover'), { recursive: true });
+    writeFileSync(join(devRoot, '.hover', 'conventions.md'), 'Prefer getByRole.');
+    mkdirSync(join(devRoot, '__vibe_tests__', 'pages'), { recursive: true });
+    writeFileSync(join(devRoot, '__vibe_tests__', 'pages', 'CartPage.ts'), 'export class CartPage {}');
+    const suite = await gatherSuiteContext(devRoot);
+    expect(suite.conventions).toBe('Prefer getByRole.');
+    expect(suite.pages.map(p => p.name)).toEqual(['CartPage.ts']);
+    expect(suite.pages[0].source).toContain('class CartPage');
+  });
+
+  it('returns empty (never throws) when nothing exists', async () => {
+    const suite = await gatherSuiteContext(devRoot);
+    expect(suite.conventions).toBeUndefined();
+    expect(suite.pages).toEqual([]);
   });
 });
 
