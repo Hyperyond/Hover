@@ -15,6 +15,7 @@ interface SpecRow {
   group: string;
   security: boolean;
   cells: (Status | null)[];
+  flaky?: boolean;
 }
 interface DashboardData {
   hasRuns: boolean;
@@ -34,6 +35,7 @@ const Shield = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="none
 const Beaker = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M6 2v4L3 12.5a1 1 0 0 0 .9 1.5h8.2a1 1 0 0 0 .9-1.5L10 6V2M5 2h6" /></svg>);
 const Play = () => (<svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M4 3l9 5-9 5z" /></svg>);
 const Sparkle = () => (<svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M8 1l1.6 4.4L14 7l-4.4 1.6L8 13l-1.6-4.4L2 7l4.4-1.6z" /></svg>);
+const Heal = () => (<svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M6.5 2h3v4.5H14v3H9.5V14h-3V9.5H2v-3h4.5z" /></svg>);
 const Folder = () => (<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" className="opacity-70"><path d="M2 4.5h4l1.2 1.5H14v6.5H2z" /></svg>);
 
 const TILE_CLS: Record<string, string> = { ok: "text-pass", bad: "text-fail", warn: "text-flaky" };
@@ -57,6 +59,7 @@ function Row({ r }: { r: SpecRow }) {
       ) : (
         <span className="flex-1 min-w-0 truncate cursor-default" title="not on disk">{r.name}</span>
       )}
+      {r.flaky && <span className="flex-none text-flaky text-[9px] font-semibold uppercase tracking-wide" title="Flaky — inconsistent across runs; 🏥 Heal may fix a drifted selector">flaky</span>}
       <span className="flex-none flex gap-0.5">
         {r.cells.map((c, i) => (<span key={i} className={"w-[11px] h-[11px] rounded-sm flex-none " + (c ? CELL_CLS[c] : "bg-line")} />))}
       </span>
@@ -64,6 +67,7 @@ function Row({ r }: { r: SpecRow }) {
         <span className="flex-none hidden gap-px group-hover:flex">
           <button className="inline-flex items-center justify-center w-6 h-6 text-muted cursor-pointer rounded-[5px] hover:text-fg hover:bg-line" title="Run" onClick={() => post({ type: "runSpec", path: r.path! })}><Play /></button>
           <button className="inline-flex items-center justify-center w-6 h-6 text-muted cursor-pointer rounded-[5px] hover:text-fg hover:bg-line" title="Optimize" onClick={() => post({ type: "optimize", path: r.path! })}><Sparkle /></button>
+          <button className={"inline-flex items-center justify-center w-6 h-6 cursor-pointer rounded-[5px] hover:text-fg hover:bg-line " + (r.flaky ? "text-flaky" : "text-muted")} title="Heal — re-locate broken steps against the live app" onClick={() => post({ type: "heal", path: r.path! })}><Heal /></button>
         </span>
       )}
     </div>
