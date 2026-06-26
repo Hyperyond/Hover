@@ -130,6 +130,9 @@ export interface ServiceClientPool {
   /** Run the deterministic + LLM optimization pass on a saved spec.
    *  `optimizeModel` pins a cheap model for the pass (empty → agent default). */
   optimizeSpec(slug: string, optimizeModel?: string, enginePort?: number): boolean;
+  /** Self-heal: ask the engine to build a heal prompt for a failed spec (it
+   *  replies `heal-ready`, which the extension then runs as a normal run). */
+  healSpec(slug: string, specSource: string, enginePort?: number): boolean;
   /** Eagerly connect to a just-spawned host's port (skip the reconnect delay). */
   ensureConnected(port: number): void;
   /** Resolve once a socket to `port` is OPEN (or false on timeout). */
@@ -212,6 +215,7 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         msg.type === 'qa-report' ||
         msg.type === 'qa-candidates' ||
         msg.type === 'reset-recipe' ||
+        msg.type === 'heal-ready' ||
         msg.type === 'optimize-result' ||
         msg.type === 'optimize-failed' ||
         msg.type === 'source-approval-request' ||
@@ -302,6 +306,12 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
       const ws = target(enginePort);
       if (!ws) return false;
       ws.send(JSON.stringify({ type: 'optimize-spec', payload: { slug, optimizeModel } }));
+      return true;
+    },
+    healSpec(slug: string, specSource: string, enginePort?: number): boolean {
+      const ws = target(enginePort);
+      if (!ws) return false;
+      ws.send(JSON.stringify({ type: 'heal-spec', payload: { slug, specSource } }));
       return true;
     },
     ensureConnected(port: number): void {

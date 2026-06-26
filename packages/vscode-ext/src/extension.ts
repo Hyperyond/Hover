@@ -444,7 +444,7 @@ function ensureBrowser(url: string, enginePort?: number): Promise<boolean> {
 }
 
 /** Hand a chat prompt to the engine, ensuring the browser is up first. */
-async function runPrompt(prompt: string): Promise<void> {
+async function runPrompt(prompt: string, displayText?: string): Promise<void> {
   if (!pool) {
     chatProvider?.pushSystem('Engine not connected yet — give it a moment after opening the project, or run "Hover: Start Engine".');
     return;
@@ -453,8 +453,11 @@ async function runPrompt(prompt: string): Promise<void> {
   // while this run is in flight (parallel model); everything below operates on
   // `sess`, never the moving active session.
   const sess = activeChat();
-  nameSessionFromPrompt(prompt);
-  sess.transcript.push({ kind: 'user', text: prompt });
+  // `displayText` lets a machine-built prompt (e.g. a self-heal run) show a
+  // short, friendly bubble while the agent still receives the full instruction.
+  const bubble = displayText ?? prompt;
+  nameSessionFromPrompt(bubble);
+  sess.transcript.push({ kind: 'user', text: bubble });
   // Normally reset the saveable-action counter per run. But if the previous run
   // ended by asking the user a hover-ask question, the task continues into this
   // run — carry the count forward so a 0-action wrap-up still renders a Done card.
@@ -750,6 +753,15 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
   if (msg.type === 'cdp-status') {
     const p = (msg.payload ?? {}) as { state?: string; launching?: boolean };
     if (!p.launching) pendingBrowserByPort.get(enginePort ?? 0)?.(p.state === 'same-window' || p.state === 'wrong-window');
+    return;
+  }
+  if (msg.type === 'heal-ready') {
+    // The engine built the heal prompt; run it through the normal run path so
+    // the repair streams into chat and crystallizes like any run. The chat shows
+    // the short label; the agent receives the full prompt.
+    const prompt = String(msg.payload?.prompt ?? '');
+    const label = String(msg.payload?.label ?? '🏥 Healing spec');
+    if (prompt) void runPrompt(prompt, label);
     return;
   }
   if (msg.type === 'optimize-result') {
@@ -1301,6 +1313,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.saveFindingsReport', () => saveFindingsReport()),
     vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel(activeEnginePort())),
     vscode.commands.registerCommand('hover.optimizeSpec', (a?: vscode.TreeItem | vscode.Uri) => optimizeSpec(a)),
+    vscode.commands.registerCommand('hover.healSpec', (a?: vscode.TreeItem | vscode.Uri) => healSpec(a)),
     vscode.commands.registerCommand('hover.addCiWorkflow', () => addCiWorkflow()),
     vscode.commands.registerCommand('hover.startApp', () => startApp()),
     vscode.commands.registerCommand('hover.toggleBrowser', () => toggleBrowser()),
@@ -2001,6 +2014,31 @@ function specSlug(uri: vscode.Uri): string {
 function resolveSpecUri(arg?: vscode.TreeItem | vscode.Uri): vscode.Uri | undefined {
   if (arg instanceof vscode.Uri) return arg;
   return arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri;
+}
+
+/** 🏥 Self-heal: a saved spec failed on replay (app changed). Read its source,
+ *  ask the engine to build a heal prompt (from the spec + the latest run's
+ *  failing locator), then the engine bounces `heal-ready` → a normal grounded
+ *  run streams the repair into chat and crystallizes a fixed candidate. */
+async function healSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const uri = resolveSpecUri(arg);
+  if (!uri) return;
+  if (!pool || connectedServices === 0) {
+    void vscode.window.showWarningMessage('Hover: engine not connected.');
+    return;
+  }
+  const slug = specSlug(uri);
+  let specSource: string;
+  try {
+    specSource = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+  } catch {
+    void vscode.window.showWarningMessage(`Hover: could not read "${slug}".`);
+    return;
+  }
+  await chatProvider?.reveal();
+  if (!pool.healSpec(slug, specSource)) {
+    void vscode.window.showWarningMessage('Hover: could not reach the engine.');
+  }
 }
 
 async function optimizeSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {

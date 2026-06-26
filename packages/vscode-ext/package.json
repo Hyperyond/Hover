@@ -156,6 +156,12 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "hover.healSpec",
+        "title": "Heal Spec",
+        "category": "Hover",
+        "icon": "$(heart)"
+      },
+      {
         "command": "hover.startApp",
         "title": "Start App (dev server + browser)",
         "category": "Hover",

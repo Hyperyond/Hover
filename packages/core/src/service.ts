@@ -35,11 +35,13 @@ import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { runDir } from './specs/sidecar.js';
-import { readdirSync, statSync, mkdirSync } from 'node:fs';
+import { readdirSync, statSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { runSession } from './runSession.js';
 import { readConventions } from './service/conventions.js';
 import { optimizeSpecWithAgent } from './specs/optimizeSpecWithAgent.js';
+import { parseRunFailures, type RunFailure } from './specs/runFailures.js';
+import { buildHealPrompt, healLabel } from './specs/healPrompt.js';
 import {
   listAgentAvailability,
   pickPrimaryAgent,
@@ -1021,6 +1023,31 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
           const reason = err instanceof Error ? err.message : String(err);
           send(ws, { type: 'optimize-failed', payload: { slug, reason } });
         }
+        return;
+      }
+      // Self-heal Stage 2: build the heal prompt for a failed spec and bounce it
+      // back. The extension then runs it through the normal run path (runPrompt →
+      // command), so the repair streams into chat and crystallizes like any run —
+      // no run-path surgery. The failing locator comes from the latest Playwright
+      // run JSON (parseRunFailures); absent → buildHealPrompt degrades gracefully.
+      if (msg.type === 'heal-spec') {
+        const slug = msg.payload?.slug;
+        const specSource = typeof msg.payload?.specSource === 'string' ? msg.payload.specSource : '';
+        if (typeof slug !== 'string' || !slug || !specSource) {
+          send(ws, { type: 'error', payload: { message: 'heal-spec: slug and specSource are required' } });
+          return;
+        }
+        let failures: RunFailure[] = [];
+        try {
+          const runsDir = join(devRoot, '.hover', 'runs');
+          const files = readdirSync(runsDir).filter((f) => f.endsWith('.json')).sort();
+          const newest = files.at(-1);
+          if (newest) {
+            failures = parseRunFailures(readFileSync(join(runsDir, newest), 'utf-8'))
+              .filter((f) => f.specFile.includes(slug));
+          }
+        } catch { /* no runs ledger yet — heal from the spec source alone */ }
+        send(ws, { type: 'heal-ready', payload: { slug, prompt: buildHealPrompt(slug, specSource, failures), label: healLabel(slug) } });
         return;
       }
       // v0.12 — plugin-contributed save handlers. Lookup is O(plugins),

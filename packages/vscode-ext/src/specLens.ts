@@ -40,6 +40,16 @@ export class SpecLensProvider implements vscode.CodeLensProvider {
       );
     }
 
+    // 🏥 Heal — re-locate broken steps against the live app when the spec fails
+    // on replay (app changed). Always offered; the user heals when a run breaks.
+    lenses.push(
+      new vscode.CodeLens(topRange, {
+        title: '🏥 Heal this spec',
+        command: 'hover.healSpec',
+        arguments: [document.uri],
+      }),
+    );
+
     return lenses;
   }
 }
