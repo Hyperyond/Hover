@@ -304,6 +304,13 @@ function isSaveableTool(tool: unknown): boolean {
   const t = String(tool ?? '').replace(/^mcp__.*?__/, '');
   return t !== '' && !NON_SAVEABLE_TOOLS.has(t);
 }
+/** True when the agent's final text contains a `hover-ask` block — i.e. the run
+ *  ended by asking the user to choose, so the task is NOT concluded (the user's
+ *  answer starts a follow-up run). Presence check; mirrors the webview's
+ *  HOVER_ASK_RE (followup.ts). */
+function endsWithHoverAsk(text: string): boolean {
+  return /```hover-ask/i.test(text);
+}
 /** A live chat conversation: its transcript + the agent session id used to
  *  --resume follow-up turns. Multiple coexist; one is active. Persisted to
  *  workspaceState so they survive reload. Each session drives its OWN engine
@@ -328,6 +335,12 @@ interface ChatSession {
    *  start; incremented only on saveable tools. Read at session_end to gate the
    *  Done-vs-clarification branch + Save prompt. Runtime-only. */
   stepCount?: number;
+  /** Set when a run ends by asking the user a `hover-ask` question — the task
+   *  isn't concluded, so the NEXT run inherits this run's `stepCount` instead of
+   *  resetting it. Without this, a clarify splits one task into two runs and the
+   *  closing 0-action wrap-up turn loses its Done card (+ Save). Consumed (and
+   *  cleared) at the next run start. Runtime-only. */
+  carryStepCount?: boolean;
   runCost?: number;
   runTokens?: number;
   /** Per-run source-read grant ("Allow once" / "Deny"); reset each run. Per
@@ -363,6 +376,15 @@ function activeEnginePort(): number | undefined {
  *  resolver to run with the user's answer. Lets several prompt kinds share the
  *  one card UI + the one askUserAnswer round-trip. */
 const pendingCards = new Map<string, (value: string | null) => void>();
+/** Auth-as-fixture (debt 3): save params stashed by spec name, so an APPROVED
+ *  config edit can re-save the same spec with the fixture engaged. */
+const fixtureResaves = new Map<string, { steps: unknown[]; redactions: { value: string; envVar: string }[]; resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string } }>();
+/** Minimal additive diff for the config-edit preview — lines in `after` not in
+ *  `before`, `+`-prefixed (the ts-morph edit only inserts a `projects` block). */
+function additiveConfigDiff(before: string, after: string): string {
+  const seen = new Set(before.split('\n').map((l) => l.trim()));
+  return after.split('\n').filter((l) => l.trim() && !seen.has(l.trim())).map((l) => `+ ${l}`).join('\n');
+}
 /** The prompt card awaiting an answer in each session, so a prompt from a
  *  BACKGROUND session doesn't pop in the conversation you're watching — it's
  *  rendered only when its session is active, and re-rendered on switch-back. */
@@ -433,7 +455,11 @@ async function runPrompt(prompt: string): Promise<void> {
   const sess = activeChat();
   nameSessionFromPrompt(prompt);
   sess.transcript.push({ kind: 'user', text: prompt });
-  sess.stepCount = 0;
+  // Normally reset the saveable-action counter per run. But if the previous run
+  // ended by asking the user a hover-ask question, the task continues into this
+  // run — carry the count forward so a 0-action wrap-up still renders a Done card.
+  if (sess.carryStepCount) sess.carryStepCount = false;
+  else sess.stepCount = 0;
   sess.runCost = 0;
   sess.runTokens = 0;
   sess.lastRunAt = Date.now(); // for the sidebar's "last run N ago"
@@ -600,6 +626,70 @@ function handleAskUser(msg: ServerMessage, enginePort?: number): void {
   presentAsk(ownerId, { askId: id, question, options });
 }
 
+/** Auth-as-fixture (debt 3, Stage 4b): present an in-chat approval card offering
+ *  to lift the recorded login into a reusable setup project (which edits the
+ *  user's playwright.config). On approval, re-save with the fixture engaged and
+ *  show the config edit as an inline diff. "Keep inline" → leave today's spec. */
+function offerAuthFixture(owner: ChatSession, specName: string, configPath: string, proposedConfig: string, enginePort?: number): void {
+  const askId = `authfix:${specName}:${configPath}`;
+  const cfg = configPath.split('/').pop();
+  // Match the user's language (their prompt drives the agent's prose too).
+  const zh = CJK_RE.test(lastUserPrompt(owner));
+  const setLabel = zh ? '抽成 auth fixture' : 'Set up auth fixture';
+  pendingCards.set(askId, (value) => {
+    if (value !== setLabel) return; // "Keep inline" (or dismissed) → no-op
+    void applyAuthFixture(specName, configPath, proposedConfig, enginePort, zh);
+  });
+  presentAsk(owner.id, {
+    askId,
+    question: zh
+      ? `把这次的登录抽成可复用的 auth fixture 吗？它只跑一次（而非每个测试都登录），你的 spec 直接从已登录态开始。这会修改 ${cfg} 注册一个 setup project，并生成 auth.setup.ts。`
+      : `Lift this login into a reusable auth fixture? It runs once (not per test); your specs start logged in. This edits ${cfg} to register a setup project and creates auth.setup.ts.`,
+    options: zh
+      ? [
+          { label: setLabel, description: `修改 ${cfg} + 生成 auth.setup.ts` },
+          { label: '保持登录内联', description: '把登录步骤留在每个 spec 里' },
+        ]
+      : [
+          { label: setLabel, description: `Edit ${cfg} + create auth.setup.ts` },
+          { label: 'Keep login inline', description: 'Leave the login steps inside each spec' },
+        ],
+  });
+}
+
+/** The most recent user prompt in a session — used to pick the card's language. */
+function lastUserPrompt(owner: ChatSession): string {
+  for (let i = owner.transcript.length - 1; i >= 0; i--) {
+    const t = owner.transcript[i];
+    if (t.kind === 'user' && typeof t.text === 'string') return t.text;
+  }
+  return '';
+}
+/** Any CJK character → render Hover's prose in Chinese (mirrors agentDirectives). */
+const CJK_RE = /[一-鿿]/;
+
+/** Re-save the spec with the auth fixture engaged (the engine applies the config
+ *  edit + writes auth.setup.ts), then render the config change as an inline diff. */
+async function applyAuthFixture(specName: string, configPath: string, proposedConfig: string, enginePort?: number, zh = false): Promise<void> {
+  const cfg = configPath.split('/').pop();
+  const stash = fixtureResaves.get(specName);
+  if (!stash) {
+    chatProvider?.pushSystem(zh ? 'Hover：无法设置 fixture——原始步骤已不可用，请重新保存该 spec。' : 'Hover: could not set up the fixture — original steps are no longer available; re-save the spec.');
+    return;
+  }
+  // Diff against the current config BEFORE the re-save overwrites it.
+  let before = '';
+  try { before = readFileSync(configPath, 'utf-8'); } catch { /* show the proposal anyway */ }
+  pool?.saveSpec(specName, stash.steps, stash.redactions, true, stash.resetRecipe, enginePort, true);
+  const diff = additiveConfigDiff(before, proposedConfig);
+  chatProvider?.pushSystem(
+    (zh
+      ? `✓ 已设置 auth fixture——登录抽进了 auth.setup.ts，并在 ${cfg} 注册：`
+      : `✓ Set up the auth fixture — lifted login into auth.setup.ts and registered it in ${cfg}:`) +
+    `\n\n\`\`\`diff\n${diff}\n\`\`\``,
+  );
+}
+
 /** Route a captured MITM flow (security/pentest mode) into the Network view. */
 function handleFlow(msg: ServerMessage): void {
   if (msg.type === 'security:flows:cleared') { trafficProvider?.clear(); return; }
@@ -635,6 +725,12 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       chatProvider?.pushSystem(`Saved ${files.length} specs: ${files.join(', ')}`);
     } else {
       chatProvider?.pushSystem(`Saved spec: ${String(msg.payload?.name ?? '')}`);
+    }
+    // Auth-as-fixture (debt 3): a login was detected but a user playwright.config
+    // exists — offer (in-chat, with approval) to lift login into a setup project.
+    const offer = msg.payload?.authFixtureOffer as { configPath?: string; proposedConfig?: string } | undefined;
+    if (live && offer?.configPath && offer.proposedConfig) {
+      offerAuthFixture(owner, String(msg.payload?.name ?? ''), offer.configPath, offer.proposedConfig, enginePort);
     }
     return;
   }
@@ -776,6 +872,11 @@ function handleServerMessage(msg: ServerMessage, enginePort?: number): void {
       // Done-vs-clarification branch + the Save prompt.
       const steps = owner.stepCount ?? 0;
       owner.transcript.push({ kind: 'done', summary: ev.summary, isError: ev.isError, findings: ev.findings, mode: currentMode, steps, tokens: owner.runTokens ?? 0 });
+      // If this run ended by asking the user to choose (a hover-ask block), the
+      // task isn't done — carry the saveable-step count into the follow-up run so
+      // its closing wrap-up keeps the Done card instead of degrading to a plain
+      // reply. Only on a clean ask (not an error/cancel).
+      owner.carryStepCount = !ev.isError && !ev.cancelled && endsWithHoverAsk(String(ev.summary ?? ''));
       persistSessions();
       if (typeof ev.costUsd === 'number') owner.runCost = ev.costUsd;
       if (typeof ev.tokens === 'number') owner.runTokens = ev.tokens;
@@ -1089,7 +1190,14 @@ async function saveSpec(nameArg?: string, overwrite = false): Promise<void> {
     if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
     if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
   }
-  if (!pool?.saveSpec(name, steps, redactions, overwrite)) void vscode.window.showWarningMessage('Hover: engine not connected.');
+  // Debt-2: a tier-1 reset recipe on the active env makes the spec re-enter from
+  // a clean client state (resetState() beforeEach). Recon populates it; absent
+  // here → no reset emitted.
+  const resetRecipe = (await envStore?.getActive())?.resetRecipe;
+  // Stash for a possible auth-fixture re-save (debt 3): if the engine reports a
+  // login + an existing config, the approval card re-saves these same params.
+  fixtureResaves.set(name, { steps, redactions, resetRecipe });
+  if (!pool?.saveSpec(name, steps, redactions, overwrite, resetRecipe)) void vscode.window.showWarningMessage('Hover: engine not connected.');
 }
 
 /** A QA candidate flow surfaced at run end — its steps are already resolved to
@@ -1129,7 +1237,9 @@ async function crystallizeCandidate(candidateName: string, rawSteps: unknown[]):
     if (a.username) redactions.push({ value: a.username, envVar: a.userEnvVar });
     if (a.password) redactions.push({ value: a.password, envVar: a.passEnvVar });
   }
-  if (!pool?.saveSpec(name, steps, redactions, false)) void vscode.window.showWarningMessage('Hover: engine not connected.');
+  const resetRecipe = (await envStore?.getActive())?.resetRecipe;
+  fixtureResaves.set(name, { steps, redactions, resetRecipe });
+  if (!pool?.saveSpec(name, steps, redactions, false, resetRecipe)) void vscode.window.showWarningMessage('Hover: engine not connected.');
 }
 
 /** 🔴 pentest mode: crystallize the session's recorded probes into a Markdown

@@ -94,7 +94,12 @@ const CLAUDE_DEFAULT_DISALLOWED_TOOLS: readonly string[] = [
   // file / shell / data access — never appropriate for browser driving
   'Bash', 'BashOutput', 'KillBash',
   'Edit', 'MultiEdit', 'Write', 'Read', 'NotebookEdit',
-  'Grep', 'Glob', 'Task', 'TodoWrite',
+  // `Task` was renamed `Agent` in newer Claude Code — it spawns a subagent with
+  // the full tool surface (Bash/Write/…), a real sandbox escape, so deny BOTH
+  // the current and legacy name. (Only this one targeted name was added; do NOT
+  // add MCP-machinery tools like WaitForMcpServers here — denying those breaks
+  // the MCP tool path and the agent loses its real browser tools.)
+  'Grep', 'Glob', 'Task', 'Agent', 'TodoWrite',
   'WebFetch', 'WebSearch',
   // plan / worktree / cron / notification — irrelevant in -p mode
   'EnterPlanMode', 'ExitPlanMode',

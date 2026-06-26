@@ -117,8 +117,10 @@ export interface ServiceClientPool {
   /** Cancel a run. `enginePort` cancels one host; omit to cancel all. */
   cancel(enginePort?: number): void;
   /** Crystallize the accumulated steps into a spec. `redactions` parameterize
-   *  credential fill values into process.env refs so secrets stay out of the spec. */
-  saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, enginePort?: number): boolean;
+   *  credential fill values into process.env refs so secrets stay out of the spec.
+   *  `resetRecipe` (active env's, debt-2) → a tier-1 recipe makes the spec emit a
+   *  resetState() beforeEach for reproducible runs. */
+  saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string }, enginePort?: number, authFixture?: boolean): boolean;
   /** Invoke a plugin-contributed save handler (e.g. `save:pentest:report`,
    *  `save:security:spec`). The engine replies with `<type>:saved` or `error`. */
   pluginSave(type: string, payload: Record<string, unknown>, enginePort?: number): boolean;
@@ -277,10 +279,10 @@ export function connectServicePool(handlers: PoolHandlers): ServiceClientPool {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel' }));
       }
     },
-    saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, enginePort?: number): boolean {
+    saveSpec(name: string, steps: unknown[], redactions?: Redaction[], overwrite?: boolean, resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string }, enginePort?: number, authFixture?: boolean): boolean {
       const ws = target(enginePort);
       if (!ws) return false;
-      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions, overwrite } }));
+      ws.send(JSON.stringify({ type: 'save-spec', payload: { name, steps, redactions, overwrite, resetRecipe, authFixture } }));
       return true;
     },
     pluginSave(type: string, payload: Record<string, unknown>, enginePort?: number): boolean {

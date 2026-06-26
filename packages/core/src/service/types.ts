@@ -30,6 +30,13 @@ export interface ClientMessage {
     /** save-spec only — credentials to parameterize into process.env.<envVar>
      *  references so secrets never land in the spec / sidecar. */
     redactions?: { value: string; envVar: string }[];
+    /** save-spec only — the active env's recon-discovered reset recipe (debt-2).
+     *  A tier-1 recipe makes the spec generate + call a resetState() beforeEach. */
+    resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string };
+    /** save-spec only — auth-as-fixture (debt 3). The user approved Hover editing
+     *  their existing playwright.config; engage the fixture (lift login into
+     *  auth.setup.ts) and apply the setup-project edit. Absent on a normal save. */
+    authFixture?: boolean;
     /** command only — test accounts the prompt referenced via @label. Injected
      *  into the agent's system prompt (ephemeral, not the saved transcript) so
      *  it can log in; the recorded fill values get redacted on save. */
