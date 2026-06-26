@@ -3,6 +3,16 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.23.0 — 2026-06-26
+
+**Crystallization fidelity — saved specs hold up across runs on apps with changing content.**
+
+- **Dynamic content → invariants, not literals.** When a recorded step targets data that varies run-to-run (a drawn word, a generated id, a date), the saved spec now anchors on a stable selector and asserts the invariant (a value is shown) instead of freezing this run's value — so it passes on the next run instead of breaking on a different word. Driven at record time, with a backstop in ✨ Optimize.
+- **✨ Optimize is smarter and cheaper.** The refinement pass now reads your project's Page Objects + conventions and reuses them, de-literalizes volatile values it detects, and runs on a small model by default (Claude → `haiku`; override with the new `hover.optimizeModel` setting). The deterministic spec stays the source of truth — the model only refines, and you review the diff before promoting.
+- **A QA run always offers a Crystallize card.** When a run completes a clean flow, you get a ✨ Crystallize candidate even if the agent didn't explicitly mark one.
+- **Reproducible state (foundation).** Groundwork for resetting an app to a clean starting state before replay — state-reset recon, a generated `resetState()` helper, and login lifted into a Playwright `storageState` fixture. Recon clears client state, so it is off by default for now.
+- **Fixed:** stray tool-call syntax a model occasionally emitted as plain text no longer leaks into the run summary or the report.
+
 ## 0.22.1 — 2026-06-21
 
 - **Fixed:** a 0-action assistant reply (a clarification, or a short wrap-up like a security-test conclusion) rendered raw text, so `**bold**` showed its literal asterisks. The assistant bubble now renders markdown (bold / italic / bullets / headings) like the Done card and the clarify question.
