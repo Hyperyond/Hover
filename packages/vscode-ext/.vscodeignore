@@ -11,3 +11,31 @@ tsup.config.ts
 vite.config.ts
 .gitignore
 resources/icon-source.png
+
+# --- Engine slimming (keep the .vsix small so the marketplace virus scan
+# doesn't time out). Hover drives Playwright over CDP only — it never launches
+# the trace-viewer / recorder / dashboard web UIs, and node never loads the
+# source maps / type defs / docs at runtime. None of these affect the engine. ---
+engine/node_modules/**/lib/vite/**
+engine/node_modules/**/*.map
+engine/node_modules/**/*.d.ts
+engine/node_modules/**/*.md
+engine/node_modules/**/*.markdown
+engine/node_modules/**/CHANGELOG*
+engine/node_modules/**/changelog*
+engine/node_modules/**/AUTHORS*
+engine/node_modules/**/bin/reinstall_*
+engine/node_modules/**/.bin/**
+# Build/install shell scripts in deps — never run at Hover runtime, and the
+# kind of file a marketplace virus scan is most likely to flag.
+engine/node_modules/**/*.sh
+engine/node_modules/**/*.ps1
+engine/node_modules/**/*.cmd
+engine/node_modules/**/*.bat
+# Dep test/example/doc dirs — not loaded at runtime.
+engine/node_modules/**/test/**
+engine/node_modules/**/tests/**
+engine/node_modules/**/__tests__/**
+engine/node_modules/**/example/**
+engine/node_modules/**/examples/**
+**/.DS_Store
