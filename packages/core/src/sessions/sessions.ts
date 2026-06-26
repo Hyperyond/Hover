@@ -109,19 +109,40 @@ function stripJsonArtifact(summary: string): string {
   return summary.replace(block[0], '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+/**
+ * Strip leaked function-call syntax a model sometimes emits as TEXT instead of
+ * actually invoking the tool — e.g. a final summary that ends with
+ * `call\n<invoke name="mcp__playwright__browser_wait_for">…</invoke>`. The model
+ * "writes out" the call (a known tool-calling glitch, common at end-of-turn /
+ * budget cap) and the parser renders it verbatim into the report + Done card.
+ * This keeps user-facing prose about the APP, not Hover's tooling
+ * (REPORTING_DIRECTIVE). Defensive + total: any agent can trip this.
+ */
+export function stripToolCallNoise(text: string): string {
+  return text
+    .replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, '') // wrapper form
+    .replace(/<invoke\b[\s\S]*?<\/invoke>/gi, '')                // closed call block
+    .replace(/<invoke\b[\s\S]*$/gi, '')                          // dangling (truncated) call
+    .replace(/<parameter\b[\s\S]*?<\/parameter>/gi, '')          // stray parameter
+    .replace(/^[ \t]*call[ \t]*$/gim, '')                        // lone "call" lead-in line
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** Markdown-forced: the agent emits a plain-markdown report (REPORTING_DIRECTIVE)
  *  — ONE outcome line, `- ` bullets, and an optional `## Findings` section with
  *  `- **severity** — text` items. Parse the summary + findings from that markdown
  *  only; a stray ```json block (a non-compliant agent) is stripped, never parsed
  *  for findings and never leaked. Pure + total — no Findings block yields none. */
 export function parseFindings(summary: string): { summary: string; findings: SessionFinding[] } {
-  const lines = stripJsonArtifact(summary).split('\n');
+  const cleaned = stripToolCallNoise(stripJsonArtifact(summary));
+  const lines = cleaned.split('\n');
   let hi = -1;
   for (let i = 0; i < lines.length; i++) {
     const t = lines[i].trim();
     if (/^#{1,6}\s*(findings|bugs|issues)\b/i.test(t) || /^findings\s*:/i.test(t)) { hi = i; break; }
   }
-  if (hi < 0) return { summary: summary.trim(), findings: [] };
+  if (hi < 0) return { summary: cleaned.trim(), findings: [] };
   let j = hi + 1;
   while (j < lines.length && lines[j].trim() === '') j++;
   const start = j;

@@ -80,6 +80,35 @@ describe('parseFindings', () => {
     const { findings } = parseFindings('## Findings\n- counter never increments');
     expect(findings).toEqual([{ severity: 'note', text: 'counter never increments' }]);
   });
+
+  it('strips a tool-call the model emitted as text in the final summary', () => {
+    const summary = [
+      'Guest mode entered fine; existing progress kept. Waiting for sync.',
+      '',
+      'call',
+      '<invoke name="mcp__playwright__browser_wait_for">',
+      '<parameter name="textGone">同步中...</parameter>',
+      '</invoke>',
+    ].join('\n');
+    const { summary: main, findings } = parseFindings(summary);
+    expect(main).toBe('Guest mode entered fine; existing progress kept. Waiting for sync.');
+    expect(main).not.toContain('<invoke');
+    expect(main).not.toContain('browser_wait_for');
+    expect(findings).toEqual([]);
+  });
+
+  it('strips leaked tool-call noise even with a Findings block present', () => {
+    const summary = [
+      'Checked login and checkout.',
+      '<invoke name="mcp__playwright__browser_snapshot"></invoke>',
+      '',
+      '## Findings',
+      '- **high** — checkout total is wrong',
+    ].join('\n');
+    const { summary: main, findings } = parseFindings(summary);
+    expect(main).toBe('Checked login and checkout.');
+    expect(findings).toEqual([{ severity: 'high', text: 'checkout total is wrong' }]);
+  });
 });
 
 describe('tallyTools', () => {
