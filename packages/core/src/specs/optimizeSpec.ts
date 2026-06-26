@@ -10,7 +10,7 @@
  * The LLM call is injected (`runCodegen`) so callers wire their own agent and
  * tests run deterministically without spawning anything.
  */
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Project } from 'ts-morph';
 import { readSidecar, type SpecSidecar } from './sidecar.js';
@@ -26,6 +26,40 @@ export class OptimizeError extends Error {
 
 /** Runs the codegen LLM on a prompt and returns its raw text output. */
 export type RunCodegen = (prompt: string) => Promise<string>;
+
+/** Project context fed to the refinement pass so the candidate FITS the existing
+ *  suite: the team's conventions + the reusable Page Objects to prefer over raw
+ *  locators. Relevant files only (POMs + conventions), NOT the whole suite — the
+ *  refinement is a cheap pass, keep the context bounded. */
+export interface SuiteContext {
+  conventions?: string;
+  pages: { name: string; source: string }[];
+}
+
+/** Total Page-Object source budget injected into the prompt (chars). Keeps the
+ *  refinement context bounded on a large suite; extra POMs are dropped (logged in
+ *  the prompt) rather than blowing the window. */
+const POM_CONTEXT_BUDGET = 16_000;
+
+/** Best-effort gather of the suite context (conventions.md + __vibe_tests__/pages
+ *  Page Objects). Missing files → empty; never throws. */
+export async function gatherSuiteContext(devRoot: string): Promise<SuiteContext> {
+  const conventions = (await readFile(join(devRoot, '.hover', 'conventions.md'), 'utf-8').catch(() => ''))
+    .trim() || undefined;
+  const pages: { name: string; source: string }[] = [];
+  let used = 0;
+  try {
+    const dir = join(devRoot, '__vibe_tests__', 'pages');
+    for (const f of (await readdir(dir)).sort()) {
+      if (!f.endsWith('.ts')) continue;
+      const source = (await readFile(join(dir, f), 'utf-8').catch(() => '')).trim();
+      if (!source || used + source.length > POM_CONTEXT_BUDGET) continue;
+      used += source.length;
+      pages.push({ name: f, source });
+    }
+  } catch { /* no pages dir — plain spec, no POMs to reuse */ }
+  return { conventions, pages };
+}
 
 export interface OptimizeResult {
   /** Absolute path of the written candidate (never the original spec). */
@@ -59,7 +93,8 @@ export async function optimizeSpec(
       .map(s => s.tool as string),
   );
   const seeds = relevantSeeds(BUILTIN_SEEDS, specTools);
-  const raw = await runCodegen(buildOptimizePrompt(draft, sidecar, seeds));
+  const suite = await gatherSuiteContext(devRoot);
+  const raw = await runCodegen(buildOptimizePrompt(draft, sidecar, seeds, suite));
   const llmCode = extractCode(raw);
   const check = validateSpecCode(llmCode);
   if (!check.ok) {
@@ -91,6 +126,7 @@ export function buildOptimizePrompt(
   draft: string,
   sidecar: SpecSidecar | null,
   seeds: SeedRule[] = [],
+  suite: SuiteContext = { pages: [] },
 ): string {
   const done = sidecar?.steps.find(s => s.kind === 'done');
   const stepsJson = sidecar
@@ -114,6 +150,19 @@ export function buildOptimizePrompt(
     `    exact-literal assertion for genuinely fixed text (a heading, a fixed`,
     `    confirmation). Any captured assert_visible step already encodes this —`,
     `    preserve its matcher/intent; don't tighten a dynamic one back to a literal.`,
+    `  - DE-LITERALIZE VOLATILE VALUES — even ones NOT pre-flagged. Scan every`,
+    `    selector and assertion in the spec for values that are this run's DATA, not`,
+    `    stable UI: a word/title/name/id/order number/date/price/count drawn from`,
+    `    app content. Judge from what this app IS (the conventions + Page Objects`,
+    `    below tell you) and the captured values. For each volatile one:`,
+    `    getByRole(role, { name: "<value>" }) -> a stable anchor (getByTestId, or`,
+    `    getByRole(role).first(), or a Page Object method); toHaveText("<value>") ->`,
+    `    .not.toHaveText('') or .toContainText(/.../). When unsure if a value is`,
+    `    volatile, PREFER the invariant — over-asserting a changing value is the`,
+    `    failure we are fixing. But NEVER newly hard-code a value that wasn't there.`,
+    `  - REUSE the project's Page Objects + conventions (below). If a step sequence`,
+    `    matches a Page Object method, CALL it instead of re-emitting raw locators,`,
+    `    and follow the naming / structure the existing suite uses.`,
     `  - Keep semantic selectors: getByRole / getByLabel / getByText. NEVER emit`,
     `    XPath or CSS-id selectors. NEVER use waitForTimeout (Playwright`,
     `    auto-waits).`,
@@ -138,6 +187,16 @@ export function buildOptimizePrompt(
     ``,
     `=== CAPTURED STEPS ===`,
     stepsJson,
+    ...(suite.conventions
+      ? [``, `=== PROJECT CONVENTIONS (follow these) ===`, suite.conventions]
+      : []),
+    ...(suite.pages.length > 0
+      ? [
+          ``,
+          `=== REUSABLE PAGE OBJECTS (prefer calling these over raw locators) ===`,
+          ...suite.pages.map(p => `// ${p.name}\n${p.source}`),
+        ]
+      : []),
     ...(seeds.length > 0
       ? [
           ``,

@@ -87,6 +87,26 @@ import {
   type ModeActivateCtx,
 } from './plugin-api.js';
 
+/** Tools whose steps crystallize to a replayable line (grounded actuations +
+ *  navigation). Used to build a FALLBACK QA candidate from a completed run when
+ *  the agent never called record_candidate — so crystallization doesn't depend
+ *  on the agent's compliance. Structural typing avoids a SkillStep import. */
+const CRYSTALLIZABLE_TOOLS = new Set([
+  'click_control', 'fill_control', 'select_control', 'check_control',
+  'upload_file', 'assert_visible', 'browser_navigate',
+]);
+function bareToolName(tool: string): string {
+  return tool.replace(/^mcp__[a-z0-9_-]+?__/, '');
+}
+function isCrystallizableStep(s: { kind?: string; tool?: string; isError?: boolean }): boolean {
+  return s.kind === 'step' && !!s.tool && !s.isError && CRYSTALLIZABLE_TOOLS.has(bareToolName(s.tool));
+}
+/** A real interaction (not just navigation) — so a fallback candidate isn't a
+ *  lone goto with nothing to replay. */
+function isRealAction(s: { tool?: string }): boolean {
+  return !!s.tool && bareToolName(s.tool) !== 'browser_navigate';
+}
+
 /** The source-reader MCP server (codeContext). Id → the `mcp__hoversource`
  *  tool prefix; script path resolved relative to this module so it works from
  *  dist/. Spawned only when codeContext is enabled. */
@@ -1640,7 +1660,19 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
         // functional regression artifacts — the pentest phase produces a findings
         // report, not specs, so it never offers them (and avoids duplicating the
         // verify phase's candidates).
-        if (runMode === 'qa' && !pentestActiveThisRun && runCandidates.length && !run.cancelled) {
+        if (runMode === 'qa' && !pentestActiveThisRun && !run.cancelled) {
+          // Fallback: the agent may finish a clean flow but never call
+          // record_candidate (compliance is unreliable, esp. on short directed
+          // tasks). If it recorded none, offer the whole completed run's grounded
+          // actuations as ONE candidate — crystallization shouldn't depend on the
+          // agent remembering to mark it. Deterministic; the user renames at the
+          // Crystallize prompt. Skipped on error runs and when nothing was acted.
+          if (runCandidates.length === 0 && !runResult.isError) {
+            const grounded = runResult.steps.filter(isCrystallizableStep);
+            if (grounded.some(isRealAction)) {
+              runCandidates.push({ name: 'Recorded flow', steps: grounded });
+            }
+          }
           const resolved = finalizeCandidates(runCandidates);
           if (resolved.length) emitToRun({ type: 'qa-candidates', payload: { candidates: resolved } });
         }

@@ -764,7 +764,10 @@ function translateStep(rawTool: string, rawInput: unknown, pageVar = 'page'): st
       // swaps a dynamic name/text for a stable anchor, so the locator is sound;
       // here we pick the MATCHER by volatility — a dynamic value never freezes
       // to a literal even if the agent passed matcher 'text-exact'.
-      const sel = `${groundedSelector(input, pageVar)}.first()`;
+      // groundedSelector ALREADY appends `.first()` for text / dynamic-role
+      // anchors, so only add one when it didn't (avoid `.first().first()`).
+      const groundExpr = groundedSelector(input, pageVar);
+      const sel = groundExpr.endsWith('.first()') ? groundExpr : `${groundExpr}.first()`;
       const dynamic = input.dynamic === true;
       const expected = input.expected != null ? String(input.expected)
         : input.observed != null ? String(input.observed) : '';

@@ -986,6 +986,19 @@ describe('writeSpec — assert_visible crystallization', () => {
     });
     expect(readFileSync(r.path, 'utf-8')).toContain(`expect(page.getByTestId("greeting").first()).toBeVisible()`);
   });
+
+  it('text-anchored assert_visible does not double .first()', async () => {
+    const r = await writeSpec({
+      devRoot, name: 'instruction visible',
+      steps: [
+        nav,
+        { kind: 'step', tool: 'mcp__hover-control__assert_visible', input: { text: 'Press space to flip' } },
+      ],
+    });
+    const src = readFileSync(r.path, 'utf-8');
+    expect(src).toContain('.first())');
+    expect(src).not.toContain('.first().first()');
+  });
 });
 
 describe('writeSpec — auth-as-fixture (debt 3)', () => {
