@@ -586,26 +586,35 @@ function handleSourceApproval(msg: ServerMessage, enginePort?: number): void {
   const ownerId = owner?.id ?? activeSessionId;
   if (sourceAccessForRun() === 'always' || owner?.sourceGrant === 'allow') { pool?.sendSourceApproval(id, true, enginePort); return; }
   if (owner?.sourceGrant === 'deny') { pool?.sendSourceApproval(id, false, enginePort); return; }
+  // Localize the prompt to match the run's language (CJK prompt → Chinese card),
+  // mirroring the ZH_OUTPUT directive. Labels are matched below by the same
+  // localized strings, so the choice comparison stays consistent.
+  const zh = CJK_RE.test(lastUserPrompt(owner ?? activeChat()));
+  const L = zh
+    ? { always: '始终允许', once: '仅此一次', deny: '拒绝' }
+    : { always: 'Always allow', once: 'Allow once', deny: 'Deny' };
   pendingCards.set(`src:${id}`, (choice) => {
     pendingAsks.delete(ownerId);
-    if (choice === 'Always allow') {
+    if (choice === L.always) {
       void extContext?.workspaceState.update('hover.sourceAlways', true);
       if (owner) owner.sourceGrant = 'allow';
       pool?.sendSourceApproval(id, true, enginePort);
-    } else if (choice === 'Allow once') {
+    } else if (choice === L.once) {
       if (owner) owner.sourceGrant = 'allow';
       pool?.sendSourceApproval(id, true, enginePort);
-    } else if (choice === 'Deny') {
+    } else if (choice === L.deny) {
       if (owner) owner.sourceGrant = 'deny';
       pool?.sendSourceApproval(id, false, enginePort);
     } else {
-      pool?.sendSourceApproval(id, false, enginePort); // dismissed → deny this one, ask again next
+      pool?.sendSourceApproval(id, false, enginePort); // dismissed (×) → deny this one, ask again next
     }
   });
   presentAsk(ownerId, {
     askId: `src:${id}`,
-    question: `Hover wants to read ${path} to understand the page (read-only, fenced — secrets / .env / .git / node_modules are blocked).`,
-    options: [{ label: 'Always allow' }, { label: 'Allow once' }, { label: 'Deny' }],
+    question: zh
+      ? `Hover 想读取 ${path} 来理解页面（只读，已隔离——secrets / .env / .git / node_modules 不可读）。`
+      : `Hover wants to read ${path} to understand the page (read-only, fenced — secrets / .env / .git / node_modules are blocked).`,
+    options: [{ label: L.always }, { label: L.once }, { label: L.deny }],
     other: false,
   });
 }
