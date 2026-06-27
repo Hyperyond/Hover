@@ -3,6 +3,16 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.24.0 — 2026-06-27
+
+**🏥 Self-heal — when a spec breaks because the app changed, repair it in chat instead of by hand.**
+
+- **🏥 Heal a spec.** A saved spec failing on replay (a renamed/moved control, a drifted selector)? Click **🏥 Heal** — on the spec's CodeLens or its Dashboard row — and Hover re-runs the flow against your live app, re-locates the broken step(s) with grounded selectors, and offers a fixed candidate to review. The repair streams into the chat (you watch the agent work) and crystallizes through the normal candidate flow. Triggered from the spec, executed live; the fix is yours to review before it lands — Hover never silently rewrites a spec.
+- **Finds what actually broke.** It reads the last run's failure to target the exact failing locator, and judges broke-vs-intentionally-changed (a real regression is reported, not healed away).
+- **Per-spec flaky, surfaced.** The Dashboard now flags each spec that's inconsistent across runs (passed and failed in the window) with a "flaky" marker, and every row gets a 🏥 Heal action — so unstable specs are individually visible and fixable from where you see them.
+
+Self-heal re-locates in your own browser via your own agent (BYO-CLI) — no cloud, no vendor; the fixed test stays plain `@playwright/test` you own.
+
 ## 0.23.0 — 2026-06-26
 
 **Crystallization fidelity — saved specs hold up across runs on apps with changing content.**
