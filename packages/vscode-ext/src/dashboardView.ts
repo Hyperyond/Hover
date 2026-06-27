@@ -32,6 +32,16 @@ interface SpecRow {
   group: string;
   security: boolean;
   cells: (Status | null)[];
+  /** Inconsistent across the window (both passed and failed, or a flaky run) —
+   *  a candidate for 🏥 Heal. */
+  flaky: boolean;
+}
+
+/** Flaky = a spec that both passed and failed across the window (or a run marked
+ *  it flaky on retry). Shared by the per-row flag and the aggregate tile. */
+function cellsFlaky(cells: (Status | null)[]): boolean {
+  const seen = new Set(cells.filter(Boolean));
+  return seen.has('flaky') || (seen.has('pass') && seen.has('fail'));
 }
 
 interface DashboardData {
@@ -112,20 +122,18 @@ async function gather(): Promise<DashboardData> {
     .sort((a, b) => a.localeCompare(b))
     .map((name) => {
       const uri = byName.get(name);
+      const cells = runs.map((r) => r.specs[name] ?? null) as (Status | null)[];
       return {
         name,
         path: uri ? uri.fsPath : null,
         group: uri ? specGroup(uri.fsPath) : '',
         security: name.endsWith('.api-test.spec.ts'),
-        cells: runs.map((r) => r.specs[name] ?? null) as (Status | null)[],
+        cells,
+        flaky: cellsFlaky(cells),
       };
     });
 
-  // Flaky = a spec that both passed and failed across the window.
-  const flaky = rows.filter((r) => {
-    const seen = new Set(r.cells.filter(Boolean));
-    return seen.has('flaky') || (seen.has('pass') && seen.has('fail'));
-  }).length;
+  const flaky = rows.filter((r) => r.flaky).length;
 
   // Pass rate of the latest run.
   let passRate: number | null = null;
@@ -174,6 +182,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       else if (msg.type === 'runAll') void vscode.commands.executeCommand('hover.runAllSpecs');
       else if (msg.type === 'runSpec' && msg.path) void vscode.commands.executeCommand('hover.runSpec', vscode.Uri.file(msg.path));
       else if (msg.type === 'optimize' && msg.path) void vscode.commands.executeCommand('hover.optimizeSpec', vscode.Uri.file(msg.path));
+      else if (msg.type === 'heal' && msg.path) void vscode.commands.executeCommand('hover.healSpec', vscode.Uri.file(msg.path));
       else if (msg.type === 'open' && msg.path) void vscode.window.showTextDocument(vscode.Uri.file(msg.path));
     });
   }

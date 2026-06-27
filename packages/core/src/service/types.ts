@@ -57,6 +57,9 @@ export interface ClientMessage {
     /** optimize-spec only — override model for the F7 refinement pass (the
      *  `hover.optimizeModel` setting). Empty → the agent's cheap default. */
     optimizeModel?: string;
+    /** heal-spec only — the failing spec's source, so the engine can build the
+     *  heal prompt without guessing the spec's path. */
+    specSource?: string;
     /** set-effort only — reasoning-effort level for subsequent runs (empty
      *  string clears it → agent/model default). */
     effort?: string;
