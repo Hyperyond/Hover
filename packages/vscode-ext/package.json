@@ -162,6 +162,12 @@
         "icon": "$(heart)"
       },
       {
+        "command": "hover.syncCiResults",
+        "title": "Sync CI Results",
+        "category": "Hover",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "hover.startApp",
         "title": "Start App (dev server + browser)",
         "category": "Hover",
@@ -521,6 +527,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {

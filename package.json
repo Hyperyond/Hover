@@ -27,6 +27,7 @@
   "devDependencies": {
     "@commitlint/cli": "^19.7.0",
     "@commitlint/config-conventional": "^19.7.0",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
