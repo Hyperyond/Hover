@@ -183,6 +183,7 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       else if (msg.type === 'runSpec' && msg.path) void vscode.commands.executeCommand('hover.runSpec', vscode.Uri.file(msg.path));
       else if (msg.type === 'optimize' && msg.path) void vscode.commands.executeCommand('hover.optimizeSpec', vscode.Uri.file(msg.path));
       else if (msg.type === 'heal' && msg.path) void vscode.commands.executeCommand('hover.healSpec', vscode.Uri.file(msg.path));
+      else if (msg.type === 'syncCi') void vscode.commands.executeCommand('hover.syncCiResults');
       else if (msg.type === 'open' && msg.path) void vscode.window.showTextDocument(vscode.Uri.file(msg.path));
     });
   }

@@ -25,6 +25,7 @@ import {
 } from './serviceClient.js';
 import { SpecLensProvider } from './specLens.js';
 import { registerDashboardView } from './dashboardView.js';
+import { syncCiResults as ghSyncCiResults } from './githubCi.js';
 import { registerTrafficView, type TrafficViewProvider, type Flow } from './trafficView.js';
 import { registerConversationsView, type ConversationsViewProvider } from './conversationsView.js';
 import { ChatViewProvider, registerChatView } from './chatView.js';
@@ -585,26 +586,35 @@ function handleSourceApproval(msg: ServerMessage, enginePort?: number): void {
   const ownerId = owner?.id ?? activeSessionId;
   if (sourceAccessForRun() === 'always' || owner?.sourceGrant === 'allow') { pool?.sendSourceApproval(id, true, enginePort); return; }
   if (owner?.sourceGrant === 'deny') { pool?.sendSourceApproval(id, false, enginePort); return; }
+  // Localize the prompt to match the run's language (CJK prompt → Chinese card),
+  // mirroring the ZH_OUTPUT directive. Labels are matched below by the same
+  // localized strings, so the choice comparison stays consistent.
+  const zh = CJK_RE.test(lastUserPrompt(owner ?? activeChat()));
+  const L = zh
+    ? { always: '始终允许', once: '仅此一次', deny: '拒绝' }
+    : { always: 'Always allow', once: 'Allow once', deny: 'Deny' };
   pendingCards.set(`src:${id}`, (choice) => {
     pendingAsks.delete(ownerId);
-    if (choice === 'Always allow') {
+    if (choice === L.always) {
       void extContext?.workspaceState.update('hover.sourceAlways', true);
       if (owner) owner.sourceGrant = 'allow';
       pool?.sendSourceApproval(id, true, enginePort);
-    } else if (choice === 'Allow once') {
+    } else if (choice === L.once) {
       if (owner) owner.sourceGrant = 'allow';
       pool?.sendSourceApproval(id, true, enginePort);
-    } else if (choice === 'Deny') {
+    } else if (choice === L.deny) {
       if (owner) owner.sourceGrant = 'deny';
       pool?.sendSourceApproval(id, false, enginePort);
     } else {
-      pool?.sendSourceApproval(id, false, enginePort); // dismissed → deny this one, ask again next
+      pool?.sendSourceApproval(id, false, enginePort); // dismissed (×) → deny this one, ask again next
     }
   });
   presentAsk(ownerId, {
     askId: `src:${id}`,
-    question: `Hover wants to read ${path} to understand the page (read-only, fenced — secrets / .env / .git / node_modules are blocked).`,
-    options: [{ label: 'Always allow' }, { label: 'Allow once' }, { label: 'Deny' }],
+    question: zh
+      ? `Hover 想读取 ${path} 来理解页面（只读，已隔离——secrets / .env / .git / node_modules 不可读）。`
+      : `Hover wants to read ${path} to understand the page (read-only, fenced — secrets / .env / .git / node_modules are blocked).`,
+    options: [{ label: L.always }, { label: L.once }, { label: L.deny }],
     other: false,
   });
 }
@@ -1314,6 +1324,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.cancelRun', () => pool?.cancel(activeEnginePort())),
     vscode.commands.registerCommand('hover.optimizeSpec', (a?: vscode.TreeItem | vscode.Uri) => optimizeSpec(a)),
     vscode.commands.registerCommand('hover.healSpec', (a?: vscode.TreeItem | vscode.Uri) => healSpec(a)),
+    vscode.commands.registerCommand('hover.syncCiResults', () => syncCiResults()),
     vscode.commands.registerCommand('hover.addCiWorkflow', () => addCiWorkflow()),
     vscode.commands.registerCommand('hover.startApp', () => startApp()),
     vscode.commands.registerCommand('hover.toggleBrowser', () => toggleBrowser()),
@@ -2014,6 +2025,37 @@ function specSlug(uri: vscode.Uri): string {
 function resolveSpecUri(arg?: vscode.TreeItem | vscode.Uri): vscode.Uri | undefined {
   if (arg instanceof vscode.Uri) return arg;
   return arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri;
+}
+
+/** Pull the latest GitHub CI run's Playwright results into `.hover/runs/` so the
+ *  Dashboard + 🏥 self-heal show CI failures (cloudless — extension ↔ GitHub).
+ *  Failures then surface in the Dashboard (red cells + 🏥 Heal per row). */
+async function syncCiResults(): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) { void vscode.window.showWarningMessage('Hover: open a workspace folder first.'); return; }
+  try {
+    const res = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'Hover: syncing CI results from GitHub…' },
+      () => ghSyncCiResults(folder.uri),
+    );
+    if (!res) {
+      void vscode.window.showInformationMessage('Hover: no completed "Hover E2E" run with results yet. Add the workflow ("Hover: Add CI Workflow"), push, and let it run.');
+      return;
+    }
+    await vscode.commands.executeCommand('hover.refreshDashboard');
+    if (res.conclusion === 'failure') {
+      const view = 'View run';
+      const pick = await vscode.window.showWarningMessage(
+        `Hover: CI run #${res.runId} failed — failing specs are marked in the Dashboard; click 🏥 Heal on one to repair it.`,
+        view,
+      );
+      if (pick === view) void vscode.env.openExternal(vscode.Uri.parse(res.htmlUrl));
+    } else {
+      void vscode.window.showInformationMessage(`Hover: CI run #${res.runId} ${res.conclusion ?? 'completed'} — Dashboard updated.`);
+    }
+  } catch (e) {
+    void vscode.window.showErrorMessage(`Hover: CI sync failed — ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /** 🏥 Self-heal: a saved spec failed on replay (app changed). Read its source,

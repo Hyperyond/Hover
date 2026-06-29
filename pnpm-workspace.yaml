@@ -1,9 +1,4 @@
 packages:
   - 'packages/*'
   - 'examples/*'
-  # A migrated real-world app used as a Hover test target. It's an npm project
-  # (its own package-lock.json + node_modules); exclude it from the pnpm
-  # workspace so a root `pnpm install` doesn't fight its npm setup. Run its dev
-  # server standalone via `pnpm dev:example:vocab`.
-  - '!examples/3000MostCommonEnglishWords'
   - 'site'

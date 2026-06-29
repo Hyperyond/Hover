@@ -23,7 +23,15 @@ export function AskCard({ ask, onResolve }: { ask: AskReq; onResolve: (value: st
     if (v) onResolve(v);
   };
   return (
-    <div className="ask">
+    <div className="ask" style={{ position: "relative" }}>
+      {/* Dismiss (×) — same as Claude: closing interrupts/declines the prompt
+          (sends a null answer → the run treats it as cancelled/denied). */}
+      <button
+        title="Dismiss"
+        aria-label="Dismiss"
+        onClick={() => onResolve(null)}
+        style={{ position: "absolute", top: 4, right: 6, background: "none", border: "none", color: "inherit", opacity: 0.45, cursor: "pointer", fontSize: 17, lineHeight: 1, padding: "2px 4px" }}
+      >×</button>
       <div className="ask-q" dangerouslySetInnerHTML={{ __html: inline(ask.question || "Hover needs your input") }} />
       <div className="ask-opts">
         {ask.options

@@ -9,8 +9,11 @@
  * `HOVER_<LABEL>_USER/PASS` names the Environments view exports, so authoring
  * (the vault) and CI (secrets) line up on one convention.
  *
- * A commented hook marks where Hover Cloud will later add on-failure self-heal
- * of drifted specs + a dashboard; until then a red check is a real regression.
+ * It also writes a JSON report (`hover-results.json`) and uploads it as the
+ * `hover-results` artifact — the structured result the Hover extension fetches
+ * (via GitHub) to surface CI failures in the editor and offer 🏥 Heal on drifted
+ * specs, with the heal running locally. No AI in CI; a red check is a real
+ * regression until you heal it.
  */
 
 export interface CiWorkflowOptions {
@@ -75,17 +78,27 @@ ${setupBlock}      - uses: actions/setup-node@v4
       - name: Wait for the app
         run: npx --yes wait-on "$BASE_URL" --timeout 120000
       - name: Run Hover specs
-        run: ${pm.exec} playwright test __vibe_tests__
+        run: ${pm.exec} playwright test __vibe_tests__ --reporter=html,json
         env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: hover-results.json
 ${secretEnv}
+      - name: Upload Hover results
+        uses: actions/upload-artifact@v4
+        if: \${{ !cancelled() }}
+        with:
+          name: hover-results
+          path: hover-results.json
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: \${{ !cancelled() }}
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
-      # Hover Cloud (coming soon): on failure, auto-heal UI-drifted specs and
-      # report to a dashboard. Until then, a red check is a genuine regression.
+      # The hover-results artifact (Playwright JSON) is what the Hover VS Code
+      # extension reads to surface CI failures in the editor and offer 🏥 Heal on
+      # drifted specs — the heal runs LOCALLY (your browser + your agent), no AI
+      # in CI. Until you connect the extension, a red check is a real regression.
 #
 # Testing a deployed URL instead of building in CI? Delete the "Start the app"
 # + "Wait for the app" steps and point BASE_URL at your deployment — or use a

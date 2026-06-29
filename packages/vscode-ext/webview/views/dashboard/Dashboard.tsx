@@ -100,6 +100,9 @@ export function Dashboard() {
       <button className="w-full p-2 mb-2 rounded-lg bg-accent text-[#0c2417] text-[12.5px] font-semibold cursor-pointer inline-flex items-center justify-center gap-1.5 hover:brightness-110" onClick={() => post({ type: "runAll" })}>
         <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l9 5-9 5z" /></svg> Run all specs
       </button>
+      <button className="w-full p-1.5 mb-2 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3" title="Pull the latest GitHub CI run's results into the dashboard (failures become 🏥 Heal targets)" onClick={() => post({ type: "syncCi" })}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M4 8a4 4 0 1 1 1.3 3M8 5v3l2 1" strokeLinecap="round" /></svg> Sync from CI
+      </button>
       <div className="relative mb-2.5">
         <svg className="absolute left-[9px] top-1/2 -translate-y-1/2 text-faint" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="4.2" /><path d="M10.2 10.2 13.5 13.5" strokeLinecap="round" /></svg>
         <input className="w-full pl-7 pr-[9px] py-[7px] rounded-lg border border-line bg-bg3 text-fg text-[12px] placeholder:text-faint focus:outline-none focus:border-focus" type="text" placeholder="Search specs…" value={q} onChange={(e) => setQ(e.target.value)} />

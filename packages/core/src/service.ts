@@ -567,25 +567,15 @@ export async function startService(opts: ServiceOptions): Promise<ServiceHandle>
 
   /** Send the current mode catalogue to one ws (or all if undefined). */
   const broadcastModes = (target?: WebSocket): void => {
-    const available = plugins
-      .filter((p): p is HoverPluginManifest & { mode: NonNullable<HoverPluginManifest['mode']> } =>
-        Boolean(p.mode),
-      )
-      .map((p) => ({
-        id: p.mode.id,
-        label: p.mode.label,
-        description: p.mode.description,
-        // Widget retints to this while the mode is engaged (falls back to
-        // security orange in the widget when absent).
-        accent: p.mode.accent,
-        pluginName: p.name,
-      }));
-    // Built-in non-Flow modes (QA) are core-owned, not plugin-contributed —
-    // surface them in the same catalogue so the picker lists them.
+    // The picker lists ONLY the built-in modes (Flow implicit + QA). The
+    // api-test / pentest PLUGINS still load — but they're surfaced as QA
+    // capability TOGGLES (apiCapabilityAvailable / pentestCapabilityAvailable
+    // below), NOT as standalone modes. (Listing plugin-contributed modes here is
+    // the old, removed UX: the mode picker is now Flow + QA Testing only.)
     const builtins = BUILTIN_MODES.map((m) => ({ id: m.id, label: m.label, description: m.description, accent: m.accent }));
     const payload = {
       current: currentModeId,
-      available: [...builtins, ...available],
+      available: builtins,
       // Whether QA's API / Pentest capabilities can actually run (plugin loaded +
       // MITM up). Gates the QA toggles so "on" always works.
       apiCapabilityAvailable: apiCapabilityAvailable(),

@@ -26,6 +26,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^19.7.0
         version: 19.8.1
+      '@playwright/test':
+        specifier: ^1.60.0
+        version: 1.60.0
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
@@ -259,6 +262,9 @@ importers:
 
   packages/vscode-ext:
     dependencies:
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       ws:
         specifier: ^8.18.0
         version: 8.20.1
@@ -2207,6 +2213,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   finalhandler@1.1.2:
     resolution: {integrity: sha512-aAWcW57uxVNrQZqFXjITpW3sIUQmHGG3qSb9mUah9MgMC4NeWhNOlNjXEYq3HjRAvL6arUviZGGJsBg6z0zsWA==}
@@ -5529,6 +5538,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
       picomatch: 4.0.4
+
+  fflate@0.8.3: {}
 
   finalhandler@1.1.2:
     dependencies:
