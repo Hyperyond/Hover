@@ -49,7 +49,6 @@ export const DOCS_NAV: DocSection[] = [
     items: [
       { text: 'Overview', href: '/docs/development/' },
       { text: 'Monorepo layout', href: '/docs/development/monorepo-layout/' },
-      { text: 'Running examples', href: '/docs/development/running-examples/' },
       { text: 'Smoke tests', href: '/docs/development/smoke-tests/' },
       { text: 'Releasing', href: '/docs/development/releasing/' },
     ],

@@ -69,10 +69,6 @@ QA Testing has two **capability toggles**:
 
 The API + Penetration capabilities run off a built-in **probe catalogue** — small recipes covering 8 access-control + 9 vulnerability classes, curated and shipped with Hover.
 
-## Examples
-
-Runnable apps under [`examples/`](./examples/) stress different testing surfaces — `basic-app` (login / counter / todos), `stock-registration` (~50-field form), `e-commerce` (cart / checkout with a cross-tab payment popup), `canvas-paint` (DOM controls amid a canvas), and `payment-provider` (the unintegrated third-party popup target). They're plain Vite + React apps — the extension drives them over CDP, nothing to install in the app.
-
 ## FAQ
 
 **My UI changed and my saved spec breaks.** Most UI churn doesn't — selectors are semantic, not CSS/XPath. When semantics shift, edit the spec by hand (it's plain Playwright) or treat it as a real regression. No CI-time auto-heal on purpose — CI stays deterministic and free. Automatic on-failure self-heal of UI-drifted specs is coming via **Hover Cloud**, not the local extension (which stays purely author + run).

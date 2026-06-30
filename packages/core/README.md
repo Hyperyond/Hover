@@ -92,7 +92,7 @@ They ship inlined as the `BUILTIN_SEEDS` constant in
 
 ## Exercising the engine
 
-There is no standalone CLI smoke loop — the engine is driven by the VS Code extension. Build + sideload it (`pnpm --filter hover-dev package`), open the Hover chat, and drive an example (`pnpm dev:example:basic-app`). The extension spawns the isolated debug Chrome on demand and connects to the engine over WS (ports 51789+). Env knobs the engine reads: `HOVER_CDP` (CDP URL, default `http://localhost:9222`), `HOVER_AGENT` (agent id; omit to auto-detect), `HOVER_MODEL` (default `sonnet`).
+There is no standalone CLI smoke loop — the engine is driven by the VS Code extension. Build + sideload it (`pnpm --filter hover-dev package`), open the Hover chat, and drive any dev server. The extension spawns the isolated debug Chrome on demand and connects to the engine over WS (ports 51789+). Env knobs the engine reads: `HOVER_CDP` (CDP URL, default `http://localhost:9222`), `HOVER_AGENT` (agent id; omit to auto-detect), `HOVER_MODEL` (default `sonnet`).
 
 ## Sandboxing
 
