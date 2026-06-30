@@ -54,6 +54,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('hover.reviewOptimizationCandidate', (arg?: vscode.TreeItem | vscode.Uri) =>
       reviewOptimizationCandidate(arg),
     ),
+    vscode.commands.registerCommand('hover.healSpec', (arg?: vscode.TreeItem | vscode.Uri) => healSpec(arg)),
     vscode.commands.registerCommand('hover.runSpec', (item?: vscode.TreeItem | vscode.Uri) => runSpec(item)),
     vscode.commands.registerCommand('hover.runFolderSpecs', (item?: vscode.TreeItem) => runFolderSpecs(item)),
     vscode.commands.registerCommand('hover.runAllSpecs', () => runAllSpecs()),
@@ -253,6 +254,24 @@ async function reviewOptimizationCandidate(arg?: vscode.TreeItem | vscode.Uri): 
     candidate,
     `Hover · ${fileName} ↔ optimized`,
     { preview: true } satisfies vscode.TextDocumentShowOptions,
+  );
+}
+
+/** Hand self-heal off to the user's coding agent. The cockpit drives no agent,
+ *  so copy the `/mcp__hover__heal <slug>` command for the user to run in Claude
+ *  Code, where the Hover MCP replays the spec and re-grounds the drifted step. */
+async function healSpec(arg?: vscode.TreeItem | vscode.Uri): Promise<void> {
+  const specUri =
+    arg instanceof vscode.Uri ? arg : (arg?.resourceUri ?? vscode.window.activeTextEditor?.document.uri);
+  if (!specUri || specUri.scheme !== 'file') {
+    void vscode.window.showWarningMessage('Hover: open a spec file to heal it.');
+    return;
+  }
+  const slug = path.basename(specUri.fsPath).replace(/\.spec\.ts$/, '');
+  const cmd = `/mcp__hover__heal ${slug}`;
+  await vscode.env.clipboard.writeText(cmd);
+  void vscode.window.showInformationMessage(
+    `Hover: copied "${cmd}" — paste it into your coding agent (Claude Code) to replay & heal this spec. The cockpit reviews; the Hover MCP does the healing.`,
   );
 }
 

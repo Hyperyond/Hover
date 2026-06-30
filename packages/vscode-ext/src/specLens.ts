@@ -40,6 +40,19 @@ export class SpecLensProvider implements vscode.CodeLensProvider {
       );
     }
 
+    // Heal hand-off — UI specs only (self-heal replays the sidecar; API specs
+    // aren't sidecar-replayed). Copies the `/mcp__hover__heal` command for the
+    // user's agent, since the cockpit drives no agent.
+    if (!document.uri.path.endsWith('.api-test.spec.ts')) {
+      lenses.push(
+        new vscode.CodeLens(topRange, {
+          title: '🏥 Heal in agent',
+          command: 'hover.healSpec',
+          arguments: [document.uri],
+        }),
+      );
+    }
+
     return lenses;
   }
 }
