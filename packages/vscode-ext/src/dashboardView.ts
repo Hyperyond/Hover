@@ -22,7 +22,7 @@
 import * as vscode from 'vscode';
 import { renderWebviewHtml } from './webviewHost.js';
 
-type Status = 'pass' | 'fail' | 'flaky';
+export type Status = 'pass' | 'fail' | 'flaky';
 
 interface SpecRow {
   name: string;
@@ -62,7 +62,7 @@ function worse(a: Status | undefined, b: Status): Status {
 
 /** Parse a Playwright json report into { specBasename → status }. Defensive:
  *  an unexpected shape just yields no entries. */
-function parsePlaywrightRun(json: unknown): Record<string, Status> {
+export function parsePlaywrightRun(json: unknown): Record<string, Status> {
   const out: Record<string, Status> = {};
   const visit = (suite: { file?: string; specs?: unknown[]; suites?: unknown[] }, inherited?: string): void => {
     const file = suite.file ?? inherited;
@@ -181,10 +181,10 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       if (msg.type === 'ready' || msg.type === 'refresh') void this.push();
       else if (msg.type === 'runAll') void vscode.commands.executeCommand('hover.runAllSpecs');
       else if (msg.type === 'runSpec' && msg.path) void vscode.commands.executeCommand('hover.runSpec', vscode.Uri.file(msg.path));
-      else if (msg.type === 'optimize' && msg.path) void vscode.commands.executeCommand('hover.optimizeSpec', vscode.Uri.file(msg.path));
-      else if (msg.type === 'heal' && msg.path) void vscode.commands.executeCommand('hover.healSpec', vscode.Uri.file(msg.path));
       else if (msg.type === 'syncCi') void vscode.commands.executeCommand('hover.syncCiResults');
       else if (msg.type === 'open' && msg.path) void vscode.window.showTextDocument(vscode.Uri.file(msg.path));
+      else if (msg.type === 'installMcp') void vscode.commands.executeCommand('hover.installMcp');
+      else if (msg.type === 'openSite') void vscode.commands.executeCommand('hover.openSite');
     });
   }
 

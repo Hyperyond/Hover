@@ -1,8 +1,8 @@
 /**
  * Shared host HTML for every Hover React WebviewView.
  *
- * All views (chat / settings / dashboard / conversations / traffic) load the
- * SAME bundled app (dist/webview/chat.js + chat.css). The extension injects
+ * All views (dashboard / business-map) load the SAME bundled app
+ * (dist/webview/chat.js + chat.css). The extension injects
  * which screen to render via `window.__HOVER_VIEW__`; the webview app's
  * top-level router (webview/App.tsx) switches on it. This is a param-driven
  * switch, not react-router — each WebviewView is a separate sandboxed iframe

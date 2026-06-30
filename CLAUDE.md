@@ -18,23 +18,17 @@ The differentiator vs. Stagehand / Midscene / Playwright codegen is the **AI exp
 
 The **`hover-dev` VSCode extension (`packages/vscode-ext`) is the distribution.** The npm bundler-plugin path — `vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`, `@hover-dev/transform-source`, plus the in-page widget — has been **removed**: those packages' source is gone. The extension drives any dev server over CDP with no injected widget, so the install-a-plugin step no longer exists. (Published versions of the old packages remain installable from the registry as historical artifacts, but they are no longer part of this repo.)
 
-**`@hover-dev/core` is NOT removed** — it stays the engine, consumed by the extension as *local source* (the extension's `stage-engine` step `npm pack`s the local `packages/core`, never the registry), so core keeps evolving without being (re)published to npm. **Do not delete `core`.** The remaining workspace packages are `core`, `probe-engine`, `api-test`, `pentest`, and `vscode-ext` (plus the `site` docs app and `examples/*`).
+**`@hover-dev/core` is NOT removed** — it stays the engine, consumed by the extension as *local source* (the extension's `stage-engine` step `npm pack`s the local `packages/core`, never the registry), so core keeps evolving without being (re)published to npm. **Do not delete `core`.** The remaining workspace packages are `core`, `probe-engine`, `api-test`, `pentest`, and `vscode-ext` (plus the `site` docs app).
 
 ## Workspace directories
 
-Workspace packages come from `pnpm-workspace.yaml`: `packages/*` and `examples/*`. The repo is pnpm + ESM throughout.
+Workspace packages come from `pnpm-workspace.yaml`: `packages/*`. The repo is pnpm + ESM throughout.
 
 - `packages/core` is `@hover-dev/core` — the Node service. Owns agent invocation, Playwright CDP preflight, MCP config, and the WebSocket bridge between the extension UI and the agent process.
 - `packages/probe-engine` is the private shared probe engine consumed by `@hover-dev/api-test` and `@hover-dev/pentest`.
 - `packages/api-test` (`@hover-dev/api-test`) and `packages/pentest` (`@hover-dev/pentest`) are the api-test / pentest mode plugins, staged into the extension's engine. **The orange `api-test` mode (renamed from the old `security` mode) covers BOTH jobs in one mode: functional/contract API testing (drive + verify endpoints) AND the previously-defined security/authz testing (access control, IDOR/BOLA, permissions); confirmed authz findings crystallize to `.api-test.spec.ts`.** Many *internal* identifiers still read `Security*` (`writeSecuritySpec`, `startSecurityRuntime`, `SecuritySeed`, `builtinSecuritySeeds`, …) — deliberately not renamed; only the package, mode id, artifact name, and CI tag changed. (The old bundler-plugin / in-page-widget packages — `vite-plugin-hover`, `@hover-dev/astro` / `nuxt` / `next`, `webpack-plugin-hover`, `@hover-dev/cli`, `@hover-dev/widget-bootstrap`, `@hover-dev/transform-source` — have been removed; their per-bundler integration notes survive only in git history.)
 - `packages/vscode-ext` is `hover-dev` — the VSCode extension, Hover's **primary surface** per the security-direction design. ONE extension covers AI test authoring + application-security testing; the normal / api-test (orange) / pentest (red) split is a mode switch over the engine's `set-mode` protocol. **Engine-in-extension (Path A)**: rather than esbuild-bundle `@hover-dev/core` (which fails — playwright-core does a dynamic `require('chromium-bidi/…')` esbuild can't follow), `scripts/stage-engine.mjs` runs `npm pack` on core + a flat `npm install` into `engine/node_modules`, shipped inside the .vsix; `src/engine.ts` spawns `engine/host.mjs` under VSCode's own Node (`process.execPath` + `ELECTRON_RUN_AS_NODE=1`, so no system node needed), and the host prints `HOVER_ENGINE_PORT=<port>` for the WS client pool (`src/serviceClient.ts`, ports 51789–51798) to connect. Surfaces: a chat **webview** (`src/chatView.ts` — grouped run rendering mirroring the in-page widget's reducer: tool steps fold under AI-narration titles, BOUNDARY tools + a per-group cap split groups, markdown→HTML, Findings card, voice narration, a busy-spinner for optimize, mode-colored running border) in its own Activity Bar container, plus native tree views in the `hover` container — **Specs** (folder-grouped: a subfolder of `__vibe_tests__/` is a group; ✨ Optimize runs the pass and auto-opens the candidate diff), **Sessions**, **Environments** (`src/environments.ts` + `environmentsView.ts` — Local + remote targets; the active env drives the run target URL via `resolveTargetUrl()`, remote targets skip the dev-server spawn; roster in `.hover/environments.json` (commit-worthy), account passwords in SecretStorage; active selection in workspaceState), and a **Settings** webview (agent / model / browser silent-vs-visible / speech / model API key). F1 review-optimization-candidate (`src/optimized.ts` shares the candidate path with F3) · F2 element→source · F3 spec CodeLens (`src/specLens.ts`). Cloud-backed pieces (real DNS-TXT domain verification, cross-machine sync, team-shared environments) are present but disabled placeholders until Hover Cloud. Builds with `tsup` to `dist/extension.cjs`; publisher `hyperyond`; **published on the VS Code Marketplace as `hyperyond.hover-dev`** (a local `.vsix` from `pnpm --filter hover-dev package` is sideloaded for dev testing). **This extension is now Hover's distribution** — the npm bundler-plugin packages have been removed (see "Direction" above).
-- `examples/basic-app` is the minimal Vite + React app used as the default smoke target — login + counter + todos. Vite port 5173.
-- `examples/e-commerce` is an Amazon-style e-commerce SPA: product grid (with category sidebar + search) → product detail → cart → checkout (shipping address + payment method) → success. Payment method offers an inline card form OR a "Pay with PayHover" button that opens the payment-provider in a new tab and listens for the postMessage result. Stresses long action chains, cart state, conditional UI per payment method, and cross-tab popup flows. Vite port 5174.
-- `examples/stock-registration` is a realistic brokerage account opening form (think IBKR / Schwab account application). 8 sections, ~50 fields, conditional reveals (foreign-tax fields when not US tax resident, previous address when current < 2 years, employer block when employed/self-employed, PEP/FINRA/control-person follow-ups, ACH bank fields when funding via ACH), multi-select chips, file upload, range slider, compliance acknowledgements. Stresses AI form filling on rich realistic-business controls. Vite port 5175.
-- `examples/canvas-paint` is a drawing app: `<canvas>` for the artwork, DOM toolbar for tools/color/brush size. Stresses AI's ability to find DOM controls amidst graphical content (canvas pixels are opaque to Playwright snapshots). Vite port 5176.
-- `examples/payment-provider` is a **deliberately unintegrated** mock third-party payment page used as the popup target for e-commerce's "Pay with PayHover" button. Vite port 5177. It represents a simulated third-party origin. Stresses agent behaviour around cross-tab flows: agent must `browser_tabs(action='list')` to discover the new tab, `browser_tabs(action='select')` to switch, operate the page, and verify the original tab advances on `window.opener.postMessage` callback.
-
-(The bundler-dogfood examples — `astro-app` / `nuxt-app` / `next-app` / `webpack-app` / `rn-web-app` — were removed along with the bundler-plugin path; the remaining examples are the testing-surface targets the extension drives.) None of the examples install anything Hover-related — they are plain dev servers; the VS Code extension drives any of them over CDP without an injected widget or in-page service.
+(The `examples/*` dogfood test-target apps that used to live here — `basic-app`, `e-commerce`, `stock-registration`, `canvas-paint`, `payment-provider` — have been removed; test targets now live elsewhere. The VS Code extension drives any dev server over CDP without an injected widget or in-page service.)
 
 ## Runtime-created directories
 
@@ -119,7 +113,7 @@ Starting **2026-06-15**, `claude -p` calls draw from a new monthly Agent SDK cre
 
 - Runtime is Node 24+, pnpm 10+. The repo is ESM throughout. No CJS at the source layer.
 - `tsconfig.base.json` at the root is the shared TS config every package extends. There is no root `tsconfig.json` — typecheck runs per-package via `pnpm typecheck`.
-- Test stack: Vitest for unit tests (per-package, under `packages/*/tests/`), Playwright dogfooding for integration (crystallized specs under `examples/basic-app/__vibe_tests__/`). No linter or formatter is configured yet.
+- Test stack: Vitest for unit tests (per-package, under `packages/*/tests/`), Playwright dogfooding for integration (crystallized specs under a target app's `__vibe_tests__/`). No linter or formatter is configured yet.
 
 ## Package entry-point conventions
 
@@ -131,8 +125,8 @@ Most Hover packages set `main` / `exports` to `src/*.ts`, so consumers' transpil
 
 The extension is the dev surface — there is no standalone CLI smoke loop anymore (the old `pnpm smoke` / `smoke:chrome` / `detect` / `ws-smoke` / `bench-*` scripts were removed). To exercise the full flow end to end:
 
-1. `pnpm dev:example:basic-app` — basic-app at http://localhost:5173. (Same for `dev:example:e-commerce` / `…:stock-registration` / `…:canvas-paint` on 5174 / 5175 / 5176.)
-2. `pnpm --filter hover-dev package` → sideload the `.vsix` into VS Code, open the Hover chat, and drive the example. The extension spawns the isolated debug Chrome (`--remote-debugging-port=9222`, profile at `<tmpdir>/hover-chrome`) on demand on the first ✨ click.
+1. Start any target dev server (a plain Vite/Next/etc. app; nothing Hover-related is installed in it).
+2. `pnpm --filter hover-dev package` → sideload the `.vsix` into VS Code, open the Hover chat, and drive the target. The extension spawns the isolated debug Chrome (`--remote-debugging-port=9222`, profile at `<tmpdir>/hover-chrome`) on demand on the first ✨ click.
 
 Editing `core/src/` during extension dev needs a `pnpm --filter @hover-dev/core build` (or a `dev` watch terminal) so the staged engine picks it up, then re-package.
 
@@ -140,7 +134,7 @@ Editing `core/src/` during extension dev needs a `pnpm --filter @hover-dev/core 
 
 - Use Conventional Commits. Format: `<type>(<scope>): <description>`.
 - Common types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `perf`.
-- `<scope>` is the package or sub-area: `core`, `vscode-ext`, `api-test`, `pentest`, `probe-engine`, `example`, `agents`, `playwright`, `mcp`, `ci`, `deps`.
+- `<scope>` is the package or sub-area: `core`, `vscode-ext`, `api-test`, `pentest`, `probe-engine`, `agents`, `playwright`, `mcp`, `ci`, `deps`.
 - Commit messages are written in **English**. Hover is a public open-source repo; contributors come from everywhere.
 - The subject line is imperative, ≤72 characters, no trailing period.
 - Conventional Commits is enforced at commit time by a husky `commit-msg` hook running `commitlint`. The hook installs on `pnpm install`. Do not bypass it with `--no-verify` unless you have explicit owner sign-off.
@@ -164,8 +158,8 @@ Tag versions at meaningful milestones so the history has anchor points:
 ## Test strategy
 
 - Unit tests: **Vitest**, per-package, in `packages/*/tests/` sibling to `src/`. Run with `pnpm --filter @hover-dev/core test` or `pnpm test` at the root (which fans out across the workspace). Keep `src/` source-only; do not place `*.test.ts` inside `src/`. Current coverage: `packages/core/tests/agents/` (argv dispatcher, claude descriptor, registry).
-- Integration / e2e: **Playwright dogfooding**. Crystallized specs land under `examples/basic-app/__vibe_tests__/` and run with standard `@playwright/test`. The agent must not be involved at CI time — only the Playwright script runs. Bootstrap on a fresh machine: `pnpm --filter basic-app exec playwright install chromium`. Run with `pnpm test:e2e`.
-- Manual end-to-end (agent in the loop): sideload the extension (`pnpm --filter hover-dev package`) and drive an example by hand. There is no scripted smoke loop; it is not part of CI.
+- Integration / e2e: **Playwright dogfooding**. Crystallized specs land under a target app's `__vibe_tests__/` and run with standard `@playwright/test`. The agent must not be involved at CI time — only the Playwright script runs.
+- Manual end-to-end (agent in the loop): sideload the extension (`pnpm --filter hover-dev package`) and drive a target app by hand. There is no scripted smoke loop; it is not part of CI.
 
 ## Validation strategy
 
@@ -181,20 +175,13 @@ Before marking work ready:
 pnpm install              # workspace install (also runs husky install via the `prepare` script)
 pnpm typecheck            # tsc --noEmit, per-package
 pnpm test                 # vitest, per-package (where present)
-pnpm test:e2e             # Playwright dogfood suite — first run needs `playwright install chromium`
 pnpm --filter hover-dev package    # build + stage engine + vsce package → hover-dev-<v>.vsix (sideload into VS Code)
-pnpm dev:example:basic-app         # http://localhost:5173 — login / counter / todos
-pnpm dev:example:e-commerce        # http://localhost:5174 — Amazon-style storefront (cart / checkout / popup)
-pnpm dev:example:stock-registration # http://localhost:5175 — ~50-field brokerage form
-pnpm dev:example:canvas-paint      # http://localhost:5176 — canvas + DOM toolbar
-pnpm dev:example:payment-provider  # http://localhost:5177 — mock third-party popup origin
 ```
 
 ```bash
 pnpm --filter @hover-dev/core test
 pnpm --filter @hover-dev/core typecheck
 pnpm --filter hover-dev typecheck
-pnpm --filter basic-app dev
 ```
 
 # FAQ

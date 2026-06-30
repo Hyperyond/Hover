@@ -9,14 +9,13 @@ export default defineConfig({
   format: ['cjs'],
   outExtension: () => ({ js: '.cjs' }),
   target: 'node18',
-  // `vscode` is provided by the host. Runtime deps (`ws`, `fflate`) are BUNDLED
+  // `vscode` is provided by the host. Runtime deps (`fflate`) are BUNDLED
   // (noExternal) so the .vsix is self-contained and `vsce package
   // --no-dependencies` works cleanly in this pnpm monorepo (vsce can't walk
   // pnpm's symlinked node_modules; an un-bundled dep → "Cannot find module" at
-  // activation). ws's optional native speedups stay external — ws falls back
-  // gracefully without them.
-  external: ['vscode', 'bufferutil', 'utf-8-validate'],
-  noExternal: ['ws', 'fflate'],
+  // activation).
+  external: ['vscode'],
+  noExternal: ['fflate'],
   // Import `.css` as a plain string (inlined into the webview <style>) instead
   // of esbuild's default CSS bundling — lets the chat stylesheet live in a real
   // .css file the maintainer can edit with full tooling, no JS-template escaping.

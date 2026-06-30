@@ -24,18 +24,15 @@ pnpm typecheck       # fans out to every package
 
 ## Dev workflow
 
-Two things must be running for end-to-end testing. Once Chrome and Vite are up, they stay running across many smoke loops:
+Two things must be running for end-to-end testing: a target dev server and the
+sideloaded extension. Once Chrome and the dev server are up, they stay running
+across many runs:
 
 ```bash
-# Terminal 1 — start an example app (a plain Vite dev server; nothing
+# Terminal 1 — start a target dev server (a plain Vite/Next/etc. app; nothing
 # Hover-related is installed in it — the extension drives it over CDP).
-pnpm dev:example:basic-app          # http://localhost:5173 — minimal: login + counter + todos
-pnpm dev:example:e-commerce         # http://localhost:5174 — Amazon-style storefront
-pnpm dev:example:stock-registration # http://localhost:5175 — IBKR-style account-opening wizard
-pnpm dev:example:canvas-paint       # http://localhost:5176 — drawing app + DOM toolbar
-pnpm dev:example:payment-provider   # http://localhost:5177 — third-party popup origin
 
-# Terminal 2 — build + sideload the extension, then drive the example from its
+# Terminal 2 — build + sideload the extension, then drive the target from its
 # chat panel. The extension spawns the isolated debug Chrome on demand
 # (--remote-debugging-port=9222, profile under <tmpdir>/hover-chrome).
 pnpm --filter hover-dev package     # → hover-dev-<v>.vsix; sideload into VS Code
@@ -49,7 +46,6 @@ The Hover engine listens on `127.0.0.1` (ports 51789+); the extension's WS clien
 |---|---|---|
 | `pnpm typecheck` | All `tsc --noEmit`. Fastest. | free |
 | `pnpm test` | Vitest unit tests across packages. | free |
-| `pnpm test:e2e` | Playwright dogfood specs (no agent). | free |
 | Extension chat panel | Full chain (extension → WS → engine → agent → Playwright MCP → Chrome). | ~$0.05–0.30 |
 
 If something fails, climb the ladder: typecheck → unit tests → sideload the extension and watch the chat panel + engine logs.
@@ -67,14 +63,6 @@ packages/
 ├── api-test/               @hover-dev/api-test — 🟠 API-testing mode plugin
 ├── pentest/                @hover-dev/pentest — 🔴 pentest mode plugin
 └── vscode-ext/             hover-dev — the VS Code extension (primary surface)
-
-examples/                   Each app stands alone, has its own aesthetic + Vite port.
-                            Plain Vite + React — nothing Hover-related installed.
-├── basic-app/              5173 — login + counter + todos
-├── e-commerce/             5174 — Amazon-style storefront
-├── stock-registration/     5175 — IBKR-style wizard
-├── canvas-paint/           5176 — drawing app + DOM toolbar
-└── payment-provider/       5177 — third-party popup origin
 ```
 
 ## Adding a new agent
@@ -88,38 +76,9 @@ The whole point of "Local CLI Agent First" is that a contributor can add a new a
    - `buildArgs(opts)` — return the argv array.
    - `parseEvent(line)` — translate one line of stdout into an array of normalised `InvokeEvent` (see `agents/types.ts`).
 2. Register it in `packages/core/src/agents/registry.ts`.
-3. Sideload the extension and confirm your binary shows up in Settings → Local CLI (Rescan if needed), then drive an example from the chat panel to confirm the end-to-end loop works with your descriptor.
+3. Sideload the extension and confirm your binary shows up in Settings → Local CLI (Rescan if needed), then drive a target app from the chat panel to confirm the end-to-end loop works with your descriptor.
 
-No changes are needed in `service.ts`, the extension, or any example.
-
-## Adding a new example
-
-Each example is a standalone pnpm workspace package. To add one:
-
-```bash
-mkdir -p examples/my-example/src
-cd examples/my-example
-```
-
-Copy `package.json`, `tsconfig.json`, `vite.config.ts`, `index.html`, `src/main.tsx`, and `src/App.tsx` from a peer example (e.g. `examples/basic-app`). Update:
-
-- `package.json` `name` to `my-example`.
-- `vite.config.ts` `server.port` to a free port (5178+).
-- `index.html` `<title>` to `my-example · Hover`.
-
-Nothing Hover-related needs to be added to the example — it's a plain Vite app the extension drives over CDP.
-
-Add a root script:
-
-```json
-"dev:example:my-example": "cross-env NODE_OPTIONS=\"--import tsx/esm\" pnpm --filter my-example dev"
-```
-
-Update [CLAUDE.md](./CLAUDE.md) `## Workspace directories` with a one-line description.
-
-## Visual aesthetics
-
-Each example commits to a distinct visual direction — no two share fonts, palette, or composition. New examples should follow that principle, not converge on generic AI-style "purple gradient on white". Pick a clear aesthetic point of view and execute it with restraint. See `.claude/skills/frontend-design/SKILL.md` for the design brief.
+No changes are needed in `service.ts` or the extension.
 
 ## Commit conventions
 
@@ -130,7 +89,7 @@ Each example commits to a distinct visual direction — no two share fonts, pale
 ```
 
 - **type**: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `perf`, `style`, `revert`.
-- **scope**: `core`, `vscode-ext`, `security`, `pentest`, `probe-engine`, `examples`, `agents`, `playwright`, `mcp`, `ci`, `deps`, the specific example name (`basic-app`, `e-commerce`, …), or omit if cross-cutting.
+- **scope**: `core`, `vscode-ext`, `security`, `pentest`, `probe-engine`, `agents`, `playwright`, `mcp`, `ci`, `deps`, or omit if cross-cutting.
 - **description**: imperative, ≤72 characters, no trailing period.
 
 Body is optional but encouraged for non-trivial commits — describe *what changed and why*, not the mechanical *how*. Wrap at ~72.
@@ -153,9 +112,7 @@ Cancel:
 ## Tests
 
 - **Vitest** for unit tests under `packages/*/tests/`. Currently mostly empty — adding tests is welcome.
-- **Playwright** for end-to-end specs under `examples/<x>/__vibe_tests__/`. These are the dogfooded crystallised specs — the shape Hover emits on "save as Playwright spec". They run with `pnpm test:e2e` and do not require the agent in the loop.
-
-For a fresh machine: `pnpm --filter basic-app exec playwright install chromium`.
+- **Playwright** for end-to-end specs crystallised under a target app's `__vibe_tests__/` — the shape Hover emits on "save as Playwright spec". They run with standard `@playwright/test` and do not require the agent in the loop.
 
 ## Code style
 
@@ -169,7 +126,7 @@ For a fresh machine: `pnpm --filter basic-app exec playwright install chromium`.
 
 Open a GitHub issue. Please include:
 
-- Reproduction steps in one of the five `examples/` apps if relevant.
+- Reproduction steps against a target dev server if relevant.
 - `pnpm typecheck` / `pnpm test` output, and a note on what you exercised in the extension chat panel (invaluable for triage).
 - claude CLI version (`claude --version`), Node version (`node --version`), Chrome version, OS.
 
