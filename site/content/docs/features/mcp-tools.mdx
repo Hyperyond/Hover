@@ -4,10 +4,11 @@ Hover's authoring engine is an MCP server (`@hover-dev/mcp`) you add to the codi
 
 ## Install
 
-One command (Claude Code shown — any MCP-capable agent works):
+Install the MCP globally, then register the bin (Claude Code shown — any MCP-capable agent works):
 
 ```bash
-claude mcp add hover -- npx -y @hover-dev/mcp
+npm i -g @hover-dev/mcp
+claude mcp add hover -- hover-mcp
 ```
 
 Adding the server brings both the tools and the `/mcp__hover__test_app` command. See [Install](/docs/get-started/install/) for other agents.

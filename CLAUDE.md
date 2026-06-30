@@ -10,10 +10,11 @@ This file is the single source of truth for agents entering the Hover repository
 
 ## What Hover is
 
-Hover is an **MCP server** (`@hover-dev/mcp`) that the user adds to their *own* coding agent (Claude Code, Cursor, …). The user's agent drives the user's debug Chrome over CDP through Hover's **grounded actuation** tools, then crystallizes the session into a plain `@playwright/test` `.spec.ts` file under `__vibe_tests__/`. Hover bundles **no AI runtime** and manages **no model** — the calling agent is the intelligence (BYO-CLI). Install is one command:
+Hover is an **MCP server** (`@hover-dev/mcp`) that the user adds to their *own* coding agent (Claude Code, Cursor, …). The user's agent drives the user's debug Chrome over CDP through Hover's **grounded actuation** tools, then crystallizes the session into a plain `@playwright/test` `.spec.ts` file under `__vibe_tests__/`. Hover bundles **no AI runtime** and manages **no model** — the calling agent is the intelligence (BYO-CLI). Install globally, then register the bin:
 
 ```bash
-claude mcp add hover -- npx -y @hover-dev/mcp
+npm i -g @hover-dev/mcp
+claude mcp add hover -- hover-mcp
 ```
 
 The differentiator vs. Stagehand / Midscene / Playwright codegen is **record == replay**: grounded actuation means the selector that drove the action IS the one saved, and crystallization is **deterministic** — a string-template translation of the recorded grounded-step buffer, with **no LLM in the codegen path**. The saved artifact is plain Playwright that runs in CI with no agent in the loop.
@@ -102,8 +103,8 @@ Most Hover packages set `main` / `exports` to `src/*.ts`, so consumers' transpil
 To exercise the MCP loop end to end:
 
 1. Start any target dev server (a plain Vite/Next/etc. app; nothing Hover-related is installed in it).
-2. Build the MCP + core (`pnpm --filter @hover-dev/mcp build`, which pulls core), or point your agent at the published `npx -y @hover-dev/mcp`.
-3. Add the server to your own coding agent (`claude mcp add hover -- npx -y @hover-dev/mcp`), set `HOVER_TARGET` to the dev-server URL, and drive the app. Hover launches the isolated debug Chrome (`--remote-debugging-port`, profile at `<tmpdir>/hover-chrome`) on demand.
+2. Build the MCP + core (`pnpm --filter @hover-dev/mcp build`, which pulls core), or install the published package globally (`npm i -g @hover-dev/mcp`).
+3. Add the server to your own coding agent (`npm i -g @hover-dev/mcp && claude mcp add hover -- hover-mcp`), set `HOVER_TARGET` to the dev-server URL, and drive the app. Hover launches the isolated debug Chrome (`--remote-debugging-port`, profile at `<tmpdir>/hover-chrome`) on demand.
 
 For the extension cockpit: `pnpm --filter hover-dev package` → sideload the `.vsix` into VS Code to review the Business Map / Dashboard / run specs.
 

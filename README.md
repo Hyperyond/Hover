@@ -28,7 +28,8 @@ The through-line is **the artifact**: owned, portable Playwright in your repo an
 Add the MCP to your agent (Claude Code shown — any MCP-capable agent works):
 
 ```bash
-claude mcp add hover -- npx -y @hover-dev/mcp
+npm i -g @hover-dev/mcp
+claude mcp add hover -- hover-mcp
 ```
 
 Then, in your agent:

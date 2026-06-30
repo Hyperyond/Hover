@@ -9,8 +9,8 @@
 
 import { useState } from 'react';
 
-/** The one-command MCP install — the primary affordance. */
-export const MCP_INSTALL = 'claude mcp add hover -- npx -y @hover-dev/mcp';
+/** The global MCP install — the primary affordance. */
+export const MCP_INSTALL = 'npm i -g @hover-dev/mcp && claude mcp add hover -- hover-mcp';
 
 /** npm package page for the MCP server. */
 export const NPM_URL = 'https://www.npmjs.com/package/@hover-dev/mcp';

@@ -52,7 +52,7 @@ const JSON_LD = {
   keywords:
     'vibe testing, AI testing, MCP, Model Context Protocol, Playwright, end-to-end testing, test automation, BYO CLI, record equals replay, Claude Code, Cursor',
   featureList: [
-    'An MCP server you add to your own coding agent (Claude Code, Cursor, …) — install with: claude mcp add hover -- npx -y @hover-dev/mcp',
+    'An MCP server you add to your own coding agent (Claude Code, Cursor, …) — install with: npm i -g @hover-dev/mcp && claude mcp add hover -- hover-mcp',
     'The agent explores your app and crystallizes each flow into a standard @playwright/test spec',
     'record == replay — grounded actuation means the selector that drove a click is the exact one saved; crystallization is deterministic, no LLM writes code',
     'You own the artifact — plain @playwright/test in your repo, runs in your CI with zero AI, no proprietary format, no lock-in',

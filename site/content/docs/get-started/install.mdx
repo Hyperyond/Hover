@@ -4,17 +4,22 @@ Hover authors tests through its **MCP server** (`@hover-dev/mcp`). You add it to
 
 ## Add the MCP to your agent
 
-One command wires Hover into your agent (Claude Code shown — any MCP-capable agent works):
+Install the MCP globally, then register the bin (Claude Code shown — any MCP-capable agent works):
 
 ```bash
-claude mcp add hover -- npx -y @hover-dev/mcp
+npm i -g @hover-dev/mcp
+claude mcp add hover -- hover-mcp
 ```
+
+Prefer the global install — the `npx -y @hover-dev/mcp` one-liner re-downloads on first launch and can exceed your agent's 30s MCP connect timeout.
 
 That's the whole install. The MCP server runs under your agent and exposes Hover's grounded browser tools + `/mcp__hover__test_app`. It bundles no LLM and takes no API keys — it rides the agent and subscription you already pay for.
 
+To upgrade later: `npm i -g @hover-dev/mcp@latest`.
+
 <Callout type="tip" title="Using Cursor or another agent?">
 
-Any MCP-capable coding agent can use Hover. Add `@hover-dev/mcp` as an MCP server in your agent's configuration (for Claude Code, the one-liner above; for others, point the server command at `npx -y @hover-dev/mcp`). The tools and the `/mcp__hover__test_app` flow are identical across agents.
+Any MCP-capable coding agent can use Hover. Install it globally with `npm i -g @hover-dev/mcp`, then add it as an MCP server in your agent's configuration (for Claude Code, the command above; for others, point the server command at `hover-mcp`). The tools and the `/mcp__hover__test_app` flow are identical across agents.
 
 </Callout>
 
