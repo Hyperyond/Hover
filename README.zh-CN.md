@@ -1,89 +1,91 @@
-# Hover — Vibe 测你的应用，沉淀真正的 Playwright spec
+# Hover —— 开源 Vibe Testing 套件
 
 [English](./README.md) · **简体中文**
 
+[![npm @hover-dev/mcp](https://img.shields.io/npm/v/%40hover-dev%2Fmcp?label=npm%20%40hover-dev%2Fmcp&color=cb3837&logo=npm)](https://www.npmjs.com/package/@hover-dev/mcp)
 [![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/hyperyond.hover-dev?label=VS%20Marketplace&color=1f9cf0&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/hyperyond.hover-dev?label=installs&color=1f9cf0)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
+[![Playwright](https://img.shields.io/badge/output-%40playwright%2Ftest-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-**Hover 的 AI 像真人同事一样测你的应用,解放你的双手,产出真正的 Playwright spec —— 一个本地优先、开源的 VS Code 插件。** 用大白话描述一个流程;Hover 调用你本机已有的编码 Agent CLI(Claude Code / OpenAI Codex / Gemini / Qwen,或本地模型),通过 Playwright MCP 操作你真实的 Chrome,再把跑通的流程结晶成纯 `@playwright/test` 用例 —— **CI 里零 AI** 就能跑。或切到 🟢 **QA 测试**模式 —— Agent 自主探索整个应用、产出发现报告,并把 **API** 与**渗透**测试作为开关叠加其上。✦ 可选 AI 优化 pass。
+**把你本来就在用的 coding agent 指向 Hover,得到一套你自己拥有的真 Playwright 测试。** Hover 是一个开源 **Vibe Testing** 套件:把它的 MCP server 加进你自己的 agent(Claude Code、Cursor……),agent 就会探索你的应用、梳理业务流程,并把每条流程结晶成 `__vibe_tests__/` 下的纯 `@playwright/test` 用例。这些测试**归你所有** —— 在你的 CI 里跑,过程中**零 AI**。
 
-## 安装
+核心差异是 **record == replay(录即放)**:agent 通过 Hover 的**接地(grounded)**浏览器工具操作,所以"驱动这次点击的选择器"就是"保存下来的选择器",而结晶是**确定性**的(没有 LLM 在写代码)。不会有编造的选择器、不依赖 Hover 运行时、不锁定。
 
-到 **[VS Code 应用市场安装 Hover](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** —— 打开扩展面板,搜索 **`hover-dev`**,点 Install(或执行 `code --install-extension hyperyond.hover-dev`)。
+## 套件 —— 四个 surface,一个 artifact
 
-你还需要 `PATH` 上有**一个编码 Agent CLI**:[Claude Code](https://claude.com/claude-code)(`npm i -g @anthropic-ai/claude-code`)或 [OpenAI Codex](https://github.com/openai/codex)(`npm i -g @openai/codex`),用你的订阅或自己的 API key 登录即可。除此之外**没有别的要配** —— Hover 不带任何模型 SDK,也不存任何 key。
+| Surface | 角色 | 是什么 |
+|---|---|---|
+| **MCP** —— `@hover-dev/mcp` | **创作** | 引擎。加进你自己的 agent;`/mcp__hover__test_app` 探索 + 结晶用例。BYO-CLI —— 你的模型、你的订阅,我们不带任何 key。 |
+| **VS Code** —— `hover-dev` | **评审** | 可选的 cockpit:应用业务流程 + 覆盖的 **Business Map** 图谱、Dashboard(通过 / 失败 / flaky + CI 结果)、一键运行。 |
+| **CI** | **运行** | 结晶出的用例在每个 PR 上以纯 Playwright 运行 —— 无 agent、无 token。Hover 帮你生成 workflow。 |
+| **Cloud** *(可选,规划中)* | **观测** | 托管的并行运行、定时监控、flakiness 看板、失败自愈 —— 都是**在你已拥有的用例之上**做。永不锁定创作。 |
 
-## 你能得到什么
+贯穿四者的是 **artifact**:在你仓库 + 你 CI 里、你拥有的、可移植的 Playwright。AI 只在创作时驱动一次,之后没有任何 AI 在跑。
 
-- **对话即生成真正的 Playwright 用例** —— 用大白话描述你要验证什么,Hover 操作你真实的 Chrome,把跑通的流程结晶成纯 `@playwright/test` 用例(选择器是 `getByRole / getByLabel`,不是 CSS/XPath)。AI 的活到“保存”为止 —— CI 是纯 Playwright,零 token、不用塞 key。
-- **像真人同事一样测** —— 遇到拿不准的地方(用哪个账户、某一步有歧义、有破坏性的操作),Agent 会在编辑器里**直接问你**,而不是瞎猜或干脆卡住 —— 就像同事遇到拿不准的事会先问你一声。
-- **多环境账户,`@` 即用** —— 给每个环境(本地 / staging / prod)配一次测试账户,在对话里写 `@账户名`,Agent 就替你登录。密码存在 VS Code SecretStorage,**参数化成 spec 里的 `process.env` 引用**,一键导出到 CI secrets。绝不写进 spec、JSDoc 或 sidecar。
-- **你的模型 —— 本机 CLI 或 BYOK** —— 两种供模型方式,在 Settings 里切换。*本机 CLI*:用 `PATH` 上的编码 Agent CLI(Claude Code、Codex、Gemini、Qwen)驱动,跑你本就付费的订阅。*BYOK*:自带 API key —— 选协议(Anthropic / OpenAI / Azure OpenAI / Gemini)或 OpenAI 兼容网关(Ollama Cloud、AIHubMix 等),Hover 把 key + base URL + model 注入对应 CLI。任一方式都能指向自建 endpoint 跑本地模型。Key 存在 VS Code SecretStorage。没有 SDK,数据不出本机(`@hover-dev/core` 只绑 `127.0.0.1`,无遥测、无上传)。
-- **零学习成本** —— 对话界面长得、用起来都像 Claude Code / Codex,没有新工具要学。装好、打开面板、描述一个流程就行。不用改你的应用、不用 bundler 插件、不用配置。
-- **QA 测试 —— 自主探索,不只是照着脚本走** —— 从 Flow(写一个 spec)切到 🟢 **QA 测试**:Agent 自主探索你的应用找缺陷,按强度预算(Quick / Standard / Deep)自我控量,产出带覆盖范围(coverage)的 Markdown 发现报告,并把每个跑通的干净流程作为一键 ✨ 结晶 spec 提供给你。两个能力开关叠加其上 —— **API 测试**(接口校验 / 越权 / IDOR / 参数篡改,靠本地 HTTPS MITM 把抓到的 API 改参重放 → `.api-test.spec.ts` CI 关卡)和**渗透测试**(攻击性、白盒:SQLi / XSS / SSTI / SSRF / IDOR,只对你**自己的**应用 —— 有破坏性,所以作为单独的第二趟跑,默认关闭)。它还会记住自己确认过的业务规则,以后不再反复问你。不需要 mitmproxy、不需要 Python、不需要装系统 CA。
-- **确定性、可移植的 spec** —— 每个 spec 都是普通 Playwright,进 git、脱离 Hover 也能跑。可选、默认关闭的 **AI 优化 pass** 会把草稿打磨成候选,用 diff 让你采纳(原件永远保留)。
+## 快速开始
 
-## 工作原理
+把 MCP 加进你的 agent(以 Claude Code 为例 —— 任何支持 MCP 的 agent 都行):
 
-```
-┌────────────────┐   chat (WebSocket)   ┌──────────────────┐
-│  Hover         │ ───────────────────▶ │  @hover-dev/core │
-│  (VS Code      │ ◀─────────────────── │  Node 引擎       │ ◀── 插件
-│   插件)        │   step events        │  (127.0.0.1)     │     (模式 / MCP)
-└────────────────┘                      └────────┬─────────┘
-                                                 │ spawn(沙箱)
-                                                 ▼
-                                  claude / codex ── MCP ──▶ Playwright ── CDP ──▶
-                                  独立的调试版 Chrome(端口 9222,临时 profile)
+```bash
+claude mcp add hover -- npx -y @hover-dev/mcp
 ```
 
-引擎打包在插件里,调用 `PATH` 上的编码 Agent CLI,沙箱限定到 Playwright MCP,通过 CDP 操作一个独立的调试 Chrome —— 不碰你的主 profile,不走任何托管服务。
+然后在你的 agent 里:
 
-## 在 CI 里跑 spec
+```
+/mcp__hover__test_app           # 探索应用并结晶一套用例
+/mcp__hover__test_app login     # ……或只针对某一条流程
+```
 
-结晶出来的 spec 是纯 `@playwright/test`,哪都能跑、不需要 AI:
+用例落在 `__vibe_tests__/`。在任何地方运行,无需 AI:
 
 ```bash
 npx playwright test __vibe_tests__
 ```
 
-用 `BASE_URL`(以及 `HOVER_<LABEL>_*` 账户 secrets)指向任意环境;同一个 spec 在本地 / staging / PR 预览上都能跑。Hover 还能帮你生成一个在每个 PR 上跑这些 spec 的 GitHub Actions workflow。
+想要图形界面?装 **[Hover VS Code 扩展](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)**(`hyperyond.hover-dev`)看 Business Map 图谱 + Dashboard。它是评审 cockpit —— 不驱动任何 agent。
 
-## 模式
+## 为什么是 Hover
 
-同一个对话框里两种模式:
+- **record == replay** —— 接地操作 + 确定性结晶:保存的选择器就是驱动这次运行的那个。Playwright codegen / Stagehand / Midscene 都保证不了这点。
+- **你拥有 artifact** —— 仓库里的纯 `@playwright/test`,在你 CI 里零 AI 运行。无专有格式、不依赖 Hover 运行时、不锁定。
+- **BYO-CLI** —— Hover 不带 AI 运行时、不带 key;它骑在你已经付费的 coding agent + 订阅上。我们管**怎么测**,从不管**用哪个模型**。
+- **会生长的测试 wiki** —— Hover 在 `.hover/` 里维护业务地图 + 记住的规则,套件随你应用成长而复利、且自我感知。
 
-| 模式 | 做什么 |
-|---|---|
-| **Flow** | 描述一个流程;AI 操作你的应用,把跑通的流程结晶成 `.spec.ts`,在 CI 里跑 |
-| 🟢 **QA 测试** | 自主探索整个应用 → 发现报告(含 coverage 覆盖范围)+ 可一键结晶的 ✨ spec,由强度预算(Quick / Standard / Deep)控量 |
+## 工作原理
 
-QA 测试有两个**能力开关**:
+```
+你的 agent (Claude Code / Cursor)
+   │  MCP 工具 —— 接地操作
+   ▼
+@hover-dev/mcp ──▶ CDP ──▶ 你的 debug Chrome ──▶ 你的应用
+   │
+   └─ crystallize_spec ──▶ __vibe_tests__/<flow>.spec.ts   (纯 Playwright,无 AI)
+```
 
-- 🟠 **API 测试** —— MITM 重放越权 / IDOR / 越权访问 / 参数篡改;确认的发现 → `.api-test.spec.ts` CI 关卡。
-- 🔴 **渗透测试** —— 攻击性、白盒(SQLi / XSS / SSTI / SSRF / IDOR),只打你**自己的**应用 → 一份发现报告。有破坏性,所以总是作为单独的第二趟跑;默认关闭(开启时会要你确认)。
-
-API 与渗透两个能力都由内置的**探测规则**(seeds:8 类访问控制 + 9 类漏洞)驱动,开箱即用,无需配置。
+agent 从不凭空手写用例:它通过接地工具(`role+name → testId → text`)操作,Hover 把记录的步骤**确定性地**翻译成 Playwright —— 所以你回放的就是你录的。
 
 ## FAQ
 
-**UI 改了,我存的 spec 挂了。** 大多数 UI 改动不会挂 —— 选择器是语义化的,不是 CSS/XPath。等语义真的变了,spec 才会变红:你可以手改(它就是普通 Playwright),也可以把它当成一次真正的回归来处理。CI 阶段故意不做自愈,这样才能保持确定性、又免费。spec 在 CI 挂掉时用 AI 自动修复界面漂移这件事,会由 **Hover Cloud** 来做,而不是本地插件(本地只负责编写 + 运行)。
+**一定要装 VS Code 扩展吗?** 不用。MCP 就是完整的创作闭环。扩展是可选的评审 cockpit(Business Map + Dashboard)。
 
-**Hover 会上传我的源码或 DOM 吗?** 不会。`PATH` 上的 CLI 与它自己的厂商通信;`@hover-dev/core` 没有上传通道、无遥测、只绑 `127.0.0.1`。
+**Hover 会上传我的源码或 DOM 吗?** 不会。你的 agent 与它自己的 provider 通信;Hover 不带模型、不带 key、无遥测、无上传路径。
+
+**UI 改了,保存的用例挂了。** 选择器是语义化的,大多数 UI 变动不会破坏它。真破坏时,直接改那份纯 Playwright,或重跑 `/mcp__hover__test_app <flow>` 重新结晶。CI 阶段刻意不做自动自愈 —— CI 保持确定性且免费;失败自愈是规划中的 Cloud 功能。
 
 ## 路线图
 
-**规划中 —— Hover Cloud:** 一个架在你本地 spec 之上的托管层(并行跑、定时监控、flakiness dashboard、失败时 AI 自愈 UI 漂移)。编写永远本地、免费;云端只**运行和监控**你已经拥有的 spec。[加入等待名单](https://gethover.dev/#cloud)。
+**Hover Cloud(规划中,可选):** 并行运行、定时监控、flakiness 看板、失败自愈 —— 一层**在你已拥有的用例之上**的托管层。创作永远本地 + 免费;云端只运行和观测你拥有的测试,绝不锁定。[加入 waitlist](https://gethover.dev/#cloud)。
 
-## 站在巨人的肩上
+## 站在巨人肩上
 
-[**`nexu-io/open-design`**](https://github.com/nexu-io/open-design)(**Local CLI Agent First** 架构)、[**Playwright**](https://playwright.dev/) 及其 [**Codegen**](https://playwright.dev/docs/codegen)、[**Stagehand**](https://github.com/browserbase/stagehand) / [**Midscene**](https://github.com/web-infra-dev/midscene)(证明了 LLM 能驱动真实浏览器),以及 [**`microsoft/webwright`**](https://github.com/microsoft/webwright)(code-as-action)。Hover 把这个循环缩短:编写时驱动一次,然后退场。
+[**Playwright**](https://playwright.dev/)(+ [Codegen](https://playwright.dev/docs/codegen))、[**Model Context Protocol**](https://modelcontextprotocol.io/),以及自带的 coding-agent CLI([Claude Code](https://claude.com/claude-code) / [Codex](https://github.com/openai/codex) / ……)。[**Stagehand**](https://github.com/browserbase/stagehand) 与 [**Midscene**](https://github.com/web-infra-dev/midscene) 证明了 LLM 能驱动真实浏览器;Hover 把循环缩短 —— 创作时驱动一次,之后彻底退场。
 
 ## 贡献
 
-见 [CONTRIBUTING.md](./CONTRIBUTING.md):Node 22+ / pnpm 10+,Conventional Commits(强制),推送前 `pnpm typecheck && pnpm test`,保持 `main` 可运行。
+见 [CONTRIBUTING.md](./CONTRIBUTING.md):Node 22+ / pnpm 10+、Conventional Commits(强制)、push 前 `pnpm typecheck && pnpm test`、保持 `main` 可运行。
 
-## 许可
+## 许可证
 
 [Apache-2.0](./LICENSE) © Hyperyond
