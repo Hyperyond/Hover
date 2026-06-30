@@ -31,10 +31,6 @@
       "types": "./dist/agents/index.d.ts",
       "import": "./dist/agents/index.js"
     },
-    "./service": {
-      "types": "./dist/service.d.ts",
-      "import": "./dist/service.js"
-    },
     "./engine": {
       "types": "./dist/engine.d.ts",
       "import": "./dist/engine.js"
