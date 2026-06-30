@@ -5,38 +5,36 @@ name: Publish
 # are also attached to a GitHub Release for archival.
 #
 # Tag scheme (the tag prefix decides what publishes):
-#   v0.16.0        → the 8 main packages, lockstep at that version
-#   api-test-v0.1.0 → @hover-dev/api-test only, at 0.1.0
-#   pentest-v0.1.0  → @hover-dev/pentest only (when it lands)
-# The two plugins version independently from the main packages and from each
-# other; only their own tag prefix publishes them.
+#   v0.X.0          → the main packages, LOCKSTEP: @hover-dev/core + @hover-dev/mcp
+#   api-test-v0.X.0 → @hover-dev/api-test only
+#   pentest-v0.X.0  → @hover-dev/pentest only (when it lands)
+#   vscode-v0.X.0   → the hover-dev VS Code extension only (Marketplace + Open VSX)
+# The plugins + the extension version independently from the main packages and
+# from each other; only their own tag prefix publishes them.
 #
-# Trigger:    git tag -a v0.16.0 -m "..." && git push origin v0.16.0
-#         or: git tag -a api-test-v0.1.0 -m "..." && git push origin api-test-v0.1.0
-# Auth:       NPM_TOKEN repo secret (a granular automation token from
-#             https://www.npmjs.com/settings/<user>/tokens with read+write
-#             on @hover-dev/* and vite-plugin-hover / webpack-plugin-hover)
-#             — must be added before the first run. GITHUB_TOKEN is
-#             auto-injected (used for the Release).
+# Trigger:    git tag -a v0.X.0 -m "..." && git push origin v0.X.0
+#         or: git tag -a vscode-v0.X.0 -m "..." && git push origin vscode-v0.X.0
+# Auth:       NPM_TOKEN repo secret — a granular automation token (npmjs.com
+#             settings → tokens) with read+write on @hover-dev/*. Add it before
+#             the first run. GITHUB_TOKEN is auto-injected (the Release). The
+#             VS Code job uses VSCE_PAT (+ optional OVSX_TOKEN) instead.
 #
-# Packages (9 total):
-#   Scoped, the @hover-dev org on npmjs.com
-#     - @hover-dev/core              — the Node service
-#     - @hover-dev/widget-bootstrap  — shared widget assets + bundle builder
-#     - @hover-dev/astro             — Astro integration
-#     - @hover-dev/nuxt              — Nuxt module
-#     - @hover-dev/next              — Next.js (App Router, Turbopack) integration
-#     - @hover-dev/cli               — `npx @hover-dev/cli setup` setup CLI
-#     - @hover-dev/api-test          — security-testing plugin (MITM proxy + MCP)
-#   Unscoped (follows the community vite-plugin-* / webpack-*-plugin convention)
-#     - vite-plugin-hover            — Vite plugin
-#     - webpack-plugin-hover         — Webpack 5 plugin
+# Packages:
+#   npm (scoped, the @hover-dev org on npmjs.com)
+#     - @hover-dev/core      — the engine (agent invocation, crystallize,
+#                              grounded actuation, optimize, business memory).
+#                              Published so @hover-dev/mcp can resolve it; users
+#                              never install it directly.
+#     - @hover-dev/mcp       — the MCP server users add to their own agent — the
+#                              only public-facing install (`npx @hover-dev/mcp`).
+#                              Lockstep with core on the v* track.
+#     - @hover-dev/api-test  — api-test / security plugin (MITM proxy + MCP)
+#     - @hover-dev/pentest   — pentest plugin (when it lands)
+#   VS Code Marketplace + Open VSX
+#     - hover-dev            — the review-cockpit extension (own vscode-v* tag)
 #
-# Dependency order matters: widget-bootstrap (and core) must be on npm
-# before the four packages that depend on them can resolve. pnpm publish
-# respects workspace dependency order automatically, but we still list the
-# packages explicitly so the filter is unambiguous if order detection
-# ever changes upstream.
+# core + mcp publish in ONE run on a v* tag: pnpm publishes in dependency order
+# and rewrites mcp's `workspace:*` core ref to the just-published core version.
 #
 # What it does:
 #   1. Checkout, install pnpm + Node 24, restore pnpm cache
@@ -44,17 +42,13 @@ name: Publish
 #      those package.json versions from the tag (v0.16.0 → "0.16.0"). A plugin
 #      tag also pins the plugin's @hover-dev/core range to the published core.
 #   3. Typecheck + unit tests as a release gate
-#   4. Build each package (tsc + asset copy for the packages that ship
-#      non-TS files — widget-bootstrap copies src/widget/ to dist/widget/)
+#   4. Build each package (tsc / tsup)
 #   5. pnpm publish each one to https://registry.npmjs.org
 #   6. Pack the same tarballs and attach to a GitHub Release
 #
-# Consumers can then install with no .npmrc and no auth — same shape as
-# any other public npm package:
-#   npx @hover-dev/cli setup               # one command, picks the right shim
-# or manually:
-#   pnpm add -D vite-plugin-hover        # ...or @hover-dev/astro / @hover-dev/nuxt
-#                                          / webpack-plugin-hover
+# Consumers install with no .npmrc and no auth — a normal public npm package.
+# The only public-facing command is adding the MCP to your own coding agent:
+#   claude mcp add hover -- npx -y @hover-dev/mcp
 
 on:
   push:
@@ -85,12 +79,12 @@ permissions:
   contents: write   # softprops/action-gh-release needs this to create the Release
 
 # Which packages publish is decided per-tag by the "Resolve target" step:
-#   v*           → the 8 main packages, lockstep
+#   v*           → @hover-dev/core + @hover-dev/mcp, lockstep
 #   api-test-v*  → @hover-dev/api-test only
 #   pentest-v*   → @hover-dev/pentest only (when it lands)
-# The two plugins are dropped from the main set — they version independently
-# via their own tag prefixes. A plugin release also rewrites its
-# @hover-dev/core peer range to the published core (see that step).
+# The plugins version independently via their own tag prefixes. A plugin release
+# also rewrites its @hover-dev/core peer range to the published core (see that
+# step).
 
 jobs:
   publish:
@@ -215,10 +209,8 @@ jobs:
         run: pnpm typecheck
 
       - name: Unit tests
-        # Only the publishable packages — `pnpm test` at the root also
-        # fans out to examples/basic-app whose tests are Playwright e2e
-        # against an actual dev server (not appropriate as a publish gate,
-        # and would need a chromium install in CI).
+        # Scope to the publishable packages (Vitest) — the release gate
+        # shouldn't pull in anything heavier.
         run: pnpm ${{ steps.resolve.outputs.filters }} --if-present test
 
       - name: Build
@@ -257,9 +249,9 @@ jobs:
 
   # ── The hover-dev VSCode extension ──────────────────────────────────────────
   # Triggered by a `vscode-v<X.Y.Z>` tag (or a manual run with target=vscode).
-  # Builds the .vsix (which re-packs @hover-dev/core into the flat staged engine
-  # via the `package` script) and publishes it to the VS Code Marketplace and
-  # Open VSX. The extension versions independently of the npm packages.
+  # Builds the .vsix (a self-contained review cockpit — no staged engine; it
+  # drives no agent) and publishes it to the VS Code Marketplace and Open VSX.
+  # The extension versions independently of the npm packages.
   #
   # Prereqs (one-time):
   #   - VSCE_PAT  repo secret — Azure DevOps PAT, scope "Marketplace: Manage",
@@ -308,7 +300,7 @@ jobs:
         run: pnpm --filter hover-dev run typecheck
 
       - name: Package .vsix
-        # build → stage:engine (npm pack @hover-dev/core into engine/) → vsce package
+        # build (tsup) → build:webview (vite) → vsce package --no-dependencies
         run: pnpm --filter hover-dev run package
 
       - name: Publish to VS Code Marketplace
