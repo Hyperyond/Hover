@@ -1,5 +1,12 @@
 import { request as pwRequest, type Page } from 'playwright-core';
-import { groundedLocate, type GroundedTarget, type SkillStep, type ApiCheck } from '@hover-dev/core/engine';
+import {
+  groundedLocate,
+  replayOnPage,
+  type GroundedTarget,
+  type SkillStep,
+  type ApiCheck,
+  type ReplayStep,
+} from '@hover-dev/core/engine';
 
 /*
  * The hover-mcp engine, decoupled from the MCP wire layer so it's testable with
@@ -41,6 +48,9 @@ export interface McpDeps {
   recordFact?: (title: string, rule: string, type: FactType) => Promise<{ path: string } | { error: string }>;
   /** Recall known business knowledge from .hover/memory/ as a prompt block ('' if none). */
   recall?: () => Promise<string>;
+  /** Read a saved spec's recorded grounded steps (its `.hover/sidecars/<slug>.json`)
+   *  so self-heal can replay them against the live app. */
+  readSpecSteps?: (slug: string) => Promise<{ steps: SkillStep[]; startUrl?: string } | null>;
 }
 
 function describe(g: GroundedTarget): string {
@@ -241,5 +251,39 @@ export class HoverMcpController {
     if (!checks?.length) return 'No checks provided — pass the API checks you verified worth locking.';
     const { path } = await this.deps.crystallizeApi(name, description, checks);
     return `✓ wrote ${path} (${checks.length} check${checks.length === 1 ? '' : 's'})`;
+  }
+
+  /** Self-heal detection: replay a saved spec's RECORDED grounded steps against
+   *  the live app and report the first step that no longer locates — the drift
+   *  point the agent re-grounds. No `playwright test`, no install; the same
+   *  grounded replay as creation-verification, seeded from the spec's sidecar. */
+  async replaySpec(slug: string): Promise<string> {
+    if (!this.deps.readSpecSteps) return 'Spec replay unavailable in this server.';
+    const sc = await this.deps.readSpecSteps(slug);
+    if (!sc) {
+      return `No sidecar for "${slug}" — only Hover-crystallized specs can be replayed (looked for .hover/sidecars/${slug}.json).`;
+    }
+    const page = await this.livePage();
+    const devUrl = sc.startUrl ?? page.url();
+    const res = await replayOnPage(page, devUrl, sc.steps as ReplayStep[]);
+    if (res.ok) {
+      return `✓ "${slug}" still replays clean — ${res.ran}/${res.total} grounded steps located. No drift to heal.`;
+    }
+    const f = res.failures[0];
+    return JSON.stringify(
+      {
+        spec: slug,
+        drifted: true,
+        ranBeforeBreak: res.ran,
+        total: res.total,
+        brokeAtStep: f.index,
+        tool: f.tool,
+        lookingFor: f.target,
+        error: f.error,
+        next: 'Re-snapshot at this point, re-locate the control by the intent in "lookingFor" (its label/role may have changed), re-drive from here, then crystallize_spec with the SAME name to overwrite the healed spec.',
+      },
+      null,
+      2,
+    );
   }
 }

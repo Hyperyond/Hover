@@ -184,6 +184,19 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     ({ name, description, checks }) => guard(() => c.crystallizeApiSpec(name, description, checks)),
   );
 
+  // ── Self-heal ────────────────────────────────────────────────────────────
+  server.registerTool(
+    'replay_spec',
+    {
+      description:
+        "Detect drift in a saved spec: replay its RECORDED grounded steps against the LIVE app and report the first step that no longer locates (its index + what it was looking for). No `playwright test` needed. Use this to find what to heal, then re-ground that step and re-crystallize.",
+      inputSchema: {
+        slug: z.string().describe('The spec slug = its filename without .spec.ts (e.g. "login" for login.spec.ts).'),
+      },
+    },
+    ({ slug }) => guard(() => c.replaySpec(slug)),
+  );
+
   // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
   // it as `/mcp__hover__test_app`, so adding the server brings both the tools
   // AND the command. No project scaffolding needed.
@@ -199,7 +212,40 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     }),
   );
 
+  // Self-heal workflow — surfaced as `/mcp__hover__heal`.
+  server.registerPrompt(
+    'heal',
+    {
+      title: 'Hover — heal a drifted spec',
+      description: "Replay a saved spec against the live app; where the UI drifted, re-ground the broken step and re-crystallize. Pass a spec to heal one, or omit to check all.",
+      argsSchema: { spec: z.string().optional().describe('A spec slug to heal (e.g. "login"). Omit to check every spec.') },
+    },
+    ({ spec }) => ({
+      messages: [{ role: 'user', content: { type: 'text', text: healPrompt(spec) } }],
+    }),
+  );
+
   return server;
+}
+
+/** Self-heal workflow body. The agent uses `replay_spec` to find the drift,
+ *  re-grounds the broken step by its recorded intent, and re-crystallizes. */
+function healPrompt(spec?: string): string {
+  const scope = spec?.trim()
+    ? `the spec \`${spec.trim()}\``
+    : 'every spec under `__vibe_tests__/` (list them first, then heal each that drifted)';
+  return `Heal ${scope} for this app using the **Hover MCP tools** — repair specs whose UI drifted, without rewriting them by hand.
+
+A spec "drifted" when the app changed so a recorded step no longer locates its control (a renamed button, a moved field). Healing = re-grounding ONLY the broken step against the current UI, keeping everything else, so record==replay still holds.
+
+Work ONE spec at a time:
+
+1. **Detect** — \`replay_spec("<slug>")\`. It replays the spec's recorded grounded steps against the live app and reports the first step that fails to locate: its index, the tool, and what it was \`lookingFor\` (role+name/text). If it replays clean, that spec is fine — move on.
+2. **Re-ground the broken step** — \`browser_navigate\` to the spec's route, \`browser_snapshot\`, and find the control that NOW serves the intent in \`lookingFor\` (e.g. the submit button whose label changed "Sign in" → "Log in"). Re-drive from the break with the grounded \`*_control\` tools. Change ONLY what drifted — don't redesign the flow.
+3. **Re-crystallize** — when the flow runs green again, \`crystallize_spec\` with the SAME name as the broken spec to overwrite it with the healed version.
+4. **Report** — say which step drifted, what changed (old target → new target), and that it's re-crystallized. The user reviews the old-vs-new diff in the cockpit before keeping it.
+
+Rules: heal by the recorded INTENT (re-locate the same control), never invent a new flow or new assertions. If a step is gone because the FEATURE was removed (not just renamed), don't guess — say so and ASK whether to drop that step or the whole spec. Stay on the app under test.`;
 }
 
 /** The phased, scale-aware workflow, delivered as the prompt body. Mirrors the
