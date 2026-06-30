@@ -24,6 +24,8 @@ function mockPage(opts: { visible?: boolean } = {}) {
     getByRole: (r: string, o?: { name?: string }) => mkLoc(`${r}:${o?.name}`),
     getByTestId: (t: string) => mkLoc(`testId:${t}`),
     getByText: (t: string) => mkLoc(`text:${t}`),
+    // livePage() attaches a passive 'response' listener for API capture.
+    on: () => {},
     actions,
   };
   return page as unknown as Page & { actions: string[] };
