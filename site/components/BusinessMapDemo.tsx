@@ -168,7 +168,7 @@ export function BusinessMapDemo() {
             aria-label={
               mode === 'flow'
                 ? 'Business Map flow view: app root to areas (Auth, Commerce, Account) to business lines, with covered flows linked to crystallized Playwright specs.'
-                : 'Business Map wiki view: business-line nodes in a network with cross-link relationship edges (depends on, leads to, relates to) — the living test wiki.'
+                : 'Business Map relationship view: business-line nodes in a network with cross-link relationship edges (depends on, leads to, relates to) — your app’s compounding test knowledge.'
             }
             style={{ minWidth: 580, display: 'block' }}
           >
@@ -410,7 +410,7 @@ export function BusinessMapDemo() {
             <span className="text-mint">3</span> of <span className="text-text-mute">7</span> flows
             covered
           </span>
-          <span>{mode === 'flow' ? 'by area' : '+ relationships — your app’s living test wiki'}</span>
+          <span>{mode === 'flow' ? 'by area' : '+ relationships — your app’s compounding test knowledge'}</span>
         </div>
       </div>
     </div>

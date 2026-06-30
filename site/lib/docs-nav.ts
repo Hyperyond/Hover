@@ -31,7 +31,7 @@ export const DOCS_NAV: DocSection[] = [
       { text: 'Crystallize a spec', href: '/docs/features/save-as-spec/' },
       { text: 'Structured spec output', href: '/docs/features/structured-output/' },
       { text: 'Optimize a spec', href: '/docs/features/optimization-pass/' },
-      { text: 'The living test wiki', href: '/docs/features/living-wiki/' },
+      { text: 'Test knowledge', href: '/docs/features/living-wiki/' },
     ],
   },
   {
