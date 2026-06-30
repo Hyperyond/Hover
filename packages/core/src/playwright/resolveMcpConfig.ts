@@ -80,9 +80,16 @@ export function resolveMcpConfig(opts: {
   // on disk — `createRequire` accepts the URL but the resulting
   // `require.resolve('@playwright/mcp/...')` walks the wrong tree and
   // emits a "[project]/..." prefix in the result, which Claude Code
-  // can't actually load. `process.cwd()` is the user's project root,
-  // and `@playwright/mcp` is always reachable from there because it's
-  // a declared dependency of `@hover-dev/core`, which the user installed.
+  // can't actually load. `process.cwd()` is the user's project root.
+  //
+  // NOTE: `@playwright/mcp` is NO LONGER a declared dependency of
+  // `@hover-dev/core` — it dragged ~29 MB of full Playwright into the
+  // `@hover-dev/mcp` install for nothing (the MCP-first path drives the browser
+  // directly via playwright-core and never spawns Playwright's MCP). This whole
+  // resolveMcpConfig / runSession / service.ts island is the old staged-engine
+  // surface, dead for the shipped MCP + cockpit and slated for removal with the
+  // api-test rework. If it IS invoked, the caller must provide `@playwright/mcp`
+  // on disk (cwd or alongside this module).
   // The caller may override with an explicit `cwd` (e.g. `hover run --cwd`).
   //
   // Fallback for the engine-in-extension model (`@hover-dev/vscode-ext`): there

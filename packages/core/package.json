@@ -63,7 +63,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@playwright/mcp": "0.0.75",
     "cross-spawn": "^7.0.6",
     "playwright-core": "^1.50.0",
     "ts-morph": "^28.0.0",
