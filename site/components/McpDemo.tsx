@@ -19,6 +19,7 @@ type LineKind =
   | 'user' // the slash-command the user types
   | 'narrate' // AI narration line (mint dot)
   | 'tool' // a grounded tool call (muted mono)
+  | 'map' // an induced business line (chip row under the mapping narration)
   | 'wrote' // a crystallized spec (mint ✓)
   | 'done'; // final summary
 
@@ -36,18 +37,22 @@ const SCRIPT: Line[] = [
   { kind: 'tool', text: 'fill_control  "Email"  →  shopper@acme.test' },
   { kind: 'tool', text: 'fill_control  "Password"  →  ••••••••' },
   { kind: 'tool', text: 'click_control  "Log in"' },
-  { kind: 'wrote', text: 'crystallized  login.spec.ts' },
-  { kind: 'narrate', text: 'Mapping the commerce flow…' },
   { kind: 'tool', text: 'browser_navigate  →  /products' },
   { kind: 'tool', text: 'click_control  "Add to cart"' },
-  { kind: 'wrote', text: 'crystallized  add-to-cart.spec.ts' },
   { kind: 'tool', text: 'click_control  "Checkout"' },
-  { kind: 'tool', text: 'fill_control  "Card number"  →  4242 4242 …' },
-  { kind: 'tool', text: 'click_control  "Place order"' },
+  // The key insight: before recording clicks, the agent groups what it found
+  // into the app's business lines and writes the map artifact.
+  { kind: 'narrate', text: 'Mapping the business lines…' },
+  { kind: 'map', text: 'Auth · Commerce · Account' },
+  { kind: 'tool', text: 'found 7 flows across 3 areas' },
+  { kind: 'wrote', text: 'wrote  .hover/hover-map.md' },
+  { kind: 'narrate', text: 'Crystallizing the covered flows…' },
+  { kind: 'wrote', text: 'crystallized  login.spec.ts' },
+  { kind: 'wrote', text: 'crystallized  add-to-cart.spec.ts' },
   { kind: 'wrote', text: 'crystallized  checkout.spec.ts' },
   {
     kind: 'done',
-    text: '3 specs written to __vibe_tests__/ — plain @playwright/test, zero AI at runtime.',
+    text: 'Business map + 3 specs written — plain @playwright/test, zero AI at runtime.',
   },
 ];
 
@@ -263,6 +268,33 @@ function LineRow({
       <div style={{ ...style, paddingLeft: 15 }}>
         <span style={{ color: '#6b7280', flexShrink: 0 }}>·</span>
         <span style={{ color: streaming ? '#cbd5e1' : '#9ca3af' }}>{text}</span>
+      </div>
+    );
+  }
+
+  if (line.kind === 'map') {
+    // The induced business areas, rendered as chips so the viewer literally
+    // sees the agent GROUP its exploration into business lines.
+    const chips = line.text.split('·').map((c) => c.trim());
+    return (
+      <div style={{ ...style, paddingLeft: 15, alignItems: 'center', flexWrap: 'wrap' as const }}>
+        <span style={{ color: '#6b7280', flexShrink: 0 }}>·</span>
+        {chips.map((chip) => (
+          <span
+            key={chip}
+            style={{
+              padding: '2px 8px',
+              border: '1px solid rgba(124,255,168,0.35)',
+              background: 'rgba(124,255,168,0.07)',
+              borderRadius: 6,
+              color: '#7CFFA8',
+              fontSize: 11.5,
+              lineHeight: 1.4,
+            }}
+          >
+            {chip}
+          </span>
+        ))}
       </div>
     );
   }
