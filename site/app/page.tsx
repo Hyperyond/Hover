@@ -1,5 +1,6 @@
 import { Sparkle } from '@/components/Sparkle';
 import { McpDemo } from '@/components/McpDemo';
+import { LoopDiagram } from '@/components/LoopDiagram';
 import { BusinessMapDemo } from '@/components/BusinessMapDemo';
 import { CiDemo } from '@/components/CiDemo';
 import { CloudDemo } from '@/components/CloudDemo';
@@ -166,9 +167,10 @@ function Hero() {
           </p>
         </div>
 
-        {/* Right — coding-agent + MCP session replica */}
+        {/* Right — the closed-loop lifecycle diagram (Author → Review → Run →
+            Watch → back), spinning around the artifact you own. */}
         <div className="flex min-w-0 justify-center lg:justify-end">
-          <McpDemo />
+          <LoopDiagram />
         </div>
       </div>
     </section>
