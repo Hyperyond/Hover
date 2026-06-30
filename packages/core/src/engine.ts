@@ -28,14 +28,10 @@ export type { ReplayResult, ReplayFailure, ReplayStep, GroundedTarget } from './
 export { launchDebugChrome, closeDebugChrome, findChromeBinary } from './playwright/launchChrome.js';
 export type { LaunchOptions, LaunchResult } from './playwright/launchChrome.js';
 
-// ── grounded-actuation knobs (the deny-list + directive the agent runs under) ─
-export { GROUNDED_ACTUATION_DENY, GROUNDED_ACTUATION_DIRECTIVE } from './agentDirectives.js';
-
 // ── business memory (ask → remember loop) ────────────────────────────────────
 export { loadMemory, formatMemoryForPrompt, writeFact, memoryDir } from './memory/businessMemory.js';
 export type { BusinessFact } from './memory/businessMemory.js';
 
-// ── autonomous-exploration directives + intensity (the test_app workflow) ─────
-export { RECON_DIRECTIVE, QA_EXPLORATION_DIRECTIVE } from './agentDirectives.js';
+// ── QA intensity (step budget; parked until wired into the workflow) ──────────
 export { QA_INTENSITY, DEFAULT_QA_INTENSITY, asQaIntensity, qaBudgetDirective } from './qa/intensity.js';
 export type { QaIntensity, QaIntensitySpec } from './qa/intensity.js';
