@@ -167,8 +167,8 @@ function Hero() {
           </p>
         </div>
 
-        {/* Right — the closed-loop lifecycle diagram (Author → Review → Run →
-            Watch → back), spinning around the artifact you own. */}
+        {/* Right — the vertical lifecycle pipeline (1 Author → 2 Review → 3 Run →
+            4 Watch → self-heal back to Author), producing the artifact you own. */}
         <div className="flex min-w-0 justify-center lg:justify-end">
           <LoopDiagram />
         </div>
