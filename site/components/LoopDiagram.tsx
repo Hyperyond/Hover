@@ -13,14 +13,19 @@ import { useInView, usePrefersReducedMotion } from '@/lib/useInView';
  *
  * Four stage nodes stack top-to-bottom. A mint comet flows DOWN the central
  * spine through the stages (visible in the gaps between nodes), then loops back
- * UP the left side — the self-heal feedback edge from Watch (4) to Author (1)
- * that closes the pipeline. As the comet passes a stage, that stage lights up
- * in sequence. The owned artifact — `@playwright/test`, "you own it" — sits at
- * the foot as the through-line everything produces.
+ * UP the left as the self-heal feedback edge (4 → 1) that closes the pipeline.
+ * The owned artifact — `@playwright/test`, "you own it" — sits at the foot as
+ * the through-line everything produces.
  *
- * Pure SVG + CSS. Gated with useInView (no work offscreen). prefers-reduced-
- * motion → fully static: the pipeline, all four nodes, the feedback edge, no
- * motion.
+ * ANIMATION — single source of truth. One rAF clock produces a normalized lap
+ * progress; the comet head + trail (positioned along the real path via
+ * getPointAtLength) AND the currently-lit stage are BOTH derived from it, so
+ * they can never drift out of sync (the failure mode of two independent
+ * timers). Same declarative spirit as the Business Map demo: one state, every
+ * visual follows it.
+ *
+ * Gated with useInView (no rAF offscreen). prefers-reduced-motion → fully
+ * static: the pipeline, all four nodes, the feedback edge, no motion.
  */
 
 const MINT = '#7CFFA8';
@@ -44,6 +49,7 @@ const NH = 58; // node height
 const TOPY = 70; // centre of node 1 (Author)
 const GAP = 112; // centre-to-centre spacing
 const BOTY = TOPY + GAP * 3; // centre of node 4 (Watch) = 406
+const SPINE_LEN = BOTY - TOPY; // arc-length of the straight spine
 
 type StageDef = {
   k: string;
@@ -72,7 +78,12 @@ const FEEDBACK = `M ${NX} ${BOTY} C 52 ${BOTY} 52 ${TOPY} ${NX} ${TOPY}`;
 // The full closed loop the comet travels: down the spine, then up the feedback arc.
 const LOOP = `M ${NX} ${TOPY} L ${NX} ${BOTY} C 52 ${BOTY} 52 ${TOPY} ${NX} ${TOPY}`;
 
-const LAP_MS = 8000; // one full lap (down the spine + back up the feedback arc)
+const LAP_MS = 8200; // one full lap (down the spine + back up the feedback arc)
+// Pace: give the four stages a generous share of the lap (spine), the self-heal
+// return the rest. The comet eases through the stages, glides back up.
+const SPINE_T = 0.62; // fraction of the lap spent descending the spine
+const COMET = 8; // comet dots incl. head
+const TRAIL_DT = 0.012; // time gap between trail dots (fraction of a lap)
 
 // Centre of the owned-artifact badge at the foot.
 const ARTY = BOTY + 96; // = 502
@@ -83,22 +94,63 @@ export function LoopDiagram() {
   const reduced = usePrefersReducedMotion();
   const run = inView && !reduced;
 
-  // Which node is currently "active" (lit). Driven by a JS interval that steps
-  // in lockstep with the comet (one stage per quarter-lap). When not running we
-  // leave it null so the static fallback shows the calm pipeline fully drawn.
   const [active, setActive] = useState<number | null>(null);
+  const pathRef = useRef<SVGPathElement>(null);
+  const dotsRef = useRef<(SVGCircleElement | null)[]>([]);
 
   useEffect(() => {
     if (!run) {
       setActive(null);
       return;
     }
-    const step = LAP_MS / STAGES.length;
-    setActive(0);
-    const id = setInterval(() => {
-      setActive((a) => ((a ?? 0) + 1) % STAGES.length);
-    }, step);
-    return () => clearInterval(id);
+    const path = pathRef.current;
+    if (!path) return;
+    const total = path.getTotalLength();
+    const arcLen = total - SPINE_LEN;
+
+    // Map a lap-time fraction (0..1) to an arc-distance along LOOP. Constant speed
+    // within the spine and within the arc, but the spine gets SPINE_T of the lap.
+    const distAt = (tf: number) => {
+      const t = ((tf % 1) + 1) % 1;
+      return t < SPINE_T
+        ? (t / SPINE_T) * SPINE_LEN
+        : SPINE_LEN + ((t - SPINE_T) / (1 - SPINE_T)) * arcLen;
+    };
+
+    // Which stage is "active" at lap-time tf — the one the comet is at / last passed.
+    // On the spine each stage owns a third of SPINE_T; the arc's second half hands
+    // back to Author (the self-heal feeding the next authoring pass).
+    const activeAt = (tf: number) => {
+      if (tf < SPINE_T / 3) return 0;
+      if (tf < (SPINE_T * 2) / 3) return 1;
+      if (tf < SPINE_T) return 2;
+      if (tf < SPINE_T + (1 - SPINE_T) / 2) return 3;
+      return 0;
+    };
+
+    let raf = 0;
+    let start = -1;
+    let last = -1;
+    const tick = (now: number) => {
+      if (start < 0) start = now;
+      const tf = (((now - start) / LAP_MS) % 1 + 1) % 1;
+      for (let j = 0; j < COMET; j++) {
+        const pt = path.getPointAtLength(distAt(tf - j * TRAIL_DT));
+        const c = dotsRef.current[j];
+        if (c) {
+          c.setAttribute('cx', String(pt.x));
+          c.setAttribute('cy', String(pt.y));
+        }
+      }
+      const a = activeAt(tf);
+      if (a !== last) {
+        last = a;
+        setActive(a);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [run]);
 
   return (
@@ -111,13 +163,9 @@ export function LoopDiagram() {
         style={{ display: 'block' }}
       >
         <defs>
-          {/* Comet glow — a soft blur so the moving head reads as light, not a hard
-              dash. Applied to the halo layer; the crisp head sits on top. We
-              deliberately do NOT colour the comet with a spatial gradient: an SVG
-              stroke gradient paints by bbox position, so a moving dash goes invisible
-              on whichever leg falls at the transparent end. */}
-          <filter id="loop-comet-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="3.2" />
+          {/* Comet glow — a soft blur on the head so it reads as light, not a dot. */}
+          <filter id="loop-comet-glow" x="-120%" y="-120%" width="340%" height="340%">
+            <feGaussianBlur stdDeviation="2.6" />
           </filter>
           <radialGradient id="loop-center-glow" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="rgba(124,255,168,0.16)" />
@@ -138,72 +186,50 @@ export function LoopDiagram() {
         </defs>
 
         <style>{`
-          @keyframes loop-comet-run {
-            from { stroke-dashoffset: 0; }
-            to   { stroke-dashoffset: var(--loop-len); }
-          }
           @keyframes loop-feedback-dash { to { stroke-dashoffset: -14; } }
         `}</style>
 
-        {/* ── Tracks ───────────────────────────────────────────────────────
-            faint central spine (behind the nodes) + the dashed self-heal
-            feedback arc that closes the loop. */}
+        {/* Invisible reference copy of the loop — measured for getPointAtLength. */}
+        <path ref={pathRef} d={LOOP} fill="none" stroke="none" />
 
         {/* Spine — Author → Watch, faint, sits behind nodes. */}
         <path d={SPINE} fill="none" stroke={LINE2} strokeWidth={2} strokeLinecap="round" />
 
-        {/* Down chevrons in the gaps between stages — make the downward travel
-            legible even under reduced motion. */}
+        {/* Down chevrons in the gaps between stages — legible even under reduced motion. */}
         <DownChevrons />
 
-        {/* The self-heal feedback edge (Watch → Author): dashed, muted, with an
-            arrowhead into Author and a label. This is what makes the pipeline
-            read as a closed loop. */}
+        {/* The self-heal feedback edge (Watch → Author): dashed, muted, arrowhead
+            into Author + a label. This is what makes the pipeline read as a loop. */}
         <FeedbackEdge animate={run} />
 
-        {/* ── The comet — a soft mint light running down the spine and back up the
-            feedback arc, forever. Two layers: a wide blurred halo (tail) trailing a
-            crisp head. Solid mint (no spatial gradient) → uniformly visible on the
-            spine AND the feedback arc, so the 4→1 leg animates too. */}
+        {/* The comet — rAF-positioned head + fading trail. Drawn BEFORE the nodes so
+            it pulses behind them (hidden under a node, visible in the gaps), then runs
+            fully visible up the feedback arc. */}
         {run && (
           <g>
-            <path
-              d={LOOP}
-              fill="none"
-              stroke={MINT}
-              strokeOpacity={0.4}
-              strokeWidth={7}
-              strokeLinecap="round"
-              pathLength={1000}
-              filter="url(#loop-comet-glow)"
-              style={
-                {
-                  strokeDasharray: '110 890',
-                  ['--loop-len' as string]: '-1000',
-                  animation: `loop-comet-run ${LAP_MS}ms linear infinite`,
-                } as React.CSSProperties
-              }
-            />
-            <path
-              d={LOOP}
-              fill="none"
-              stroke={MINT}
-              strokeOpacity={0.95}
-              strokeWidth={3}
-              strokeLinecap="round"
-              pathLength={1000}
-              style={
-                {
-                  strokeDasharray: '52 948',
-                  ['--loop-len' as string]: '-1000',
-                  animation: `loop-comet-run ${LAP_MS}ms linear infinite`,
-                } as React.CSSProperties
-              }
-            />
+            {Array.from({ length: COMET }).map((_, j) => {
+              const t = j / (COMET - 1); // 0 = head, 1 = tail
+              const r = 4.6 - t * 3.2;
+              const op = 0.95 - t * 0.82;
+              return (
+                <circle
+                  key={j}
+                  ref={(el) => {
+                    dotsRef.current[j] = el;
+                  }}
+                  cx={NX}
+                  cy={TOPY}
+                  r={r}
+                  fill={MINT}
+                  fillOpacity={op}
+                  filter={j === 0 ? 'url(#loop-comet-glow)' : undefined}
+                />
+              );
+            })}
           </g>
         )}
 
-        {/* ── Stage nodes (drawn on top so the comet pulses behind them) ── */}
+        {/* ── Stage nodes (on top so the comet pulses behind them) ── */}
         {STAGES.map((s, i) => (
           <StageNode key={s.k} s={s} lit={active === i} reduced={reduced} />
         ))}
@@ -278,7 +304,7 @@ function StageNode({
       : 'rgba(124,255,168,0.10)'
     : BG2;
 
-  const tween = reduced ? undefined : 'transform 360ms cubic-bezier(0.4,0,0.2,1)';
+  const tween = reduced ? undefined : 'transform 320ms cubic-bezier(0.4,0,0.2,1)';
   const scale = lit ? 1.05 : 1;
 
   return (
@@ -364,7 +390,6 @@ function StageNode({
 
 /* ── Down chevrons in the gaps between stages ───────────────────────────── */
 function DownChevrons() {
-  // Sit at the midpoints between consecutive node centres, on the spine.
   const ys = [TOPY + GAP / 2, TOPY + GAP * 1.5, TOPY + GAP * 2.5];
   return (
     <g>
@@ -387,7 +412,6 @@ function DownChevrons() {
 
 /* ── Feedback edge: Watch (4) → Author (1) closes the loop ──────────────── */
 function FeedbackEdge({ animate }: { animate: boolean }) {
-  // Label sits on the bulge of the arc, mid-height, on the left.
   const lx = 86;
   const ly = (TOPY + BOTY) / 2;
 
