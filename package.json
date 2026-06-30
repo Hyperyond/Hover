@@ -9,7 +9,7 @@
     "dev:site": "pnpm --filter @hover-dev/site dev",
     "build:site": "pnpm --filter @hover-dev/site build",
     "typecheck": "pnpm -r --filter './packages/*' exec tsc --noEmit && pnpm --filter @hover-dev/site typecheck",
-    "build": "pnpm --filter @hover-dev/probe-engine --filter @hover-dev/core --filter @hover-dev/api-test --filter @hover-dev/pentest build",
+    "build": "pnpm --filter @hover-dev/probe-engine --filter @hover-dev/core --filter @hover-dev/api-test --filter @hover-dev/pentest --filter @hover-dev/mcp build",
     "package": "pnpm --filter hover-dev package",
     "clean": "pnpm --filter @hover-dev/core --filter @hover-dev/api-test --filter @hover-dev/pentest clean",
     "test": "pnpm -r --if-present test",
