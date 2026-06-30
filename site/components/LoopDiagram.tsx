@@ -120,12 +120,15 @@ export function LoopDiagram() {
             style={{ display: 'block' }}
           >
             <defs>
-              {/* Comet gradient — a bright mint head fading to transparent tail. */}
-              <linearGradient id="loop-comet" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor={MINT} stopOpacity="0" />
-                <stop offset="80%" stopColor={MINT} stopOpacity="0.55" />
-                <stop offset="100%" stopColor={MINT} stopOpacity="1" />
-              </linearGradient>
+              {/* Comet glow — a soft blur so the moving head reads as light, not
+                  a hard dash. Applied to the halo layer; the crisp head sits on top.
+                  (We deliberately do NOT colour the comet with a spatial gradient:
+                  an SVG stroke gradient paints by bbox position, so a moving dash
+                  would go invisible on whichever side falls at the transparent end —
+                  that was why the Watch→Author leg looked un-animated.) */}
+              <filter id="loop-comet-glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="3.2" />
+              </filter>
               <radialGradient id="loop-center-glow" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="rgba(124,255,168,0.16)" />
                 <stop offset="100%" stopColor="rgba(124,255,168,0)" />
@@ -187,22 +190,45 @@ export function LoopDiagram() {
                 rest of the lap. CSS var --loop-len = full path length so the
                 offset animation completes exactly one lap. */}
             {run && (
-              <path
-                d={TRACK}
-                fill="none"
-                stroke="url(#loop-comet)"
-                strokeWidth={3}
-                strokeLinecap="round"
-                pathLength={1000}
-                style={
-                  {
-                    // 60-unit dash (comet) + 940 gap; offset sweeps a full 1000.
-                    strokeDasharray: '60 940',
-                    ['--loop-len' as string]: '-1000',
-                    animation: `loop-comet-run ${LAP_MS}ms linear infinite`,
-                  } as React.CSSProperties
-                }
-              />
+              <g>
+                {/* Halo — a wide, blurred, longer dash that trails the head, so the
+                    comet reads as a soft moving light with a tail. Solid mint (no
+                    spatial gradient) → uniformly visible on all four legs. */}
+                <path
+                  d={TRACK}
+                  fill="none"
+                  stroke={MINT}
+                  strokeOpacity={0.4}
+                  strokeWidth={7}
+                  strokeLinecap="round"
+                  pathLength={1000}
+                  filter="url(#loop-comet-glow)"
+                  style={
+                    {
+                      strokeDasharray: '96 904',
+                      ['--loop-len' as string]: '-1000',
+                      animation: `loop-comet-run ${LAP_MS}ms linear infinite`,
+                    } as React.CSSProperties
+                  }
+                />
+                {/* Crisp head — a short bright dash riding the leading edge of the halo. */}
+                <path
+                  d={TRACK}
+                  fill="none"
+                  stroke={MINT}
+                  strokeOpacity={0.95}
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  pathLength={1000}
+                  style={
+                    {
+                      strokeDasharray: '44 956',
+                      ['--loop-len' as string]: '-1000',
+                      animation: `loop-comet-run ${LAP_MS}ms linear infinite`,
+                    } as React.CSSProperties
+                  }
+                />
+              </g>
             )}
 
             {/* ── Centre artifact — the through-line you own ── */}
