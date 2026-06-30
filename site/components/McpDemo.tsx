@@ -24,25 +24,30 @@ type LineKind =
 
 type Line = { kind: LineKind; text: string };
 
-/* One scripted session. The tool lines are the grounded actuation surface —
- * browser_navigate to explore, then click_control / fill_control whose
- * role+name target is exactly what gets written into the spec. */
+/* One scripted session, run against the Acme Store example (shop.acme.dev).
+ * The tool lines are the grounded actuation surface — browser_navigate to
+ * explore, then click_control / fill_control whose role+name target is exactly
+ * what gets written into the spec. The crystallized spec names here MUST match
+ * the covered flows in BusinessMapDemo (Log in / Add to cart / Checkout). */
 const SCRIPT: Line[] = [
-  { kind: 'user', text: '/mcp__hover__test_app' },
-  { kind: 'narrate', text: 'Exploring the app…' },
+  { kind: 'user', text: '/mcp__hover__test_app  shop.acme.dev' },
+  { kind: 'narrate', text: 'Exploring Acme Store…' },
   { kind: 'tool', text: 'browser_navigate  →  /login' },
-  { kind: 'tool', text: 'fill_control  "Email"  →  user@acme.test' },
+  { kind: 'tool', text: 'fill_control  "Email"  →  shopper@acme.test' },
   { kind: 'tool', text: 'fill_control  "Password"  →  ••••••••' },
-  { kind: 'tool', text: 'click_control  "Sign in"' },
+  { kind: 'tool', text: 'click_control  "Log in"' },
   { kind: 'wrote', text: 'crystallized  login.spec.ts' },
-  { kind: 'narrate', text: 'Mapping the checkout flow…' },
+  { kind: 'narrate', text: 'Mapping the commerce flow…' },
+  { kind: 'tool', text: 'browser_navigate  →  /products' },
   { kind: 'tool', text: 'click_control  "Add to cart"' },
+  { kind: 'wrote', text: 'crystallized  add-to-cart.spec.ts' },
   { kind: 'tool', text: 'click_control  "Checkout"' },
   { kind: 'tool', text: 'fill_control  "Card number"  →  4242 4242 …' },
+  { kind: 'tool', text: 'click_control  "Place order"' },
   { kind: 'wrote', text: 'crystallized  checkout.spec.ts' },
   {
     kind: 'done',
-    text: '2 specs written to __vibe_tests__/ — plain @playwright/test, zero AI at runtime.',
+    text: '3 specs written to __vibe_tests__/ — plain @playwright/test, zero AI at runtime.',
   },
 ];
 
@@ -152,7 +157,7 @@ export function McpDemo() {
             }}
           >
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#7CFFA8' }} />
-            claude · hover MCP
+            claude · hover MCP · shop.acme.dev
           </span>
         </div>
 

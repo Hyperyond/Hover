@@ -4,11 +4,13 @@ import { useRef } from 'react';
 import { useInView, usePrefersReducedMotion } from '@/lib/useInView';
 
 /**
- * A static-but-polished mock of the VS Code cockpit's **Business Map** graph:
- * a left-to-right flow from the app root → areas (Auth / Commerce / Account) →
- * business lines (individual flows) → a couple of crystallized spec nodes.
- * Coverage-colored — a covered line gets a mint border + ✓, an uncovered one
- * is dim/gray + ○. Pure SVG, no graph library (the site must not pull in
+ * A static-but-polished mock of the VS Code cockpit's **Business Map** graph
+ * for the Acme Store example (shop.acme.dev): a left-to-right flow from the app
+ * root → areas (Auth / Commerce / Account) → business lines (individual flows)
+ * → the crystallized spec nodes. Coverage-colored — a covered line gets a mint
+ * border + ✓, an uncovered one is dim/gray + ○. The covered flows (Log in /
+ * Add to cart / Checkout) and their spec leaves MUST match the specs the
+ * McpDemo crystallizes. Pure SVG, no graph library (the site must not pull in
  * reactflow). The layout echoes the extension's flow graph so the marketing
  * surface and the product read as one thing.
  */
@@ -31,34 +33,37 @@ const AREAS: Area[] = [
     y: 70,
     flows: [
       { label: 'Log in', covered: true, y: 44 },
-      { label: 'Sign up', covered: true, y: 96 },
+      { label: 'Sign up', covered: false, y: 96 },
     ],
   },
   {
     label: 'Commerce',
     y: 190,
     flows: [
-      { label: 'Add to cart', covered: false, y: 158 },
-      { label: 'Checkout', covered: true, y: 210 },
-      { label: 'Search', covered: false, y: 262 },
+      { label: 'Browse products', covered: false, y: 150 },
+      { label: 'Add to cart', covered: true, y: 200 },
+      { label: 'Checkout', covered: true, y: 250 },
+      { label: 'Search', covered: false, y: 300 },
     ],
   },
   {
     label: 'Account',
-    y: 320,
-    flows: [{ label: 'Edit profile', covered: false, y: 320 }],
+    y: 330,
+    flows: [{ label: 'Edit profile', covered: false, y: 345 }],
   },
 ];
 
-const APP = { label: 'shop.acme', x: 18, y: 190, w: 96, h: 40 };
-const AREA_X = 168;
+const APP = { label: 'shop.acme.dev', x: 12, y: 195, w: 116, h: 40 };
+const AREA_X = 176;
 const AREA_W = 104;
-const FLOW_X = 320;
-const FLOW_W = 142;
-// Two spec nodes hang off covered flows (Log in → login.spec, Checkout → checkout.spec).
+const FLOW_X = 328;
+const FLOW_W = 150;
+// Three spec nodes hang off covered flows — matching the specs McpDemo writes:
+// Log in → login.spec, Add to cart → add-to-cart.spec, Checkout → checkout.spec.
 const SPECS = [
-  { label: 'login.spec.ts', x: 494, y: 44 },
-  { label: 'checkout.spec.ts', x: 494, y: 210 },
+  { label: 'login.spec.ts', x: 506, y: 44 },
+  { label: 'add-to-cart.spec.ts', x: 506, y: 200 },
+  { label: 'checkout.spec.ts', x: 506, y: 250 },
 ];
 
 function edge(x1: number, y1: number, x2: number, y2: number, active: boolean) {
@@ -82,7 +87,7 @@ export function BusinessMapDemo() {
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <div className="flex items-center gap-2 font-mono text-[12px] text-text-mute">
             <span className="h-1.5 w-1.5 rounded-full bg-mint" />
-            Business Map
+            Business Map · Acme Store
           </div>
           <div className="flex items-center gap-4 font-mono text-[11px] text-text-dim">
             <span className="flex items-center gap-1.5">
@@ -105,7 +110,7 @@ export function BusinessMapDemo() {
         {/* The graph */}
         <div className="overflow-x-auto px-3 py-4">
           <svg
-            viewBox="0 0 640 360"
+            viewBox="0 0 650 372"
             width="100%"
             role="img"
             aria-label="Business Map graph: app root to areas (Auth, Commerce, Account) to business lines, with covered flows linked to crystallized Playwright specs."
@@ -267,7 +272,7 @@ export function BusinessMapDemo() {
                 <rect
                   x={s.x}
                   y={s.y - 13}
-                  width={128}
+                  width={130}
                   height={26}
                   rx={7}
                   fill={BG2}
@@ -293,10 +298,10 @@ export function BusinessMapDemo() {
         {/* Footer status row — like the cockpit's coverage summary */}
         <div className="flex items-center justify-between border-t border-line px-4 py-2.5 font-mono text-[11px] text-text-dim">
           <span>
-            <span className="text-mint">3</span> of <span className="text-text-mute">6</span> flows
+            <span className="text-mint">3</span> of <span className="text-text-mute">7</span> flows
             covered
           </span>
-          <span>2 specs · __vibe_tests__/</span>
+          <span>3 specs · __vibe_tests__/</span>
         </div>
       </div>
     </div>

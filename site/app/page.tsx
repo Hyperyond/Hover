@@ -1,41 +1,19 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { createHash } from 'node:crypto';
 import { Sparkle } from '@/components/Sparkle';
 import { McpDemo } from '@/components/McpDemo';
 import { BusinessMapDemo } from '@/components/BusinessMapDemo';
+import { CiDemo } from '@/components/CiDemo';
+import { CloudDemo } from '@/components/CloudDemo';
 import {
   InstallButton,
   CockpitButton,
-  MCP_INSTALL,
   NPM_URL,
   MARKETPLACE_URL,
 } from '@/components/InstallButton';
 import { Waitlist } from '@/components/Waitlist';
 import { Nav } from '@/components/Nav';
-import { VideoSection } from '@/components/VideoSection';
 import { Coverage } from '@/components/Coverage';
-import { Comparison } from '@/components/Comparison';
 import { Pricing } from '@/components/Pricing';
 import { Faq } from '@/components/Faq';
-
-/* The walkthrough lives on YouTube; the landing page only shows a poster that
- * links out (no self-hosted asset, no iframe on load). `asset()` appends a
- * content-hash cache-bust to the poster: a static path like /demo-poster.jpg
- * gets cached hard by the browser and Vercel's CDN, so swapping the file for a
- * same-named one would keep serving the stale image. Hashing the bytes at build
- * time means the URL changes only when the content changes. */
-const PUBLIC = join(process.cwd(), 'public');
-
-function asset(rel: string): string {
-  const abs = join(PUBLIC, rel);
-  if (!existsSync(abs)) return '';
-  const hash = createHash('sha1').update(readFileSync(abs)).digest('hex').slice(0, 10);
-  return `/${rel}?v=${hash}`;
-}
-
-const DEMO_VIDEO = 'https://www.youtube.com/watch?v=vAr74I9I9Ew';
-const DEMO_POSTER = asset('demo-poster.jpg');
 
 const GITHUB = 'https://github.com/Hyperyond/Hover';
 const YOUTUBE = 'https://www.youtube.com/@hyperyond';
@@ -95,14 +73,10 @@ export default function Home() {
       <Backdrop />
       <Nav />
       <Hero />
-      {/* Walkthrough video. The poster (public/demo-poster.jpg) links out to the
-       * YouTube watch page — no self-hosted MP4, no iframe on load. */}
-      <VideoSection watchUrl={DEMO_VIDEO} poster={DEMO_POSTER} />
+      <Walkthrough />
       <Surfaces />
       <Why />
-      <Cockpit />
       <Coverage />
-      <Comparison />
       <Roadmap />
       <Pricing />
       <Waitlist />
@@ -201,57 +175,155 @@ function Hero() {
   );
 }
 
-/* ── The four surfaces, one artifact ────────────────────────────────────
- * The suite's organizing thesis (mirrors the README "four surfaces" table):
- * MCP authors, the VS Code cockpit reviews, CI runs, Cloud (planned) watches.
- * The through-line is the owned Playwright artifact — the AI authors it once,
- * nothing AI runs after. */
-const SURFACES = [
+/* ── The walkthrough — Hover on one real store, stage by stage ───────────
+ * The spine of the page: a single running example (Acme Store, shop.acme.dev)
+ * walked across all four surfaces — Author (MCP) → Review (VS Code) → Run (CI)
+ * → Watch (Cloud, planned). Each stage pairs a short explanation with that
+ * stage's visual; the same app, flows, and spec names thread through every one,
+ * so the page reads as a case study rather than abstract claims. Layout
+ * alternates copy / visual sides on desktop for rhythm. */
+const STAGES = [
   {
-    k: 'mcp',
-    step: '01',
+    k: 'author',
     stage: 'Author',
     surface: 'MCP',
     accent: '#7CFFA8',
     status: 'Shipped',
-    title: 'Add it to your own agent',
-    body: 'The engine. `@hover-dev/mcp` plugs into Claude Code, Cursor, or any MCP-capable agent. Run /mcp__hover__test_app and the agent explores your app and crystallizes specs — BYO-CLI, your model, your subscription, no keys of ours.',
+    title: 'The agent explores Acme Store and crystallizes its specs',
+    body: 'Point the coding agent you already run at Hover’s MCP and call /mcp__hover__test_app. It logs in, browses the catalogue, adds to cart, and checks out — acting through Hover’s grounded tools, so the selector that drove each click is the one that lands in the spec. Three flows crystallize to plain @playwright/test under __vibe_tests__/.',
+    visual: 'mcp' as const,
   },
   {
-    k: 'vscode',
-    step: '02',
+    k: 'review',
     stage: 'Review',
     surface: 'VS Code',
     accent: '#7dd3fc',
     status: 'Shipped',
-    title: 'An optional review cockpit',
-    body: 'A place to look — not the engine. The extension shows a Business Map graph of your app’s flows + coverage and a Dashboard (pass / fail / flaky + CI results), with one-click run. Install only if you want the visual surface.',
+    title: 'See Acme Store’s flows and coverage on the Business Map',
+    body: 'The optional VS Code cockpit graphs the store’s areas — Auth, Commerce, Account — coloured by coverage, with each covered flow linked to the spec it produced. Log in, Add to cart, and Checkout are green and carry their spec leaves; Sign up, Browse, Search, and Edit profile are the gaps to fill next. It drives no agent — it’s a place to look.',
+    visual: 'map' as const,
   },
   {
-    k: 'ci',
-    step: '03',
+    k: 'run',
     stage: 'Run',
     surface: 'CI',
     accent: '#7CFFA8',
     status: 'Shipped',
-    title: 'Runs as plain Playwright',
-    body: 'The crystallized specs run on every PR as standard @playwright/test — no agent, no tokens, no key. Hover generates the GitHub Actions workflow for you and pulls the results back into the Dashboard.',
+    title: 'Those specs run on every PR — plain Playwright, zero AI',
+    body: 'The crystallized suite runs as a standard GitHub Actions check on every pull request: no agent, no tokens, no key. login, add-to-cart, and checkout pass alongside the rest of the suite. Hover can generate the workflow for you and pull the results back into the Dashboard.',
+    visual: 'ci' as const,
   },
   {
-    k: 'cloud',
-    step: '04',
+    k: 'watch',
     stage: 'Watch',
     surface: 'Cloud',
     accent: '#6b7280',
     status: 'Planned',
-    title: 'Hosted parallel runs & self-heal',
-    body: 'Optional, planned. A hosted layer over the specs you already own: parallel runs, scheduled monitoring, a flakiness dashboard, on-failure self-heal. Never authoring lock-in — the artifact stays yours.',
+    title: 'Watch the suite over time — hosted, planned',
+    body: 'A planned hosted layer over the specs you already own: scheduled runs, a pass-rate and flakiness view, parallel execution, and on-failure self-heal. Authoring stays local and free, CI still runs plain Playwright, and the artifact stays entirely yours — never authoring lock-in.',
+    visual: 'cloud' as const,
   },
 ];
 
+function StageVisual({ kind }: { kind: 'mcp' | 'map' | 'ci' | 'cloud' }) {
+  if (kind === 'mcp')
+    return (
+      <div className="flex justify-center lg:justify-start">
+        <McpDemo />
+      </div>
+    );
+  if (kind === 'map') return <BusinessMapDemo />;
+  if (kind === 'ci') return <CiDemo />;
+  return <CloudDemo />;
+}
+
+function Walkthrough() {
+  return (
+    <section id="walkthrough" className="relative z-10 mx-auto max-w-6xl px-6 pb-8 pt-20 md:pt-28">
+      <SectionLabel>Watch it work on a real store</SectionLabel>
+      <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
+        One store —{' '}
+        <span className="text-mint">Acme Store</span> — walked stage by stage.
+      </h2>
+      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
+        Here is Hover on a real e-commerce app at{' '}
+        <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">
+          shop.acme.dev
+        </code>
+        , followed across all four surfaces. The same flows — Log in, Add to
+        cart, Checkout — thread through every stage:{' '}
+        <strong className="font-medium text-text">authored</strong> by the agent,{' '}
+        <strong className="font-medium text-text">reviewed</strong> on the map,{' '}
+        <strong className="font-medium text-text">run</strong> in CI, and (soon){' '}
+        <strong className="font-medium text-text">watched</strong> in the cloud.
+      </p>
+
+      <div className="mt-14 flex flex-col gap-16 md:gap-24">
+        {STAGES.map((s, i) => {
+          const flip = i % 2 === 1; // alternate copy/visual sides on desktop
+          return (
+            <div
+              key={s.k}
+              className="grid grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-14"
+            >
+              {/* Copy */}
+              <div className={flip ? 'lg:order-2' : ''}>
+                <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.16em]">
+                  <span className="text-text-dim">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="font-semibold" style={{ color: s.accent }}>
+                    {s.stage}
+                  </span>
+                  <span className="text-text-dim">· {s.surface}</span>
+                  <span
+                    className={
+                      s.status === 'Shipped'
+                        ? 'inline-flex items-center rounded-full border border-[rgba(124,255,168,0.35)] px-2 py-0.5 text-[10px] tracking-wider text-mint'
+                        : 'inline-flex items-center rounded-full border border-line px-2 py-0.5 text-[10px] tracking-wider text-text-dim'
+                    }
+                  >
+                    {s.status === 'Shipped' ? '✓ Shipped' : 'Planned'}
+                  </span>
+                </div>
+                <h3 className="mt-4 max-w-md font-mono text-[21px] font-semibold leading-tight tracking-tight text-text md:text-[24px]">
+                  {s.title}
+                </h3>
+                <p className="mt-4 max-w-md text-[14.5px] leading-relaxed text-text-mute">
+                  {s.body}
+                </p>
+              </div>
+
+              {/* Visual */}
+              <div className={`min-w-0 ${flip ? 'lg:order-1' : ''}`}>
+                <StageVisual kind={s.visual} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ── The four surfaces, one artifact ────────────────────────────────────
+ * The suite's organizing thesis (mirrors the README "four surfaces" table):
+ * MCP authors, the VS Code cockpit reviews, CI runs, Cloud (planned) watches.
+ * The through-line is the owned Playwright artifact — the AI authors it once,
+ * nothing AI runs after. Just the compact rail data; the walkthrough above
+ * carries the per-surface detail. */
+const SURFACES = [
+  { k: 'mcp', stage: 'Author', surface: 'MCP', accent: '#7CFFA8', status: 'Shipped' },
+  { k: 'vscode', stage: 'Review', surface: 'VS Code', accent: '#7dd3fc', status: 'Shipped' },
+  { k: 'ci', stage: 'Run', surface: 'CI', accent: '#7CFFA8', status: 'Shipped' },
+  { k: 'cloud', stage: 'Watch', surface: 'Cloud', accent: '#6b7280', status: 'Planned' },
+];
+
+/* The compact pipeline rail — an at-a-glance summary of the four surfaces the
+ * walkthrough just walked. No detail cards here (the walkthrough carries the
+ * per-surface detail); this is the one-line "Author → Review → Run → Watch"
+ * recap plus the artifact through-line. */
 function Surfaces() {
   return (
-    <section id="how" className="relative z-10 mx-auto max-w-6xl px-6 pb-8 pt-16 md:pt-24">
+    <section id="how" className="relative z-10 mx-auto max-w-6xl px-6 pb-8 pt-20 md:pt-28">
       <SectionLabel>The suite — one journey</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[26px] font-semibold leading-tight tracking-tight md:text-[34px]">
         <span className="text-mint">Author → Review → Run → Watch.</span>
@@ -271,41 +343,26 @@ function Surfaces() {
       </p>
 
       {/* The journey at a glance — Author → Review → Run → Watch */}
-      <div className="mt-8 flex flex-wrap items-center gap-y-2 font-mono text-[12px]">
+      <div className="mt-8 flex flex-wrap items-center gap-y-3 font-mono text-[12.5px]">
         {SURFACES.map((s, i) => (
           <span key={s.k} className="inline-flex items-center">
-            {i > 0 && <span className="px-2 text-text-dim" aria-hidden>→</span>}
-            <span className="inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3 py-1.5">
-              <span className="font-semibold" style={{ color: s.accent }}>{s.stage}</span>
+            {i > 0 && <span className="px-2.5 text-text-dim" aria-hidden>→</span>}
+            <span
+              className="inline-flex items-center gap-2 rounded-full border bg-bg-2 px-3.5 py-1.5"
+              style={{
+                borderColor:
+                  s.status === 'Shipped' ? 'rgba(124,255,168,0.25)' : 'var(--color-line)',
+              }}
+            >
+              <span className="font-semibold" style={{ color: s.accent }}>
+                {s.stage}
+              </span>
               <span className="text-text-dim">· {s.surface}</span>
+              <span className="text-[10px] uppercase tracking-wider text-text-dim">
+                {s.status === 'Shipped' ? '✓' : '·planned'}
+              </span>
             </span>
           </span>
-        ))}
-      </div>
-
-      <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-        {SURFACES.map((s) => (
-          <article
-            key={s.k}
-            className="flex flex-col rounded-lg border border-line bg-bg-2 p-6 transition-colors hover:border-line-2"
-          >
-            <div className="mb-4 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.16em]" style={{ color: s.accent }}>
-              <span className="text-text-dim">{s.step}</span>
-              <span className="font-semibold">{s.stage}</span>
-              <span className="text-text-dim">· {s.surface}</span>
-            </div>
-            <h3 className="text-[16px] font-semibold tracking-tight text-text">{s.title}</h3>
-            <p className="mt-3 flex-1 text-[13.5px] leading-relaxed text-text-mute">{s.body}</p>
-            <span
-              className={
-                s.status === 'Shipped'
-                  ? 'mt-5 inline-flex w-fit items-center gap-1.5 rounded-full border border-[rgba(124,255,168,0.35)] px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-wider text-mint'
-                  : 'mt-5 inline-flex w-fit items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-wider text-text-dim'
-              }
-            >
-              {s.status === 'Shipped' ? '✓ Shipped' : 'Planned'}
-            </span>
-          </article>
         ))}
       </div>
     </section>
@@ -361,41 +418,6 @@ function Why() {
             <p className="mt-3 text-[14.5px] leading-relaxed text-text-mute">{p.body}</p>
           </article>
         ))}
-      </div>
-    </section>
-  );
-}
-
-/* ── VS Code cockpit ─────────────────────────────────────────────────────
- * The optional review surface, anchored by the Business Map graph. Framed as
- * a place to look — it drives no agent. */
-function Cockpit() {
-  return (
-    <section id="cockpit" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>The cockpit (optional)</SectionLabel>
-      <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        See every flow on a{' '}
-        <span className="text-mint">Business Map</span>.
-      </h2>
-      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        The MCP is the whole authoring loop — but if you want a visual surface,
-        the <span className="text-text">Hover VS Code extension</span> is a review
-        cockpit. The Business Map graphs your app&rsquo;s areas and business lines,
-        coloured by coverage, and links each covered flow to the spec it
-        crystallized. A Dashboard shows pass / fail / flaky and your CI results.
-        It drives no agent — it&rsquo;s a place to look.
-      </p>
-      <div className="mt-10">
-        <BusinessMapDemo />
-      </div>
-      <div className="mt-7 flex flex-wrap items-center gap-3">
-        <CockpitButton />
-        <a
-          href={DOCS}
-          className="rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
-        >
-          Read the docs →
-        </a>
       </div>
     </section>
   );
