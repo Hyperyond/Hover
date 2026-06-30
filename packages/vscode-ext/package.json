@@ -2,7 +2,7 @@
   "name": "hover-dev",
   "version": "0.25.2",
   "displayName": "Hover — Vibe Testing cockpit",
-  "description": "The review cockpit for your Hover Vibe Testing suite: a Business Map of your app's flows + coverage, a run-health Dashboard with CI sync, and one-click spec runs. Authoring lives in the @hover-dev/mcp server you add to your own coding agent.",
+  "description": "Open-source, local-first Vibe Testing — the review cockpit. Add Hover's MCP to the coding agent you already run (Claude Code / Codex / Cursor); it explores your app through grounded tools and crystallizes each flow into a plain @playwright/test spec you own, passing CI with zero AI. This extension is where you see it: a Business Map of flows + coverage, a Dashboard of run health with GitHub CI sync, and one-click runs. record == replay · API testing · self-heal drifted specs.",
   "keywords": [
     "ai",
     "ai-testing",
@@ -61,6 +61,12 @@
         "title": "Review Optimization Candidate",
         "category": "Hover",
         "icon": "$(diff)"
+      },
+      {
+        "command": "hover.healSpec",
+        "title": "Heal Spec (in your agent)",
+        "category": "Hover",
+        "icon": "$(heart)"
       },
       {
         "command": "hover.runSpec",
