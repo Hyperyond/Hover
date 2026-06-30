@@ -20,9 +20,12 @@ export type { SkillStep } from './specs/specStep.js';
 // API-layer crystallizer — observed/replayed requests → *.api-test.spec.ts.
 export { writeApiSpec } from './specs/writeApiSpec.js';
 export type { ApiCheck, WriteApiSpecOptions, WriteApiSpecResult } from './specs/writeApiSpec.js';
-// Creation-verification: replay a flow's grounded steps over CDP (no playwright test).
+// Creation-verification + self-heal: replay a flow's grounded steps over CDP (no playwright test).
 export { replayGroundedSteps, replayOnPage, applyGroundedStep, groundedLocate } from './specs/replayGrounded.js';
 export type { ReplayResult, ReplayFailure, ReplayStep, GroundedTarget } from './specs/replayGrounded.js';
+// Spec sidecar (recorded grounded steps) — read by self-heal to replay a saved spec.
+export { readSidecar } from './specs/sidecar.js';
+export type { SpecSidecar } from './specs/sidecar.js';
 
 // ── debug-Chrome lifecycle ───────────────────────────────────────────────────
 export { launchDebugChrome, closeDebugChrome, findChromeBinary } from './playwright/launchChrome.js';

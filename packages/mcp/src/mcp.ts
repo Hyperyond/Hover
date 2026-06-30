@@ -7,6 +7,7 @@ import {
   writeFact,
   loadMemory,
   formatMemoryForPrompt,
+  readSidecar,
   type SkillStep,
   type ApiCheck,
 } from '@hover-dev/core/engine';
@@ -66,6 +67,10 @@ const controller = new HoverMcpController({
   recordFact: (title, rule, type) =>
     writeFact(DEV_ROOT, { name: title, description: title, type, body: rule }),
   recall: async () => formatMemoryForPrompt(await loadMemory(DEV_ROOT)),
+  readSpecSteps: async (slug: string) => {
+    const sc = await readSidecar(DEV_ROOT, slug);
+    return sc ? { steps: sc.steps, startUrl: TARGET } : null;
+  },
 });
 
 const server = createHoverMcpServer(controller);
