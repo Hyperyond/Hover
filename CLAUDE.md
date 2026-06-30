@@ -30,8 +30,6 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` (plus the `site
 
 - `packages/core` is `@hover-dev/core` — the **engine library**. Owns grounded-actuation logic, `writeSpec` (the deterministic crystallizer), grounded-step replay (`replayGroundedSteps`), the optimize / architecture passes (ts-morph), business memory (`.hover/memory/`), `launchDebugChrome`, and the `@hover-dev/core/engine` barrel. Published to npm (public). Its **only consumer now is `@hover-dev/mcp`** — the extension no longer touches it, so the old WS staged-engine surface (`runSession`, the `./service` host + `service/*`, the Playwright-MCP config in `resolveMcpConfig` / `buildGroundedMcpConfig`, and the `mcp/actuateServer` + `sourceServer` relays) has been **removed**, and `@playwright/mcp` is no longer a dependency (it dragged ~29 MB of full Playwright into every install for nothing). `main` / `exports` point at `dist/*.js`. **Do not delete `core`.**
 - `packages/mcp` is `@hover-dev/mcp` (bin `hover-mcp`) — the **MCP stdio server**, the thin frontend and the only public-facing install. Depends on `core` via `workspace:*`. Exposes grounded browser tools — `browser_navigate`, `browser_snapshot`, `click_control`, `fill_control`, `select_control`, `check_control`, `assert_visible` — plus `recall_business_knowledge` / `record_fact` and `crystallize_spec`, and a `test_app` **MCP prompt** (the phased explore → business-map → crystallize workflow, surfaced in Claude Code as `/mcp__hover__test_app`). It spawns no agent: the calling agent IS the intelligence; Hover guarantees record == replay at the output. Config via env: `HOVER_TARGET`, `HOVER_CDP_PORT`, `HOVER_PROJECT_ROOT`. **Published lockstep with `core` on `v*` tags** (pnpm rewrites mcp's `workspace:*` core ref to the just-published core version). Users add the MCP and `core` comes along as a dep — they never install `core` directly.
-- `packages/probe-engine` is `@hover-dev/probe-engine` — the private shared probe engine consumed by `@hover-dev/api-test` and `@hover-dev/pentest`.
-- `packages/api-test` (`@hover-dev/api-test`) and `packages/pentest` (`@hover-dev/pentest`) are the api-test / pentest plugins — the old extension's QA api/pentest capabilities. They **still exist as workspace packages** (and publish on their own `api-test-v*` / `pentest-v*` tags), but they are **not wired into the cockpit** and not loaded by the MCP server. Many *internal* identifiers still read `Security*` (`writeSecuritySpec`, `startSecurityRuntime`, `SecuritySeed`, `builtinSecuritySeeds`, …) — deliberately not renamed.
 - `packages/vscode-ext` is `hover-dev` — the VS Code extension, now a **passive review cockpit**. It drives no agent and ships no engine. Surfaces:
   - **Business Map** (`src/businessMap.ts` + `businessMapView.ts`) — a reactflow graph of `.hover/hover-map.md`: business lines → specs, coverage-colored; its own Activity Bar icon plus a full editor panel.
   - **Dashboard** (`src/dashboardView.ts`) — the spec × run health matrix + CI sync (`src/githubCi.ts` / `ciWorkflow.ts`), an "Install Hover MCP" button, and a gethover.dev link.
@@ -54,11 +52,11 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` (plus the `site
   - `conventions.md` — project conventions.
   - `cache/` — disposable (optimization candidates live at `cache/optimized/`).
 
-  The seed / probe catalogue ships built-in as inlined TypeScript constants — optimization seeds in `packages/core/src/specs/seeds.ts` (`BUILTIN_SEEDS`); api-test / pentest probes in `packages/probe-engine/src/builtins.ts` (`builtinSecuritySeeds`). Wiki / ledger writes are best-effort by contract — they must never break a run or crystallize. This repo's root `.gitignore` ignores `.hover/` wholesale; in user projects the intended policy is `cache/` ignored, the rest commit-worthy.
+  The optimization seed catalogue ships built-in as inlined TypeScript constants in `packages/core/src/specs/seeds.ts` (`BUILTIN_SEEDS`). Wiki / ledger writes are best-effort by contract — they must never break a run or crystallize. This repo's root `.gitignore` ignores `.hover/` wholesale; in user projects the intended policy is `cache/` ignored, the rest commit-worthy.
 
 ## Repository status
 
-The MCP-first loop is shipped: `@hover-dev/mcp` plugs into the user's own coding agent, the agent drives the user's debug Chrome through Hover's grounded tools, and the run crystallizes into a plain Playwright spec via the deterministic `writeSpec` path. `@hover-dev/core` + `@hover-dev/mcp` publish **lockstep** on `v*` tags. The **`hover-dev` VS Code extension** is now a passive **review cockpit** (Business Map + Dashboard + Environments + Specs/Run) — it drives no agent and ships no engine — published on its own `vscode-v*` tags to the VS Code Marketplace + Open VSX as `hyperyond.hover-dev`. The `@hover-dev/probe-engine` / `api-test` / `pentest` packages still exist but are not wired into the cockpit or the MCP server.
+The MCP-first loop is shipped: `@hover-dev/mcp` plugs into the user's own coding agent, the agent drives the user's debug Chrome through Hover's grounded tools, and the run crystallizes into a plain Playwright spec via the deterministic `writeSpec` path. `@hover-dev/core` + `@hover-dev/mcp` publish **lockstep** on `v*` tags. The **`hover-dev` VS Code extension** is now a passive **review cockpit** (Business Map + Dashboard + Environments + Specs/Run) — it drives no agent and ships no engine — published on its own `vscode-v*` tags to the VS Code Marketplace + Open VSX as `hyperyond.hover-dev`. The old `@hover-dev/probe-engine` / `api-test` / `pentest` plugins and the agent-spawning layer (`agents/*`) have been **removed**: they belonged to the in-extension staged engine and contradict the MCP-first BYO-CLI model (core never spawns a model — the user's own agent is the intelligence). The api/pentest capability is slated to return as agent-driven prompts, not bundled probe code.
 
 # Architecture
 
@@ -97,7 +95,7 @@ These are load-bearing — several are non-obvious:
 
 Most Hover packages set `main` / `exports` to `src/*.ts`, so consumers' transpilers see TypeScript source with zero build step.
 
-**Exception: `@hover-dev/core`** points `main` / `exports` (including the `./engine` barrel) at `dist/*.js` and ships a `dev: tsc --watch`. Reason: `@hover-dev/mcp` imports `@hover-dev/core/engine`, so core must build to `dist`. A root `postinstall` (`scripts/postinstall-build.mjs`) builds core (plus the probe-engine / api-test / pentest plugins) after every `pnpm install`, so fresh clones have usable `dist/`. Editing `core/src/` during MCP dev needs a `pnpm --filter @hover-dev/core build` (or a `dev` watch terminal) so the consumer picks it up.
+**Exception: `@hover-dev/core`** points `main` / `exports` (including the `./engine` barrel) at `dist/*.js` and ships a `dev: tsc --watch`. Reason: `@hover-dev/mcp` imports `@hover-dev/core/engine`, so core must build to `dist`. A root `postinstall` (`scripts/postinstall-build.mjs`) builds core after every `pnpm install`, so fresh clones have usable `dist/`. Editing `core/src/` during MCP dev needs a `pnpm --filter @hover-dev/core build` (or a `dev` watch terminal) so the consumer picks it up.
 
 ## Local lifecycle
 
@@ -113,7 +111,7 @@ For the extension cockpit: `pnpm --filter hover-dev package` → sideload the `.
 
 - Use Conventional Commits. Format: `<type>(<scope>): <description>`.
 - Common types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `perf`.
-- `<scope>` is the package or sub-area: `core`, `mcp`, `vscode-ext`, `api-test`, `pentest`, `probe-engine`, `agents`, `playwright`, `mcp`, `ci`, `deps`.
+- `<scope>` is the package or sub-area: `core`, `mcp`, `vscode-ext`, `site`, `playwright`, `ci`, `deps`.
 - Commit messages are written in **English**. Hover is a public open-source repo; contributors come from everywhere.
 - The subject line is imperative, ≤72 characters, no trailing period.
 - Conventional Commits is enforced at commit time by a husky `commit-msg` hook running `commitlint`. The hook installs on `pnpm install`. Do not bypass it with `--no-verify` unless you have explicit owner sign-off.
@@ -134,7 +132,7 @@ Tag versions at meaningful milestones so the history has anchor points:
 - `v0.0.1-poc` — Phase 0 (end-to-end feasibility) verified.
 - `v0.1.0` — Phase 1 (chat UI + persistent service) shipped.
 
-Tag scheme today (the prefix decides what publishes): `v*` → `@hover-dev/core` + `@hover-dev/mcp` lockstep; `api-test-v*` → `@hover-dev/api-test`; `pentest-v*` → `@hover-dev/pentest`; `vscode-v*` → the `hover-dev` extension (Marketplace + Open VSX). See `.github/workflows/publish.yml`.
+Tag scheme today (the prefix decides what publishes): `v*` → `@hover-dev/core` + `@hover-dev/mcp` lockstep; `vscode-v*` → the `hover-dev` extension (Marketplace + Open VSX). See `.github/workflows/publish.yml`.
 
 ## Test strategy
 
@@ -156,7 +154,7 @@ Before marking work ready:
 pnpm install              # workspace install (also runs husky install via `prepare`, + postinstall build of core/plugins)
 pnpm typecheck            # tsc --noEmit, per-package
 pnpm test                 # vitest, per-package (where present)
-pnpm build                # build probe-engine + core + api-test + pentest + mcp
+pnpm build                # build core + mcp
 pnpm --filter @hover-dev/mcp build   # build the MCP server (pulls core's dist)
 pnpm --filter hover-dev package      # build + vite webview + vsce package → hover-dev-<v>.vsix (sideload into VS Code)
 ```
@@ -184,30 +182,6 @@ Playwright MCP's interaction tools take a free-form `element` description that d
 
 The agent only needs Hover's MCP tools to drive the browser end to end. The single write path (the crystallized spec under `__vibe_tests__/`) is taken by `writeSpec` in `core`, not by the agent issuing arbitrary writes — which keeps the blast radius small if the prompt is hijacked or the agent hallucinates a destructive action.
 
-## "ERR_REQUIRE_ESM" when loading `@hover-dev/api-test`?
+## Why did api-test / pentest get removed?
 
-Symptom: `require() of ES Module .../get-port/index.js from .../mockttp/dist/server/mockttp-server.js not supported`. Chain is `@hover-dev/api-test` → `mockttp@4.4.2` → `require('get-port')` → `get-port@7.x` (ESM-only). `mockttp` upstream is aware — see [httptoolkit/mockttp#200](https://github.com/httptoolkit/mockttp/issues/200) — but ships no fix yet.
-
-Workarounds, by preference:
-
-1. **Upgrade to Node ≥ 22.12** — Node added sync `require(ESM)` in 22.12, so the load succeeds out of the box. `@hover-dev/api-test` declares `engines.node >= 22.12.0` for this reason.
-2. **Pin `get-port` to `5.1.1`** in your project's overrides:
-   ```json
-   { "pnpm": { "overrides": { "get-port": "5.1.1" } } }
-   ```
-   (npm: top-level `"overrides"`; yarn: `"resolutions"`.) `get-port` is ESM from v6 onward; `5.1.1` is the last CJS release, so `mockttp`'s `require()` works on any Node.
-3. **Don't register the `@hover-dev/api-test` plugin** if you don't need MITM mode.
-
-We can't fix this from inside `@hover-dev/api-test`: npm overrides only flow from the consumer's root package.json.
-
-## "Cannot get schema for 'PrivateKeyInfo' target" when enabling api-test?
-
-Symptom: `@peculiar/asn1-schema schema-registry collision`. Root cause: `@peculiar/asn1-schema` keeps its ASN.1 schema definitions on a per-module-instance singleton. When two copies end up in the consumer's `node_modules` (pnpm hoisting + Next 15's module resolution produces this readily), PKI deps register schemas into copy A's registry but the runtime lookup walks copy B's empty one → schema not found.
-
-`@hover-dev/api-test` declares `@peculiar/asn1-schema@2.6.0` as a direct dependency to hint pnpm, but mockttp's sub-deps may still pull a sibling copy. Fix from the consumer's root package.json:
-
-```json
-{ "pnpm": { "overrides": { "@peculiar/asn1-schema": "2.6.0" } } }
-```
-
-Then `rm -rf node_modules && pnpm install` to collapse to one copy. Verify with `pnpm why @peculiar/asn1-schema` — should show exactly one resolved version. Tracking upstream: [PeculiarVentures/asn1-schema#111](https://github.com/PeculiarVentures/asn1-schema/issues/111).
+They were plugins of the old in-extension staged engine (the WS host + `runSession`), and they relied on Hover spawning a model itself (the `agents/*` CLI adapters). That contradicts the MCP-first BYO-CLI model — **core never spawns a model**; the user's own coding agent is the intelligence. The api/pentest capability is slated to return as **agent-driven prompts** (the user's agent runs the probes through Hover's grounded tools), not as a bundled `mockttp` / probe-engine runtime — which also retires the old `get-port` ESM and `@peculiar/asn1-schema` dependency headaches those packages carried.

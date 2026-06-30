@@ -6,11 +6,9 @@ name: Publish
 #
 # Tag scheme (the tag prefix decides what publishes):
 #   v0.X.0          → the main packages, LOCKSTEP: @hover-dev/core + @hover-dev/mcp
-#   api-test-v0.X.0 → @hover-dev/api-test only
-#   pentest-v0.X.0  → @hover-dev/pentest only (when it lands)
 #   vscode-v0.X.0   → the hover-dev VS Code extension only (Marketplace + Open VSX)
-# The plugins + the extension version independently from the main packages and
-# from each other; only their own tag prefix publishes them.
+# The extension versions independently from the main packages; only its own tag
+# prefix publishes it.
 #
 # Trigger:    git tag -a v0.X.0 -m "..." && git push origin v0.X.0
 #         or: git tag -a vscode-v0.X.0 -m "..." && git push origin vscode-v0.X.0
@@ -28,8 +26,6 @@ name: Publish
 #     - @hover-dev/mcp       — the MCP server users add to their own agent — the
 #                              only public-facing install (`npx @hover-dev/mcp`).
 #                              Lockstep with core on the v* track.
-#     - @hover-dev/api-test  — api-test / security plugin (MITM proxy + MCP)
-#     - @hover-dev/pentest   — pentest plugin (when it lands)
 #   VS Code Marketplace + Open VSX
 #     - hover-dev            — the review-cockpit extension (own vscode-v* tag)
 #
@@ -53,9 +49,7 @@ name: Publish
 on:
   push:
     tags:
-      - 'v*'            # main packages, lockstep             (e.g. v0.16.0)
-      - 'api-test-v*'   # @hover-dev/api-test only            (e.g. api-test-v0.1.0)
-      - 'pentest-v*'    # @hover-dev/pentest only, when it lands (e.g. pentest-v0.1.0)
+      - 'v*'            # main packages, lockstep             (e.g. v0.18.0)
       - 'vscode-v*'     # the hover-dev VSCode extension only  (e.g. vscode-v0.13.1)
                         #   → VS Code Marketplace + Open VSX. Secrets: VSCE_PAT
                         #     (Azure DevOps, Marketplace:Manage) + OVSX_TOKEN
@@ -73,18 +67,13 @@ on:
         required: true
         default: main
         type: choice
-        options: [main, api-test, pentest, vscode]
+        options: [main, vscode]
 
 permissions:
   contents: write   # softprops/action-gh-release needs this to create the Release
 
-# Which packages publish is decided per-tag by the "Resolve target" step:
-#   v*           → @hover-dev/core + @hover-dev/mcp, lockstep
-#   api-test-v*  → @hover-dev/api-test only
-#   pentest-v*   → @hover-dev/pentest only (when it lands)
-# The plugins version independently via their own tag prefixes. A plugin release
-# also rewrites its @hover-dev/core peer range to the published core (see that
-# step).
+# The v* tag publishes @hover-dev/core + @hover-dev/mcp lockstep; vscode-v*
+# publishes the extension (separate job below).
 
 jobs:
   publish:
@@ -112,87 +101,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Resolve target + version
+      - name: Resolve version
         id: resolve
         run: |
-          # The bundler-plugin / in-page-widget packages (vite-plugin-hover,
-          # @hover-dev/{astro,nuxt,next,cli,widget-bootstrap}, webpack-plugin-hover,
-          # @hover-dev/transform-source) were removed — that npm path is retired.
-          # The main v* track now publishes @hover-dev/core + @hover-dev/mcp
-          # LOCKSTEP (mcp depends on core via workspace:* → pnpm rewrites it to
-          # the published core version when both publish in the same run). The
-          # security / pentest plugins version on their own tag prefixes below.
-          MAIN_FILTERS="--filter @hover-dev/core --filter @hover-dev/mcp"
+          # The v* track publishes @hover-dev/core + @hover-dev/mcp LOCKSTEP: mcp
+          # depends on core via workspace:* → pnpm rewrites it to the just-published
+          # core version when both publish in the same run. This is the only npm
+          # publish path (the old bundler-plugin packages and the api-test / pentest
+          # plugins have been removed).
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TARGET="${{ inputs.target }}"
             VERSION="${{ inputs.version }}"
           else
-            REF="${GITHUB_REF_NAME}"
-            case "$REF" in
-              api-test-v*) TARGET="api-test"; VERSION="${REF#api-test-v}" ;;
-              pentest-v*)  TARGET="pentest";  VERSION="${REF#pentest-v}" ;;
-              v*)          TARGET="main";     VERSION="${REF#v}" ;;
-              *) echo "::error::Unrecognized tag '$REF' (expected v*, api-test-v*, or pentest-v*)."; exit 1 ;;
-            esac
+            VERSION="${GITHUB_REF_NAME#v}"
           fi
           if [ -z "$VERSION" ]; then
             echo "::error::Could not resolve a version to publish."
             exit 1
           fi
-          case "$TARGET" in
-            main)     FILTERS="$MAIN_FILTERS";              IS_PLUGIN=false; PKG_DIR="" ;;
-            api-test) FILTERS="--filter @hover-dev/api-test"; IS_PLUGIN=true;  PKG_DIR="packages/api-test" ;;
-            pentest)  FILTERS="--filter @hover-dev/pentest";  IS_PLUGIN=true;  PKG_DIR="packages/pentest" ;;
-            *) echo "::error::Unknown target '$TARGET'."; exit 1 ;;
-          esac
           {
-            echo "target=$TARGET"
             echo "version=$VERSION"
-            echo "filters=$FILTERS"
-            echo "is_plugin=$IS_PLUGIN"
-            echo "pkg_dir=$PKG_DIR"
+            echo "filters=--filter @hover-dev/core --filter @hover-dev/mcp"
           } >> "$GITHUB_OUTPUT"
-          echo "Publishing target=$TARGET version=$VERSION"
-
-      - name: Pin plugin's internal @hover-dev/* ranges to published versions
-        # A plugin (security / pentest) versions independently, so core is NOT
-        # bumped in this run and still reads 0.0.0 in the checkout. Left alone,
-        # pnpm would replace the plugin's `workspace:*` refs with `0.0.0` and
-        # publish uninstallable deps. Rewrite every internal @hover-dev/* ref to
-        # a real range against the LATEST published version before publish:
-        #   - @hover-dev/core      → peer `>=<ver>` (works with that core or newer)
-        #   - @hover-dev/api-test  → dep  `^<ver>`  (pentest's runtime dep on the
-        #     security MITM runtime — without this it would publish as ^0.0.0)
-        # CI-only — the repo keeps `workspace:*` for local dev.
-        if: steps.resolve.outputs.is_plugin == 'true'
-        run: |
-          CORE_VER="$(npm view @hover-dev/core version)"
-          SEC_VER="$(npm view @hover-dev/api-test version)"
-          if [ -z "$CORE_VER" ]; then
-            echo "::error::Could not read the published @hover-dev/core version from npm."
-            exit 1
-          fi
-          echo "Pinning core peer >=$CORE_VER; security dep ^${SEC_VER:-<none>}"
-          PKG="${{ steps.resolve.outputs.pkg_dir }}/package.json" CORE_VER="$CORE_VER" SEC_VER="$SEC_VER" node -e '
-            const fs = require("node:fs");
-            const f = process.env.PKG;
-            const coreVer = process.env.CORE_VER;
-            const secVer = process.env.SEC_VER;
-            const p = JSON.parse(fs.readFileSync(f, "utf8"));
-            for (const field of ["peerDependencies", "devDependencies", "dependencies"]) {
-              if (!p[field]) continue;
-              if (p[field]["@hover-dev/core"]) {
-                p[field]["@hover-dev/core"] = field === "peerDependencies" ? ">=" + coreVer : "^" + coreVer;
-              }
-              // @hover-dev/api-test is a runtime dep of @hover-dev/pentest; pin it
-              // to the published security so workspace:* never escapes as ^0.0.0.
-              if (p[field]["@hover-dev/api-test"]) {
-                if (!secVer) { console.error("@hover-dev/api-test not published; cannot pin"); process.exit(1); }
-                p[field]["@hover-dev/api-test"] = "^" + secVer;
-              }
-            }
-            fs.writeFileSync(f, JSON.stringify(p, null, 2) + "\n");
-          '
+          echo "Publishing @hover-dev/core + @hover-dev/mcp $VERSION"
 
       - name: Bump package versions in-place
         run: |
