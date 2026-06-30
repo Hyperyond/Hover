@@ -1,87 +1,86 @@
-# Hover — Vibe-test your app, ship real Playwright specs.
+# Hover — open-source Vibe Testing suite
 
 **English** · [简体中文](./README.zh-CN.md)
 
+[![npm @hover-dev/mcp](https://img.shields.io/npm/v/%40hover-dev%2Fmcp?label=npm%20%40hover-dev%2Fmcp&color=cb3837&logo=npm)](https://www.npmjs.com/package/@hover-dev/mcp)
 [![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/hyperyond.hover-dev?label=VS%20Marketplace&color=1f9cf0&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/hyperyond.hover-dev?label=installs&color=1f9cf0)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)
-[![Rating](https://img.shields.io/visual-studio-marketplace/stars/hyperyond.hover-dev?label=rating)](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev&ssr=false#review-details)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 [![Playwright](https://img.shields.io/badge/output-%40playwright%2Ftest-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-**Hover's AI tests your app like a real teammate and ships a real Playwright spec — a local-first, open-source VS Code extension.** Describe a flow in plain English; Hover spawns the coding-agent CLI you already run (Claude Code / OpenAI Codex / Gemini / Qwen, or a local model) to drive your real Chrome via Playwright MCP, then crystallizes clean runs into plain `@playwright/test` specs that pass CI with **zero AI**. Or switch to 🟢 **QA Testing** — the agent explores your whole app on its own, writes a findings report, and layers **API** and **penetration** testing on as toggles. ✦ optional AI optimize pass.
+**Point the coding agent you already run at Hover, and get a real Playwright test suite you own.** Hover is an open-source **Vibe Testing** suite: add its MCP server to your own agent (Claude Code, Cursor, …) and the agent explores your app, maps its business flows, and crystallizes each one into a plain `@playwright/test` spec under `__vibe_tests__/`. The saved tests are **yours** — they run in your CI with **zero AI** in the loop.
 
-## Install
+The differentiator is **record == replay**: the agent acts through Hover's *grounded* browser tools, so the selector that drove a click is the exact one saved, and crystallization is **deterministic** (no LLM writing code). No confabulated selectors, no runtime dependency on Hover, no lock-in.
 
-Install **[Hover from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** — open the Extensions view, search **`hover-dev`**, and click Install (or run `code --install-extension hyperyond.hover-dev`).
+## The suite — four surfaces, one artifact
 
-You also need **one coding-agent CLI** on your `PATH`: [Claude Code](https://claude.com/claude-code) (`npm i -g @anthropic-ai/claude-code`) or [OpenAI Codex](https://github.com/openai/codex) (`npm i -g @openai/codex`), signed in with your subscription or your own API key. That's the only thing to configure — Hover ships no model SDK and no keys of its own.
+| Surface | Role | What it is |
+|---|---|---|
+| **MCP** — `@hover-dev/mcp` | **author** | The engine. Add it to your own agent; `/mcp__hover__test_app` explores + crystallizes specs. BYO-CLI — your model, your subscription, no keys of ours. |
+| **VS Code** — `hover-dev` | **review** | An optional cockpit: a **Business Map** graph of your app's flows + coverage, a Dashboard (pass / fail / flaky + CI results), one-click run. |
+| **CI** | **run** | The crystallized specs run on every PR as plain Playwright — no agent, no tokens. Hover generates the workflow for you. |
+| **Cloud** *(optional, planned)* | **watch** | Hosted parallel runs, scheduled monitoring, a flakiness dashboard, on-failure self-heal — *over* the specs you already own. Never authoring lock-in. |
 
-## What you get
+The through-line is **the artifact**: owned, portable Playwright in your repo and your CI. The AI authors it once; nothing AI runs after.
 
-- **Chat to a real Playwright spec** — Describe what you want to verify in plain English; Hover drives your real app and crystallizes the verified run into a plain `@playwright/test` spec (`getByRole / getByLabel`, not CSS/XPath). The AI's job ends at "save" — CI is pure Playwright, with zero tokens and no key wired in.
-- **Tests like a real teammate** — When the agent hits something it can't safely decide (which account to use, an ambiguous step, a destructive action), it asks you right in the editor instead of guessing or stalling. Human-in-the-loop, the way a coworker checks in.
-- **Multi-environment accounts, `@`-mentionable** — Define test accounts per environment (local / staging / prod) once, then just mention `@account` in chat — the agent logs in for you. Credentials are parameterized into `process.env` references: never written into the spec, the JSDoc, or the sidecar, and the same names export to your CI secrets in one click.
-- **Your model — Local CLI or BYOK** — Two ways to provide a model, switchable in Settings. *Local CLI*: drive runs with a coding-agent CLI on your PATH (Claude Code, Codex, Gemini, Qwen) on the subscription you already pay for. *BYOK*: bring your own API key — pick a protocol (Anthropic / OpenAI / Azure OpenAI / Gemini) or an OpenAI-compatible gateway (Ollama Cloud, AIHubMix, …), and Hover injects the key + base URL + model into the matching CLI. Either can point at a self-hosted endpoint for a local model. Keys live in VS Code SecretStorage. No SDK, nothing leaves your computer (`@hover-dev/core` binds `127.0.0.1`, no telemetry, no upload path).
-- **Nothing new to learn** — The chat looks and works like Claude Code or Codex, so there's no new tool to learn. Install it, open the panel, describe a flow. No setup in your app, no bundler plugin, no config.
-- **QA Testing — explore, don't just script** — Switch from Flow (author one spec) to 🟢 **QA Testing**: the agent autonomously explores your app to find defects, paces itself by an intensity budget (Quick / Standard / Deep), writes a Markdown findings report with a coverage map, and offers each clean flow it completes as a one-click "Crystallize" spec. Two capability toggles ride on top: **API testing** (auth / status codes / access control / IDOR / broken authorization, via a local HTTPS MITM that replays captured API calls with mutations → `.api-test.spec.ts` CI gates) and **Penetration testing** (offensive, white-box: SQLi / XSS / SSTI / SSRF / open-redirect / IDOR against your **own** app — destructive, so it runs as a separate second pass, off by default). It remembers business rules it confirms so neither it nor a future run re-asks. No mitmproxy, no Python, no system CA.
-- **Deterministic, portable specs** — Every spec is plain Playwright that checks into git and runs without Hover. An optional, off-by-default **AI optimize pass** polishes a draft into a candidate you accept via diff (original always kept).
+## Quickstart
 
-## How it works
+Add the MCP to your agent (Claude Code shown — any MCP-capable agent works):
 
-```
-┌────────────────┐   chat (WebSocket)   ┌──────────────────┐
-│  Hover         │ ───────────────────▶ │  @hover-dev/core │
-│  (VS Code      │ ◀─────────────────── │  Node engine     │ ◀── plugins
-│   extension)   │   step events        │  (127.0.0.1)     │     (mode, MCPs)
-└────────────────┘                      └────────┬─────────┘
-                                                 │ spawn (sandboxed)
-                                                 ▼
-                                  claude / codex ── MCP ──▶ Playwright ── CDP ──▶
-                                  isolated debug Chrome (port 9222, tmp profile)
+```bash
+claude mcp add hover -- npx -y @hover-dev/mcp
 ```
 
-The engine ships inside the extension and spawns the coding-agent CLI on your `PATH`, sandboxed to Playwright MCP, driving an isolated debug Chrome over CDP — never your main profile, never a hosted service.
+Then, in your agent:
 
-## Run specs in CI
+```
+/mcp__hover__test_app           # explore the app and crystallize a suite
+/mcp__hover__test_app login     # …or scope it to one flow
+```
 
-Crystallized specs are plain `@playwright/test` — they run anywhere with no AI:
+Specs land in `__vibe_tests__/`. Run them anywhere, with no AI:
 
 ```bash
 npx playwright test __vibe_tests__
 ```
 
-Point them at any environment with `BASE_URL` (and the `HOVER_<LABEL>_*` account secrets); the same spec runs against local, staging, or a PR preview. Hover can generate a GitHub Actions workflow that runs them on every PR.
+Want a visual surface? Install the **[Hover VS Code extension](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** (`hyperyond.hover-dev`) for the Business Map graph + the Dashboard. It's a review cockpit — it drives no agent.
 
-## Modes
+## Why Hover
 
-Two modes in the same chat:
+- **record == replay** — grounded actuation + deterministic crystallize: the saved selector is the one that drove the run. Playwright codegen / Stagehand / Midscene can't guarantee this.
+- **You own the artifact** — plain `@playwright/test` in your repo, runs in your CI with zero AI. No proprietary format, no runtime dependency on Hover, no lock-in.
+- **BYO-CLI** — Hover bundles no AI runtime and no keys; it rides the coding agent + subscription you already pay for. We manage *how* to test, never *which* model.
+- **A living test wiki** — Hover maintains a business map + remembered rules in `.hover/`, so the suite compounds and stays self-aware as your app grows.
 
-| Mode | What it does |
-|---|---|
-| **Flow** | Describe a flow; the AI drives your app and crystallizes the verified run → a `.spec.ts` you run in CI |
-| 🟢 **QA Testing** | Autonomously explores the whole app → a findings report (+ coverage map) and promotable ✨ specs, bounded by an intensity budget (Quick / Standard / Deep) |
+## How it works
 
-QA Testing has two **capability toggles**:
+```
+your agent (Claude Code / Cursor)
+   │  MCP tools — grounded actuation
+   ▼
+@hover-dev/mcp ──▶ CDP ──▶ your debug Chrome ──▶ your app
+   │
+   └─ crystallize_spec ──▶ __vibe_tests__/<flow>.spec.ts   (plain Playwright, no AI)
+```
 
-- 🟠 **API testing** — MITM-replay auth-bypass / IDOR / broken-authz / parameter-tampering; confirmed findings → `.api-test.spec.ts` CI gates.
-- 🔴 **Penetration testing** — offensive, white-box (SQLi / XSS / SSTI / SSRF / IDOR) on your **own** app → a findings report. Destructive, so it always runs as a separate second pass; off by default (enabling it asks for confirmation).
-
-The API + Penetration capabilities run off a built-in **probe catalogue** — small recipes covering 8 access-control + 9 vulnerability classes, curated and shipped with Hover.
+The agent never freehand-writes the spec: it acts through grounded tools (`role+name → testId → text`), and Hover translates the recorded steps to Playwright deterministically — so what you replay is what you recorded.
 
 ## FAQ
 
-**My UI changed and my saved spec breaks.** Most UI churn doesn't — selectors are semantic, not CSS/XPath. When semantics shift, edit the spec by hand (it's plain Playwright) or treat it as a real regression. No CI-time auto-heal on purpose — CI stays deterministic and free. Automatic on-failure self-heal of UI-drifted specs is coming via **Hover Cloud**, not the local extension (which stays purely author + run).
+**Do I need the VS Code extension?** No. The MCP is the whole authoring loop. The extension is an optional review cockpit (Business Map + Dashboard).
 
-**Does Hover upload my source or DOM?** No. The CLI on your `PATH` talks to its own provider; `@hover-dev/core` has no upload path, no telemetry, binds `127.0.0.1`.
+**Does Hover upload my source or DOM?** No. Your agent talks to its own provider; Hover bundles no model, no keys, no telemetry, and has no upload path.
+
+**My UI changed and a spec breaks.** Selectors are semantic, so most churn doesn't break them. When it does, edit the plain Playwright by hand, or re-run `/mcp__hover__test_app <flow>` to re-crystallize. There's no CI-time auto-heal on purpose — CI stays deterministic and free; on-failure self-heal is a planned Cloud feature.
 
 ## Roadmap
 
-**Planned — Hover Cloud:** a hosted layer over your local specs (parallel runs, scheduled monitoring, a flakiness dashboard, on-failure AI self-heal of UI-drifted specs). Authoring stays local and free; the cloud only ever *runs and monitors* the specs you already own. [Join the waitlist](https://gethover.dev/#cloud).
+**Hover Cloud (planned, optional):** parallel runs, scheduled monitoring, a flakiness dashboard, and on-failure self-heal — a hosted layer *over* the specs you already own. Authoring stays local and free; the cloud only ever runs and watches the tests you own, never locking them in. [Join the waitlist](https://gethover.dev/#cloud).
 
-## Built on the shoulders of
+## Built on
 
-[**`nexu-io/open-design`**](https://github.com/nexu-io/open-design) (the **Local CLI Agent First** architecture), [**Playwright**](https://playwright.dev/) + its [**Codegen**](https://playwright.dev/docs/codegen), [**Stagehand**](https://github.com/browserbase/stagehand) / [**Midscene**](https://github.com/web-infra-dev/midscene) (proved an LLM can drive a real browser), and [**`microsoft/webwright`**](https://github.com/microsoft/webwright) (code-as-action). Hover shortens the loop: drive once at authoring, then step out.
+[**Playwright**](https://playwright.dev/) (+ [Codegen](https://playwright.dev/docs/codegen)), the [**Model Context Protocol**](https://modelcontextprotocol.io/), and the BYO coding-agent CLIs ([Claude Code](https://claude.com/claude-code) / [Codex](https://github.com/openai/codex) / …). [**Stagehand**](https://github.com/browserbase/stagehand) and [**Midscene**](https://github.com/web-infra-dev/midscene) proved an LLM can drive a real browser; Hover shortens the loop — drive once at authoring, then step out for good.
 
 ## Contributing
 
