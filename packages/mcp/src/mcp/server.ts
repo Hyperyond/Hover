@@ -219,6 +219,12 @@ tree — read before acting) · \`click_control\` / \`fill_control\` / \`select_
 
 Target: the app at HOVER_TARGET (set in the server's env). Scope: ${target}.
 
+## Ground rules (they protect record==replay AND the user's real app)
+- **Grounded targets only.** Pass role+name EXACTLY as they appear in the LATEST \`browser_snapshot\`. If a locate fails, re-snapshot and read the real target — never guess, invent, or reuse a stale name.
+- **It's the user's REAL app.** Avoid irreversible / destructive actions — real payments, deleting data you didn't create, sending real emails or SMS — unless the user confirms this is a safe test environment. When unsure, ASK first.
+- **Assert stable outcomes.** Assert on semantic, durable signals (a success message, a heading, a new row's label) — NEVER volatile instance data (timestamps, generated ids, "today", a one-off order number), which makes the saved spec flaky on replay.
+- **Log in first.** If the app needs auth, do that before anything else — ask for credentials if you don't have them — then crystallize it as its own "Log in" spec and stay logged in for the rest of the run.
+
 Work in PHASES — this is what lets it scale from a tiny app to a large one.
 
 ## Phase 1 — Map the business lines (read the CODE, don't click around)

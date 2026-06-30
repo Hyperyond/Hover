@@ -95,7 +95,7 @@ function deEsc(s: string): string {
 }
 
 /** Defensive leak-guard, NOT a parse path. The agent is directed to emit a
- *  plain-markdown report (REPORTING_DIRECTIVE) — no JSON. A non-compliant agent
+ *  plain-markdown report (the markdown-report contract) — no JSON. A non-compliant agent
  *  that still wraps its report in a ```json block would otherwise leak raw JSON
  *  to the UI, so strip it: recover the `summary` field as prose when present
  *  (tolerating unescaped quotes by matching up to `","findings"`), else drop the
@@ -116,7 +116,7 @@ function stripJsonArtifact(summary: string): string {
  * "writes out" the call (a known tool-calling glitch, common at end-of-turn /
  * budget cap) and the parser renders it verbatim into the report + Done card.
  * This keeps user-facing prose about the APP, not Hover's tooling
- * (REPORTING_DIRECTIVE). Defensive + total: any agent can trip this.
+ * (the markdown-report contract). Defensive + total: any agent can trip this.
  */
 export function stripToolCallNoise(text: string): string {
   return text
@@ -129,7 +129,7 @@ export function stripToolCallNoise(text: string): string {
     .trim();
 }
 
-/** Markdown-forced: the agent emits a plain-markdown report (REPORTING_DIRECTIVE)
+/** Markdown-forced: the agent emits a plain-markdown report (the markdown-report contract)
  *  — ONE outcome line, `- ` bullets, and an optional `## Findings` section with
  *  `- **severity** — text` items. Parse the summary + findings from that markdown
  *  only; a stray ```json block (a non-compliant agent) is stripped, never parsed
