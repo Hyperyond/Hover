@@ -28,7 +28,8 @@
 把 MCP 加进你的 agent(以 Claude Code 为例 —— 任何支持 MCP 的 agent 都行):
 
 ```bash
-claude mcp add hover -- npx -y @hover-dev/mcp
+npm i -g @hover-dev/mcp
+claude mcp add hover -- hover-mcp
 ```
 
 然后在你的 agent 里:

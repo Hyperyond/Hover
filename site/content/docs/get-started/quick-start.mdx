@@ -16,10 +16,11 @@ Add the Hover MCP to the coding agent you already run, then ask it to test your 
 
 ## Add the MCP
 
-One command (Claude Code shown — any MCP-capable agent works):
+Install the MCP globally, then register the bin (Claude Code shown — any MCP-capable agent works):
 
 ```bash
-claude mcp add hover -- npx -y @hover-dev/mcp
+npm i -g @hover-dev/mcp
+claude mcp add hover -- hover-mcp
 ```
 
 That's the whole install. Hover runs as an MCP server under your agent — no plugin in your project, no bundler-config edit, no new dependency, no keys of Hover's own.

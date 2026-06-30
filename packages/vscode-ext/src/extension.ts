@@ -103,14 +103,14 @@ export function deactivate(): void {
 // ── Install the Hover MCP server into the user's coding agent ───────────────
 // Hover is an MCP server; the user's own agent drives. This is the one-click
 // on-ramp: register it with Claude Code, or copy the command for other agents.
-const MCP_INSTALL_CMD = 'claude mcp add hover -- npx -y @hover-dev/mcp';
+const MCP_INSTALL_CMD = 'npm i -g @hover-dev/mcp && claude mcp add hover -- hover-mcp';
 
 async function installMcp(): Promise<void> {
   const RUN = 'Claude Code';
   const COPY = 'Copy command';
   const pick = await vscode.window.showQuickPick(
     [
-      { label: `$(terminal) ${RUN}`, description: 'Run `claude mcp add` in a terminal', id: RUN },
+      { label: `$(terminal) ${RUN}`, description: 'Install + register in a terminal', id: RUN },
       { label: `$(clippy) ${COPY}`, description: MCP_INSTALL_CMD, id: COPY },
     ],
     { title: 'Install the Hover MCP server', placeHolder: 'Add Hover to your coding agent' },

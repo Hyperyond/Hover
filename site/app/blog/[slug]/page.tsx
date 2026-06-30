@@ -128,7 +128,7 @@ export default async function BlogPost(
           your app and crystallizes plain Playwright specs you own.
         </p>
         <code className="mx-auto mt-5 block max-w-md overflow-x-auto rounded-md border border-line bg-bg px-4 py-3 font-mono text-[13px] text-mint">
-          claude mcp add hover -- npx -y @hover-dev/mcp
+          npm i -g @hover-dev/mcp && claude mcp add hover -- hover-mcp
         </code>
         <a
           href="/docs/get-started/quick-start/"

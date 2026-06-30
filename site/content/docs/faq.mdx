@@ -10,11 +10,14 @@ No. The MCP is the whole authoring loop — add it to your agent and run `/mcp__
 
 ## How do I install it?
 
-One command adds the MCP to your agent (Claude Code shown — any MCP-capable agent works):
+Install the MCP globally, then register the bin with your agent (Claude Code shown — any MCP-capable agent works):
 
 ```bash
-claude mcp add hover -- npx -y @hover-dev/mcp
+npm i -g @hover-dev/mcp
+claude mcp add hover -- hover-mcp
 ```
+
+Prefer the global install — the `npx -y @hover-dev/mcp` one-liner re-downloads on first launch and can exceed your agent's 30s MCP connect timeout.
 
 That brings both the grounded browser tools and the `/mcp__hover__test_app` command. There's no plugin in your project, no bundler-config edit, and no keys of Hover's own.
 

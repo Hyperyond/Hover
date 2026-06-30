@@ -20,7 +20,7 @@ We did not want to build that.
 
 ## What Hover does instead
 
-Hover is a free, open-source MCP server. You add it to the coding agent you already run — `claude mcp add hover -- npx -y @hover-dev/mcp` — and that is the whole transaction. There is no account, no seat, no monthly charge from us.
+Hover is a free, open-source MCP server. You add it to the coding agent you already run — `npm i -g @hover-dev/mcp && claude mcp add hover -- hover-mcp` — and that is the whole transaction. There is no account, no seat, no monthly charge from us.
 
 It holds no API key. It bundles no model SDK. It does not call Claude or Codex on your behalf and bill you for the round trip. Instead it rides the coding agent already sitting on your machine: `claude` (Claude Code), `codex` (OpenAI Codex), or any MCP-capable agent. When you ask that agent to test a flow, it calls Hover's grounded tools and drives. The model access runs on your subscription or your own key, through a tool you already trust. We are not in the middle of that call, and we are not invoiced for it, so there is nothing to mark up. The mechanism is covered in more detail in [bring your own CLI, no API key](/blog/bring-your-own-cli-no-api-key/).
 
