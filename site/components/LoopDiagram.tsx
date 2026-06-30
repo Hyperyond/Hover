@@ -112,24 +112,7 @@ export function LoopDiagram() {
 
   return (
     <div ref={rootRef} className="select-none" style={{ width: 440, maxWidth: '100%' }}>
-      <div
-        className="overflow-hidden rounded-xl shadow-[0_18px_48px_rgba(0,0,0,0.55)]"
-        style={{ background: BG, border: `1px solid ${LINE}` }}
-      >
-        {/* Panel chrome — a quiet caption bar, cohesive with the other demos */}
-        <div
-          className="flex items-center justify-between border-b px-4 py-2.5 font-mono text-[12px]"
-          style={{ borderColor: LINE, color: MUTE }}
-        >
-          <span className="flex items-center gap-2">
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: MINT }} />
-            The loop
-          </span>
-          <span style={{ color: DIM, fontSize: 11 }}>Author → Review → Run → Watch</span>
-        </div>
-
-        <div className="px-2 py-1">
-          <svg
+      <svg
             viewBox={`0 0 ${VB} ${VB}`}
             width="100%"
             role="img"
@@ -229,46 +212,17 @@ export function LoopDiagram() {
             {STAGES.map((s, i) => (
               <StageNode key={s.k} s={s} lit={active === i} reduced={reduced} />
             ))}
-          </svg>
-        </div>
-
-        {/* Footer — the payoff line, mirroring the other demos' status row */}
-        <div
-          className="flex items-center justify-between border-t px-4 py-2.5 font-mono text-[11px]"
-          style={{ borderColor: LINE, color: DIM }}
-        >
-          <span>
-            The loop spins · the <span style={{ color: MINT }}>artifact</span> stays
-          </span>
-          <span>
-            <span style={{ color: MUTE }}>Watch</span> · Cloud — planned
-          </span>
-        </div>
-      </div>
+      </svg>
     </div>
   );
 }
 
 /* ── Centre: the owned @playwright/test artifact ──────────────────────── */
 function CenterArtifact() {
-  const w = 168;
-  const h = 78;
-  const x = CX - w / 2;
-  const y = CY - h / 2;
   return (
     <g>
-      {/* soft glow puddle so the centre reads as the "core" */}
+      {/* soft glow puddle so the centre reads as the "core" — no card, text only */}
       <circle cx={CX} cy={CY} r={120} fill="url(#loop-center-glow)" />
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        rx={12}
-        fill={BG3}
-        stroke={MINT}
-        strokeWidth={1.5}
-      />
       <text
         x={CX}
         y={CY - 16}
