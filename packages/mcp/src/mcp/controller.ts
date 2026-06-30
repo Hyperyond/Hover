@@ -1,5 +1,5 @@
-import type { Page } from 'playwright-core';
-import { groundedLocate, type GroundedTarget, type SkillStep } from '@hover-dev/core/engine';
+import { request as pwRequest, type Page } from 'playwright-core';
+import { groundedLocate, type GroundedTarget, type SkillStep, type ApiCheck } from '@hover-dev/core/engine';
 
 /*
  * The hover-mcp engine, decoupled from the MCP wire layer so it's testable with
@@ -8,15 +8,35 @@ import { groundedLocate, type GroundedTarget, type SkillStep } from '@hover-dev/
  * testId → text), and Hover buffers each successful actuation as a SkillStep.
  * `crystallize` turns the buffer into a plain Playwright spec — record==replay,
  * because the buffered selectors ARE the ones that drove the page.
+ *
+ * API layer: while the agent drives the UI, Hover passively buffers the app's
+ * xhr/fetch traffic off the SAME CDP connection (no MITM proxy). The agent reads
+ * it with `capture_requests`, verifies a contract/authz check with
+ * `replay_request`, and crystallizes the worthwhile ones into a
+ * `*.api-test.spec.ts`. record == replay holds for the API layer too.
  */
 
 export type FactType = 'business-rule' | 'expected-behavior' | 'validation' | 'access-policy';
 
+/** A passively-observed xhr/fetch call (metadata + a light body shape). */
+export interface CapturedRequest {
+  method: string;
+  url: string;
+  status: number;
+  contentType?: string;
+  /** Request post data, truncated. */
+  requestBody?: string;
+  /** Top-level keys of a JSON response (a light shape hint). */
+  responseKeys?: string[];
+}
+
 export interface McpDeps {
   /** Resolve the live page on the app under test (launch/connect lazily). */
   getPage: () => Promise<Page>;
-  /** Write the buffered steps to a spec; returns the written path. */
+  /** Write the buffered steps to a UI spec; returns the written path. */
   crystallize: (name: string, description: string | undefined, steps: SkillStep[]) => Promise<{ path: string }>;
+  /** Write selected API checks to a `*.api-test.spec.ts`; returns the path. */
+  crystallizeApi: (name: string, description: string | undefined, checks: ApiCheck[]) => Promise<{ path: string }>;
   /** Persist a learned business rule to .hover/memory/ (rules only — no secrets). */
   recordFact?: (title: string, rule: string, type: FactType) => Promise<{ path: string } | { error: string }>;
   /** Recall known business knowledge from .hover/memory/ as a prompt block ('' if none). */
@@ -30,9 +50,15 @@ function describe(g: GroundedTarget): string {
   return '(no target)';
 }
 
+const MAX_CAPTURED = 200; // ring-buffer cap so a long run can't grow unbounded
+
 export class HoverMcpController {
   /** The grounded-action buffer — sliced by `crystallize`. */
   readonly steps: SkillStep[] = [];
+  /** Passively-observed xhr/fetch traffic — read by `capture_requests`. */
+  private readonly captured: CapturedRequest[] = [];
+  /** Pages we've already attached a network listener to (avoid duplicates). */
+  private readonly listening = new WeakSet<Page>();
 
   constructor(private readonly deps: McpDeps) {}
 
@@ -40,15 +66,48 @@ export class HoverMcpController {
     this.steps.push({ kind: 'step', tool, input });
   }
 
-  private async resolve(g: GroundedTarget) {
+  /** getPage + ensure the passive network listener is attached to it. */
+  private async livePage(): Promise<Page> {
     const page = await this.deps.getPage();
-    const loc = groundedLocate(page, g);
-    if (!loc) throw new Error(`pass role+name (preferred), or testId, or text — taken from the snapshot`);
-    return loc;
+    if (!this.listening.has(page)) {
+      this.listening.add(page);
+      page.on('response', (response) => {
+        void this.onResponse(response).catch(() => {});
+      });
+    }
+    return page;
+  }
+
+  private async onResponse(response: import('playwright-core').Response): Promise<void> {
+    const req = response.request();
+    const rt = req.resourceType();
+    if (rt !== 'xhr' && rt !== 'fetch') return; // API calls only — skip docs/assets
+    const contentType = (response.headers()['content-type'] || '').split(';')[0] || undefined;
+    let responseKeys: string[] | undefined;
+    if (contentType === 'application/json') {
+      try {
+        const body = await response.json();
+        if (body && typeof body === 'object' && !Array.isArray(body)) {
+          responseKeys = Object.keys(body as Record<string, unknown>).slice(0, 24);
+        }
+      } catch {
+        /* body unavailable / not JSON — metadata only */
+      }
+    }
+    const post = req.postData();
+    this.captured.push({
+      method: req.method(),
+      url: req.url(),
+      status: response.status(),
+      contentType,
+      requestBody: post ? post.slice(0, 2000) : undefined,
+      responseKeys,
+    });
+    if (this.captured.length > MAX_CAPTURED) this.captured.splice(0, this.captured.length - MAX_CAPTURED);
   }
 
   async navigate(url: string): Promise<string> {
-    const page = await this.deps.getPage();
+    const page = await this.livePage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     this.push('browser_navigate', { url });
     return `navigated to ${url}`;
@@ -56,8 +115,15 @@ export class HoverMcpController {
 
   /** ARIA snapshot of the page — the agent reads role+name from here. */
   async snapshot(): Promise<string> {
-    const page = await this.deps.getPage();
+    const page = await this.livePage();
     return await page.locator('body').ariaSnapshot();
+  }
+
+  private async resolve(g: GroundedTarget) {
+    const page = await this.livePage();
+    const loc = groundedLocate(page, g);
+    if (!loc) throw new Error(`pass role+name (preferred), or testId, or text — taken from the snapshot`);
+    return loc;
   }
 
   async click(g: GroundedTarget): Promise<string> {
@@ -97,6 +163,52 @@ export class HoverMcpController {
     return `✓ ${describe(g)} is visible`;
   }
 
+  /** Return the passively-observed xhr/fetch traffic (optionally filtered) as
+   *  JSON for the agent to reason over when deciding API checks. */
+  captureRequests(filter?: { urlContains?: string; method?: string }): string {
+    let rows = this.captured;
+    if (filter?.urlContains) rows = rows.filter((r) => r.url.includes(filter.urlContains!));
+    if (filter?.method) rows = rows.filter((r) => r.method.toUpperCase() === filter.method!.toUpperCase());
+    if (rows.length === 0) {
+      return 'No xhr/fetch traffic captured yet. Drive the app (navigate / click) so its API calls fire, then call this again.';
+    }
+    return JSON.stringify(rows.slice(-60), null, 2);
+  }
+
+  /** Send a (possibly mutated) request and return the response summary — the
+   *  API analogue of replaying a grounded step, so an authz/contract check is
+   *  VERIFIED against the live app before it's crystallized (no confabulation).
+   *  `authenticated` (default true) replays with the browser session's cookies;
+   *  false uses a fresh context (no session) for "requires auth" checks. */
+  async replayRequest(opts: {
+    method: string;
+    url: string;
+    headers?: Record<string, string>;
+    body?: unknown;
+    authenticated?: boolean;
+  }): Promise<string> {
+    const page = await this.livePage();
+    const authed = opts.authenticated !== false;
+    const ctx = authed ? page.context().request : await pwRequest.newContext();
+    try {
+      const m = opts.method.toUpperCase();
+      const reqOpts: { headers?: Record<string, string>; data?: unknown } = {};
+      if (opts.headers) reqOpts.headers = opts.headers;
+      if (opts.body !== undefined && m !== 'GET' && m !== 'HEAD') reqOpts.data = opts.body;
+      const res = await ctx.fetch(opts.url, { method: m, ...reqOpts });
+      const contentType = (res.headers()['content-type'] || '').split(';')[0] || '';
+      let preview = '';
+      try {
+        preview = contentType === 'application/json' ? JSON.stringify(await res.json()).slice(0, 800) : (await res.text()).slice(0, 400);
+      } catch {
+        /* no body */
+      }
+      return JSON.stringify({ status: res.status(), ok: res.ok(), contentType, body: preview, authenticated: authed }, null, 2);
+    } finally {
+      if (!authed) await ctx.dispose();
+    }
+  }
+
   /** Recall what earlier runs learned about this app's business rules. */
   async recall(): Promise<string> {
     if (!this.deps.recall) return 'No business memory available.';
@@ -112,7 +224,7 @@ export class HoverMcpController {
     return 'error' in res ? `✗ could not save fact: ${res.error}` : `✓ remembered: ${title}`;
   }
 
-  /** Crystallize the buffered flow → a plain Playwright spec, then clear the
+  /** Crystallize the buffered UI flow → a plain Playwright spec, then clear the
    *  buffer for the next flow. */
   async crystallize(name: string, description?: string): Promise<string> {
     if (this.steps.length === 0) return 'Nothing to crystallize yet — actuate some controls first.';
@@ -120,5 +232,14 @@ export class HoverMcpController {
     const { path } = await this.deps.crystallize(name, description, flow);
     this.steps.length = 0;
     return `✓ wrote ${path} (${flow.length} step${flow.length === 1 ? '' : 's'})`;
+  }
+
+  /** Crystallize agent-selected API checks → a `*.api-test.spec.ts`. The agent
+   *  decides WHICH calls are worth locking (a real contract / authz boundary),
+   *  not every captured request. */
+  async crystallizeApiSpec(name: string, description: string | undefined, checks: ApiCheck[]): Promise<string> {
+    if (!checks?.length) return 'No checks provided — pass the API checks you verified worth locking.';
+    const { path } = await this.deps.crystallizeApi(name, description, checks);
+    return `✓ wrote ${path} (${checks.length} check${checks.length === 1 ? '' : 's'})`;
   }
 }
