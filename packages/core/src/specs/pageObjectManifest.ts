@@ -1,15 +1,16 @@
 /**
- * Page Object manifest — the link between extraction (Stage 3b) and
- * consumption (Stage 3c).
+ * Page Object manifest — `.hover/page-objects.json` describing each emitted
+ * Page Object (class/method/fixture names + the signature prefix it replays).
+ * writeSpec reads it (`readPageObjectManifest`) to decide whether a freshly-saved
+ * spec's prefix matches an existing Page Object — if so it consumes
+ * `await loginPage.login(…)` and imports from `./fixtures` instead of re-emitting
+ * the steps inline.
  *
- * extractPageObjects writes `.hover/page-objects.json` describing each emitted
- * Page Object: its class/method/fixture names and the signature prefix it
- * replays. writeSpec reads it to decide whether a freshly-saved spec's prefix
- * matches a Page Object — if so it consumes `await loginPage.login(…)` and
- * imports from `./fixtures` instead of re-emitting the steps inline.
- *
- * Kept separate from extractPageObjects so writeSpec can read the manifest
- * without importing the detection/generation chain.
+ * NOTE: cross-spec reuse is currently DORMANT — the manifest writer
+ * (`writePageObjectManifest`) has no caller since the standalone extraction stage
+ * was removed, so the read path returns null and writeSpec emits Page Objects
+ * inline. Kept as the seam for when cross-spec Page Object reuse is wired into
+ * the MCP-first flow.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
