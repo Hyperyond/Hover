@@ -47,10 +47,6 @@ Candidates not yet wired: `cline`, `continue`, `kilo` (see the comment in `regis
 
 ## Cost & budget
 
-Default model is `sonnet`, not `opus` — a browser-driving session is ~5× cheaper. Override per invocation:
+Default model is `sonnet`, not `opus` — a browser-driving session is ~5× cheaper. Override per invocation with `HOVER_MODEL=opus`.
 
-```bash
-HOVER_MODEL=opus pnpm smoke
-```
-
-Hover's `--max-budget-usd 0.50` ceiling is a runaway-prompt safety belt. Phase-0 sessions empirically complete a 5-step task on the example frontend for well under $0.10.
+Hover's `--max-budget-usd 0.50` ceiling is a runaway-prompt safety belt. A typical 5-step browser-driving session completes for well under $0.10.

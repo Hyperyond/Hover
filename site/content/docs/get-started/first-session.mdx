@@ -1,83 +1,58 @@
 # Your first session
 
-A guided walkthrough of the Hover chat and views. Estimated time: 5 minutes.
+A guided walkthrough of one Hover run through your agent. Estimated time: 5 minutes.
 
 ## Prerequisites
 
-- Followed [Quick start](/docs/get-started/quick-start/) — the Hover extension is installed and your dev server is running.
-- The **Hover** icon is visible in the VS Code Activity Bar.
-- A debug Chrome on port 9222 (Hover prompts you to launch it on the first run).
+- Followed [Quick start](/docs/get-started/quick-start/) — `@hover-dev/mcp` is added to your agent and your dev server is running.
+- A coding agent that speaks MCP (Claude Code, Cursor, …), logged in.
+- On the first run, Hover prompts you to launch an isolated debug Chrome on port 9222.
 
-## Step 1 — Open the chat
+## Step 1 — Set up an environment (optional)
 
-Click the **Hover** icon in the Activity Bar to open the chat webview.
+You can let the agent log in for you without putting credentials in a spec. Define a test account and reference it by name; the agent signs in via `@account`. Credentials are parameterized into `process.env` references — never written into the spec, the JSDoc, or the sidecar — and the same names export to your CI secrets. (Account passwords are kept in VS Code SecretStorage if you use the cockpit, never in the committed roster.)
 
-You'll see:
-- A header pill `claude ▾` showing the active coding agent
-- A mode switch — Flow / 🟢 QA Testing (QA carries API + penetration toggles)
-- An empty conversation body
-- A composer with a textarea, a model pill, a voice (speech) toggle, and **Send**
+If you're working purely from the MCP in your own agent, just tell it the test credentials when it asks — it will ask rather than guess.
 
-Alongside the chat, the `hover` container has these views: **Dashboard** (your saved `__vibe_tests__/` specs, folder-grouped, with pass/fail and ✨ Optimize), **Conversations** (one record per agent run — agent, model, cost, outcome), **Network** (captured API calls; shown when QA's API / penetration toggles are on), and **Environments** (Local + remote targets and their accounts). A **Settings** view covers agent / model / browser visibility / speech / model API key.
+## Step 2 — Run the `test_app` prompt
 
-## Step 2 — Set up an environment (optional)
-
-Open the **Environments** view. The active environment drives the run target URL; remote targets skip the dev-server spawn entirely.
-
-Define a test account on an environment, then in chat just mention `@account` — the agent logs in for you. Credentials are parameterized into `process.env` references: never written into the spec, the JSDoc, or the sidecar. The same names export to your CI secrets in one click. (Account passwords are kept in VS Code SecretStorage, never in the committed roster.)
-
-## Step 3 — Send your first prompt
-
-Type a natural-language instruction describing a flow you want to verify on your app. For example:
+In your agent, invoke Hover's prompt:
 
 ```
-log in with @account, navigate to the dashboard, and verify
-the user's name appears in the header
+/mcp__hover__test_app           # explore the whole app and crystallize a suite
+/mcp__hover__test_app login     # …or scope it to one flow
 ```
 
-```
-add a product to cart, go to checkout, verify the total is correct
-```
+The prompt walks the agent through a phased, scale-aware loop:
 
-```
-submit the contact form with empty fields, verify each required-field
-error appears
-```
+1. **Map the business lines.** The agent reads your routes + nav with its own file tools and writes a checklist to `.hover/hover-map.md` — the plan for a large app.
+2. **Pick a scope.** If you named one, it covers that; otherwise it shows the uncovered lines and asks which to do now.
+3. **Cover each flow, one at a time.** For each: navigate → snapshot → exercise the real flow (`click_control` / `fill_control` / …) → assert the outcome → `crystallize_spec`.
+4. **Update coverage** in `hover-map.md`.
 
-Press `↵` or click **Send**. The button switches to **Stop** while the agent runs.
+## Step 3 — Watch the agent drive
 
+The agent calls Hover's [grounded tools](/docs/features/mcp-tools/) over CDP against your debug Chrome — `browser_snapshot` to read the page, then `click_control` / `fill_control` / `select_control` / `check_control` to act, and `assert_visible` on the outcome. Because it targets controls by `role+name`, the selector that drives each action is the exact one that gets saved.
 
+If the agent genuinely can't resolve something — is this a bug or by-design? what does this domain term mean? — it asks you rather than guessing, and when you confirm a durable rule it remembers it via `record_fact` (see [the living test wiki](/docs/features/living-wiki/)).
 
-Press `↵` or click **Send** to submit.
+## Step 4 — Crystallize
 
+The moment a flow is verified, the agent calls `crystallize_spec`, and Hover writes `__vibe_tests__/<slug>.spec.ts` — deterministically, using `getByRole` / `getByLabel` / `getByTestId`. No LLM writes the code. See [Crystallize a spec](/docs/features/save-as-spec/) for the shape of the file.
 
+## Step 5 — Run the spec without Hover
 
-## Step 4 — Watch the agent drive
-
-Events stream into the chat as the agent works. Tool steps fold under AI-narration titles:
-- `Opening page` / `Clicking …` / `Filling form` — tool calls, grouped under each natural-language intent
-- A spinner on the currently-running step
-- Running cost ($) ticks in the header
-
-The agent's verification report renders as a Result card at the end. If it found bugs, a Findings card appears alongside, severity-coloured.
-
-## Step 5 — Save the verified session
-
-When the run finishes, Hover asks **Save this run as a spec?** in the composer. Confirm and it writes `__vibe_tests__/<slug>.spec.ts` using `getByRole` / `getByLabel` / `getByTestId`.
-
-The extension's Save emits **only** the Playwright spec. It appears in the **Dashboard**, where you can also ✨ **Optimize** it (an optional AI pass you accept via diff — the original is always kept).
-
-## Step 6 — Run the spec without Hover
-
-The saved file is a plain `@playwright/test` spec. Run it like any other Playwright test in your project:
+The saved file is plain `@playwright/test`. Run it like any other Playwright test:
 
 ```bash
-npx playwright test __vibe_tests__/<slug>.spec.ts
+npx playwright test __vibe_tests__
 ```
 
 This is the point of crystallization: the AI authored the test once, but the saved spec runs forever in CI with zero agent involvement.
 
 ## What's next
 
-- [API & security testing](/docs/features/api-test/) — QA Testing's 🟠 API and 🔴 penetration capabilities
-- [Optimize a spec](/docs/features/optimization-pass/) — the optional diff-reviewed AI polish pass
+- [The MCP tools](/docs/features/mcp-tools/) — the full grounded tool surface and the `test_app` prompt.
+- [The living test wiki](/docs/features/living-wiki/) — what Hover remembers about your app under `.hover/`.
+- Want a visual surface? The optional **[VS Code cockpit](/docs/get-started/install/)** adds a Business Map graph + Dashboard. It reviews — it doesn't drive the agent.
+- [Optimize a spec](/docs/features/optimization-pass/) — the optional diff-reviewed AI polish pass.

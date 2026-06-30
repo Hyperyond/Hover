@@ -30,7 +30,7 @@ The two options on the table are manual clicking, which doesn't scale, and hand-
 
 The fix is to test the way you built. You described the feature in plain English to get it. Describe the flow in plain English to verify it.
 
-That's what [Hover](/) does. It's a free, open-source VS Code extension. You write something like "log in, add a product to the cart, check out with a saved card," and the agent drives your real Chrome to do exactly that. It uses the `claude` or `codex` CLI you already have on your machine, connected to your actual browser over CDP. No new account, no separate test harness, no headless approximation of your app. It runs the flow in the same browser you'd use to click through it yourself, so what it verifies is what a user would hit.
+That's what [Hover](/) does. It's a free, open-source MCP server you add to the coding agent you already run. You ask for something like "log in, add a product to the cart, check out with a saved card," and the agent drives your real Chrome to do exactly that. It rides the `claude` or `codex` CLI you already have on your machine, connected to your actual browser over CDP. No new account, no separate test harness, no headless approximation of your app. It runs the flow in the same browser you'd use to click through it yourself, so what it verifies is what a user would hit.
 
 You watch it go. If the flow works, you keep it. If it doesn't, you've found the bug before a user did, which was the entire point.
 

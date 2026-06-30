@@ -13,8 +13,8 @@ const GITHUB = 'https://github.com/Hyperyond/Hover';
 const DOCS = '/docs/';
 
 const LINKS: { href: string; label: string }[] = [
+  { href: '#walkthrough', label: 'Walkthrough' },
   { href: '#how', label: 'How it works' },
-  { href: '#comparison', label: 'Comparison' },
   { href: '#pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' },
   { href: '/blog/', label: 'Blog' },

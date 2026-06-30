@@ -1,0 +1,63 @@
+# The MCP tools
+
+Hover's authoring engine is an MCP server (`@hover-dev/mcp`) you add to the coding agent you already run. Once it's wired in, your agent gains a small set of **grounded** browser tools plus a `test_app` prompt. The agent drives your app through these tools — and because every action targets a control by `role+name → testId → text` read off the page snapshot, the selector that drove an action is the exact one Hover saves. That is what makes **record == replay** hold.
+
+## Install
+
+One command (Claude Code shown — any MCP-capable agent works):
+
+```bash
+claude mcp add hover -- npx -y @hover-dev/mcp
+```
+
+Adding the server brings both the tools and the `/mcp__hover__test_app` command. See [Install](/docs/get-started/install/) for other agents.
+
+## The `test_app` prompt
+
+The server ships its workflow as an MCP prompt, surfaced by Claude Code as `/mcp__hover__test_app`:
+
+```
+/mcp__hover__test_app           # map the app and crystallize a suite
+/mcp__hover__test_app login     # …or scope it to one area
+```
+
+The prompt walks the agent through a scale-aware loop: **map the business lines** (the agent reads your routes + nav with its own file tools), **pick a scope**, **cover each flow one at a time** (navigate → snapshot → exercise → assert → crystallize), then **update coverage** in `.hover/hover-map.md`. A large app doesn't have to finish in one pass — covering a batch and updating the map is a resumable unit.
+
+## The tools
+
+| Tool | Purpose |
+|---|---|
+| `browser_navigate(url)` | Open a URL in the app under test (the debug Chrome). |
+| `browser_snapshot()` | Read the page as an ARIA snapshot (role + accessible-name tree). The agent calls this **before** actuating, to get the exact `role+name` for the grounded tools. |
+| `click_control(target)` | Click a control by a grounded target (`role+name` preferred → `testId` → `text`). |
+| `fill_control(target, value)` | Type a value into a textbox / field by a grounded target. |
+| `select_control(target, value)` | Choose an option in a `<select>` by a grounded target. |
+| `check_control(target, checked?)` | Check or uncheck a checkbox / radio by a grounded target (handles `sr-only` / hidden inputs). |
+| `assert_visible(target)` | Assert a control / text is visible now — captures an `expect(...).toBeVisible()` into the saved spec. |
+| `recall_business_knowledge()` | Recall what earlier runs learned about this app (business rules, expected behaviours, access policies). The agent calls this at the start. |
+| `record_fact(title, rule, type?)` | Remember a durable **business rule** so neither this run nor a future one re-asks it. Rules only — never secrets, passwords, tokens, or personal data. |
+| `crystallize_spec(name, description?)` | Save the flow the agent just performed (the grounded actions since the last crystallize) as a plain `@playwright/test` spec in `__vibe_tests__/`. |
+
+### The grounded target
+
+The actuation tools take a small target shape read off the snapshot:
+
+```ts
+{
+  role?: string;    // ARIA role, e.g. 'button', 'textbox', 'link' — pair with name
+  name?: string;    // accessible name, exactly as shown — pair with role
+  testId?: string;  // a data-testid, if there is no clean role+name
+  text?: string;    // real visible text — last resort
+  within?: { role: string; name: string };  // scope to a container first
+}
+```
+
+This shape mirrors the agent-facing schema, so what you see here is what the agent receives in its tool catalogue.
+
+## Why grounded actuation
+
+A loose "click the Submit button" instruction doesn't round-trip to a replayable selector — it crystallizes as a confabulated `getByText` that may not match next time. Hover's grounded tools take a target read straight from the snapshot and run it through `page.getByRole(...)` / `getByTestId(...)` / `getByText(...)` over CDP. **The selector that drives the action is the one that gets saved**, so what you replay is what you recorded. No LLM rewrites the code at save time — [crystallization is deterministic](/docs/features/save-as-spec/).
+
+## The agent never freehand-writes the spec
+
+Only `crystallize_spec` writes files, and it doesn't ask the model to author Playwright — it translates the recorded grounded steps deterministically. The calling agent is the intelligence that explores; Hover guarantees fidelity at the output. Hover bundles no model and holds no key (BYO-CLI): the agent talks to its own provider.

@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
-const TITLE = 'Hover — Vibe-test your app, CI runs plain Playwright';
+const TITLE = 'Hover — open-source Vibe Testing suite, own the Playwright';
 const DESCRIPTION =
-  'A VS Code extension: chat to a test in your editor. AI drives your real Chrome once to explore a flow, then crystallises a standard @playwright/test spec that runs in CI with zero AI, zero tokens. Hover spawns the coding-agent CLI on your PATH — your subscription or your own API key.';
+  'Hover is an open-source Vibe Testing suite. Add its MCP server to the coding agent you already run (Claude Code, Cursor, …); the agent explores your app and crystallizes each flow into a plain @playwright/test spec you own, running in CI with zero AI. record == replay, BYO-CLI, no lock-in. An optional VS Code extension adds a Business Map + Dashboard review cockpit.';
 const OG_DESCRIPTION =
-  'A VS Code extension — AI explores once, then hands off a deterministic Playwright spec. Zero AI at runtime, zero tokens in CI.';
+  'Add Hover’s MCP to your own coding agent — it explores your app and crystallizes plain Playwright specs you own. record == replay, BYO-CLI, zero AI in CI.';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gethover.dev'),
@@ -20,18 +20,22 @@ export const metadata: Metadata = {
     'vibe-test',
     'vibe coding',
     'AI testing',
+    'MCP server',
+    'Model Context Protocol',
+    'MCP testing',
     'Playwright',
+    'Playwright MCP',
     'end-to-end testing',
     'test automation',
     'Playwright spec',
     'browser testing',
-    'CDP',
-    'VS Code extension',
+    'Claude Code',
+    'Cursor',
+    'coding agent',
+    'record equals replay',
+    'BYO CLI',
     'open source',
     'CI testing',
-    'natural language tests',
-    'AI security testing',
-    'pentest',
   ],
   authors: [{ name: 'Hyperyond' }],
   creator: 'Hyperyond',

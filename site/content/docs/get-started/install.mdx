@@ -1,39 +1,48 @@
 # Install
 
-Hover is a **VS Code extension**. There's no bundler plugin to install and nothing to add to your project — the extension drives your existing dev server over CDP regardless of framework.
+Hover authors tests through its **MCP server** (`@hover-dev/mcp`). You add it to the coding agent you already run — there's no bundler plugin, nothing to add to your project, and no model or keys of Hover's own (BYO-CLI). The agent drives your existing dev server over CDP regardless of framework.
 
-## Install the VS Code extension
+## Add the MCP to your agent
 
-Install it from the **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)**:
+One command wires Hover into your agent (Claude Code shown — any MCP-capable agent works):
 
-1. Open the Extensions view (`⇧⌘X` / `Ctrl+Shift+X`), search **`hover-dev`**, and click **Install** — or run `code --install-extension hyperyond.hover-dev`.
-2. That's it. (Building from source? `pnpm --filter hover-dev package` produces a `hover-dev-<version>.vsix` you can sideload via the `⋯` menu → **Install from VSIX…**.)
+```bash
+claude mcp add hover -- npx -y @hover-dev/mcp
+```
 
-That's the whole install for Hover itself. The extension ships the engine (`@hover-dev/core`) inside it and runs it under VS Code's own Node — no global service, no per-project plugin, no bundler config to edit.
+That's the whole install. The MCP server runs under your agent and exposes Hover's grounded browser tools + `/mcp__hover__test_app`. It bundles no LLM and takes no API keys — it rides the agent and subscription you already pay for.
+
+<Callout type="tip" title="Using Cursor or another agent?">
+
+Any MCP-capable coding agent can use Hover. Add `@hover-dev/mcp` as an MCP server in your agent's configuration (for Claude Code, the one-liner above; for others, point the server command at `npx -y @hover-dev/mcp`). The tools and the `/mcp__hover__test_app` flow are identical across agents.
+
+</Callout>
 
 ## Before you start
 
 You need two things:
 
-1. **VS Code** (or a VS Code-compatible editor) with the Hover extension installed.
-2. **One coding-agent CLI installed and logged in.** Hover spawns whichever you have on `PATH`; it doesn't bundle an LLM and doesn't take API keys.
+1. **A coding agent that speaks MCP** — Claude Code, Cursor, or similar, already installed and logged in. Hover rides whatever model that agent runs.
+2. **A dev server you already run** — any framework Hover can reach over CDP (Vite, Next.js, Nuxt, Astro, webpack). Hover drives it; it doesn't replace, wrap, or restart it.
 
-<Callout type="tip" title="Don't have an agent CLI yet?">
+On the first run, Hover prompts to launch an isolated debug Chrome on port 9222 (a clean temp profile under `<tmpdir>/hover-chrome` — never your everyday browser). Subsequent runs reuse it.
 
-- **Claude Code** — `npm install -g @anthropic-ai/claude-code`, then `claude login`. Uses your Claude Pro / Max subscription.
-- **OpenAI Codex** — `npm install -g @openai/codex`, then `codex login`. Uses your ChatGPT plan.
+## The optional VS Code cockpit
 
-Either one works. You can switch between agents from the chat header or Settings any time.
+If you want a visual surface, install the **[Hover VS Code extension](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** (`hyperyond.hover-dev`) — Extensions view (`⇧⌘X` / `Ctrl+Shift+X`), search `hover-dev`, **Install** (or `code --install-extension hyperyond.hover-dev`).
 
-</Callout>
-
-That's the only thing to configure — Hover ships no model SDK and no keys of its own. (Prefer a model API key over your CLI subscription? See [Use an API key](/docs/get-started/api-key/).)
+The extension is a **review cockpit**, not the engine: it adds a **Business Map** graph of your app's flows + coverage and a **Dashboard** (pass / fail / flaky + CI results). It drives no agent — authoring still happens through the MCP in your own agent.
 
 ## Use it
 
-Open your project in VS Code, start your dev server the way you already do (`pnpm dev` / `npm run dev` / …), then open the **Hover** chat from the Activity Bar and send a prompt. On the first run, Hover prompts you to launch an isolated debug Chrome on port 9222 (a clean temp profile — never your everyday browser). See [Your first session](/docs/get-started/first-session/) for the full walkthrough.
+Open your project, start your dev server the way you already do (`pnpm dev` / `npm run dev` / …), then in your agent run:
 
-Remote / staging targets, multi-environment accounts, and per-environment credentials are managed in the **Environments** view — see [Your first session](/docs/get-started/first-session/).
+```
+/mcp__hover__test_app           # explore the app and crystallize a suite
+/mcp__hover__test_app login     # …or scope it to one flow
+```
+
+Specs land in `__vibe_tests__/`. See [Your first session](/docs/get-started/first-session/) for the full walkthrough.
 
 ## Troubleshooting
 
@@ -45,8 +54,6 @@ Something else is on the port. Most often: a prior `next dev` / `vite` that didn
 lsof -i :5173 -t | xargs kill         # replace 5173 with your dev port
 ```
 
-If `lsof` shows a stale Hover engine on 51789–51798 too, kill those: `lsof -i :51789 -t | xargs kill`.
-
-### The chat can't reach a debug Chrome
+### The agent can't reach a debug Chrome
 
 On first use Hover offers to launch an isolated debug Chrome on port 9222 (a clean temp profile under `<tmpdir>/hover-chrome` — not your everyday browser). If a debug Chrome is already running but you're not in it, Hover brings the right window to the front. If 9222 is occupied by something else, free it: `lsof -i :9222 -t | xargs kill`.

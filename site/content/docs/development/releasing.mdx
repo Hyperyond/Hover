@@ -8,14 +8,15 @@ The **VS Code extension** (`hover-dev`) is the distribution. It is built, engine
 
 | Package | npm |
 |---|---|
+| `@hover-dev/mcp` | [https://www.npmjs.com/package/@hover-dev/mcp](https://www.npmjs.com/package/@hover-dev/mcp) |
 | `@hover-dev/core` | [https://www.npmjs.com/package/@hover-dev/core](https://www.npmjs.com/package/@hover-dev/core) |
 
-`@hover-dev/core` is the only package this repo still publishes to npm — it's the extension's engine. (The old bundler-plugin packages were removed; previously published versions remain on the registry as historical artifacts.) `@hover-dev/api-test` and `@hover-dev/pentest` are staged into the extension's bundled engine rather than published. All scoped packages live under the `@hover-dev` npm org (public access).
+`@hover-dev/mcp` (the authoring surface) and `@hover-dev/core` (the engine it rides on) are published lockstep on a `v*` tag. (The old bundler-plugin packages were removed; previously published versions remain on the registry as historical artifacts.) `@hover-dev/api-test` and `@hover-dev/pentest` are staged into the extension's bundled engine rather than published. All scoped packages live under the `@hover-dev` npm org (public access).
 
 ## Cutting a release
 
-1. Land all the PRs you want shipped on `main`. `main` must stay runnable — every commit on it should leave `pnpm typecheck` + `pnpm test` + `pnpm smoke` intact.
-2. Confirm `pnpm build` + the relevant smokes are clean locally.
+1. Land all the PRs you want shipped on `main`. `main` must stay runnable — every commit on it should leave `pnpm typecheck` + `pnpm test` intact.
+2. Confirm `pnpm build` is clean locally and the relevant manual end-to-end passes.
 3. Tag with an annotated message (the message becomes the leading body of the GitHub Release):
 
    ```bash

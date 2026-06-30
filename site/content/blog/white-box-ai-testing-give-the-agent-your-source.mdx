@@ -14,9 +14,9 @@ Turn on `codeContext` and that changes. Hover gives the agent read-only access t
 
 ## What the agent gets
 
-Two tools land next to Playwright MCP: `read_source` and `list_source`. The agent lists a directory, opens the files it needs, and stops. There is no write tool and no exec tool. It reads.
+Two tools land next to Hover's grounded browser tools: `read_source` and `list_source`. The agent lists a directory, opens the files it needs, and stops. There is no write tool and no exec tool. It reads.
 
-Enable `codeContext` in the Hover extension's Settings. The default is `false`. Off, the agent stays browser-only, which is the safest posture and the right one when you are pointing it at a third-party origin. On, it can read your tree.
+Source reading is opt-in and off by default. Off, the agent stays browser-only, which is the safest posture and the right one when you are pointing it at a third-party origin. On, it can read your tree.
 
 ## The fence is the feature
 
@@ -36,6 +36,6 @@ instead of inventing a brittle CSS path from the rendered class soup. When you c
 
 ## White-box security
 
-The bigger win is on the security side. Black-box security testing finds a symptom: a request that returns data it shouldn't. It can't tell you which handler skipped the check. With source access, the agent reads your route table, finds the endpoint that takes an ID straight from the path, and probes that one on purpose instead of fuzzing blind. The [security mode](/blog/test-idor-broken-access-control/) gets sharper, and so does [pentest mode](/blog/pentest-mode-attack-your-own-app/): both read the code to aim, then attack the running app to confirm.
+The bigger win is on the security side. Black-box security testing finds a symptom: a request that returns data it shouldn't. It can't tell you which handler skipped the check. With source access, the agent reads your route table, finds the endpoint that takes an ID straight from the path, and probes that one on purpose instead of fuzzing blind. [Access-control testing](/blog/test-idor-broken-access-control/) gets sharper, and so does an [offensive sweep](/blog/pentest-mode-attack-your-own-app/): both read the code to aim, then attack the running app to confirm.
 
 `codeContext` works in every mode, so you opt in once and the agent stays white-box whether it's writing a checkout test or hunting an IDOR. It's read-only, fenced, and off by default. Turn it on when you want the agent to test what you wrote, not just what it saw.

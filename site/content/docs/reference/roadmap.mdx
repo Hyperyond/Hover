@@ -2,6 +2,28 @@
 
 What's shipped, what's in flight.
 
+## Today — MCP-first, four surfaces
+
+Hover is an open-source Vibe Testing suite organised around four surfaces and one artifact:
+
+| Surface | Role | Status |
+|---|---|---|
+| **MCP** — `@hover-dev/mcp` | **author** — add it to your own agent; `/mcp__hover__test_app` explores + crystallizes a suite | ✅ Shipped (on npm) |
+| **VS Code** — `hover-dev` | **review** — an optional Business Map + Dashboard cockpit; drives no agent | ✅ Shipped (Marketplace) |
+| **CI** | **run** — the crystallized specs run on every PR as plain Playwright | ✅ Shipped |
+| **Cloud** | **watch** — hosted parallel runs, monitoring, flakiness dashboard, on-failure self-heal | Planned |
+
+The through-line is the artifact: owned, portable `@playwright/test` in your repo and your CI. The AI authors it once; nothing AI runs after.
+
+## What's next
+
+- **A living test wiki.** A richer `.hover/` memory layer — a relationship graph linking flows, pages, and the endpoints they touch, plus coverage-gap detection — over the business map + remembered rules that ship today. No source uploaded.
+- **Hover Cloud (planned, not shipped).** A hosted layer over the specs you already own: parallel runs, scheduled monitoring, a flakiness dashboard, and on-failure AI self-heal of UI-drifted specs (replaying a spec's recorded intent against the current UI and proposing a diff). Authoring always stays local and free; the cloud only ever *runs and monitors* specs you already own — never authoring lock-in.
+
+## Version history
+
+How Hover got here. The engine evolved through the version line below; today it ships as the `@hover-dev/mcp` server (and the optional VS Code cockpit).
+
 | Version | Theme | Status |
 |---|---|---|
 | **v0.0.1-poc** | Phase 0 — end-to-end feasibility (`claude -p` drives Chrome via CDP) | ✅ Shipped |
@@ -20,16 +42,7 @@ What's shipped, what's in flight.
 | **v0.13.x** | **Record/replay parity** — (1) visibility prelude in `writeSpec` emit (`{ const el = …; await expect(el).toBeVisible(); await el.<action>; }`) makes UI drift fail in ~3 s with `Locator expected to be visible` instead of 30 s actionability timeout; (2) Record mode emits `page.goto` as the first step (was: spec started on `about:blank` and failed mysteriously); (3) opt-in "Reload before recording" setting aligns record-time and replay-time starting state. Plus a `?drift=on` visibility-drift lab and 9 new vitest cases | ✅ Shipped |
 | **v0.14.x** | **Single-Chrome security + landing site** — security mode drops its second browser (one debug Chrome; a `hover:service:start` hook sets launch flags), gethover.dev lands, the widget gains `--mode-accent` plugin theming + CJK output mirroring | ✅ Shipped |
 | **v0.15.x** | **Structured spec output + CLI mode** — named `test.step` Given/When/Then stages, `.hover/<slug>.json` sidecars, Page Objects + fixtures (`hover extract`), `Promise.all` popup / upload / download pairing, the off-by-default **AI optimization pass** (`hover optimize` — diff-reviewed candidate, original always kept, `// KNOWN BUG` flagging), the `.hover/rules/` **seed library** (full catalogue ships built-in), terminal-native **`hover run`**, an optional model **API key** passed to the spawned CLI's env, the `add`→`setup` rename, and one Clack-style frame across every command. Save-as-Skill retired (spec + Re-record + seeds cover it) | ✅ Shipped (**you are here**) |
-| **VS Code extension (`hover-dev`)** | **The distribution** — chat in the editor (no in-page widget), engine bundled inside the extension, Specs / Sessions / Environments views, `@account` multi-environment credentials, 🟠 API testing + 🔴 Pentest modes, optional AI optimize pass, PR-CI workflow generation. The npm bundler-plugin path has been removed. | ✅ Shipped (on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)) |
-
-## What's next
-
-- **Chrome extension** as a possible sibling product. Targets the "AI tests any live site" use case (staging URLs, third-party sites, multi-origin flows). Likely a separate `hover-extension` repo because Chrome Web Store releases are manual and would mis-fit this monorepo's auto-publish workflow.
-- **Hover Cloud (planned, not shipped).** A hosted layer over your local specs — parallel runs, scheduled monitoring, a flakiness dashboard, and on-failure AI self-heal of UI-drifted specs (replaying a spec's recorded intent against the current UI and proposing a diff — batched across the specs Playwright reports as failing). Authoring always stays local and free; the cloud only ever *runs and monitors* specs you already own.
-
-## Beyond v0.15.x
-
-- **Voice mode Pro** (opt-in) — Deepgram Nova-3 streaming STT + ElevenLabs Flash / Cartesia Sonic TTS as an env-var-gated upgrade for users who want sub-100ms TTFA or higher-fidelity 中文 recognition. LLM stays on the user's local CLI agent — only the I/O adapters are cloud. Brings new privacy boundary (audio leaves the browser); will be opt-in, never default.
-- **AI-compiled spec output** — ✅ **shipped** as the off-by-default [optimization pass](/docs/features/optimization-pass/): the deterministic translator always emits the spec, and an optional LLM pass polishes it into a diff-reviewed candidate (original always kept). The AI is an authoring-time aid, never a CI dependency.
+| **VS Code extension (`hover-dev`)** | **The review cockpit** — a Business Map graph of your flows + coverage and a Dashboard (pass / fail / flaky + CI results), optional AI optimize pass, PR-CI workflow generation. Optional — it reviews, it doesn't drive the agent. | ✅ Shipped (on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)) |
+| **`@hover-dev/mcp`** | **The authoring engine** — an MCP server you add to your own agent (BYO-CLI). Grounded actuation tools + `crystallize_spec` + the `test_app` prompt; record == replay, deterministic crystallize. | ✅ Shipped (on npm) |
 
 For real-time tracking, see [github.com/Hyperyond/Hover/issues](https://github.com/Hyperyond/Hover/issues).

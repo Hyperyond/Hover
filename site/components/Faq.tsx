@@ -13,14 +13,27 @@ type Item = { q: string; a: string; answer: React.ReactNode };
 const ITEMS: Item[] = [
   {
     q: 'Do I have to learn a new tool or test format?',
-    a: 'No. The chat looks and works like Claude Code or Codex, so there is nothing new to learn. You install the extension, open the panel, and describe a flow. Nothing changes in your app, your bundler config, or your dependencies, and the file you get is standard @playwright/test that any Playwright user can read.',
+    a: 'No. Hover is an MCP server you add to the coding agent you already run (Claude Code, Cursor, …) with one command — you keep working in the agent you know. Nothing changes in your app, your bundler config, or your dependencies, and the file you get is standard @playwright/test that any Playwright user can read.',
     answer: (
       <>
-        No. The chat looks and works like Claude Code or Codex, so there is
-        nothing new to learn. You install the extension, open the panel, and
-        describe a flow. Nothing changes in your app, your bundler config, or
-        your dependencies, and the file you get is standard{' '}
-        <Code>@playwright/test</Code> that any Playwright user can read.
+        No. Hover is an MCP server you add to the coding agent you already run
+        (Claude Code, Cursor, …) with one command — you keep working in the
+        agent you know. Nothing changes in your app, your bundler config, or your
+        dependencies, and the file you get is standard <Code>@playwright/test</Code>{' '}
+        that any Playwright user can read.
+      </>
+    ),
+  },
+  {
+    q: 'Do I need the VS Code extension?',
+    a: 'No. The MCP server is the whole authoring loop — add it to your own agent and you are done. The VS Code extension is an optional review cockpit: a Business Map graph of your app’s flows and coverage, and a Dashboard of pass / fail / flaky and CI results. It drives no agent.',
+    answer: (
+      <>
+        No. The <Code>@hover-dev/mcp</Code> server is the whole authoring loop —
+        add it to your own agent and you are done. The VS Code extension is an
+        optional <em className="not-italic text-text">review cockpit</em>: a
+        Business Map graph of your app&rsquo;s flows and coverage, and a Dashboard
+        of pass / fail / flaky and CI results. It drives no agent.
       </>
     ),
   },
@@ -67,41 +80,27 @@ const ITEMS: Item[] = [
   },
   {
     q: 'Which AI agents and models can Hover use?',
-    a: 'Claude Code, OpenAI Codex, Gemini, and Qwen today, plus any local model behind a self-hosted OpenAI-compatible endpoint. Hover auto-detects the first agent on your PATH and lets you switch agent and model from the chat toolbar.',
+    a: 'Any MCP-capable coding agent — Claude Code, Cursor, and others. Hover is an MCP server, so it rides whatever agent and model you already run on your own subscription or key. Hover bundles no model and holds no keys.',
     answer: (
       <>
-        <Code>claude</Code>, <Code>codex</Code>, <Code>gemini</Code>, and{' '}
-        <Code>qwen</Code> today, plus any local model behind a self-hosted
-        OpenAI-compatible endpoint. Hover auto-detects the first agent on your{' '}
-        <Code>PATH</Code> and lets you switch agent and model from the chat
-        toolbar.
+        Any MCP-capable coding agent — <Code>Claude Code</Code>,{' '}
+        <Code>Cursor</Code>, and others. Hover is an MCP server, so it rides
+        whatever agent and model you already run on your own subscription or key.
+        Hover bundles no model and holds no keys.
       </>
     ),
   },
   {
-    q: 'How does Hover test pages behind a login?',
-    a: 'Define your test accounts once per environment, then mention @account in the chat and the agent logs in for you. Passwords live in VS Code SecretStorage and parameterize into process.env references, so they never land in the spec, the JSDoc, or git. The same names export to your CI secrets in one click.',
+    q: 'What does "record == replay" actually mean?',
+    a: 'The agent acts through Hover’s grounded browser tools (role+name → testId → text), so the selector that drove a click is the exact one written into the saved spec — and crystallization is deterministic, with no LLM writing code. There are no confabulated selectors: what you replay in CI is exactly what the agent recorded.',
     answer: (
       <>
-        Define your test accounts once per environment, then mention{' '}
-        <Code>@account</Code> in the chat and the agent logs in for you.
-        Passwords live in VS Code SecretStorage and parameterize into{' '}
-        <Code>process.env</Code> references, so they never land in the spec, the
-        JSDoc, or git. The same names export to your CI secrets in one click.
-      </>
-    ),
-  },
-  {
-    q: 'Is it safe to run the API testing and pentest capabilities in QA?',
-    a: 'Yes. Both are QA Testing toggles and run only against your own dev server, origin-locked to it. They need no mitmproxy, no Python, and no system CA. API testing replays captured API calls with mutations and crystallizes confirmed findings into .api-test.spec.ts gates; penetration testing is offensive, so it runs as a separate pass (off by default) and writes a report that states what it did and did not test.',
-    answer: (
-      <>
-        Yes. Both are QA Testing toggles and run only against your own dev server,
-        origin-locked to it. They need no mitmproxy, no Python, and no system CA.
-        API testing replays captured API calls with mutations and crystallizes
-        confirmed findings into <Code>.api-test.spec.ts</Code> gates; penetration
-        testing is offensive, so it runs as a separate pass (off by default) and
-        writes a report that states what it did and did not test.
+        The agent acts through Hover&rsquo;s <em className="not-italic text-text">grounded</em>{' '}
+        browser tools (<Code>role+name → testId → text</Code>), so the selector
+        that drove a click is the exact one written into the saved spec — and
+        crystallization is deterministic, with no LLM writing code. There are no
+        confabulated selectors: what you replay in CI is exactly what the agent
+        recorded.
       </>
     ),
   },

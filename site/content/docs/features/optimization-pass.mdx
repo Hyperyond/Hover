@@ -20,7 +20,7 @@ the original behind your back.
 
 ## You always keep the original
 
-The pass writes a **candidate** to `.hover/optimized/<slug>.spec.ts.draft` — a
+The pass writes a **candidate** to `.hover/cache/optimized/<slug>.spec.ts.draft` — a
 path the Playwright runner never collects. You review the diff (the candidate
 opens automatically in a diff view) and either **promote** it (it replaces the
 spec; the prior version is in git) or **discard** it. The deterministic original
@@ -28,15 +28,15 @@ is the fallback, always.
 
 ## When it runs
 
-The optimization pass is **off by default**. Trigger it from the **Specs** view's
-✨ **Optimize** action. It writes a diff-reviewed candidate; the original is
-always kept and never auto-promoted.
+The optimization pass is **off by default**. Trigger it from the optional VS Code
+cockpit's **Dashboard** (the ✨ **Optimize** action). It writes a diff-reviewed
+candidate; the original is always kept and never auto-promoted.
 
 ## Why it doesn't dent the moat
 
-The pass is a code-generation helper issued by the local service — its input is
-data the service already holds (the draft, the [sidecar](/docs/features/structured-output/),
-the built-in seeds), never live page content. It runs through the same validator as the
-deterministic path (no XPath, no `waitForTimeout`, must parse). And it never
+The pass is a local code-generation helper — its input is data Hover already
+holds (the draft, the [sidecar](/docs/features/structured-output/), the
+built-in seeds), never live page content. It runs through the same validator as
+the deterministic path (no XPath, no `waitForTimeout`, must parse). And it never
 becomes the spec without a human diff. CI still runs plain Playwright, zero
 tokens.

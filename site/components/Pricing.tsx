@@ -7,12 +7,12 @@
  * owns the email-capture modal. */
 
 const OSS_INCLUDES = [
-  'The VS Code extension — chat, Specs, Sessions, Environments',
-  'Chat any flow in plain English → a Playwright spec',
-  '@account multi-environment credential vault',
-  '🟢 QA Testing — autonomous exploration + API & pentest toggles',
-  'BYO local CLI — claude / codex, your plan or your key',
-  'Self-hosted, Apache-2.0, no telemetry',
+  'The @hover-dev/mcp server — add it to your own coding agent',
+  'Agent explores your app → plain @playwright/test specs you own',
+  'record == replay — grounded actuation + deterministic crystallize',
+  'Optional VS Code cockpit — Business Map graph + Dashboard',
+  'CI integration — runs as plain Playwright, zero AI, zero tokens',
+  'BYO-CLI — your model, your subscription; Apache-2.0, no telemetry',
 ];
 
 const CLOUD_INCLUDES = [
@@ -70,7 +70,7 @@ export function Pricing() {
               href="#install"
               className="mt-8 block rounded-md border border-[rgba(124,255,168,0.5)] bg-mint px-5 py-3 text-center text-[14px] font-semibold text-bg transition-all hover:bg-[#5cf094]"
             >
-              Install the extension →
+              Add the MCP →
             </a>
           </div>
         </article>

@@ -74,8 +74,8 @@ The teams shipping AI-generated code at volume will lean toward durable artifact
 
 ## How Hover does vibe testing
 
-[Hover](/docs/get-started/install/) is a free, open-source VS Code extension built on the durable-artifact side of that line. You describe a flow in plain English. The agent drives your real Chrome over the DevTools Protocol, using the `claude` or `codex` CLI you already run, and works out the steps. When the run is clean, Hover crystallizes it into a standard `@playwright/test` spec.
+[Hover](/docs/get-started/) is a free, open-source MCP server built on the durable-artifact side of that line. You add it to the coding agent you already run; the agent drives your real Chrome over the DevTools Protocol through Hover's grounded tools and works out the steps. When the run is clean, Hover crystallizes it into a standard `@playwright/test` spec.
 
-That spec is the whole point. It runs in CI with no AI, no tokens, and no variance, the same as any Playwright test you wrote by hand. We've written about [why AI-authored tests should leave no AI in CI](/blog/ai-authored-playwright-tests/), and the same chat flips into [security and pentest modes](/blog/security-and-pentest-in-the-same-editor-chat/) for the access-control holes that vibe-coded apps [ship by default](/blog/vibe-coded-apps-ship-security-holes/).
+That spec is the whole point. It runs in CI with no AI, no tokens, and no variance, the same as any Playwright test you wrote by hand. We've written about [why AI-authored tests should leave no AI in CI](/blog/ai-authored-playwright-tests/), and the same agent can probe the access-control holes that vibe-coded apps [ship by default](/blog/vibe-coded-apps-ship-security-holes/).
 
 Vibe-code the feature if you want. Then vibe-test it, and keep a real Playwright spec when you're done.

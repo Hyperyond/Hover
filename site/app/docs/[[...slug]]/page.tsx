@@ -30,7 +30,8 @@ export async function generateMetadata(
     // title isn't doubled (e.g. "… · Hover docs · Hover").
     return {
       title: { absolute: 'Hover docs' },
-      description: 'Everything you need to author end-to-end tests with Hover.',
+      description:
+        'Add Hover’s MCP to your coding agent and crystallize plain Playwright specs you own. Install, the MCP tools, architecture, and the FAQ.',
       alternates: { canonical: '/docs/' },
     };
   }

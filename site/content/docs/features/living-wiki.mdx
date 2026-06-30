@@ -1,0 +1,32 @@
+# The living test wiki
+
+Everything Hover derives about your app lives under `.hover/` in your project root, committed with your code. Over time it becomes a **living test wiki**: a business map of your app's flows plus the rules earlier runs learned, so the suite compounds and stays self-aware as your app grows.
+
+## What's under `.hover/`
+
+| Path | What it is |
+|---|---|
+| `hover-map.md` | The **business map** — a checklist of your app's business lines grouped by area, each marked covered (`[x]`) with the spec it produced, or open (`[ ]`). The agent reads and extends it on every run; it doubles as the plan for a large app. |
+| `memory/` | **Remembered rules** — durable business rules, expected behaviours, validation rules, and access policies the agent recorded via `record_fact`. Rules only — never secrets or personal data. |
+| `sidecars/<slug>.json` | The structured `SpecStep[]` record per crystallized spec — the machine-readable record the [optimization pass](/docs/features/optimization-pass/) reads. |
+| `cache/` | Disposable working data (e.g. optimization candidates under `cache/optimized/`). |
+
+The crystallized specs themselves live in `__vibe_tests__/`, not under `.hover/`.
+
+## Recall before re-asking
+
+At the start of a run the agent calls `recall_business_knowledge` and reads `hover-map.md`, then treats both as ground truth — so it doesn't re-ask questions an earlier run already settled, and it continues the map instead of starting over. When you confirm a durable rule ("a viewer can't edit another user's post"), the agent calls `record_fact` to persist it for every future run.
+
+## Why it's owned and portable
+
+`.hover/` is plain Markdown and JSON in your repo. There's no hosted database, no account, and no upload path — your app's accumulated test knowledge is yours, versioned alongside the code it describes. This is the backbone of the moat: the artifact (your specs) plus the knowledge that maintains them both live with you.
+
+<Callout type="note" title="What ships built-in vs what lives in your repo">
+
+The probe / seed **catalogue** that teaches the optimization pass ships built-in to the packages. What lands in *your* `.hover/` is only what the agent learned about *your* app — the map, the remembered rules, and the per-spec sidecars.
+
+</Callout>
+
+## Planned: deeper memory
+
+A richer memory layer — a relationship graph linking flows, pages, and the endpoints they touch, plus coverage-gap detection — is on the [roadmap](/docs/reference/roadmap/). The map and remembered rules ship today.
