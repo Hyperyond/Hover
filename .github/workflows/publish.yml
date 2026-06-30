@@ -123,11 +123,12 @@ jobs:
         run: |
           # The bundler-plugin / in-page-widget packages (vite-plugin-hover,
           # @hover-dev/{astro,nuxt,next,cli,widget-bootstrap}, webpack-plugin-hover,
-          # @hover-dev/transform-source) were removed — that npm path is retired
-          # (the VS Code extension is the surface). Only @hover-dev/core remains
-          # on the main v* track; the security / pentest plugins version on their
-          # own tag prefixes below.
-          MAIN_FILTERS="--filter @hover-dev/core"
+          # @hover-dev/transform-source) were removed — that npm path is retired.
+          # The main v* track now publishes @hover-dev/core + @hover-dev/mcp
+          # LOCKSTEP (mcp depends on core via workspace:* → pnpm rewrites it to
+          # the published core version when both publish in the same run). The
+          # security / pentest plugins version on their own tag prefixes below.
+          MAIN_FILTERS="--filter @hover-dev/core --filter @hover-dev/mcp"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TARGET="${{ inputs.target }}"
             VERSION="${{ inputs.version }}"
