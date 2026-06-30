@@ -1,20 +1,29 @@
 # Features
 
-What Hover does today, in the VS Code extension and its living surfaces.
+What Hover does today, across its four surfaces — authored through the MCP, reviewed in the optional cockpit, run in CI.
 
-## Modes
+## Authoring — the MCP
 
-- **Flow** — describe a flow; the agent drives your app and crystallizes the verified run into a `.spec.ts` for CI.
-- **🟢 QA Testing** — autonomously explores the whole app to find defects → a findings report (with a coverage map) and ✨ promotable specs, bounded by an intensity budget (Quick / Standard / Deep). Two **[API & security](/docs/features/api-test/)** capability toggles ride on top: **API testing** routes the debug Chrome through a local HTTPS MITM and replays captured calls with mutations, probing IDOR / broken authorization / parameter tampering (→ `.api-test.spec.ts` CI gates); **penetration testing** runs offensive checks (SQLi / XSS / SSTI / SSRF / open-redirect / IDOR) against your **own** dev app, as a separate destructive pass (off by default) → a report.
+The authoring engine is an **MCP server** (`@hover-dev/mcp`) you add to the coding agent you already run. Once it's wired in, your agent gets Hover's grounded browser tools plus a `test_app` prompt that explores your app and crystallizes a suite.
 
-## Authoring
-
-- **[@account multi-environment credentials](/docs/get-started/first-session/#step-2-set-up-an-environment-optional)** — define test accounts per environment, mention `@account` in chat, and the agent logs in. Credentials are parameterized into `process.env` references — never written into the spec, the JSDoc, or the sidecar — and the same names export to your CI secrets in one click.
-- **white-box `codeContext`** — an opt-in, read-only source reader the agent can use to ground its testing in your code. Off by default; fenced to read-only.
+- **[The MCP tools](/docs/features/mcp-tools/)** — the grounded actuation tools (`click_control` / `fill_control` / `select_control` / `check_control`), `browser_navigate` / `browser_snapshot`, `crystallize_spec`, the `recall` / `record_fact` memory tools, and the `test_app` prompt. The agent acts through these so the selector that drove an action is the exact one saved.
+- **[@account multi-environment credentials](/docs/get-started/first-session/#step-2-set-up-an-environment-optional)** — define test accounts per environment; the agent logs in via `@account`. Credentials are parameterized into `process.env` references — never written into the spec, the JSDoc, or the sidecar.
+- **white-box source reading** — an opt-in, read-only source reader the agent can use to ground its testing in your code. Off by default; fenced to read-only.
 
 ## Output
 
-- **[Save as Spec](/docs/features/save-as-spec/)** — `__vibe_tests__/<slug>.spec.ts` using `getByRole / getByLabel / getByTestId`. Runs in CI without Hover. Every interaction is wrapped in a visibility prelude so UI drift fails in ~3 s with `Locator expected to be visible` instead of a 30 s actionability timeout.
-- **[Save as an API-test spec](/docs/features/api-test-spec/)** — `__vibe_tests__/<slug>.api-test.spec.ts` using Playwright's `request` fixture. Crystallises authz / IDOR / parameter-tampering probes into CI-runnable regression specs.
-- **[Structured spec output](/docs/features/structured-output/)** — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, a `.hover/<slug>.json` sidecar, and Page Objects + fixtures lifted from flows repeated across specs.
-- **[Optimize a spec](/docs/features/optimization-pass/)** — an optional, off-by-default AI pass polishes a deterministic draft into a diff-reviewed candidate: adds the assertions the run observed, flags buggy behaviour `// KNOWN BUG`, always keeps the original. Run it from the Dashboard's ✨ Optimize.
+- **[Crystallize a spec](/docs/features/save-as-spec/)** — `__vibe_tests__/<slug>.spec.ts` using `getByRole` / `getByLabel` / `getByTestId`, emitted **deterministically** (no LLM writing code). Runs in CI without Hover. Every interaction is wrapped in a visibility prelude so UI drift fails in ~3 s with `Locator expected to be visible` instead of a 30 s actionability timeout.
+- **[Structured spec output](/docs/features/structured-output/)** — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, a `.hover/sidecars/<slug>.json` sidecar, and Page Objects + fixtures lifted from flows repeated across specs.
+- **[Optimize a spec](/docs/features/optimization-pass/)** — an optional, off-by-default AI pass polishes a deterministic draft into a diff-reviewed candidate: adds the assertions the run observed, flags buggy behaviour `// KNOWN BUG`, always keeps the original.
+
+## Memory
+
+- **[The living test wiki](/docs/features/living-wiki/)** — Hover maintains a business map of your app's flows + remembered rules under `.hover/`, committed with your code. The suite compounds and stays self-aware as your app grows.
+
+## Review — the optional cockpit
+
+The **[VS Code extension](/docs/get-started/install/)** (`hyperyond.hover-dev`) is an optional review cockpit, not the engine: a **Business Map** graph of your flows + coverage, and a **Dashboard** (pass / fail / flaky + CI results), with one-click run. It reviews — it drives no agent.
+
+## Run — CI
+
+The crystallized specs are plain `@playwright/test`. They run on every PR with no agent, no tokens, no key. Hover can generate the GitHub Actions workflow and pull the run results back into the Dashboard.

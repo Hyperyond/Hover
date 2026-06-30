@@ -1,6 +1,8 @@
 # Agent registry
 
-Hover doesn't bundle an AI runtime. Each supported coding-agent CLI is a single `AgentDescriptor` entry in [`packages/core/src/agents/registry.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/agents/registry.ts). Hover auto-detects the first one installed on your `PATH`; you switch agent and model from the chat toolbar and Settings.
+Hover bundles no AI runtime (BYO-CLI). In the **MCP-first** flow, the intelligence is *your* agent — you add `@hover-dev/mcp` to whatever MCP-capable coding agent you already run (Claude Code, Cursor, …), and it talks to its own provider; Hover holds no key.
+
+Hover's **engine** (`@hover-dev/core`) also knows how to spawn a coding-agent CLI directly — this is what the optional VS Code cockpit's chat uses. Each supported CLI is a single `AgentDescriptor` entry in [`packages/core/src/agents/registry.ts`](https://github.com/Hyperyond/Hover/blob/main/packages/core/src/agents/registry.ts); the engine auto-detects the first one installed on your `PATH`.
 
 ## Supported agents
 

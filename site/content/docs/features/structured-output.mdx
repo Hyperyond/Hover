@@ -17,10 +17,11 @@ grow as you save more flows.
   Playwright needs, and the subsequent steps are retargeted onto the new page —
   no race on replay.
 - **A structured sidecar.** Alongside `<slug>.spec.ts`, Hover writes
-  `.hover/<slug>.json` — the structured `SpecStep[]` plus the signals the run
-  observed. It's the machine-readable record the [optimization
+  `.hover/sidecars/<slug>.json` — the structured `SpecStep[]` plus the signals
+  the run observed. It's the machine-readable record the [optimization
   pass](/docs/features/optimization-pass/) reads, and it keeps the spec file
-  itself clean.
+  itself clean. See [the living test wiki](/docs/features/living-wiki/) for
+  what else lives under `.hover/`.
 
 ## Page Objects from repeated flows
 

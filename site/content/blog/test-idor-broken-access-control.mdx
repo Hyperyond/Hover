@@ -1,6 +1,6 @@
 ---
 title: "Test for IDOR and broken access control from your dev browser"
-description: "Broken access control is the #1 web security risk and rarely gets an automated test. Hover's security mode replays your app's own API calls with mutated IDs and tokens, then saves the probe as a Playwright spec."
+description: "Broken access control is the #1 web security risk and rarely gets an automated test. Point your agent at Hover and it replays your app's own API calls with mutated IDs and tokens, then crystallizes the probe as a Playwright spec."
 date: 2026-06-07
 author: "Hover"
 tags: [security, idor, access-control]
@@ -16,14 +16,14 @@ An IDOR (insecure direct object reference) is simple: the server trusts an ID in
 
 ## Replay your own requests, mutated
 
-Switch the Hover VS Code extension into 🟠 Security mode and the orange bar comes on. A local MITM proxy (built on [mockttp](https://github.com/httptoolkit/mockttp), no Python and no system CA install) starts recording every HTTPS call your dev page makes. Now you have the real requests, carrying real session cookies, sitting in a panel.
+Hover can route your debug browser through a local HTTPS man-in-the-middle proxy (built on [mockttp](https://github.com/httptoolkit/mockttp), no Python and no system CA install) that records every call your dev page makes. The real requests — carrying real session cookies — become material the agent can work with.
 
-From there you point the agent at them: re-issue `GET /api/invoices/1043` with the next ID, drop the auth header, swap a tenant parameter. It checks whether the response leaks data it shouldn't, the probe a happy-path test never runs.
+From there you point the agent at them: re-issue `GET /api/invoices/1043` with the next ID, drop the auth header, swap a tenant parameter. It checks whether the response leaks data it shouldn't — the probe a happy-path test never runs.
 
-It's a switch in the editor chat. No config, and the extension drives whatever dev server you point it at over CDP.
+There's no separate tool to set up. The agent drives whatever dev server you point Hover at, over CDP.
 
 ## A finding becomes a regression test
 
-When the agent confirms a hole, you save it. Hover writes `__vibe_tests__/<slug>.api-test.spec.ts`: plain Playwright on the `request` fixture, one `test()` per check, recording the intent and the status code each one expects. It runs in CI with `npx playwright test`, no proxy and no agent, so the authz hole you found today stays closed.
+When the agent confirms a hole, Hover crystallizes it into `__vibe_tests__/<slug>.api-test.spec.ts`: plain Playwright on the `request` fixture, one `test()` per check, recording the intent and the status code each one expects. It runs in CI with `npx playwright test`, no proxy and no agent, so the authz hole you found today stays closed.
 
-[Read the security-testing docs →](/docs/features/api-test/) · [Save as Security spec →](/docs/features/api-test-spec/)
+[Read about pointing an offensive agent at your own app →](/blog/pentest-mode-attack-your-own-app/)
