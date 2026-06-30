@@ -2,8 +2,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Sparkle } from '@/components/Sparkle';
-import { WidgetDemo } from '@/components/WidgetDemo';
-import { InstallButton, MARKETPLACE_URL } from '@/components/InstallButton';
+import { McpDemo } from '@/components/McpDemo';
+import { BusinessMapDemo } from '@/components/BusinessMapDemo';
+import {
+  InstallButton,
+  CockpitButton,
+  MCP_INSTALL,
+  NPM_URL,
+  MARKETPLACE_URL,
+} from '@/components/InstallButton';
 import { Waitlist } from '@/components/Waitlist';
 import { Nav } from '@/components/Nav';
 import { VideoSection } from '@/components/VideoSection';
@@ -11,8 +18,6 @@ import { Coverage } from '@/components/Coverage';
 import { Comparison } from '@/components/Comparison';
 import { Pricing } from '@/components/Pricing';
 import { Faq } from '@/components/Faq';
-import { AskDemo } from '@/components/AskDemo';
-import { EnvDemo } from '@/components/EnvDemo';
 
 /* The walkthrough lives on YouTube; the landing page only shows a poster that
  * links out (no self-hosted asset, no iframe on load). `asset()` appends a
@@ -40,20 +45,25 @@ const DOCS = '/docs/';
  *  the node LLM answer engines quote when asked "what is Hover". It lives here
  *  (not in the sitewide layout) so it appears once, on the page it describes.
  *  featureList gives generative engines a clean, quotable feature enumeration.
- *  Every string must match the shipped product — these get cited verbatim. */
+ *  Every string must match the shipped product — these get cited verbatim.
+ *  Hover is MCP-first: the authoring engine is an MCP server (@hover-dev/mcp)
+ *  that plugs into the user's OWN coding agent — so it's a DeveloperApplication
+ *  installed via npx, not a VS Code extension. The extension is the optional
+ *  review cockpit. */
 const JSON_LD = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
   '@id': 'https://gethover.dev/#software',
   name: 'Hover',
-  alternateName: 'Hover — AI Vibe Testing',
+  alternateName: 'Hover — open-source Vibe Testing suite',
   applicationCategory: 'DeveloperApplication',
   applicationSubCategory: 'Test automation',
-  operatingSystem: 'Visual Studio Code (macOS, Windows, Linux)',
+  operatingSystem: 'macOS, Windows, Linux (Node.js 20+)',
   description:
-    'Hover is an open-source VS Code extension for AI vibe-testing web apps. You describe a flow in plain English; Hover drives your real Chrome over CDP using the coding-agent CLI already on your machine (Claude Code, OpenAI Codex, Gemini, or Qwen) on your own subscription or your own API key (BYOK), then crystallizes the verified run into a plain @playwright/test spec that runs in CI with zero AI and zero tokens. Or switch to QA Testing mode, where the agent autonomously explores your whole app to find defects and can layer API and penetration testing on top.',
+    'Hover is an open-source Vibe Testing suite built around an MCP server (@hover-dev/mcp). Add it to the coding agent you already run (Claude Code, Cursor, …) and the agent explores your app, maps its business flows, and crystallizes each one into a plain @playwright/test spec under __vibe_tests__/. The saved tests are yours — they run in your CI with zero AI in the loop. The differentiator is record == replay: the agent acts through Hover\'s grounded browser tools, so the selector that drove a click is the exact one saved, and crystallization is deterministic (no LLM writing code). Hover bundles no model and no keys (BYO-CLI). An optional VS Code extension adds a Business Map graph + Dashboard review cockpit.',
   url: 'https://gethover.dev/',
-  downloadUrl: MARKETPLACE_URL,
+  downloadUrl: NPM_URL,
+  installUrl: NPM_URL,
   softwareHelp: 'https://gethover.dev/docs/',
   license: 'https://www.apache.org/licenses/LICENSE-2.0',
   isAccessibleForFree: true,
@@ -61,18 +71,18 @@ const JSON_LD = {
   publisher: { '@id': 'https://gethover.dev/#org' },
   author: { '@id': 'https://gethover.dev/#org' },
   keywords:
-    'vibe testing, AI testing, Playwright, end-to-end testing, test automation, VS Code extension, AI security testing, pentest, IDOR, BYO CLI',
+    'vibe testing, AI testing, MCP, Model Context Protocol, Playwright, end-to-end testing, test automation, BYO CLI, record equals replay, Claude Code, Cursor',
   featureList: [
-    'Describe a flow in plain English; AI drives your real Chrome and crystallizes a standard @playwright/test spec',
-    'CI runs plain Playwright with no AI, no tokens, and no API key',
-    'Runs on the coding-agent CLI already on your PATH (Claude Code, OpenAI Codex, Gemini, Qwen) on your subscription, or BYOK with your own API key / gateway, or a local model',
-    'Asks you in the chat when a step is ambiguous or destructive instead of guessing',
-    'Multi-environment @account login; passwords stay in SecretStorage and parameterize into process.env',
-    'QA Testing mode autonomously explores the whole app to find defects, writes a findings report with a coverage map, and promotes clean flows to specs',
-    'QA can turn on API testing (replays captured API calls with mutations to catch IDOR and broken access control → .api-test.spec.ts gates) and penetration testing (offensive SQLi, XSS, SSTI, SSRF on your own dev app → a findings report)',
-    'Optional AI optimize pass proposes a polished spec you accept via diff, original always kept',
+    'An MCP server you add to your own coding agent (Claude Code, Cursor, …) — install with: claude mcp add hover -- npx -y @hover-dev/mcp',
+    'The agent explores your app and crystallizes each flow into a standard @playwright/test spec',
+    'record == replay — grounded actuation means the selector that drove a click is the exact one saved; crystallization is deterministic, no LLM writes code',
+    'You own the artifact — plain @playwright/test in your repo, runs in your CI with zero AI, no proprietary format, no lock-in',
+    'BYO-CLI — Hover bundles no model and no keys; it rides the coding agent and subscription you already pay for',
+    'Optional VS Code cockpit — a Business Map graph of your flows + coverage and a Dashboard (pass / fail / flaky + CI results)',
+    'CI integration — the crystallized specs run on every PR as plain Playwright; Hover can generate the workflow',
+    'A living test wiki in .hover/ — a business map + remembered rules so the suite compounds as your app grows',
   ],
-  sameAs: [GITHUB, MARKETPLACE_URL],
+  sameAs: [GITHUB, NPM_URL, MARKETPLACE_URL],
 };
 
 export default function Home() {
@@ -85,14 +95,13 @@ export default function Home() {
       <Backdrop />
       <Nav />
       <Hero />
-      <Triad />
       {/* Walkthrough video. The poster (public/demo-poster.jpg) links out to the
        * YouTube watch page — no self-hosted MP4, no iframe on load. */}
       <VideoSection watchUrl={DEMO_VIDEO} poster={DEMO_POSTER} />
+      <Surfaces />
+      <Why />
+      <Cockpit />
       <Coverage />
-      <Pillars />
-      <Teammate />
-      <MultiEnv />
       <Comparison />
       <Roadmap />
       <Pricing />
@@ -136,140 +145,166 @@ function Backdrop() {
 function Hero() {
   return (
     <section className="relative z-10 mx-auto max-w-6xl px-6 pb-20 pt-12 md:pt-16">
-      <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1fr_minmax(400px,440px)] lg:gap-10">
+      <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1fr_minmax(400px,460px)] lg:gap-10">
         {/* Left — copy */}
         <div className="min-w-0">
           <a
-            href={MARKETPLACE_URL}
+            href={GITHUB}
             className="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3.5 py-1.5 text-[12px] text-text-mute transition-colors hover:border-[rgba(124,255,168,0.4)] hover:text-text"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-mint" />
-            A free, open-source VS Code extension
+            Open-source · MCP-first · Apache-2.0
           </a>
 
           <h1 className="font-mono text-[38px] font-semibold leading-[1.08] tracking-tight md:text-[52px]">
-            Vibe-test your app.
+            Point your agent at Hover.
             <br />
-            <span className="text-mint">CI runs plain Playwright.</span>
+            <span className="text-mint">Own the Playwright suite.</span>
           </h1>
 
           <p className="mt-7 max-w-xl text-[16px] leading-relaxed text-text-mute md:text-[18px]">
-            Chat to a test in your editor. Describe a flow in plain English; AI
-            drives your <em className="not-italic text-text">real</em> Chrome
-            once to explore it. When the run&rsquo;s clean, Hover crystallises it
-            into a standard{' '}
+            Hover is an open-source <em className="not-italic text-text">Vibe Testing</em>{' '}
+            suite. Add its MCP server to the coding agent you already run; it
+            explores your app and crystallizes each flow into a plain{' '}
             <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[14px] text-mint">
               @playwright/test
             </code>{' '}
-            spec that runs in CI with zero AI, forever.
+            spec you own — running in CI with <em className="not-italic text-text">zero AI</em>.
           </p>
 
-          <div id="install" className="mt-9 flex flex-wrap items-center gap-3">
+          <div id="install" className="mt-9 flex flex-col items-start gap-3">
             <InstallButton />
-            <a
-              href={DOCS}
-              className="rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
-            >
-              Read the docs →
-            </a>
+            <div className="flex flex-wrap items-center gap-3">
+              <CockpitButton />
+              <a
+                href={DOCS}
+                className="rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
+              >
+                Read the docs →
+              </a>
+            </div>
           </div>
 
-          <p className="mt-5 text-[13px] text-text-dim">
-            No per-token resale — Hover spawns the{' '}
-            <span className="text-text-mute">claude</span> /{' '}
-            <span className="text-text-mute">codex</span> CLI already on your{' '}
-            <code className="font-mono text-text-mute">PATH</code>, on your
-            subscription or your own API key.
-          </p>
-
-          <p className="mt-3 text-[13px] text-text-dim">
-            Page objects, <span className="text-text-mute">test.step</span>{' '}
-            stages, a built-in pattern library. Or switch to{' '}
-            <span style={{ color: '#22c55e' }}>🟢 QA Testing</span> — explore the
-            whole app, with <span style={{ color: '#fb923c' }}>API</span> and{' '}
-            <span style={{ color: '#f87171' }}>pentest</span> as toggles.{' '}
-            <a href="#roadmap" className="text-text underline-offset-2 hover:underline">
-              See what shipped
-            </a>.
+          <p className="mt-6 text-[13px] text-text-dim">
+            <span className="text-mint">record == replay</span> — the selector
+            that drove the click is the one that&rsquo;s saved. BYO-CLI: Hover
+            bundles no model and no keys, riding the agent you already pay for.
           </p>
         </div>
 
-        {/* Right — live widget replica */}
+        {/* Right — coding-agent + MCP session replica */}
         <div className="flex min-w-0 justify-center lg:justify-end">
-          <WidgetDemo />
+          <McpDemo />
         </div>
       </div>
-
     </section>
   );
 }
 
-/* ── The triad: one chat, every kind of test ────────────────────────────
- * The page's organizing thesis. The kinds of testing one chat covers —
- * author a flow (Flow), explore the whole app (QA Testing), and turn on
- * security (API + pentest, which ride on QA as toggles) — with the crystallize
- * moat as the shared through-line: whatever the AI does, the artifact that lands
- * in your repo is plain @playwright/test that runs in CI with no AI. Flow + QA
- * are green; the security card is orange/red. */
-const TRIAD = [
+/* ── The four surfaces, one artifact ────────────────────────────────────
+ * The suite's organizing thesis (mirrors the README "four surfaces" table):
+ * MCP authors, the VS Code cockpit reviews, CI runs, Cloud (planned) watches.
+ * The through-line is the owned Playwright artifact — the AI authors it once,
+ * nothing AI runs after. */
+const SURFACES = [
   {
-    k: 'frontend',
-    tag: 'Flow',
+    k: 'mcp',
+    step: '01',
+    stage: 'Author',
+    surface: 'MCP',
     accent: '#7CFFA8',
-    title: 'Describe a flow → a plain Playwright spec',
-    body: 'Type a flow in plain English. AI drives your real Chrome once to explore it, then crystallizes the run into a standard @playwright/test file — semantic getByRole / getByLabel selectors, page objects, named test.step stages.',
+    status: 'Shipped',
+    title: 'Add it to your own agent',
+    body: 'The engine. `@hover-dev/mcp` plugs into Claude Code, Cursor, or any MCP-capable agent. Run /mcp__hover__test_app and the agent explores your app and crystallizes specs — BYO-CLI, your model, your subscription, no keys of ours.',
   },
   {
-    k: 'qa',
-    tag: 'QA Testing',
-    accent: '#22c55e',
-    title: 'Explore the whole app → a findings report',
-    body: 'Point QA at your app — or just say "test it". The agent autonomously exercises controls and negative inputs to find defects, paces itself by an intensity budget (Quick / Standard / Deep), writes a findings report with a coverage map, and offers each clean flow as a one-click ✨ Crystallize spec.',
+    k: 'vscode',
+    step: '02',
+    stage: 'Review',
+    surface: 'VS Code',
+    accent: '#7dd3fc',
+    status: 'Shipped',
+    title: 'An optional review cockpit',
+    body: 'A place to look — not the engine. The extension shows a Business Map graph of your app’s flows + coverage and a Dashboard (pass / fail / flaky + CI results), with one-click run. Install only if you want the visual surface.',
   },
   {
-    k: 'security',
-    tag: 'API & security',
-    accent: '#fb923c',
-    title: 'Turn on API + penetration testing',
-    body: 'Toggle security on inside QA. A local HTTPS MITM replays your API calls with mutations to catch IDOR and broken access (→ .api-test.spec.ts gates); penetration testing then attacks your own dev app — SQLi, XSS, SSTI, SSRF — and writes a findings report. No proxy, no Python.',
+    k: 'ci',
+    step: '03',
+    stage: 'Run',
+    surface: 'CI',
+    accent: '#7CFFA8',
+    status: 'Shipped',
+    title: 'Runs as plain Playwright',
+    body: 'The crystallized specs run on every PR as standard @playwright/test — no agent, no tokens, no key. Hover generates the GitHub Actions workflow for you and pulls the results back into the Dashboard.',
+  },
+  {
+    k: 'cloud',
+    step: '04',
+    stage: 'Watch',
+    surface: 'Cloud',
+    accent: '#6b7280',
+    status: 'Planned',
+    title: 'Hosted parallel runs & self-heal',
+    body: 'Optional, planned. A hosted layer over the specs you already own: parallel runs, scheduled monitoring, a flakiness dashboard, on-failure self-heal. Never authoring lock-in — the artifact stays yours.',
   },
 ];
 
-function Triad() {
+function Surfaces() {
   return (
-    <section className="relative z-10 mx-auto max-w-6xl px-6 pb-8 pt-4 md:pt-8">
-      <SectionLabel>One chat, every kind of test</SectionLabel>
+    <section id="how" className="relative z-10 mx-auto max-w-6xl px-6 pb-8 pt-16 md:pt-24">
+      <SectionLabel>The suite — one journey</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[26px] font-semibold leading-tight tracking-tight md:text-[34px]">
-        <span className="text-mint">Frontend flows</span>,{' '}
-        <span style={{ color: '#22c55e' }}>QA exploration</span>, and{' '}
-        <span style={{ color: '#fb923c' }}>security</span> — in one chat.
+        <span className="text-mint">Author → Review → Run → Watch.</span>
+        <br className="hidden md:block" />
+        One pipeline, one artifact you own.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Author one spec, or let QA explore the whole app and turn on API + pentest when you need them. Whatever the AI does, the artifact in git is plain{' '}
+        Four surfaces, one flow: the MCP <strong className="font-medium text-text">authors</strong>,
+        the VS Code cockpit <strong className="font-medium text-text">reviews</strong>, CI{' '}
+        <strong className="font-medium text-text">runs</strong>, and Cloud (planned){' '}
+        <strong className="font-medium text-text">watches</strong>. The through-line is the artifact —
+        portable{' '}
         <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">
           @playwright/test
         </code>{' '}
-        that runs in CI with no agent, no model, no key.
+        in your repo and your CI. The AI authors it once; nothing AI runs after.
       </p>
-      <div className="mt-10 grid gap-5 md:grid-cols-3">
-        {TRIAD.map((t) => (
+
+      {/* The journey at a glance — Author → Review → Run → Watch */}
+      <div className="mt-8 flex flex-wrap items-center gap-y-2 font-mono text-[12px]">
+        {SURFACES.map((s, i) => (
+          <span key={s.k} className="inline-flex items-center">
+            {i > 0 && <span className="px-2 text-text-dim" aria-hidden>→</span>}
+            <span className="inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3 py-1.5">
+              <span className="font-semibold" style={{ color: s.accent }}>{s.stage}</span>
+              <span className="text-text-dim">· {s.surface}</span>
+            </span>
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        {SURFACES.map((s) => (
           <article
-            key={t.k}
-            className="rounded-lg border border-line bg-bg-2 p-6 transition-colors hover:border-line-2"
+            key={s.k}
+            className="flex flex-col rounded-lg border border-line bg-bg-2 p-6 transition-colors hover:border-line-2"
           >
-            <div
-              className="mb-4 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em]"
-              style={{ color: t.accent }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: t.accent }} />
-              {t.tag}
+            <div className="mb-4 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.16em]" style={{ color: s.accent }}>
+              <span className="text-text-dim">{s.step}</span>
+              <span className="font-semibold">{s.stage}</span>
+              <span className="text-text-dim">· {s.surface}</span>
             </div>
-            <h3 className="text-[17px] font-semibold tracking-tight text-text">
-              {t.title}
-            </h3>
-            <p className="mt-3 text-[14px] leading-relaxed text-text-mute">
-              {t.body}
-            </p>
+            <h3 className="text-[16px] font-semibold tracking-tight text-text">{s.title}</h3>
+            <p className="mt-3 flex-1 text-[13.5px] leading-relaxed text-text-mute">{s.body}</p>
+            <span
+              className={
+                s.status === 'Shipped'
+                  ? 'mt-5 inline-flex w-fit items-center gap-1.5 rounded-full border border-[rgba(124,255,168,0.35)] px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-wider text-mint'
+                  : 'mt-5 inline-flex w-fit items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-wider text-text-dim'
+              }
+            >
+              {s.status === 'Shipped' ? '✓ Shipped' : 'Planned'}
+            </span>
           </article>
         ))}
       </div>
@@ -277,56 +312,53 @@ function Triad() {
   );
 }
 
-/* ── Four core pillars ──────────────────────────────────────────────── */
-const PILLARS = [
+/* ── Why Hover ──────────────────────────────────────────────────────────
+ * The moat, in four pillars (mirrors README "Why Hover"): record == replay,
+ * you own the artifact, BYO-CLI, a living test wiki. */
+const WHY = [
   {
-    k: 'author',
-    title: 'Describe the flow. Get a spec.',
-    body: 'Say what to check in plain English. Hover drives your real Chrome to run it, and the moment it passes you have a standard @playwright/test file. It clicks through the app once so you stop testing by hand.',
+    k: 'replay',
+    title: 'record == replay',
+    body: 'The agent acts through Hover’s grounded browser tools (role+name → testId → text), so the selector that drove a click is the exact one saved — and crystallization is deterministic, no LLM writing code. Playwright codegen / Stagehand / Midscene can’t guarantee this.',
   },
   {
-    k: 'teammate',
-    title: 'It works beside you in VS Code.',
-    body: 'Hover runs as a chat in your editor. You watch each action land, it asks when a step is ambiguous, and it opens the spec it wrote for your review. You steer it the way you would a teammate sharing your screen.',
+    k: 'own',
+    title: 'You own the artifact',
+    body: 'Plain @playwright/test in your repo, running in your CI with zero AI. No proprietary format, no runtime dependency on Hover, no lock-in. The AI authors it once; the file is yours forever.',
   },
   {
     k: 'byo',
-    title: 'Runs on the Claude you already pay for.',
-    body: 'Hover ships no model and holds no key. It spawns the claude or codex CLI already on your PATH, on the subscription you already have. You pay nothing extra, and nothing leaves your machine.',
+    title: 'BYO-CLI',
+    body: 'Hover bundles no AI runtime and holds no key. It rides the coding agent + subscription you already pay for. We manage how to test, never which model — switch agents and nothing about your tests changes.',
   },
   {
-    k: 'allinone',
-    title: 'One extension for UI, QA, and security.',
-    body: 'Two modes in one chat. Flow drives the browser and writes a UI spec; QA Testing explores the whole app to find bugs, and can turn on API replay (IDOR, broken access) and offensive pentest (SQLi, XSS) against your own dev app. One install covers all of it.',
+    k: 'wiki',
+    title: 'A living test wiki',
+    body: 'Hover maintains a business map + remembered rules in .hover/, committed with your code. The suite compounds and stays self-aware as your app grows — your app’s test knowledge, owned and portable.',
   },
 ];
 
-function Pillars() {
+function Why() {
   return (
-    <section id="how" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
+    <section id="why" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
       <SectionLabel>Why Hover</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        You already pay for Claude.{' '}
-        <span className="text-mint">Hover just makes it write your tests.</span>
+        AI drives the browser once.{' '}
+        <span className="text-mint">The test it leaves behind is yours.</span>
       </h2>
       <div className="mt-12 grid gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-2">
-        {PILLARS.map((p, i) => (
-          <article
-            key={p.k}
-            className="group bg-bg p-8 transition-colors hover:bg-bg-2"
-          >
+        {WHY.map((p, i) => (
+          <article key={p.k} className="group bg-bg p-8 transition-colors hover:bg-bg-2">
             <div className="mb-5 flex items-center gap-3">
               <span className="flex h-7 w-7 items-center justify-center rounded-md border border-line bg-bg-3 font-mono text-[12px] text-mint">
                 {String(i + 1).padStart(2, '0')}
               </span>
               <span className="h-px flex-1 bg-line transition-colors group-hover:bg-[rgba(124,255,168,0.3)]" />
             </div>
-            <h3 className="text-[18px] font-semibold tracking-tight text-text">
+            <h3 className="font-mono text-[18px] font-semibold tracking-tight text-text">
               {p.title}
             </h3>
-            <p className="mt-3 text-[14.5px] leading-relaxed text-text-mute">
-              {p.body}
-            </p>
+            <p className="mt-3 text-[14.5px] leading-relaxed text-text-mute">{p.body}</p>
           </article>
         ))}
       </div>
@@ -334,102 +366,75 @@ function Pillars() {
   );
 }
 
-function Teammate() {
+/* ── VS Code cockpit ─────────────────────────────────────────────────────
+ * The optional review surface, anchored by the Business Map graph. Framed as
+ * a place to look — it drives no agent. */
+function Cockpit() {
   return (
-    <section id="teammate" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>Your AI testing teammate</SectionLabel>
+    <section id="cockpit" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
+      <SectionLabel>The cockpit (optional)</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        It asks when it&rsquo;s unsure.{' '}
-        <span className="text-mint">You decide.</span>
+        See every flow on a{' '}
+        <span className="text-mint">Business Map</span>.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Some calls a tool shouldn&rsquo;t make alone: which account to log in as,
-        whether a step that deletes data should run. Hover stops and asks you in
-        the chat, then continues with your answer. You stay in control without
-        babysitting every click.
+        The MCP is the whole authoring loop — but if you want a visual surface,
+        the <span className="text-text">Hover VS Code extension</span> is a review
+        cockpit. The Business Map graphs your app&rsquo;s areas and business lines,
+        coloured by coverage, and links each covered flow to the spec it
+        crystallized. A Dashboard shows pass / fail / flaky and your CI results.
+        It drives no agent — it&rsquo;s a place to look.
       </p>
       <div className="mt-10">
-        <AskDemo />
+        <BusinessMapDemo />
+      </div>
+      <div className="mt-7 flex flex-wrap items-center gap-3">
+        <CockpitButton />
+        <a
+          href={DOCS}
+          className="rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
+        >
+          Read the docs →
+        </a>
       </div>
     </section>
   );
 }
 
-/* ── Multi-environment accounts ──────────────────────────────────────────
- * @-mention a test account in chat and Hover logs in, then writes the
- * credential as a process.env reference. The same spec runs on local, staging,
- * and production, each environment supplying its own secret in CI. Two synced
- * code animations (EnvDemo) carry the story: the chat on the left, the spec it
- * writes on the right. */
-function MultiEnv() {
-  return (
-    <section id="environments" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
-      <SectionLabel>Multi-environment, by name</SectionLabel>
-      <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        Say <span className="text-mint">@account</span>. The same spec runs
-        everywhere.
-      </h2>
-      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Define your test accounts once per environment. Mention one with{' '}
-        <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-mint">@</code>{' '}
-        in the chat and Hover logs in for you, then writes the password as a{' '}
-        <code className="rounded bg-bg-3 px-1.5 py-0.5 font-mono text-[13px] text-text">process.env</code>{' '}
-        reference, never a literal. The same file runs on local, staging, and
-        production, and each environment hands CI its own secret.
-      </p>
-      <div className="mt-10">
-        <EnvDemo />
-      </div>
-    </section>
-  );
-}
-
-/* ── Structured output — shipped + what's next ──────────────────────────
- * The structured spec-output suite (page objects, test.step, popup pairing, a
- * conventions file, a built-in seed library, the optional AI optimization
- * pass) has landed on `main`, and the VS Code extension is live on the
- * Marketplace. Hover Cloud remains planned. Each card carries a `status` so
- * shipped vs planned renders distinctly. */
+/* ── Roadmap — shipped + planned ─────────────────────────────────────────
+ * Today's reality: the MCP server + core are published on npm, the review
+ * cockpit (Business Map + Dashboard) ships in the extension, and CI integration
+ * is wired. Cloud + the living-wiki memory layer remain planned. */
 const ROADMAP = [
   {
     status: 'shipped',
-    title: 'A VS Code extension',
-    body: 'Chat panel, Conversations, Specs, Environments, Dashboard. Engine ships inside — no bundler plugin, no config in your app.',
+    title: 'The MCP server',
+    body: '@hover-dev/mcp (and @hover-dev/core) published on npm. Add it to your own agent with one command; /mcp__hover__test_app explores + crystallizes a suite. BYO-CLI — no model, no keys of ours.',
   },
   {
     status: 'shipped',
-    title: 'Asks you when it is unsure',
-    body: 'Ambiguous step, destructive action, unclear account — the agent asks right in the editor instead of guessing or stalling.',
+    title: 'record == replay crystallize',
+    body: 'Grounded actuation + deterministic crystallization: the agent acts through role+name tools, and Hover translates each recorded step to Playwright with no LLM writing code. What you replay is what you recorded.',
   },
   {
     status: 'shipped',
-    title: 'Local CLI or BYOK',
-    body: 'Drive runs with a CLI on your PATH (Claude Code, Codex, Gemini, Qwen) on your own subscription — or switch to BYOK and bring your own API key (Anthropic / OpenAI / Azure / Gemini, or an OpenAI-compatible gateway), which Hover injects into the matching CLI. Point either at a self-hosted endpoint for a local model. Keys stay in SecretStorage.',
+    title: 'The review cockpit',
+    body: 'The Hover VS Code extension: a Business Map graph of your flows + coverage and a Dashboard (pass / fail / flaky + CI results), one-click run. Optional — it reviews, it doesn’t drive the agent.',
   },
   {
     status: 'shipped',
-    title: 'Multi-environment accounts',
-    body: '@mention an account in chat and the agent logs in for you. Passwords stay in SecretStorage and parameterize into process.env — never written into the spec.',
-  },
-  {
-    status: 'shipped',
-    title: 'QA Testing mode',
-    body: 'Autonomously explores the app → a findings report with a coverage map, an intensity budget (Quick / Standard / Deep), and ✨ promotable specs. API testing (MITM-replayed calls → .api-test.spec.ts) and penetration testing (SQLi / XSS / SSTI / SSRF on your own app → report) ride on as toggles.',
-  },
-  {
-    status: 'shipped',
-    title: 'Optional AI optimize pass',
-    body: 'AI proposes a polished spec — page objects, named test.step stages, observed assertions — which you accept via diff. Original always kept; pass is off by default.',
+    title: 'CI integration',
+    body: 'The crystallized specs run on every PR as plain Playwright — no agent, no tokens. Hover generates the GitHub Actions workflow and pulls the run results back into the Dashboard.',
   },
   {
     status: 'planned',
-    title: 'It remembers your codebase',
-    body: 'A local knowledge graph of your app and its tests. Before it writes a test, Hover already knows which pages, forms, and endpoints a flow touches; it flags coverage gaps and reruns only the specs a change affects. Stored on your machine, committed with your code, carried across any model. No source uploaded.',
+    title: 'A living test wiki',
+    body: 'A business map + remembered rules in .hover/, committed with your code: Hover already knows which pages, forms, and endpoints a flow touches, flags coverage gaps, and keeps the suite self-aware as your app grows. No source uploaded.',
   },
   {
     status: 'planned',
     title: 'Hover Cloud',
-    body: 'A hosted layer over the specs and memory you build locally: a team-shared memory graph, parallel runs, scheduled monitoring, a flakiness dashboard, and AI self-heal on drift. Only graph metadata syncs, never your source or DOM. Authoring stays local and free; CI still runs plain Playwright.',
+    body: 'A hosted layer over the specs you already own: parallel runs, scheduled monitoring, a flakiness dashboard, and on-failure self-heal. Authoring stays local and free; CI still runs plain Playwright. Never authoring lock-in.',
   },
 ];
 
@@ -438,12 +443,13 @@ function Roadmap() {
     <section id="roadmap" className="relative z-10 mx-auto max-w-6xl px-6 py-24">
       <SectionLabel>Shipped</SectionLabel>
       <h2 className="mt-4 max-w-3xl font-mono text-[28px] font-semibold leading-tight tracking-tight md:text-[36px]">
-        A real teammate in your editor, shipping{' '}
+        An open-source suite, shipping{' '}
         <span className="text-mint">plain Playwright</span>.
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
-        Every feature that ships is in the VS Code extension today, free and
-        open-source. Next: a local memory graph, then Hover Cloud. Follow along on{' '}
+        The MCP server and core are on npm, the review cockpit and CI integration
+        ship today — all free and open-source. Next: a living test wiki, then
+        Hover Cloud. Follow along on{' '}
         <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
           GitHub
         </a>
@@ -500,20 +506,30 @@ function CTA() {
             <Sparkle size={22} />
           </span>
           <h2 className="mx-auto max-w-2xl font-mono text-[30px] font-semibold leading-tight tracking-tight md:text-[40px]">
-            Stop hand-writing the tests AI could explore for you.
+            Point your agent at Hover. Keep the Playwright.
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-text-mute">
-            Install the VS Code extension. Keep the deterministic Playwright
-            files forever.
+            One command adds the MCP to the agent you already run. The specs it
+            crystallizes are yours — deterministic, in your repo, AI-free in CI.
           </p>
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-9 flex flex-col items-center gap-4">
             <InstallButton />
-            <a
-              href={GITHUB}
-              className="flex items-center gap-2 rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
-            >
-              <GitHubGlyph /> Star on GitHub
-            </a>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <a
+                href={NPM_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
+              >
+                @hover-dev/mcp on npm
+              </a>
+              <a
+                href={GITHUB}
+                className="flex items-center gap-2 rounded-md border border-line px-5 py-3 text-[14px] font-medium text-text-mute transition-colors hover:border-line-2 hover:text-text"
+              >
+                <GitHubGlyph /> Star on GitHub
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -538,6 +554,9 @@ function Footer() {
           <a href={GITHUB} className="transition-colors hover:text-text">
             GitHub
           </a>
+          <a href={NPM_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-text">
+            npm
+          </a>
           <a
             href={YOUTUBE}
             target="_blank"
@@ -546,11 +565,8 @@ function Footer() {
           >
             YouTube
           </a>
-          <a
-            href={MARKETPLACE_URL}
-            className="transition-colors hover:text-text"
-          >
-            Install
+          <a href={MARKETPLACE_URL} className="transition-colors hover:text-text">
+            VS Code
           </a>
         </div>
       </div>

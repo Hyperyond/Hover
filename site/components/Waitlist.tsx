@@ -47,8 +47,8 @@ export function Waitlist() {
               <span className="text-mint">Cloud is coming.</span>
             </h2>
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-text-mute">
-              Everything on this page works right now — install the{' '}
-              <span className="text-mint">VS Code extension</span>.
+              Everything on this page works right now — add the{' '}
+              <span className="text-mint">Hover MCP</span> to your own agent.
               Cloud keeps the specs you author locally alive with AI — it
               re-records the ones UI drift breaks and flags the ones that have
               gone stale:
@@ -189,8 +189,8 @@ function WaitlistModal({ onClose }: { onClose: () => void }) {
             <p className="text-[15px] font-semibold text-text">You&rsquo;re on the list.</p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-text-mute">
               We&rsquo;ll email you when Hover Cloud opens. Meanwhile it&rsquo;s
-              ready right now — install the{' '}
-              <span className="text-mint">VS Code extension</span>.
+              ready right now — add the{' '}
+              <span className="text-mint">Hover MCP</span> to your agent.
             </p>
           </div>
         ) : (

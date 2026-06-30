@@ -132,7 +132,7 @@ const ROWS: Row[] = [
   },
   {
     dim: 'Bring-your-own AI (your CLI / model key)',
-    hover: yes('Spawns the claude / codex CLI already on your PATH'),
+    hover: yes('Rides the coding agent you already run — Claude Code / Cursor — via its MCP'),
     cols: [
       no('Vendor-hosted AI; you supply a Momentic key'),
       na('Managed — the AI is internal to their service'),
@@ -143,7 +143,7 @@ const ROWS: Row[] = [
   },
   {
     dim: 'Drives your real local dev server',
-    hover: yes('A VS Code extension drives your existing dev server over CDP — nothing added to your app'),
+    hover: yes('Your own agent drives your existing dev server over CDP via the MCP — nothing added to your app'),
     cols: [
       partial('Local browser can hit localhost, but every step calls Momentic-hosted AI'),
       no('Runs the suite on QA Wolf’s own cloud infra'),
@@ -342,9 +342,9 @@ export function Comparison() {
         (a planner, generator, and healer; v1.56+) — an AI layer that drives a
         coding agent to emit standard specs. It is the closest first-party take
         on AI-explore-to-static-spec, and like Hover its output runs in CI with
-        no AI. Hover differs in driving your real Chrome from one chat, guarding
-        every step, lifting Page Objects, and adding API-testing and pentest
-        modes.
+        no AI. Hover differs in plugging into the coding agent you already run
+        (via its MCP, BYO-CLI), guaranteeing record == replay through grounded
+        actuation, and leaving the artifact entirely in your hands.
       </p>
 
       <p className="mt-3 max-w-3xl text-[12.5px] leading-relaxed text-text-dim">

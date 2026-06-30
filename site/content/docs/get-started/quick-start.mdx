@@ -1,27 +1,28 @@
 # Quick start
 
-Install the Hover VS Code extension, install one coding-agent CLI, and send your first prompt. No changes to your app, bundler config, or dependencies.
+Add the Hover MCP to the coding agent you already run, then ask it to test your app. No changes to your app, bundler config, or dependencies.
 
 ## Prerequisites
 
-- **VS Code** (or a VS Code-compatible editor).
-- A dev server you already run for your project — any framework Hover can reach over CDP (Vite, Next.js, Nuxt, Astro, webpack).
-- Any supported coding-agent CLI on PATH — `claude`, `codex`, `gemini`, or `qwen` (the Local LLM host). Hover spawns whichever you already have. No new API keys.
+- A **coding agent that speaks MCP** — Claude Code, Cursor, or similar, installed and logged in. Hover rides whatever model it runs; no new API keys.
+- A **dev server you already run** — any framework Hover can reach over CDP (Vite, Next.js, Nuxt, Astro, webpack).
 
-<Callout type="tip" title="Don't have an agent CLI yet?">
+<Callout type="tip" title="Don't have a coding agent yet?">
 
 - **Claude Code** — `npm install -g @anthropic-ai/claude-code`, then `claude login`. Uses the Claude Pro / Max subscription you might already pay for.
-- **OpenAI Codex** — `npm install -g @openai/codex`, then `codex login`.
-
-Either works. You can switch from the chat header or Settings any time.
+- **Cursor** — any MCP-capable agent works; add `@hover-dev/mcp` as an MCP server in its config.
 
 </Callout>
 
-## Install the extension
+## Add the MCP
 
-Install **[Hover from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=hyperyond.hover-dev)** — Extensions view (`⇧⌘X` / `Ctrl+Shift+X`), search `hover-dev`, **Install** (or `code --install-extension hyperyond.hover-dev`). See [Install](/docs/get-started/install/) for details.
+One command (Claude Code shown — any MCP-capable agent works):
 
-The extension ships the engine inside it. There's nothing to install into your project: no plugin, no bundler-config edit, no new dependency.
+```bash
+claude mcp add hover -- npx -y @hover-dev/mcp
+```
+
+That's the whole install. Hover runs as an MCP server under your agent — no plugin in your project, no bundler-config edit, no new dependency, no keys of Hover's own.
 
 ## Start your dev server
 
@@ -35,44 +36,39 @@ Hover drives your existing dev server over CDP — it doesn't replace, wrap, or 
 
 <Callout type="tip" title="First-run debug Chrome">
 
-On your first run, Hover prompts you to launch an **isolated debug Chrome** on port 9222 (separate from your everyday browser — a clean profile under `<tmpdir>/hover-chrome`). Accept the prompt and a debug Chrome opens, navigated to your dev URL. Subsequent runs reuse it. Hover never touches your normal Chrome session.
+On your first run, Hover prompts you to launch an **isolated debug Chrome** on port 9222 (separate from your everyday browser — a clean profile under `<tmpdir>/hover-chrome`). Subsequent runs reuse it. Hover never touches your normal Chrome session.
 
 </Callout>
 
-## Send your first prompt
+## Ask your agent to test the app
 
-Open the **Hover** chat from the Activity Bar. Type, or hold the 🎙 button and speak:
+In your agent, run the Hover tool:
 
 ```
-log in, then add a todo named "verify hover"
+/mcp__hover__test_app           # explore the app and crystallize a suite
+/mcp__hover__test_app login     # …or scope it to one flow
 ```
 
-Press `↵` or **Send**. The agent drives the debug Chrome, narrates each tool call, and renders a Result + Findings card when done.
+The agent explores your app through Hover's **grounded** browser tools — `click_control` / `fill_control` and friends, which target controls by `role+name` so the selector that drives an action is the exact one saved. When a flow is verified, Hover crystallizes it.
 
-<Callout type="tip" title="Logging in with @account">
+## The artifact
 
-Define test accounts per environment once in the **Environments** view, then just mention `@account` in chat — the agent logs in for you. Credentials are parameterized into `process.env` references and never written into the spec. See [Your first session](/docs/get-started/first-session/).
+Specs land in `__vibe_tests__/` as a `<slug>.spec.ts` file — plain `@playwright/test` code, with **no LLM writing the code** (crystallization is deterministic). It checks into git and runs in CI with no Hover dependency.
 
-</Callout>
+That's the loop: ask once → agent explores → crystallize → CI replays forever, with **record == replay** fidelity.
 
-## Save the session
+## Run the specs in CI
 
-Click **Save as Spec** on the Result card. The verified flow becomes a `__vibe_tests__/<slug>.spec.ts` file — plain `@playwright/test` code that runs in your CI with no Hover dependency.
-
-That's the loop: speak / type → agent verifies → crystallize once → CI replays forever.
-
-## Run the spec in CI
-
-The saved spec is plain Playwright. Run it anywhere with no AI, no tokens, no key:
+The saved specs are plain Playwright. Run them anywhere with no AI, no tokens, no key:
 
 ```bash
 npx playwright test __vibe_tests__
 ```
 
-Point it at any environment with `BASE_URL` (and the `HOVER_<LABEL>_*` account secrets); the same spec runs against local, staging, or a PR preview. Hover can generate a GitHub Actions workflow that runs them on every PR.
+Point them at any environment with `BASE_URL`; the same specs run against local, staging, or a PR preview. Hover can generate a GitHub Actions workflow that runs them on every PR.
 
 ## What's next
 
-- [Your first session](/docs/get-started/first-session/) — A guided walkthrough of the chat and every view on a real flow.
-- [Pick an agent](/docs/get-started/agents/) — Differences between Claude and Codex, and how to add others.
-- [API & security testing](/docs/features/api-test/) — Probe your dev app for authz / authn / parameter-tampering issues, then crystallize findings as regression specs.
+- [Your first session](/docs/get-started/first-session/) — A guided walkthrough on a real flow.
+- [Pick an agent](/docs/get-started/agents/) — Which coding agents work and how Hover plugs in.
+- Want a visual surface? The optional **[VS Code cockpit](/docs/get-started/install/)** adds a Business Map graph + Dashboard. It reviews — it doesn't drive the agent.
