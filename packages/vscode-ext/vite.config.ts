@@ -4,12 +4,13 @@ import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
 /**
- * Build config for the chat webview's React app (separate from the extension's
+ * Build config for the cockpit's React webviews (separate from the extension's
  * tsup CJS build — the webview runs in a browser context, not Node).
  *
- * Output goes to `dist/webview/` with stable filenames (`chat.js` / `chat.css`)
- * so the extension's loader can reference them by `webview.asWebviewUri` without
- * parsing a manifest. `base: './'` keeps asset URLs relative.
+ * Output goes to `dist/webview/` with stable filenames (`webview.js` /
+ * `webview.css`) so the extension's loader can reference them by
+ * `webview.asWebviewUri` without parsing a manifest. `base: './'` keeps asset
+ * URLs relative.
  *
  * Dev (HMR): `vite` serves `webview/` at http://localhost:5174; the extension
  * loads from there when HOVER_WEBVIEW_DEV is set, so edits hot-reload live.
@@ -26,9 +27,9 @@ export default defineConfig({
     rollupOptions: {
       input: resolve(__dirname, "webview/index.html"),
       output: {
-        entryFileNames: "chat.js",
-        chunkFileNames: "chat-[name].js",
-        assetFileNames: (info) => (info.name?.endsWith(".css") ? "chat.css" : "[name][extname]"),
+        entryFileNames: "webview.js",
+        chunkFileNames: "webview-[name].js",
+        assetFileNames: (info) => (info.name?.endsWith(".css") ? "webview.css" : "[name][extname]"),
       },
     },
   },

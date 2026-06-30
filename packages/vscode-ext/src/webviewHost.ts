@@ -2,7 +2,7 @@
  * Shared host HTML for every Hover React WebviewView.
  *
  * All views (dashboard / business-map) load the SAME bundled app
- * (dist/webview/chat.js + chat.css). The extension injects
+ * (dist/webview/webview.js + webview.css). The extension injects
  * which screen to render via `window.__HOVER_VIEW__`; the webview app's
  * top-level router (webview/App.tsx) switches on it. This is a param-driven
  * switch, not react-router — each WebviewView is a separate sandboxed iframe
@@ -21,8 +21,8 @@ export function renderWebviewHtml(
 ): string {
   const nonce = randomBytes(16).toString('base64');
   const dist = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
-  const js = webview.asWebviewUri(vscode.Uri.joinPath(dist, 'chat.js'));
-  const css = webview.asWebviewUri(vscode.Uri.joinPath(dist, 'chat.css'));
+  const js = webview.asWebviewUri(vscode.Uri.joinPath(dist, 'webview.js'));
+  const css = webview.asWebviewUri(vscode.Uri.joinPath(dist, 'webview.css'));
   const csp = [
     `default-src 'none'`,
     `img-src ${webview.cspSource} https: data:`,
