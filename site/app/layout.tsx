@@ -113,8 +113,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
+    // suppressHydrationWarning: browser extensions (e.g. Trancy, Grammarly) and
+    // theme scripts inject attributes onto <html>/<body> before React hydrates,
+    // which would otherwise log a hydration mismatch. This suppresses only the
+    // attribute diff on these two elements, not on the tree below.
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
