@@ -1,0 +1,51 @@
+{
+  "name": "@hover-dev/mcp",
+  "version": "0.0.0",
+  "description": "Hover MCP server — grounded browser actuation + crystallize a Playwright suite, for your own coding agent",
+  "license": "Apache-2.0",
+  "author": "Hyperyond",
+  "homepage": "https://github.com/Hyperyond/Hover#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hyperyond/Hover.git",
+    "directory": "packages/mcp"
+  },
+  "keywords": [
+    "hover",
+    "mcp",
+    "playwright",
+    "browser-testing",
+    "claude",
+    "model-context-protocol"
+  ],
+  "private": true,
+  "type": "module",
+  "bin": {
+    "hover-mcp": "./dist/mcp.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@hover-dev/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "playwright-core": "^1.50.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}
