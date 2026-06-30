@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.24.0",
+  "version": "0.25.2",
   "displayName": "Hover — AI Vibe Testing",
   "description": "Describe a flow in plain English; Hover's AI tests your app like a real teammate and hands you a real Playwright spec. Hands-free, local-first, on your own Claude Code or Codex CLI.",
   "keywords": [
@@ -72,11 +72,6 @@
         "icon": "$(diff)"
       },
       {
-        "command": "hover.openSource",
-        "title": "Open Source from Element",
-        "category": "Hover"
-      },
-      {
         "command": "hover.runSpec",
         "title": "Run Spec",
         "category": "Hover",
@@ -101,67 +96,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "hover.resetSourceAccess",
-        "title": "Reset Source-Read Permission",
-        "category": "Hover"
-      },
-      {
-        "command": "hover.reopenBrowser",
-        "title": "Reopen Browser",
-        "category": "Hover",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "hover.switchMode",
-        "title": "Switch Mode (Frontend / API testing / Pentest)",
-        "category": "Hover",
-        "icon": "$(arrow-swap)"
-      },
-      {
-        "command": "hover.startEngine",
-        "title": "Start Engine",
-        "category": "Hover",
-        "icon": "$(server-process)"
-      },
-      {
-        "command": "hover.switchAgent",
-        "title": "Switch Agent",
-        "category": "Hover"
-      },
-      {
-        "command": "hover.newSession",
-        "title": "New Session",
-        "category": "Hover",
-        "icon": "$(add)"
-      },
-      {
-        "command": "hover.saveSpec",
-        "title": "Save Last Run as Spec",
-        "category": "Hover"
-      },
-      {
-        "command": "hover.saveFindingsReport",
-        "title": "Save Findings Report (Pentest)",
-        "category": "Hover"
-      },
-      {
-        "command": "hover.cancelRun",
-        "title": "Cancel Run",
-        "category": "Hover"
-      },
-      {
-        "command": "hover.optimizeSpec",
-        "title": "Optimize",
-        "category": "Hover",
-        "icon": "$(sparkle)"
-      },
-      {
-        "command": "hover.healSpec",
-        "title": "Heal Spec",
-        "category": "Hover",
-        "icon": "$(heart)"
-      },
-      {
         "command": "hover.syncCiResults",
         "title": "Sync CI Results",
         "category": "Hover",
@@ -169,20 +103,15 @@
       },
       {
         "command": "hover.startApp",
-        "title": "Start App (dev server + browser)",
+        "title": "Start App (dev server)",
         "category": "Hover",
         "icon": "$(rocket)"
       },
       {
-        "command": "hover.toggleBrowser",
-        "title": "Toggle Browser (Headless / Normal)",
+        "command": "hover.openBusinessMap",
+        "title": "Open Business Map",
         "category": "Hover",
-        "icon": "$(eye)"
-      },
-      {
-        "command": "hover.appStatus",
-        "title": "App: Set URL or Start",
-        "category": "Hover"
+        "icon": "$(type-hierarchy)"
       },
       {
         "command": "hover.openRepo",
@@ -193,6 +122,12 @@
         "command": "hover.openSite",
         "title": "Open gethover.dev",
         "category": "Hover"
+      },
+      {
+        "command": "hover.installMcp",
+        "title": "Install Hover MCP (add to your coding agent)",
+        "category": "Hover",
+        "icon": "$(plug)"
       },
       {
         "command": "hover.addCiWorkflow",
@@ -257,27 +192,18 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "hover-chat",
-          "title": "Hover Testing",
-          "icon": "resources/hover-chat.svg"
-        },
-        {
           "id": "hover",
           "title": "Hover",
           "icon": "resources/hover.svg"
+        },
+        {
+          "id": "hover-map",
+          "title": "Business Map",
+          "icon": "resources/hover-map.svg"
         }
       ]
     },
     "views": {
-      "hover-chat": [
-        {
-          "id": "hover.chat",
-          "name": "Chat",
-          "type": "webview",
-          "icon": "resources/hover-chat.svg",
-          "contextualTitle": "Hover"
-        }
-      ],
       "hover": [
         {
           "id": "hover.dashboard",
@@ -287,32 +213,19 @@
           "contextualTitle": "Hover"
         },
         {
-          "id": "hover.sessions",
-          "name": "Conversations",
-          "type": "webview",
-          "icon": "$(comment-discussion)",
-          "contextualTitle": "Hover"
-        },
-        {
-          "id": "hover.traffic",
-          "name": "Network",
-          "type": "webview",
-          "icon": "$(radio-tower)",
-          "contextualTitle": "Hover",
-          "when": "hover.modeActive"
-        },
-        {
           "id": "hover.environments",
           "name": "Environments",
           "icon": "$(globe)",
           "contextualTitle": "Hover"
-        },
+        }
+      ],
+      "hover-map": [
         {
-          "id": "hover.settings",
-          "name": "Settings",
+          "id": "hover.businessMap",
+          "name": "Business Map",
           "type": "webview",
-          "icon": "$(gear)",
-          "contextualTitle": "Hover"
+          "icon": "$(type-hierarchy)",
+          "contextualTitle": "Business Map"
         }
       ]
     },
@@ -323,110 +236,6 @@
           "type": "string",
           "default": "",
           "description": "Your dev server URL (e.g. http://localhost:5173). Leave empty to auto-detect common dev ports."
-        },
-        "hover.browser": {
-          "type": "string",
-          "enum": [
-            "silent",
-            "visible"
-          ],
-          "enumDescriptions": [
-            "Headless — no browser window; runs stream into the chat",
-            "Normal — show the debug Chrome window"
-          ],
-          "default": "silent",
-          "description": "How Hover runs the browser. Headless = no window (default); Normal = a shown Chrome window you can watch."
-        },
-        "hover.speech": {
-          "type": "boolean",
-          "default": false,
-          "description": "Speak the agent's steps and final summary aloud while it runs."
-        },
-        "hover.agent": {
-          "type": "string",
-          "default": "",
-          "description": "Coding-agent CLI to drive runs (e.g. claude / codex). Empty = auto-detect the first installed agent. Switchable from Settings."
-        },
-        "hover.model": {
-          "type": "string",
-          "default": "sonnet",
-          "description": "Model for runs, switchable from the chat toolbar. Values depend on the active agent (Claude: sonnet / opus / haiku / claude-fable-5; Codex: gpt-5.5 / gpt-5.4 / gpt-5.4-mini)."
-        },
-        "hover.effort": {
-          "type": "string",
-          "default": "",
-          "description": "Reasoning-effort level for runs, set from the chat model menu. Options depend on the model (Claude: low / medium / high / xhigh / max; Codex: minimal / low / medium / high / xhigh). Empty = the model's default."
-        },
-        "hover.optimizeModel": {
-          "type": "string",
-          "default": "",
-          "description": "Model for the ✨ Optimize refinement pass (text-only, no browser). A small/cheap model is plenty — e.g. Claude: haiku. Empty = the active agent's cheap default (Claude → haiku), or the run model if it has none."
-        },
-        "hover.localBaseUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Base URL of your self-hosted OpenAI-compatible endpoint (Ollama / LM Studio / vLLM) for the Local LLM agent, e.g. http://localhost:11434/v1. Used only when the agent is Local LLM."
-        },
-        "hover.localModel": {
-          "type": "string",
-          "default": "",
-          "description": "Model id served by your local endpoint (e.g. qwen2.5-coder), used by the Local LLM agent."
-        },
-        "hover.modelSource": {
-          "type": "string",
-          "enum": [
-            "cli",
-            "byok"
-          ],
-          "enumDescriptions": [
-            "Local CLI — drive runs with a coding-agent CLI on your PATH, using its own logged-in subscription",
-            "BYOK — bring your own API key; the key + base URL + model are injected into the matching CLI"
-          ],
-          "default": "cli",
-          "description": "Where runs get their model. Local CLI uses an installed agent's own auth; BYOK injects your API key into the matching CLI."
-        },
-        "hover.byok.protocol": {
-          "type": "string",
-          "enum": [
-            "anthropic",
-            "openai",
-            "azure",
-            "gemini"
-          ],
-          "enumDescriptions": [
-            "Anthropic (Claude) — driven via the claude CLI",
-            "OpenAI-compatible — driven via the codex CLI",
-            "Azure OpenAI — driven via the codex CLI against an Azure endpoint",
-            "Google Gemini — driven via the gemini CLI"
-          ],
-          "default": "anthropic",
-          "description": "BYOK API protocol. Determines which CLI is driven and which auth env vars are set."
-        },
-        "hover.byok.gateway": {
-          "type": "string",
-          "enum": [
-            "none",
-            "ollama-cloud",
-            "sense",
-            "aihubmix"
-          ],
-          "default": "none",
-          "description": "Optional BYOK gateway preset (an OpenAI-compatible aggregator). 'none' = the protocol's official endpoint. A gateway preset fills the Base URL."
-        },
-        "hover.byok.baseUrl": {
-          "type": "string",
-          "default": "",
-          "description": "BYOK API base URL. Empty = the protocol's default endpoint."
-        },
-        "hover.byok.model": {
-          "type": "string",
-          "default": "",
-          "description": "BYOK model id (e.g. claude-sonnet-4-5, gpt-5.5, gemini-2.5-pro)."
-        },
-        "hover.byok.maxTokens": {
-          "type": "number",
-          "default": 0,
-          "description": "BYOK response length cap (max output tokens). 0 = the model's default."
         }
       }
     },
@@ -440,11 +249,6 @@
       ],
       "view/title": [
         {
-          "command": "hover.switchMode",
-          "when": "view == hover.dashboard",
-          "group": "navigation@1"
-        },
-        {
           "command": "hover.addCiWorkflow",
           "when": "view == hover.dashboard",
           "group": "navigation@2"
@@ -455,8 +259,8 @@
           "group": "navigation@3"
         },
         {
-          "command": "hover.newSession",
-          "when": "view == hover.sessions",
+          "command": "hover.openBusinessMap",
+          "when": "view == hover.businessMap",
           "group": "navigation@1"
         },
         {
@@ -519,16 +323,15 @@
     "build:webview": "vite build",
     "dev:webview": "vite",
     "watch": "tsup --watch",
-    "stage:engine": "node scripts/stage-engine.mjs",
     "clean:vsix": "node -e \"const fs=require('node:fs');for(const f of fs.readdirSync('.'))if(f.endsWith('.vsix'))fs.rmSync(f)\"",
-    "package": "pnpm run clean:vsix && pnpm run build && pnpm run build:webview && pnpm run stage:engine && pnpm dlx @vscode/vsce package --no-dependencies",
-    "publish": "pnpm run build && pnpm run build:webview && pnpm run stage:engine && pnpm dlx @vscode/vsce publish --no-dependencies",
+    "package": "pnpm run clean:vsix && pnpm run build && pnpm run build:webview && pnpm dlx @vscode/vsce package --no-dependencies",
+    "publish": "pnpm run build && pnpm run build:webview && pnpm dlx @vscode/vsce publish --no-dependencies",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "fflate": "^0.8.3",
-    "ws": "^8.18.0"
+    "@xyflow/react": "^12.3.0",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
@@ -536,7 +339,6 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.85.0",
-    "@types/ws": "^8.5.0",
     "@vitejs/plugin-react": "^5.2.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

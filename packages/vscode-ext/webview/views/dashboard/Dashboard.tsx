@@ -4,7 +4,7 @@ import { post, onMessage } from "../../shared/vscode";
 /**
  * Dashboard view. The data layer (gather / Playwright-report parsing) lives in
  * src/dashboardView.ts and pushes a `DashboardData` over `{type:'data'}`. Same
- * outbound protocol: runAll / runSpec / optimize / open / ready. Styled with
+ * outbound protocol: runAll / runSpec / syncCi / open / ready. Styled with
  * Tailwind utilities (see webview/theme.css).
  */
 
@@ -34,8 +34,6 @@ const fmtTok = (n: number) => {
 const Shield = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"><path d="M8 2l5 2v3.5c0 3-2.1 5.3-5 6.3C5.1 12.8 3 10.5 3 7.5V4l5-2z" /></svg>);
 const Beaker = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M6 2v4L3 12.5a1 1 0 0 0 .9 1.5h8.2a1 1 0 0 0 .9-1.5L10 6V2M5 2h6" /></svg>);
 const Play = () => (<svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M4 3l9 5-9 5z" /></svg>);
-const Sparkle = () => (<svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M8 1l1.6 4.4L14 7l-4.4 1.6L8 13l-1.6-4.4L2 7l4.4-1.6z" /></svg>);
-const Heal = () => (<svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M6.5 2h3v4.5H14v3H9.5V14h-3V9.5H2v-3h4.5z" /></svg>);
 const Folder = () => (<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" className="opacity-70"><path d="M2 4.5h4l1.2 1.5H14v6.5H2z" /></svg>);
 
 const TILE_CLS: Record<string, string> = { ok: "text-pass", bad: "text-fail", warn: "text-flaky" };
@@ -59,15 +57,13 @@ function Row({ r }: { r: SpecRow }) {
       ) : (
         <span className="flex-1 min-w-0 truncate cursor-default" title="not on disk">{r.name}</span>
       )}
-      {r.flaky && <span className="flex-none text-flaky text-[9px] font-semibold uppercase tracking-wide" title="Flaky — inconsistent across runs; 🏥 Heal may fix a drifted selector">flaky</span>}
+      {r.flaky && <span className="flex-none text-flaky text-[9px] font-semibold uppercase tracking-wide" title="Flaky — inconsistent across runs">flaky</span>}
       <span className="flex-none flex gap-0.5">
         {r.cells.map((c, i) => (<span key={i} className={"w-[11px] h-[11px] rounded-sm flex-none " + (c ? CELL_CLS[c] : "bg-line")} />))}
       </span>
       {r.path && (
         <span className="flex-none hidden gap-px group-hover:flex">
           <button className="inline-flex items-center justify-center w-6 h-6 text-muted cursor-pointer rounded-[5px] hover:text-fg hover:bg-line" title="Run" onClick={() => post({ type: "runSpec", path: r.path! })}><Play /></button>
-          <button className="inline-flex items-center justify-center w-6 h-6 text-muted cursor-pointer rounded-[5px] hover:text-fg hover:bg-line" title="Optimize" onClick={() => post({ type: "optimize", path: r.path! })}><Sparkle /></button>
-          <button className={"inline-flex items-center justify-center w-6 h-6 cursor-pointer rounded-[5px] hover:text-fg hover:bg-line " + (r.flaky ? "text-flaky" : "text-muted")} title="Heal — re-locate broken steps against the live app" onClick={() => post({ type: "heal", path: r.path! })}><Heal /></button>
         </span>
       )}
     </div>
@@ -100,7 +96,7 @@ export function Dashboard() {
       <button className="w-full p-2 mb-2 rounded-lg bg-accent text-[#0c2417] text-[12.5px] font-semibold cursor-pointer inline-flex items-center justify-center gap-1.5 hover:brightness-110" onClick={() => post({ type: "runAll" })}>
         <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l9 5-9 5z" /></svg> Run all specs
       </button>
-      <button className="w-full p-1.5 mb-2 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3" title="Pull the latest GitHub CI run's results into the dashboard (failures become 🏥 Heal targets)" onClick={() => post({ type: "syncCi" })}>
+      <button className="w-full p-1.5 mb-2 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3" title="Pull the latest GitHub CI run's results into the dashboard" onClick={() => post({ type: "syncCi" })}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M4 8a4 4 0 1 1 1.3 3M8 5v3l2 1" strokeLinecap="round" /></svg> Sync from CI
       </button>
       <div className="relative mb-2.5">
@@ -139,6 +135,23 @@ export function Dashboard() {
           )}
         </>
       )}
+
+      <div className="mt-4 pt-2.5 border-t border-line flex flex-col gap-1.5">
+        <button
+          className="w-full p-1.5 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3"
+          title="Add the Hover MCP server to your coding agent (Claude Code), so it can drive + crystallize tests"
+          onClick={() => post({ type: "installMcp" })}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M8 1.5v6M5.5 5 8 7.5 10.5 5M3 9.5v3.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V9.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          Install Hover MCP
+        </button>
+        <button
+          className="text-faint text-[10.5px] cursor-pointer hover:text-fg inline-flex items-center justify-center gap-1"
+          onClick={() => post({ type: "openSite" })}
+        >
+          gethover.dev <span className="opacity-70">↗</span>
+        </button>
+      </div>
     </div>
   );
 }
