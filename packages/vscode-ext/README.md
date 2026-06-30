@@ -1,18 +1,28 @@
-# Hover — Vibe-test your app, ship real Playwright specs.
+# Hover — the review cockpit for your Vibe Testing suite
 
-**Describe a flow in plain English; Hover's AI tests your app like a real teammate and hands you a real Playwright spec.** Hands-free, local-first, running on the Claude Code or Codex CLI you already have. The AI's job ends at "save", so CI stays pure Playwright with zero tokens.
+**A place to see, run, and watch the Playwright suite your agent authored.** Hover is an open-source **Vibe Testing** suite: you add its [MCP server](https://www.npmjs.com/package/@hover-dev/mcp) to the coding agent you already run (Claude Code, Cursor, …), and the agent explores your app and crystallizes each flow into a plain `@playwright/test` spec you own. **This extension is the optional cockpit on top of that** — it drives no agent and ships no engine; it's where you review the suite, its coverage, and its run health.
 
-- **Chat to a real Playwright spec** — Describe what to verify; Hover drives your real Chrome and crystallizes the run into a plain `@playwright/test` spec with `getByRole` / `getByLabel` selectors. It runs in CI forever, with no AI and no keys.
-- **Tests like a real teammate** — When the agent hits something it can't safely decide (which account to use, an ambiguous step, a destructive action), it asks you right in the editor instead of guessing or stalling.
-- **Multi-environment accounts, `@`-mentionable** — Define test accounts per environment (local / staging / prod) once, then mention `@account` in chat and the agent logs in for you. Passwords live in VS Code SecretStorage, get parameterized into `process.env` in the spec, and export to your CI secrets in one click.
-- **Your model — Local CLI or BYOK** — Two ways to provide a model, switchable in Settings. *Local CLI*: drive runs with a coding-agent CLI on your PATH (Claude Code, Codex, Gemini, Qwen) on the subscription you already pay for. *BYOK*: bring your own API key — pick a protocol (Anthropic / OpenAI / Azure OpenAI / Gemini) or an OpenAI-compatible gateway, and Hover injects the key + base URL + model into the matching CLI. Either can point at a self-hosted endpoint for a local model. Keys live in VS Code SecretStorage; nothing leaves your computer.
-- **Nothing new to learn** — The chat looks and works like Claude Code or Codex. Install it, open the panel, describe a flow. No setup in your app, no bundler plugin, no config.
-- **QA Testing mode — explore, don't just script** — Switch from Flow (author one spec) to 🟢 QA Testing: the agent autonomously explores your app to find defects, paces itself by an intensity budget (Quick / Standard / Deep), writes a findings report with a coverage map, and offers each clean flow it completes as a one-click ✨ Crystallize spec. Two capability toggles ride on top — **API testing** (auth / status / access control / IDOR / broken authorization, via a local HTTPS MITM that replays captured calls with mutations → `.api-test.spec.ts` CI gates) and **Penetration testing** (offensive, white-box, your **own** app — destructive, runs as a separate pass, off by default). It remembers business rules it confirms so it doesn't re-ask.
+## What it gives you
+
+- **Business Map** — a graph of your app's business flows read from `.hover/hover-map.md`: areas → business lines → the spec each one produced, coloured by coverage. Lives in its own Activity Bar view and a full editor panel.
+- **Dashboard** — the spec × run health matrix (pass / fail / flaky), wired to your GitHub Actions runs: Hover can generate the CI workflow and pull each run's Playwright results back into the view. One click to install the MCP, one to open [gethover.dev](https://www.gethover.dev/).
+- **Environments** — define Local + remote targets (the roster commits to `.hover/environments.json`); account passwords stay in VS Code SecretStorage. Pick the active environment for running specs.
+- **Run specs (F3)** — a CodeLens on every `*.spec.ts` runs it through *your own* Playwright in a terminal. No agent, no tokens — just `@playwright/test`.
+
+## How authoring works
+
+Authoring happens in your coding agent via the MCP, not in this extension:
+
+```bash
+claude mcp add hover -- npx -y @hover-dev/mcp
+```
+
+Then, in your agent: `/mcp__hover__test_app` explores your app and crystallizes specs into `__vibe_tests__/`. Come back here to review the Business Map, watch the Dashboard, and run the suite. The differentiator is **record == replay** — the agent acts through grounded tools, so the selector that drove a click is the exact one saved, and the saved tests run in your CI with **zero AI**.
 
 ## Requirements
 
-- **VS Code 1.85** or higher
-- **One coding-agent CLI** on your `PATH` — [Claude Code](https://claude.com/claude-code) (`npm i -g @anthropic-ai/claude-code`) or [OpenAI Codex](https://github.com/openai/codex) (`npm i -g @openai/codex`), signed in with your subscription or your own API key.
+- **VS Code 1.85** or higher.
+- A Hover-tested project — i.e. one where you've run `@hover-dev/mcp` from your own coding agent. The extension reads the `.hover/` wiki + `__vibe_tests__/` specs it produces.
 
 ## New to Hover?
 
