@@ -20,32 +20,16 @@
     "claude"
   ],
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/engine.js",
+  "types": "dist/engine.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./agents": {
-      "types": "./dist/agents/index.d.ts",
-      "import": "./dist/agents/index.js"
-    },
-    "./service": {
-      "types": "./dist/service.d.ts",
-      "import": "./dist/service.js"
+      "types": "./dist/engine.d.ts",
+      "import": "./dist/engine.js"
     },
     "./engine": {
       "types": "./dist/engine.d.ts",
       "import": "./dist/engine.js"
-    },
-    "./launch-chrome": {
-      "types": "./dist/playwright/launchChrome.d.ts",
-      "import": "./dist/playwright/launchChrome.js"
-    },
-    "./plugin-api": {
-      "types": "./dist/plugin-api.d.ts",
-      "import": "./dist/plugin-api.js"
     }
   },
   "files": [
@@ -63,7 +47,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@playwright/mcp": "0.0.75",
     "cross-spawn": "^7.0.6",
     "playwright-core": "^1.50.0",
     "ts-morph": "^28.0.0",

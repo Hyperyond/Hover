@@ -19,12 +19,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 
 const PACKAGES = [
+  // @hover-dev/core is the only dist-shape package: @hover-dev/mcp imports
+  // @hover-dev/core/engine, so a fresh-clone `pnpm install` must leave a built
+  // dist/ behind. Rebuild only when src/ is newer than dist/.
   { name: '@hover-dev/core', dir: join(ROOT, 'packages/core') },
-  // Security/pentest ship as `main: dist/...` packages: the VS Code extension's
-  // staged engine resolves their compiled output, and a fresh-clone `pnpm
-  // install` + `pnpm typecheck` must find the built `.d.ts`. Rebuild on stale.
-  { name: '@hover-dev/api-test', dir: join(ROOT, 'packages/api-test') },
-  { name: '@hover-dev/pentest', dir: join(ROOT, 'packages/pentest') },
 ];
 
 function newestMtime(dir) {

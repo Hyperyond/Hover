@@ -8,12 +8,11 @@ import { chromium, type Browser, type Locator, type Page } from 'playwright-core
  * against the live app. This is NOT the CI run (that's `playwright test` in the
  * user's CI) — it's the instant "did what I just wrote actually replay?" check.
  *
- * The grounded steps are the bare-tool actuations the control server buffered
- * (`click_control` / `fill_control` / `select_control` / `check_control` /
- * `assert_visible`); their input shape + the `locate` resolver are duplicated
- * from mcp/actuateServer.ts on purpose — that file is the extension's
- * load-bearing control MCP and must stay untouched here. Keep the two `locate`s
- * in sync; consolidate when actuateServer is next refactored.
+ * The grounded steps are the bare-tool actuations buffered by the MCP server's
+ * grounded control tools (`click_control` / `fill_control` / `select_control` /
+ * `check_control` / `assert_visible`). `groundedLocate` below is the canonical
+ * role+name → testId → text resolver (the old extension's mcp/actuateServer.ts,
+ * which once held a sibling copy, has been removed in the MCP-first cleanup).
  */
 
 export interface GroundedTarget {
