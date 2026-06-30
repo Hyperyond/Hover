@@ -167,11 +167,11 @@ function Hero() {
           </p>
         </div>
 
-        {/* Right — record == replay, drawn directly: the agent clicks "Log in" by
-            role+name in the debug Chrome, and that exact selector lands in
-            login.spec.ts. The moat + the artifact you own. */}
+        {/* Right — a coding-agent session driving Hover's MCP: the user invokes
+            /mcp__hover__test_app, the agent streams grounded tool calls, and Hover
+            crystallizes plain Playwright specs. The authoring loop, live. */}
         <div className="flex min-w-0 justify-center lg:justify-end">
-          <RecordReplay />
+          <McpDemo />
         </div>
       </div>
     </section>
@@ -232,7 +232,7 @@ function StageVisual({ kind }: { kind: 'mcp' | 'map' | 'ci' | 'cloud' }) {
   if (kind === 'mcp')
     return (
       <div className="flex justify-center lg:justify-start">
-        <McpDemo />
+        <RecordReplay />
       </div>
     );
   if (kind === 'map') return <BusinessMapDemo />;
