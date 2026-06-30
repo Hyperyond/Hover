@@ -121,5 +121,63 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     ({ name, description }) => guard(() => c.crystallize(name, description)),
   );
 
+  // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
+  // it as `/mcp__hover__test_app`, so adding the server brings both the tools
+  // AND the command. No project scaffolding needed.
+  server.registerPrompt(
+    'test_app',
+    {
+      title: 'Hover — map & crystallize a test suite',
+      description: 'Map this app\'s business lines and crystallize a Playwright suite (incremental, scales to large apps).',
+      argsSchema: { scope: z.string().optional().describe('An area/flow to focus on. Omit to cover the whole app.') },
+    },
+    ({ scope }) => ({
+      messages: [{ role: 'user', content: { type: 'text', text: workflowPrompt(scope) } }],
+    }),
+  );
+
   return server;
+}
+
+/** The phased, scale-aware workflow, delivered as the prompt body. Mirrors the
+ *  hover-mcp tool surface; the agent's own file tools do the code-reading. */
+function workflowPrompt(scope?: string): string {
+  const target = scope?.trim() ? scope.trim() : 'the whole app';
+  return `Build (or extend) a Playwright test suite for this web app using the **Hover MCP tools**.
+Drive the browser ONLY through these tools — they actuate via grounded selectors
+(role+name → testId → text), so every spec you save replays EXACTLY what you did
+(record==replay). Never write spec files yourself; only \`crystallize_spec\` does.
+
+Tools: \`recall_business_knowledge\` · \`browser_navigate\` · \`browser_snapshot\` (ARIA
+tree — read before acting) · \`click_control\` / \`fill_control\` / \`select_control\` /
+\`check_control\` (grounded target from the snapshot) · \`assert_visible\` ·
+\`record_fact\` · \`crystallize_spec(name, description?)\`.
+
+Target: the app at HOVER_TARGET (set in the server's env). Scope: ${target}.
+
+Work in PHASES — this is what lets it scale from a tiny app to a large one.
+
+## Phase 1 — Map the business lines (read the CODE, don't click around)
+- FIRST call \`recall_business_knowledge\` — rules earlier runs learned (and read \`.hover/hover-map.md\` if it exists, the running map; CONTINUE it, don't start over). Treat both as ground truth; don't re-ask what they already answer.
+- Use YOUR OWN file tools (read / grep / glob) to find the app's ROUTES + navigation: the router config, route/page files, the nav components. Enumerate the user-facing BUSINESS LINES (a coherent task a user performs), each with its entry route, grouped by area. Reading code is cheaper + more complete than clicking around, and finds areas behind auth / nav you'd otherwise miss.
+- Write/update \`.hover/hover-map.md\` as a checklist (4-space indent = a code block):
+
+        # Business map — <app>
+        ## Auth
+        - [ ] Log in — /login
+        - [x] Checkout — /checkout — checkout.spec.ts
+
+- Don't test yet. For a large app, this map IS the plan.
+
+## Phase 2 — Pick the scope
+- If a scope was given, cover that. Otherwise show the uncovered lines and ask which to cover now (offer "all uncovered"). For a small app, just cover them all.
+
+## Phase 3 — Cover each chosen line, ONE AT A TIME
+For each line: \`browser_navigate\` to its route → \`browser_snapshot\` → EXERCISE the real flow (click / fill / select / check — you are a tester, never just describe the page) → \`assert_visible\` on the OUTCOME (a success message, the new row, the next screen) → \`crystallize_spec("<short imperative English name>")\`. Crystallize the MOMENT each flow is done, before the next — the buffer is per-flow. The tools share ONE browser, so cover lines SEQUENTIALLY.
+
+## Phase 4 — Update coverage
+- Mark each covered line \`[x]\` in \`.hover/hover-map.md\` with its spec filename. Report covered vs still-open. A LARGE app doesn't have to finish in one go — covering a batch + updating the map is a complete, resumable unit; re-invoke to continue the uncovered lines.
+
+## Understand the business — ASK, then REMEMBER
+When you genuinely can't resolve something on your own — is this a bug or by-design? which flows matter? what does this domain term mean? — ASK the user (don't guess, don't stop). When they confirm a durable business RULE, call \`record_fact\` to persist it (RULES ONLY — never credentials/secrets/PII). Also ASK when blocked on something only they can provide (login credentials, a file). Stay on the app under test — never navigate to external origins.`;
 }
