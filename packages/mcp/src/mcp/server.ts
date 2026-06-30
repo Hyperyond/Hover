@@ -21,6 +21,18 @@ const GROUND = {
     .describe('Scope the search to a container first (role+name) when a label repeats across groups.'),
 };
 
+/** One asserted API call for crystallize_api_spec — mirrors core's ApiCheck. */
+const API_CHECK = z.object({
+  title: z.string().describe('Short test name, e.g. "GET /api/cart returns the cart".'),
+  method: z.string(),
+  url: z.string().describe('Full URL or same-origin path (same-origin is relativized in the spec).'),
+  requestBody: z.any().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  expectStatus: z.number().optional().describe('Expected status — verified with replay_request.'),
+  expectBodyKeys: z.array(z.string()).optional().describe('Top-level response keys to assert present.'),
+  note: z.string().optional().describe('Emitted as a leading comment, e.g. "authz: no session → 401".'),
+});
+
 export function createHoverMcpServer(c: HoverMcpController): McpServer {
   const server = new McpServer({ name: 'hover', version: '0.1.0' });
   const guard = (fn: () => Promise<string>) => fn().then(md, (e) => md(`✗ ${errLine(e)}`));
@@ -121,6 +133,57 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     ({ name, description }) => guard(() => c.crystallize(name, description)),
   );
 
+  // ── API layer ──────────────────────────────────────────────────────────────
+  // While you drive the UI, Hover passively buffers the app's xhr/fetch traffic
+  // off the same CDP connection (no MITM). Read it, verify a check, crystallize.
+
+  server.registerTool(
+    'capture_requests',
+    {
+      description:
+        "Return the app's xhr/fetch API calls observed while you drove the UI (method, url, status, content-type, request body, response shape). Call it after exercising a flow to see which endpoints it hit. Optionally filter.",
+      inputSchema: {
+        urlContains: z.string().optional().describe('Only calls whose URL contains this substring.'),
+        method: z.string().optional().describe('Only calls with this HTTP method.'),
+      },
+    },
+    ({ urlContains, method }) => guard(() => Promise.resolve(c.captureRequests({ urlContains, method }))),
+  );
+
+  server.registerTool(
+    'replay_request',
+    {
+      description:
+        'Send a (possibly mutated) request and return the response, to VERIFY an API check before crystallizing it (no confabulated status codes). For an authz check, set authenticated:false (fresh context, no session) and expect 401/403; or drop/alter headers / swap an id for IDOR.',
+      inputSchema: {
+        method: z.string().describe('HTTP method, e.g. GET / POST.'),
+        url: z.string().describe('Full URL or same-origin path.'),
+        headers: z.record(z.string(), z.string()).optional().describe('Headers to send (omit/blank the auth header for a "requires auth" check).'),
+        body: z.any().optional().describe('Request body for POST/PUT/PATCH.'),
+        authenticated: z
+          .boolean()
+          .optional()
+          .describe('true (default) = replay with the browser session; false = fresh context with NO session (for "requires auth" checks).'),
+      },
+    },
+    ({ method, url, headers, body, authenticated }) =>
+      guard(() => c.replayRequest({ method, url, headers, body, authenticated })),
+  );
+
+  server.registerTool(
+    'crystallize_api_spec',
+    {
+      description:
+        'Save selected API checks as a plain Playwright `*.api-test.spec.ts` (uses the `request` fixture). Use it ALONGSIDE crystallize_spec when a flow exercised a worthwhile API surface — a real contract, a data mutation, or an authz boundary. Be SELECTIVE: lock checks that matter, not every captured call. Verify each with replay_request first.',
+      inputSchema: {
+        name: z.string().describe('Short imperative English name — becomes the <name>.api-test.spec.ts filename.'),
+        description: z.string().optional().describe('One line on what this API spec verifies.'),
+        checks: z.array(API_CHECK).describe('The API checks to lock — each a request + its expected status / shape / authz outcome.'),
+      },
+    },
+    ({ name, description, checks }) => guard(() => c.crystallizeApiSpec(name, description, checks)),
+  );
+
   // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
   // it as `/mcp__hover__test_app`, so adding the server brings both the tools
   // AND the command. No project scaffolding needed.
@@ -151,7 +214,8 @@ Drive the browser ONLY through these tools — they actuate via grounded selecto
 Tools: \`recall_business_knowledge\` · \`browser_navigate\` · \`browser_snapshot\` (ARIA
 tree — read before acting) · \`click_control\` / \`fill_control\` / \`select_control\` /
 \`check_control\` (grounded target from the snapshot) · \`assert_visible\` ·
-\`record_fact\` · \`crystallize_spec(name, description?)\`.
+\`record_fact\` · \`crystallize_spec(name, description?)\`. API layer:
+\`capture_requests\` · \`replay_request\` · \`crystallize_api_spec\`.
 
 Target: the app at HOVER_TARGET (set in the server's env). Scope: ${target}.
 
@@ -174,6 +238,12 @@ Work in PHASES — this is what lets it scale from a tiny app to a large one.
 
 ## Phase 3 — Cover each chosen line, ONE AT A TIME
 For each line: \`browser_navigate\` to its route → \`browser_snapshot\` → EXERCISE the real flow (click / fill / select / check — you are a tester, never just describe the page) → \`assert_visible\` on the OUTCOME (a success message, the new row, the next screen) → \`crystallize_spec("<short imperative English name>")\`. Crystallize the MOMENT each flow is done, before the next — the buffer is per-flow. The tools share ONE browser, so cover lines SEQUENTIALLY.
+
+## Phase 3.5 — Lock the API layer too (SELECTIVELY)
+As you drive each flow, Hover passively captures the app's xhr/fetch traffic. After a flow, call \`capture_requests\` to see what it hit. For a line that exercised a **worthwhile API surface — a data mutation (POST/PUT/DELETE), a clear contract, or an authz boundary** — also lock an API spec:
+- Decide the checks. Contract: the call returns its status + key fields. Authz: the same call WITHOUT the session must be refused — call \`replay_request\` with \`authenticated:false\` and confirm it's 401/403 before asserting it.
+- VERIFY each check with \`replay_request\` first (so you never assert a confabulated status), then \`crystallize_api_spec(name, checks)\` → a \`*.api-test.spec.ts\`.
+- Be SELECTIVE — skip pure-display reads, analytics, third-party pings. Most UI flows need 0–1 API specs. A static/read-only flow needs none. This is judgment, not a per-flow quota.
 
 ## Phase 4 — Update coverage
 - Mark each covered line \`[x]\` in \`.hover/hover-map.md\` with its spec filename. Report covered vs still-open. A LARGE app doesn't have to finish in one go — covering a batch + updating the map is a complete, resumable unit; re-invoke to continue the uncovered lines.

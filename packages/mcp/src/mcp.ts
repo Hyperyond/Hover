@@ -3,10 +3,12 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   launchDebugChrome,
   writeSpec,
+  writeApiSpec,
   writeFact,
   loadMemory,
   formatMemoryForPrompt,
   type SkillStep,
+  type ApiCheck,
 } from '@hover-dev/core/engine';
 import { HoverMcpController } from './mcp/controller.js';
 import { createHoverMcpServer } from './mcp/server.js';
@@ -55,6 +57,10 @@ const controller = new HoverMcpController({
   getPage,
   crystallize: async (name: string, description: string | undefined, steps: SkillStep[]) => {
     const res = await writeSpec({ devRoot: DEV_ROOT, name, description, steps, startUrl: TARGET, overwrite: true });
+    return { path: res.path };
+  },
+  crystallizeApi: async (name: string, description: string | undefined, checks: ApiCheck[]) => {
+    const res = await writeApiSpec({ devRoot: DEV_ROOT, name, description, checks, startUrl: TARGET, overwrite: true });
     return { path: res.path };
   },
   recordFact: (title, rule, type) =>
