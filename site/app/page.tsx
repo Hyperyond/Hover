@@ -1,6 +1,6 @@
 import { Sparkle } from '@/components/Sparkle';
 import { McpDemo } from '@/components/McpDemo';
-import { LoopDiagram } from '@/components/LoopDiagram';
+import { RecordReplay } from '@/components/RecordReplay';
 import { BusinessMapDemo } from '@/components/BusinessMapDemo';
 import { CiDemo } from '@/components/CiDemo';
 import { CloudDemo } from '@/components/CloudDemo';
@@ -167,10 +167,11 @@ function Hero() {
           </p>
         </div>
 
-        {/* Right — the vertical lifecycle pipeline (1 Author → 2 Review → 3 Run →
-            4 Watch → self-heal back to Author), producing the artifact you own. */}
+        {/* Right — record == replay, drawn directly: the agent clicks "Log in" by
+            role+name in the debug Chrome, and that exact selector lands in
+            login.spec.ts. The moat + the artifact you own. */}
         <div className="flex min-w-0 justify-center lg:justify-end">
-          <LoopDiagram />
+          <RecordReplay />
         </div>
       </div>
     </section>
