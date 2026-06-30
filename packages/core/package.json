@@ -35,6 +35,10 @@
       "types": "./dist/service.d.ts",
       "import": "./dist/service.js"
     },
+    "./engine": {
+      "types": "./dist/engine.d.ts",
+      "import": "./dist/engine.js"
+    },
     "./launch-chrome": {
       "types": "./dist/playwright/launchChrome.d.ts",
       "import": "./dist/playwright/launchChrome.js"
