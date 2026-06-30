@@ -299,7 +299,7 @@ function CenterArtifact() {
         fontSize={10.5}
         fill={MUTE}
       >
-        you own it · zero AI at runtime
+        you own it
       </text>
     </g>
   );
