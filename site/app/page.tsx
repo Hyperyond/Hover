@@ -59,7 +59,7 @@ const JSON_LD = {
     'BYO-CLI — Hover bundles no model and no keys; it rides the coding agent and subscription you already pay for',
     'Optional VS Code cockpit — a Business Map graph of your flows + coverage and a Dashboard (pass / fail / flaky + CI results)',
     'CI integration — the crystallized specs run on every PR as plain Playwright; Hover can generate the workflow',
-    'A living test wiki in .hover/ — a business map + remembered rules so the suite compounds as your app grows',
+    'Test knowledge that compounds — a Business Map of your flows + remembered rules in .hover/, so the suite stays self-aware as your app grows',
   ],
   sameAs: [GITHUB, NPM_URL, MARKETPLACE_URL],
 };
@@ -374,7 +374,7 @@ function Surfaces() {
 
 /* ── Why Hover ──────────────────────────────────────────────────────────
  * The moat, in four pillars (mirrors README "Why Hover"): record == replay,
- * you own the artifact, BYO-CLI, a living test wiki. */
+ * you own the artifact, BYO-CLI, compounding test knowledge. */
 const WHY = [
   {
     k: 'replay',
@@ -393,8 +393,8 @@ const WHY = [
   },
   {
     k: 'wiki',
-    title: 'A living test wiki',
-    body: 'Hover maintains a business map + remembered rules in .hover/, committed with your code. The suite compounds and stays self-aware as your app grows — your app’s test knowledge, owned and portable.',
+    title: 'Test knowledge that compounds',
+    body: 'Hover keeps a Business Map of your flows + the rules it learns in .hover/, committed with your code — so the suite stays self-aware and gets smarter as your app grows. Owned and portable.',
   },
 ];
 
@@ -429,7 +429,7 @@ function Why() {
 /* ── Roadmap — shipped + planned ─────────────────────────────────────────
  * Today's reality: the MCP server + core are published on npm, the review
  * cockpit (Business Map + Dashboard) ships in the extension, and CI integration
- * is wired. Cloud + the living-wiki memory layer remain planned. */
+ * is wired. Cloud + the deeper test-knowledge memory layer remain planned. */
 const ROADMAP = [
   {
     status: 'shipped',
@@ -453,8 +453,8 @@ const ROADMAP = [
   },
   {
     status: 'planned',
-    title: 'A living test wiki',
-    body: 'A business map + remembered rules in .hover/, committed with your code: Hover already knows which pages, forms, and endpoints a flow touches, flags coverage gaps, and keeps the suite self-aware as your app grows. No source uploaded.',
+    title: 'A deeper test-knowledge graph',
+    body: 'A richer layer over the Business Map + remembered rules in .hover/: Hover already knows which pages, forms, and endpoints a flow touches, and a relationship graph would link them and flag coverage gaps as your app grows. No source uploaded.',
   },
   {
     status: 'planned',
@@ -473,7 +473,7 @@ function Roadmap() {
       </h2>
       <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-text-mute">
         The MCP server and core are on npm, the review cockpit and CI integration
-        ship today — all free and open-source. Next: a living test wiki, then
+        ship today — all free and open-source. Next: a deeper test-knowledge graph, then
         Hover Cloud. Follow along on{' '}
         <a href={GITHUB} className="text-text underline-offset-2 hover:underline">
           GitHub

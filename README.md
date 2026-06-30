@@ -52,7 +52,7 @@ Want a visual surface? Install the **[Hover VS Code extension](https://marketpla
 - **record == replay** — grounded actuation + deterministic crystallize: the saved selector is the one that drove the run. Playwright codegen / Stagehand / Midscene can't guarantee this.
 - **You own the artifact** — plain `@playwright/test` in your repo, runs in your CI with zero AI. No proprietary format, no runtime dependency on Hover, no lock-in.
 - **BYO-CLI** — Hover bundles no AI runtime and no keys; it rides the coding agent + subscription you already pay for. We manage *how* to test, never *which* model.
-- **A living test wiki** — Hover maintains a business map + remembered rules in `.hover/`, so the suite compounds and stays self-aware as your app grows.
+- **Test knowledge that compounds** — Hover keeps a **Business Map** of your flows + the rules it learns in `.hover/`, committed with your code — so the suite stays self-aware and gets smarter as your app grows.
 
 ## How it works
 

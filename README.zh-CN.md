@@ -52,7 +52,7 @@ npx playwright test __vibe_tests__
 - **record == replay** —— 接地操作 + 确定性结晶:保存的选择器就是驱动这次运行的那个。Playwright codegen / Stagehand / Midscene 都保证不了这点。
 - **你拥有 artifact** —— 仓库里的纯 `@playwright/test`,在你 CI 里零 AI 运行。无专有格式、不依赖 Hover 运行时、不锁定。
 - **BYO-CLI** —— Hover 不带 AI 运行时、不带 key;它骑在你已经付费的 coding agent + 订阅上。我们管**怎么测**,从不管**用哪个模型**。
-- **会生长的测试 wiki** —— Hover 在 `.hover/` 里维护业务地图 + 记住的规则,套件随你应用成长而复利、且自我感知。
+- **会复利的测试知识** —— Hover 在 `.hover/` 里维护业务地图 + 记住的规则,套件随你应用成长而复利、且自我感知。
 
 ## 工作原理
 

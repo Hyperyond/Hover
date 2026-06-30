@@ -34,7 +34,7 @@ The prompt walks the agent through a phased, scale-aware loop:
 
 The agent calls Hover's [grounded tools](/docs/features/mcp-tools/) over CDP against your debug Chrome — `browser_snapshot` to read the page, then `click_control` / `fill_control` / `select_control` / `check_control` to act, and `assert_visible` on the outcome. Because it targets controls by `role+name`, the selector that drives each action is the exact one that gets saved.
 
-If the agent genuinely can't resolve something — is this a bug or by-design? what does this domain term mean? — it asks you rather than guessing, and when you confirm a durable rule it remembers it via `record_fact` (see [the living test wiki](/docs/features/living-wiki/)).
+If the agent genuinely can't resolve something — is this a bug or by-design? what does this domain term mean? — it asks you rather than guessing, and when you confirm a durable rule it remembers it via `record_fact` (see [your app's test knowledge](/docs/features/living-wiki/)).
 
 ## Step 4 — Crystallize
 
@@ -53,6 +53,6 @@ This is the point of crystallization: the AI authored the test once, but the sav
 ## What's next
 
 - [The MCP tools](/docs/features/mcp-tools/) — the full grounded tool surface and the `test_app` prompt.
-- [The living test wiki](/docs/features/living-wiki/) — what Hover remembers about your app under `.hover/`.
+- [Test knowledge](/docs/features/living-wiki/) — what Hover remembers about your app under `.hover/`.
 - Want a visual surface? The optional **[VS Code cockpit](/docs/get-started/install/)** adds a Business Map graph + Dashboard. It reviews — it doesn't drive the agent.
 - [Optimize a spec](/docs/features/optimization-pass/) — the optional diff-reviewed AI polish pass.
