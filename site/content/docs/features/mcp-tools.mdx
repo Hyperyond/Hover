@@ -22,11 +22,14 @@ The server ships its workflows as MCP prompts, surfaced by Claude Code as slash 
 /mcp__hover__test_app login     # …or scope it to one area
 /mcp__hover__heal               # replay every saved spec, fix any drift
 /mcp__hover__heal login.spec.ts # …or heal one spec
+/mcp__hover__optimize checkout  # enrich one spec with observed assertions
 ```
 
 **`test_app [scope]`** walks the agent through a scale-aware loop: **map the business lines** (the agent reads your routes + nav with its own file tools), **pick a scope**, **cover each flow one at a time** (navigate → snapshot → exercise → assert → crystallize), optionally add an [API-layer check](/docs/features/api-testing/) (Phase 3.5) and lift [shared flows into Page Objects](/docs/features/page-objects/) (Phase 5), then **update coverage** in `.hover/hover-map.md`. A large app doesn't have to finish in one pass — covering a batch and updating the map is a resumable unit.
 
 **`heal [spec]`** runs the [self-heal](/docs/features/self-heal/) loop: replay a saved spec's recorded steps against the live app, find the first step that no longer locates, and re-ground just that step. Omit the argument to scan every spec.
+
+**`optimize <spec>`** enriches a crystallized spec. It hands your agent the spec, the outcome the recording session observed, and your existing Page Objects, and asks it to add assertions for that observed feedback, replace this-run values (a generated id, an order number) with stable ones, and reuse a Page Object where a step sequence matches. Your agent does the thinking; Hover picks no model. The result goes through `save_optimized_spec`, which validates it and writes a candidate under `.hover/cache/optimized/`. Your spec stays as it was until you review the diff and promote the candidate.
 
 ## The tools
 
@@ -65,6 +68,7 @@ While the agent drives the UI, Hover passively captures the app's browser traffi
 |---|---|
 | `detect_shared_flows()` | Report NON-login flows repeated across your saved specs. |
 | `extract_page_objects()` | Lift those shared flows into `pages/` + `fixtures.ts` and fold the specs onto them. Deterministic — no LLM. See [Page Object extraction](/docs/features/page-objects/). |
+| `save_optimized_spec(slug, code)` | File an agent-improved spec (from the `optimize` prompt) as a review candidate. Hover validates it (semantic selectors, no `waitForTimeout` / XPath, parses), soft-batches trailing assertions, and writes `.hover/cache/optimized/<slug>.spec.ts.draft`. Never overwrites your spec — you promote the candidate after reviewing the diff. |
 
 ### The grounded target
 

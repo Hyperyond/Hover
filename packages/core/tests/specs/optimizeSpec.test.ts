@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   optimizeSpec, buildOptimizePrompt, extractCode, validateSpecCode, OptimizeError, gatherSuiteContext,
+  buildOptimizeBrief, saveOptimizedCandidate,
 } from '../../src/specs/optimizeSpec.js';
 import type { SpecSidecar } from '../../src/specs/sidecar.js';
 
@@ -196,4 +197,67 @@ test('login', async ({ page }) => {
     await expect(optimizeSpec(devRoot, 'nope', async () => 'x')).rejects.toThrow(OptimizeError);
   });
 
+});
+
+// MCP-first split: the agent (not a Hover-owned model) is the intelligence.
+// buildOptimizeBrief hands it the brief; saveOptimizedCandidate files its result.
+describe('buildOptimizeBrief + saveOptimizedCandidate (MCP-first optimize)', () => {
+  let devRoot: string;
+  beforeEach(() => { devRoot = mkdtempSync(join(tmpdir(), 'hover-opt2-')); });
+  afterEach(() => { rmSync(devRoot, { recursive: true, force: true }); });
+
+  function seedSpec(): void {
+    mkdirSync(join(devRoot, '__vibe_tests__', '.hover'), { recursive: true });
+    writeFileSync(
+      join(devRoot, '__vibe_tests__', 'checkout.spec.ts'),
+      `import { test, expect } from '@playwright/test';\ntest('checkout', async ({ page }) => {});\n`,
+      'utf-8',
+    );
+    writeFileSync(
+      join(devRoot, '__vibe_tests__', '.hover', 'checkout.json'),
+      JSON.stringify({
+        version: 2, slug: 'checkout', name: 'checkout', createdAt: '',
+        steps: [{ kind: 'done', summary: 'order confirmed' }], assertions: [],
+      }),
+      'utf-8',
+    );
+  }
+
+  it('builds a brief that carries the spec, the observed outcome, and the save_optimized_spec directive', async () => {
+    seedSpec();
+    const { prompt, original } = await buildOptimizeBrief(devRoot, 'checkout');
+    expect(prompt).toContain("test('checkout'"); // the current spec is included
+    expect(prompt).toContain('order confirmed'); // the observed outcome is included
+    // the agent path ends by CALLING the tool, not by emitting raw text
+    expect(prompt).toContain('save_optimized_spec');
+    expect(prompt).toContain('checkout.spec.ts.draft');
+    expect(prompt).not.toContain('Output ONLY the complete .ts file');
+    expect(original).toContain("test('checkout'");
+  });
+
+  it('throws OptimizeError when the spec does not exist', async () => {
+    await expect(buildOptimizeBrief(devRoot, 'ghost')).rejects.toThrow(OptimizeError);
+  });
+
+  it('files a validated candidate to .hover/cache/optimized/, never the original', async () => {
+    seedSpec();
+    const improved = `import { test, expect } from '@playwright/test';
+test('checkout', async ({ page }) => {
+  await expect(page.getByText('Order confirmed')).toBeVisible();
+});`;
+    const { candidatePath, code } = await saveOptimizedCandidate(devRoot, 'checkout', improved);
+    expect(candidatePath.endsWith('checkout.spec.ts.draft')).toBe(true);
+    expect(candidatePath).toContain(join('.hover', 'cache', 'optimized'));
+    expect(existsSync(candidatePath)).toBe(true);
+    expect(code).toContain("getByText('Order confirmed')");
+    // the original spec is untouched
+    expect(readFileSync(join(devRoot, '__vibe_tests__', 'checkout.spec.ts'), 'utf-8'))
+      .toContain("test('checkout', async ({ page }) => {});");
+  });
+
+  it('rejects (throws) an agent result that violates the guardrails', async () => {
+    seedSpec();
+    await expect(saveOptimizedCandidate(devRoot, 'checkout', 'await page.waitForTimeout(9999);'))
+      .rejects.toThrow(OptimizeError);
+  });
 });

@@ -218,6 +218,23 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     () => guard(() => c.extractPageObjects()),
   );
 
+  // ── Optimize (F7) ────────────────────────────────────────────────────────
+  // The IMPROVEMENT is the agent's (the /mcp__hover__optimize prompt gives it the
+  // brief); this tool is Hover's guardrail + write path — it validates the agent's
+  // result and files it as a review candidate, never touching the spec.
+  server.registerTool(
+    'save_optimized_spec',
+    {
+      description:
+        "File an improved spec (produced from the /optimize brief) as a REVIEW CANDIDATE. Hover validates it (semantic selectors, no waitForTimeout/XPath, parses), soft-batches trailing assertions, and writes .hover/cache/optimized/<slug>.spec.ts.draft — it does NOT overwrite your spec. On a ✗ (rejected check), fix it and call again. This is the only way to file an optimization; don't write the .draft yourself.",
+      inputSchema: {
+        slug: z.string().describe('The spec slug being optimized (its filename without .spec.ts).'),
+        code: z.string().describe('The COMPLETE improved .ts file contents.'),
+      },
+    },
+    ({ slug, code }) => guard(() => c.saveOptimized(slug, code)),
+  );
+
   // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
   // it as `/mcp__hover__test_app`, so adding the server brings both the tools
   // AND the command. No project scaffolding needed.
@@ -230,6 +247,20 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     },
     ({ scope }) => ({
       messages: [{ role: 'user', content: { type: 'text', text: workflowPrompt(scope) } }],
+    }),
+  );
+
+  // Optimize workflow — surfaced as `/mcp__hover__optimize`. Hover builds the
+  // brief (spec + observed session + Page Objects); the agent does the thinking.
+  server.registerPrompt(
+    'optimize',
+    {
+      title: 'Hover — enrich a spec with observed assertions',
+      description: 'Improve a crystallized spec: add assertions for what the session observed, de-literalize volatile values, reuse Page Objects. Files a review candidate; never overwrites the spec.',
+      argsSchema: { spec: z.string().describe('The spec slug to optimize (e.g. "checkout" for checkout.spec.ts).') },
+    },
+    async ({ spec }) => ({
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: await c.optimizeBrief(spec) } }],
     }),
   );
 

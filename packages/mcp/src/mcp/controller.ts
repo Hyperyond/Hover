@@ -65,6 +65,14 @@ export interface McpDeps {
   detectSharedFlows?: () => Promise<SharedFlow[]>;
   /** Lift shared flows into Page Objects + fold the specs that use them. */
   extractPageObjects?: () => Promise<ExtractResult>;
+  /** Build the optimize (F7) brief for a spec — the improvement rules + the spec
+   *  + its observed session + reusable Page Objects — for the user's OWN agent to
+   *  work from. `{ error }` when the spec doesn't exist. No model runs. */
+  optimizeBrief?: (slug: string) => Promise<{ prompt: string } | { error: string }>;
+  /** File an agent-improved spec as a REVIEW candidate: validate it against the
+   *  deterministic guardrails, soft-batch, and write `.hover/cache/optimized/
+   *  <slug>.spec.ts.draft` (never the original). Throws if it fails validation. */
+  saveOptimized?: (slug: string, code: string) => Promise<{ candidatePath: string }>;
 }
 
 function describe(g: GroundedTarget): string {
@@ -332,6 +340,31 @@ export class HoverMcpController {
       null,
       2,
     );
+  }
+
+  /** Optimize (F7), MCP-first: return the improvement brief for the user's own
+   *  agent to work from (the agent IS the model — Hover picks none). Never
+   *  throws; a missing spec / unavailable channel comes back as a plain message
+   *  the agent reads (this feeds a PROMPT, which isn't wrapped in the ✗ guard). */
+  async optimizeBrief(slug: string): Promise<string> {
+    if (!this.deps.optimizeBrief) return `Optimize is unavailable in this server (heal/optimize need spec sidecars).`;
+    try {
+      const res = await this.deps.optimizeBrief(slug);
+      if ('error' in res) {
+        return `Can't optimize "${slug}": ${res.error}. Optimize only works on a Hover-crystallized spec — list __vibe_tests__/*.spec.ts and pass one by slug.`;
+      }
+      return res.prompt;
+    } catch (e) {
+      return `Can't build the optimize brief for "${slug}": ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`;
+    }
+  }
+
+  /** File an agent-improved spec as a review candidate. Validation failures throw
+   *  (the tool guard turns them into a ✗ the agent can fix and retry against). */
+  async saveOptimized(slug: string, code: string): Promise<string> {
+    if (!this.deps.saveOptimized) return 'Optimize is unavailable in this server.';
+    const { candidatePath } = await this.deps.saveOptimized(slug, code);
+    return `✓ filed optimized candidate at ${candidatePath} (your spec is untouched). Tell the user to diff it against __vibe_tests__/${slug}.spec.ts and, to keep it, replace the spec with the candidate.`;
   }
 
   /** Lift the detected shared flows into `pages/*` + `fixtures.ts` and fold the
