@@ -3,7 +3,7 @@ import type { Page } from 'playwright-core';
 import { HoverMcpController } from '../src/mcp/controller.js';
 import type { SkillStep } from '@hover-dev/core/engine';
 
-function mockPage(opts: { visible?: boolean } = {}) {
+function mockPage(opts: { visible?: boolean; fieldType?: string } = {}) {
   const actions: string[] = [];
   const mkLoc = (label: string): Record<string, unknown> => ({
     first: () => mkLoc(label),
@@ -13,6 +13,7 @@ function mockPage(opts: { visible?: boolean } = {}) {
     check: async () => void actions.push(`check ${label}`),
     uncheck: async () => void actions.push(`uncheck ${label}`),
     isVisible: async () => opts.visible ?? true,
+    getAttribute: async (n: string) => (n === 'type' ? (opts.fieldType ?? null) : null),
     ariaSnapshot: async () => '- button "Sign in"',
     getByRole: (r: string, o?: { name?: string }) => mkLoc(`${r}:${o?.name}`),
     getByTestId: (t: string) => mkLoc(`testId:${t}`),
@@ -58,9 +59,20 @@ describe('HoverMcpController', () => {
 
     expect(out).toContain('log-in.spec.ts');
     expect(crystallize).toHaveBeenCalledOnce();
-    expect(crystallize.mock.calls[0]).toEqual(['Log in', 'auth flow', expect.any(Array)]);
+    expect(crystallize.mock.calls[0]).toEqual(['Log in', 'auth flow', expect.any(Array), expect.any(Array)]);
     expect((crystallize.mock.calls[0][2] as SkillStep[])).toHaveLength(1);
+    expect((crystallize.mock.calls[0][3] as unknown[])).toHaveLength(0); // no password fill → no redactions
     expect(c.steps).toHaveLength(0); // buffer cleared for the next flow
+  });
+
+  it('redacts a value typed into a password field to a HOVER_PASSWORD env ref', async () => {
+    const page = mockPage({ fieldType: 'password' });
+    const crystallize = vi.fn(async () => ({ path: '/p/__vibe_tests__/login.spec.ts' }));
+    const c = new HoverMcpController({ getPage: async () => page, crystallize });
+    await c.fill({ role: 'textbox', name: 'Password' }, 'hunter2');
+    await c.crystallize('Log in');
+    const redactions = crystallize.mock.calls[0][3] as Array<{ value: string; envVar: string }>;
+    expect(redactions).toEqual([{ value: 'hunter2', envVar: 'HOVER_PASSWORD' }]);
   });
 
   it('crystallize with an empty buffer writes nothing', async () => {

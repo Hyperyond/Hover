@@ -10,6 +10,7 @@ import {
   readSidecar,
   type SkillStep,
   type ApiCheck,
+  type Redaction,
 } from '@hover-dev/core/engine';
 import { HoverMcpController } from './mcp/controller.js';
 import { createHoverMcpServer } from './mcp/server.js';
@@ -56,8 +57,8 @@ async function getPage(): Promise<Page> {
 
 const controller = new HoverMcpController({
   getPage,
-  crystallize: async (name: string, description: string | undefined, steps: SkillStep[]) => {
-    const res = await writeSpec({ devRoot: DEV_ROOT, name, description, steps, startUrl: TARGET, overwrite: true });
+  crystallize: async (name: string, description: string | undefined, steps: SkillStep[], redactions: Redaction[]) => {
+    const res = await writeSpec({ devRoot: DEV_ROOT, name, description, steps, redactions, startUrl: TARGET, overwrite: true });
     return { path: res.path };
   },
   crystallizeApi: async (name: string, description: string | undefined, checks: ApiCheck[]) => {

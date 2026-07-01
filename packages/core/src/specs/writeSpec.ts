@@ -277,13 +277,18 @@ async function writeOneSpec(
   const envVars = (opts.redactions ?? []).map(r => r.envVar);
   const detectedPrefix = authPrefixLength(cleanActions, envVars);
   const userConfigName = PLAYWRIGHT_CONFIG_NAMES.find(n => existsSync(join(opts.devRoot, n)));
+  // A config Hover scaffolded earlier this run (e.g. a non-login spec wrote a
+  // plain one first) is OURS to upgrade — treat it like "no user config", not a
+  // hands-off user file. ensurePlaywrightConfig adds the setup project to it.
+  const ownScaffold =
+    !!userConfigName && readFileSync(join(opts.devRoot, userConfigName), 'utf-8').includes(SCAFFOLD_MARKER);
   // Already opted in: auth.setup.ts exists from a prior approval (and the config
   // already registers it), so engage AUTOMATICALLY — don't re-ask or re-edit.
   const authSetupExists = existsSync(join(dir, 'auth.setup.ts'));
   // Engage the fixture when a login is detected AND we can register the setup
-  // project: we scaffold the config (no user config), the caller approved editing
-  // it (opts.authFixture, Stage 4), or the fixture was already set up earlier.
-  const engage = detectedPrefix > 0 && (!userConfigName || opts.authFixture === true || authSetupExists);
+  // project: we scaffold/own the config, the caller approved editing a user
+  // config (opts.authFixture, Stage 4), or the fixture was already set up earlier.
+  const engage = detectedPrefix > 0 && (!userConfigName || ownScaffold || opts.authFixture === true || authSetupExists);
   const authPrefix = engage ? detectedPrefix : 0;
   const authFile = engage ? AUTH_STATE_FILE : undefined;
   let authFixtureOffer: WriteSpecResult['authFixtureOffer'];
@@ -1110,26 +1115,25 @@ async function ensureResetStateHelper(devRoot: string, keys: string[]): Promise<
   await writeFile(join(dir, 'resetState.ts'), source, 'utf-8');
 }
 
-async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[], startUrl?: string, authFile?: string): Promise<void> {
-  if (PLAYWRIGHT_CONFIG_NAMES.some(n => existsSync(join(devRoot, n)))) return;
-  const origin = firstNavigateOrigin(steps) ?? originOf(startUrl);
-  if (!origin) return;
-  // Auth-as-fixture: register a `setup` project (matches auth.setup.ts) that the
-  // main project depends on, so login runs ONCE before the specs. Only emitted
-  // when scaffolding our own config (we never touch a user's existing one).
+const SCAFFOLD_MARKER = 'Scaffolded by Hover';
+
+/** The scaffolded config source. When `authFile` is set, a `setup` project runs
+ *  auth.setup.ts ONCE and the main `chromium` project reuses the saved
+ *  storageState — so EVERY spec starts authenticated, not just the login flow. */
+function renderScaffoldConfig(origin: string, authFile?: string): string {
   const projects = authFile
     ? [
         `  projects: [`,
         `    { name: 'setup', testMatch: /.*\\.setup\\.ts$/ },`,
-        `    { name: 'chromium', dependencies: ['setup'] },`,
+        `    { name: 'chromium', dependencies: ['setup'], use: { storageState: ${JSON.stringify(authFile)} } },`,
         `  ],`,
       ]
     : [];
-  const source = [
+  return [
     `import { defineConfig } from '@playwright/test';`,
     ``,
     `/**`,
-    ` * Scaffolded by Hover so crystallized specs (which use relative URLs like`,
+    ` * ${SCAFFOLD_MARKER} so crystallized specs (which use relative URLs like`,
     ` * page.goto("/")) resolve against a base. Override HOVER_BASE_URL in CI to`,
     ` * point the same specs at staging/prod.`,
     ` */`,
@@ -1142,7 +1146,28 @@ async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[], startU
     `});`,
     ``,
   ].join('\n');
-  await writeFile(join(devRoot, 'playwright.config.ts'), source, 'utf-8');
+}
+
+async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[], startUrl?: string, authFile?: string): Promise<void> {
+  const origin = firstNavigateOrigin(steps) ?? originOf(startUrl);
+  if (!origin) return;
+  const existingName = PLAYWRIGHT_CONFIG_NAMES.find(n => existsSync(join(devRoot, n)));
+  if (existingName) {
+    // A config already exists. Only ever UPGRADE our OWN scaffold — and only to
+    // add the auth `setup` project when a login was just lifted (authFile) and
+    // it isn't there yet. This makes auth order-independent: whichever spec in
+    // the run triggers auth-fixture upgrades the config, even if a non-login
+    // spec scaffolded a plain config first. A user's own config is never touched
+    // (that's the Stage-4 approval flow via authFixtureOffer).
+    if (!authFile) return;
+    try {
+      const cur = readFileSync(join(devRoot, existingName), 'utf-8');
+      if (!cur.includes(SCAFFOLD_MARKER) || cur.includes(`name: 'setup'`)) return;
+      await writeFile(join(devRoot, existingName), renderScaffoldConfig(origin, authFile), 'utf-8');
+    } catch { /* upgrade is best-effort */ }
+    return;
+  }
+  await writeFile(join(devRoot, 'playwright.config.ts'), renderScaffoldConfig(origin, authFile), 'utf-8');
 }
 
 function stripBaseUrl(url: string): string {
