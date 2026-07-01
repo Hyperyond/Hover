@@ -99,6 +99,36 @@ describe('HoverMcpController', () => {
     expect(await c.recall()).toContain('No business memory');
   });
 
+  it('optimizeBrief returns the brief prompt, and a helpful message on a missing spec', async () => {
+    const optimizeBrief = vi.fn(async (slug: string) =>
+      slug === 'checkout' ? { prompt: 'IMPROVE THIS SPEC ...' } : { error: 'spec not found' });
+    const c = new HoverMcpController({ getPage: async () => mockPage(), crystallize: async () => ({ path: 'x' }), optimizeBrief });
+
+    expect(await c.optimizeBrief('checkout')).toBe('IMPROVE THIS SPEC ...');
+    const missing = await c.optimizeBrief('ghost');
+    expect(missing).toContain('spec not found');
+    expect(missing).toContain('crystallized spec'); // never throws → the prompt still renders
+  });
+
+  it('saveOptimized files the candidate; a rejected result throws (→ ✗ the agent can retry)', async () => {
+    const saveOptimized = vi.fn(async (slug: string, code: string) => {
+      if (code.includes('waitForTimeout')) throw new Error('optimization rejected — uses waitForTimeout');
+      return { candidatePath: `/p/.hover/cache/optimized/${slug}.spec.ts.draft` };
+    });
+    const c = new HoverMcpController({ getPage: async () => mockPage(), crystallize: async () => ({ path: 'x' }), saveOptimized });
+
+    const ok = await c.saveOptimized('checkout', 'await expect(x).toBeVisible();');
+    expect(ok).toContain('checkout.spec.ts.draft');
+    expect(ok).toContain('untouched');
+    await expect(c.saveOptimized('checkout', 'await page.waitForTimeout(1);')).rejects.toThrow('rejected');
+  });
+
+  it('optimize degrades gracefully when the deps are absent', async () => {
+    const c = new HoverMcpController({ getPage: async () => mockPage(), crystallize: async () => ({ path: 'x' }) });
+    expect(await c.optimizeBrief('checkout')).toContain('unavailable');
+    expect(await c.saveOptimized('checkout', 'code')).toContain('unavailable');
+  });
+
   it('assert_visible throws (→ ✗ to the agent) when the target is not visible', async () => {
     const c = new HoverMcpController({ getPage: async () => mockPage({ visible: false }), crystallize: async () => ({ path: 'x' }) });
     await expect(c.assertVisible({ text: 'Welcome' })).rejects.toThrow('not visible');

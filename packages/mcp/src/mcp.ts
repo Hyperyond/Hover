@@ -10,6 +10,8 @@ import {
   readSidecar,
   detectExtractableFlows,
   extractPageObjects,
+  buildOptimizeBrief,
+  saveOptimizedCandidate,
   type SkillStep,
   type ApiCheck,
   type Redaction,
@@ -76,6 +78,15 @@ const controller = new HoverMcpController({
   },
   detectSharedFlows: () => detectExtractableFlows(DEV_ROOT),
   extractPageObjects: () => extractPageObjects(DEV_ROOT),
+  optimizeBrief: async (slug: string) => {
+    try {
+      const { prompt } = await buildOptimizeBrief(DEV_ROOT, slug);
+      return { prompt };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message.split('\n')[0] : String(e) };
+    }
+  },
+  saveOptimized: (slug: string, code: string) => saveOptimizedCandidate(DEV_ROOT, slug, code),
 });
 
 const server = createHoverMcpServer(controller);

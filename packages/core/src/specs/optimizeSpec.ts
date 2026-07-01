@@ -76,6 +76,25 @@ export async function optimizeSpec(
   slug: string,
   runCodegen: RunCodegen,
 ): Promise<OptimizeResult> {
+  const { prompt, original } = await buildOptimizeBrief(devRoot, slug);
+  const raw = await runCodegen(prompt);
+  const { candidatePath, code } = await saveOptimizedCandidate(devRoot, slug, extractCode(raw));
+  return { candidatePath, code, original };
+}
+
+/**
+ * MCP-first optimize (F7) without a Hover-owned model: build the improvement
+ * brief for a spec, hand it to the USER's own agent (which IS the intelligence),
+ * and let it write the improved file back through `saveOptimizedCandidate`.
+ *
+ * Returns the prompt the agent works from (the same improvement rules the
+ * legacy in-engine `optimizeSpec` used) + the original spec, so a caller can
+ * diff. Throws OptimizeError if the spec doesn't exist. No LLM runs here.
+ */
+export async function buildOptimizeBrief(
+  devRoot: string,
+  slug: string,
+): Promise<{ prompt: string; original: string }> {
   const specPath = join(devRoot, '__vibe_tests__', `${slug}.spec.ts`);
   let draft: string;
   try {
@@ -86,7 +105,6 @@ export async function optimizeSpec(
 
   // Legacy-aware read; null → no sidecar, optimize from the draft alone.
   const sidecar: SpecSidecar | null = await readSidecar(devRoot, slug);
-
   const specTools = new Set(
     (sidecar?.steps ?? [])
       .filter(s => s.kind === 'step' && s.tool)
@@ -94,16 +112,39 @@ export async function optimizeSpec(
   );
   const seeds = relevantSeeds(BUILTIN_SEEDS, specTools);
   const suite = await gatherSuiteContext(devRoot);
-  const raw = await runCodegen(buildOptimizePrompt(draft, sidecar, seeds, suite));
-  const llmCode = extractCode(raw);
+
+  // The agent path ends by CALLING a tool (not by emitting raw text), so swap
+  // the legacy "output ONLY the file" footer for a save_optimized_spec directive.
+  const outputInstruction =
+    `When done, call \`save_optimized_spec\` with slug "${slug}" and the COMPLETE improved ` +
+    `.ts file as \`code\`. Hover validates it (semantic selectors, no waitForTimeout/XPath), ` +
+    `soft-batches trailing assertions, and files it as a REVIEW CANDIDATE at ` +
+    `.hover/cache/optimized/${slug}.spec.ts.draft — it does NOT touch your spec. If it comes ` +
+    `back with a ✗ (a rejected check), fix that and call it again. Then tell the user the ` +
+    `candidate path so they can diff it against __vibe_tests__/${slug}.spec.ts and promote it.`;
+
+  return { prompt: buildOptimizePrompt(draft, sidecar, seeds, suite, outputInstruction), original: draft };
+}
+
+/**
+ * Deterministic finishing + write for an optimized spec the agent produced:
+ * validate the LLM's code against the same guardrails the deterministic path
+ * keeps, soft-batch the trailing independent assertions, and write it as a
+ * CANDIDATE (`.hover/cache/optimized/<slug>.spec.ts.draft`) — never the original.
+ * Throws OptimizeError if the code fails validation (the caller surfaces it so
+ * the agent can retry). No LLM runs here.
+ */
+export async function saveOptimizedCandidate(
+  devRoot: string,
+  slug: string,
+  llmCode: string,
+): Promise<{ candidatePath: string; code: string }> {
   const check = validateSpecCode(llmCode);
   if (!check.ok) {
     throw new OptimizeError(`optimization rejected — ${check.errors.join('; ')}`);
   }
-
-  // Deterministic finishing step: the LLM decided WHAT to assert; soft-batch
-  // applies the safe mechanical rewrite (trailing run of independent assertions
-  // → expect.soft) surgically on its output. See softBatch.ts for the guard.
+  // Soft-batch applies the safe mechanical rewrite (a trailing run of
+  // independent assertions → expect.soft) surgically. See softBatch.ts.
   const code = softBatch(llmCode).code;
 
   // Candidates are disposable derived artifacts → `.hover/cache/` (always
@@ -114,7 +155,7 @@ export async function optimizeSpec(
   // candidate before a human reviews it.
   const candidatePath = join(dir, `${slug}.spec.ts.draft`);
   await writeFile(candidatePath, code.endsWith('\n') ? code : `${code}\n`, 'utf-8');
-  return { candidatePath, code, original: draft };
+  return { candidatePath, code };
 }
 
 /**
@@ -127,6 +168,7 @@ export function buildOptimizePrompt(
   sidecar: SpecSidecar | null,
   seeds: SeedRule[] = [],
   suite: SuiteContext = { pages: [] },
+  outputInstruction = 'Output ONLY the complete .ts file contents — no markdown fences, no prose, no explanation.',
 ): string {
   const done = sidecar?.steps.find(s => s.kind === 'done');
   const stepsJson = sidecar
@@ -176,8 +218,7 @@ export function buildOptimizePrompt(
     `    human can find it and so the test breaks loudly once the app is fixed.`,
     `    Never silently lock buggy behavior into a normal-looking assertion.`,
     ``,
-    `Output ONLY the complete .ts file contents — no markdown fences, no prose,`,
-    `no explanation.`,
+    outputInstruction,
     ``,
     `=== CURRENT SPEC ===`,
     draft,

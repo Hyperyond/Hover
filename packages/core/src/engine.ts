@@ -21,6 +21,10 @@ export { reRenderSpec } from './specs/writeSpec.js';
 // API-layer crystallizer — observed/replayed requests → *.api-test.spec.ts.
 export { writeApiSpec } from './specs/writeApiSpec.js';
 export type { ApiCheck, WriteApiSpecOptions, WriteApiSpecResult } from './specs/writeApiSpec.js';
+// Optimize (F7) — build the improvement brief for the user's own agent, then
+// file its result as a reviewed candidate. No Hover-owned model runs.
+export { buildOptimizeBrief, saveOptimizedCandidate, OptimizeError } from './specs/optimizeSpec.js';
+export type { OptimizeResult } from './specs/optimizeSpec.js';
 // Page-Object extraction — lift NON-login shared flows into pages/ + fixtures.
 export { extractPageObjects, detectExtractableFlows } from './specs/extractPageObjects.js';
 export type { ExtractResult, ExtractedPage } from './specs/extractPageObjects.js';
