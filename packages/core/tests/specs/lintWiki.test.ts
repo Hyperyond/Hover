@@ -18,6 +18,38 @@ describe('parseBusinessMap', () => {
     expect(line?.status).toBe('covered');
     expect(line?.route).toBe('/checkout');
     expect(line?.spec).toBe('checkout.spec.ts');
+    expect(g.relations).toEqual([]); // no Relationships block
+  });
+
+  it('parses a ## Relationships block into resolved inter-line edges', () => {
+    const g = parseBusinessMap(`# Business map — Shop
+## Auth
+- [ ] Log in — /login
+## Buy
+- [x] Checkout — /checkout — checkout.spec.ts
+- [ ] Cart — /cart
+## Relationships
+- Checkout depends-on Log in
+- Cart shares-state Checkout
+`);
+    // Relationships is NOT an area node, and its items are NOT lines.
+    expect(g.nodes.some((n) => n.kind === 'area' && n.label === 'Relationships')).toBe(false);
+    expect(g.stats).toEqual({ lines: 3, covered: 1, areas: 2 });
+    expect(g.relations).toHaveLength(2);
+    const dep = g.relations.find((r) => r.kind === 'depends-on');
+    expect(dep).toMatchObject({ source: 'line:buy/checkout', target: 'line:auth/log-in' });
+    expect(g.relations.find((r) => r.kind === 'shares-state')).toMatchObject({ source: 'line:buy/cart', target: 'line:buy/checkout' });
+  });
+
+  it('drops a relationship whose endpoint names no known line', () => {
+    const g = parseBusinessMap(`# Business map — Shop
+## Buy
+- [x] Checkout — /checkout — checkout.spec.ts
+## Relationships
+- Checkout depends-on Ghost Flow
+- Checkout navigates-to Checkout
+`);
+    expect(g.relations).toEqual([]); // Ghost unresolved; self-edge dropped
   });
 });
 
