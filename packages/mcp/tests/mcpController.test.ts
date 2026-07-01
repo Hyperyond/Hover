@@ -99,6 +99,20 @@ describe('HoverMcpController', () => {
     expect(await c.recall()).toContain('No business memory');
   });
 
+  it('recall_fact returns a matched rule body, or points back to the index on a miss', async () => {
+    const recallFact = vi.fn(async (name: string) => (name === 'checkout-tax' ? 'checkout-tax — VAT (business-rule):\nincludes 20% VAT' : null));
+    const c = new HoverMcpController({ getPage: async () => mockPage(), crystallize: async () => ({ path: 'x' }), recallFact });
+    expect(await c.recallFact('checkout-tax')).toContain('20% VAT');
+    const miss = await c.recallFact('ghost');
+    expect(miss).toContain('No remembered rule matches');
+    expect(miss).toContain('recall_business_knowledge'); // points back to the index
+  });
+
+  it('recall_fact degrades gracefully when the dep is absent', async () => {
+    const c = new HoverMcpController({ getPage: async () => mockPage(), crystallize: async () => ({ path: 'x' }) });
+    expect(await c.recallFact('anything')).toContain('unavailable');
+  });
+
   it('optimizeBrief returns the brief prompt, and a helpful message on a missing spec', async () => {
     const optimizeBrief = vi.fn(async (slug: string) =>
       slug === 'checkout' ? { prompt: 'IMPROVE THIS SPEC ...' } : { error: 'spec not found' });

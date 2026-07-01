@@ -46,7 +46,9 @@ export { launchDebugChrome, closeDebugChrome, findChromeBinary } from './playwri
 export type { LaunchOptions, LaunchResult } from './playwright/launchChrome.js';
 
 // ── business memory (ask → remember loop) ────────────────────────────────────
-export { loadMemory, formatMemoryForPrompt, writeFact, memoryDir } from './memory/businessMemory.js';
+// recallMemory = progressive disclosure (full when small, index when large);
+// readFact = the on-demand single-rule fetch behind recall_fact.
+export { loadMemory, formatMemoryForPrompt, formatMemoryIndex, recallMemory, readFact, formatFact, writeFact, memoryDir } from './memory/businessMemory.js';
 export type { BusinessFact } from './memory/businessMemory.js';
 
 // ── QA intensity (step budget; parked until wired into the workflow) ──────────

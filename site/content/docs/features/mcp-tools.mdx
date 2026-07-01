@@ -45,7 +45,8 @@ The server ships its workflows as MCP prompts, surfaced by Claude Code as slash 
 | `select_control(target, value)` | Choose an option in a `<select>` by a grounded target. |
 | `check_control(target, checked?)` | Check or uncheck a checkbox / radio by a grounded target (handles `sr-only` / hidden inputs). |
 | `assert_visible(target)` | Assert a control / text is visible now — captures an `expect(...).toBeVisible()` into the saved spec. |
-| `recall_business_knowledge()` | Recall what earlier runs learned about this app (business rules, expected behaviours, access policies). The agent calls this at the start. |
+| `recall_business_knowledge()` | Recall what earlier runs learned about this app (business rules, expected behaviours, access policies). The agent calls this at the start. Once an app has many remembered rules this returns an **index** (one line per rule) rather than every body — progressive disclosure, so recall stays cheap as the wiki compounds. |
+| `recall_fact(name)` | Read one remembered rule's full text by name, when a rule from the index is relevant to what's being tested. The on-demand tier behind the recall index. |
 | `record_fact(title, rule, type?)` | Remember a durable **business rule** so neither this run nor a future one re-asks it. Rules only — never secrets, passwords, tokens, or personal data. |
 | `crystallize_spec(name, description?)` | Save the flow the agent just performed (the grounded actions since the last crystallize) as a plain `@playwright/test` spec in `__vibe_tests__/`. |
 

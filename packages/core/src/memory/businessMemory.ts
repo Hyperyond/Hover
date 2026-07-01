@@ -101,6 +101,61 @@ export function formatMemoryForPrompt(facts: BusinessFact[]): string {
   );
 }
 
+/** Above this many chars of formatted-full memory, recall returns the INDEX
+ *  (title — description per rule) instead of every rule's body, and the agent
+ *  pulls a specific rule with `recall_fact` on demand — Claude-Code-style
+ *  progressive disclosure. Below it, inlining everything is cheaper than making
+ *  the agent round-trip for five rules, so recall stays full. */
+export const RECALL_INLINE_BUDGET = 2000;
+
+/** The INDEX block: one `title — description (type)` line per rule, no bodies.
+ *  This is the always-cheap tier; a rule's body is fetched by `readFact`. */
+export function formatMemoryIndex(facts: BusinessFact[]): string {
+  if (!facts.length) return '';
+  const lines = facts.map(
+    (f) => `- ${f.name}${f.description ? ` — ${f.description}` : ''} (${f.type})`,
+  );
+  return (
+    `KNOWN BUSINESS KNOWLEDGE FOR THIS APP — ${facts.length} rules learned from earlier ` +
+    `runs (treat as ground truth; do NOT re-ask what these answer). This is the INDEX; ` +
+    `call recall_fact("<name>") to read a rule's full text when it's relevant to what ` +
+    `you're testing:\n` +
+    lines.join('\n')
+  );
+}
+
+/** Recall memory with progressive disclosure: full bodies when the set is small
+ *  (≤ RECALL_INLINE_BUDGET chars formatted), the index alone when it's large.
+ *  '' when there are no facts. This is what `recall_business_knowledge` returns. */
+export async function recallMemory(devRoot: string): Promise<string> {
+  const facts = await loadMemory(devRoot);
+  if (!facts.length) return '';
+  const full = formatMemoryForPrompt(facts);
+  return full.length <= RECALL_INLINE_BUDGET ? full : formatMemoryIndex(facts);
+}
+
+/** Format one fact's FULL text (body verbatim, not whitespace-collapsed) for an
+ *  on-demand `recall_fact`. */
+export function formatFact(fact: BusinessFact): string {
+  return `${fact.name}${fact.description ? ` — ${fact.description}` : ''} (${fact.type}):\n${fact.body.trim()}`;
+}
+
+/** Load ONE fact by name/slug for on-demand recall. Match order: exact slug →
+ *  slugified-name equality → prefix → substring. Returns null if nothing matches
+ *  (or the memory dir is empty). Total: never throws. */
+export async function readFact(devRoot: string, name: string): Promise<BusinessFact | null> {
+  const facts = await loadMemory(devRoot);
+  if (!facts.length) return null;
+  const q = slugify(name);
+  return (
+    facts.find((f) => f.name === q) ??
+    facts.find((f) => slugify(f.name) === q) ??
+    facts.find((f) => f.name.startsWith(q) || slugify(f.name).startsWith(q)) ??
+    facts.find((f) => f.name.includes(q) || slugify(f.name).includes(q)) ??
+    null
+  );
+}
+
 /** Write (or overwrite) a fact file + refresh the MEMORY.md index line. NEVER
  *  throws — returns the path or an error string for the caller to log. Business
  *  RULES only; the caller must never pass secrets / PII / credentials. */

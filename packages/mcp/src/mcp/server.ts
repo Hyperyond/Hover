@@ -97,10 +97,22 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     'recall_business_knowledge',
     {
       description:
-        'Recall what earlier Hover runs learned about this app (business rules, expected behaviors, access policies). Call this at the START so you do not re-ask settled questions. Treat what it returns as ground truth.',
+        'Recall what earlier Hover runs learned about this app (business rules, expected behaviors, access policies). Call this at the START so you do not re-ask settled questions. Treat what it returns as ground truth. For an app with a lot of remembered rules this returns an INDEX (one line per rule); when a rule is relevant to what you are testing, read its full text with recall_fact.',
       inputSchema: {},
     },
     () => guard(() => c.recall()),
+  );
+
+  server.registerTool(
+    'recall_fact',
+    {
+      description:
+        "Read ONE remembered business rule's full text by name (the name shown in the recall_business_knowledge index). Use it when recall returned only the index and you need a specific rule's detail before deciding how to test.",
+      inputSchema: {
+        name: z.string().describe('The rule name from the recall index (a slug like "guests-cannot-checkout").'),
+      },
+    },
+    ({ name }) => guard(() => c.recallFact(name)),
   );
 
   server.registerTool(
