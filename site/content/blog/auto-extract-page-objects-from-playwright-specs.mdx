@@ -1,0 +1,31 @@
+---
+title: "Auto-extract Page Objects from Playwright specs you already recorded"
+description: "Five specs share the same opening navigation. Hover finds the shared prefix, generates a Page Object and fixtures, and folds the specs to call it. No model, and it leaves your login alone."
+date: 2026-06-27
+author: "Hover"
+tags: [playwright, page-object-model, refactoring]
+---
+
+# Auto-extract Page Objects from Playwright specs you already recorded
+
+Five of your specs start the same way: land on `/dashboard`, open the Overview panel, click into Projects. You recorded that prelude once by driving the app, and it copied itself into every spec that needed to get there. Rename the Projects tab and you edit five files.
+
+The Page Object Model solves this: a class owns the shared navigation, and each spec calls one method. Writing it by hand means re-reading every spec, spotting the common prefix, and refactoring all of them the same way without missing one.
+
+## Hover finds the prefix
+
+`detect_shared_flows` compares the grounded step records across your specs and reports each sequence that at least N of them share. `extract_page_objects` then generates a page class under `pages/`, a typed `fixtures.ts` that hands it to your tests, and re-renders every affected spec to call the method in place of the repeated steps.
+
+None of this runs a model. The shared steps were recorded as structured grounded actions, each one a role, a name, and a value, so extraction is a deterministic translation from those actions into a class method. The method that lands you on Projects uses the same `getByRole` your spec used. Record equals replay still holds after the refactor.
+
+## Your login stays out of it
+
+If five specs share a `/login` visit and a password fill, that prefix is not a Page Object. It belongs in an auth fixture that logs in once and reuses the session. Hover recognizes the redacted credential and excludes that prefix from extraction, so your login stays in `auth.setup.ts` where it belongs. [Log in once, reuse the session →](/blog/log-in-once-and-reuse-the-session-across-every-test/)
+
+## When it happens
+
+During a `test_app` run, once Hover has crystallized several specs, it checks for an extractable flow and asks whether to pull it out. You say yes, and it writes the pages, the fixtures, and the folded specs in one step. You read the diff before committing.
+
+Running the refactor late, after you already have a suite, stays safe because the sidecar keeps the full recorded context for each spec. Re-rendering a spec to use a Page Object reads that context and rewrites faithfully, auth setup and assertions included, so folding a spec never drops its login.
+
+[Read the Page Objects docs →](/docs/features/page-objects)
