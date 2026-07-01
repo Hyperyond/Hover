@@ -24,11 +24,14 @@ The server ships its workflows as MCP prompts, surfaced by Claude Code as slash 
 /mcp__hover__heal login.spec.ts # …or heal one spec
 /mcp__hover__optimize checkout  # enrich one spec with observed assertions
 /mcp__hover__lint               # health-check the .hover/ test wiki
+/mcp__hover__ask "does a guest see the cart?"  # ask the wiki, with citations
 ```
 
 **`test_app [scope]`** walks the agent through a scale-aware loop: **map the business lines** (the agent reads your routes + nav with its own file tools), **pick a scope**, **cover each flow one at a time** (navigate → snapshot → exercise → assert → crystallize), optionally add an [API-layer check](/docs/features/api-testing/) (Phase 3.5) and lift [shared flows into Page Objects](/docs/features/page-objects/) (Phase 5), then **update coverage** in `.hover/hover-map.md`. A large app doesn't have to finish in one pass — covering a batch and updating the map is a resumable unit.
 
 **`heal [spec]`** runs the [self-heal](/docs/features/self-heal/) loop: replay a saved spec's recorded steps against the live app, find the first step that no longer locates, and re-ground just that step. Omit the argument to scan every spec.
+
+**`ask <question>`** answers a question about your app from the `.hover/` wiki — the business map, the remembered rules, the crystallized specs, and the run log — and cites what it drew from. It's read-only (no browser), and when an answer establishes a durable rule the wiki was missing, it can file that back with `record_fact` so the next question is cheaper.
 
 **`lint`** health-checks your `.hover/` test wiki. `lint_map` runs the mechanical checks: a business line that points at a deleted spec, a covered line whose spec last ran fail or flaky (a heal candidate), and a spec no line maps. The prompt layers the judged checks your agent does well — contradictory rules in `.hover/memory/`, and routes in your code that the map never mentions — then offers to fix each: heal the regression, add the missing line, correct the rule. It keeps the map honest as your app grows.
 
