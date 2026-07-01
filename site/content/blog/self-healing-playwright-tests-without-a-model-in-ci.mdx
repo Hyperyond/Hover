@@ -1,0 +1,31 @@
+---
+title: "Self-healing Playwright tests, without a model running in CI"
+description: "Rename a button and six specs go red. Instead of hand-patching selectors or re-recording from scratch, replay the recorded steps, find the one that drifted, and re-ground only that step."
+date: 2026-06-24
+author: "Hover"
+tags: [playwright, self-heal, maintenance]
+---
+
+# Self-healing Playwright tests, without a model running in CI
+
+You rename a button from "Save" to "Save changes." Six specs go red on the next CI run. Every one clicked that button on the way to what it actually checked, so every one breaks at the same step. None caught a bug. They caught your rename.
+
+You have two ways out and both waste work. Open each file and patch the locator by hand. Or delete the spec and record it again, throwing away the twelve steps that still work to fix the one that doesn't.
+
+## Find the step that drifted
+
+Hover replays the recorded steps against the running app and stops at the first one that no longer resolves. `replay_spec` reads the sidecar, the grounded step record saved beside every spec, runs each step on your live page, and names the one that drifted: step 4, `getByRole('button', { name: 'Save' })`, matched nothing. You know the line and you know the app moved under it.
+
+Then you run `/mcp__hover__heal <spec>` in your own agent. It takes a fresh snapshot of the page at that step, finds the control that now carries the same meaning (the button relabelled "Save changes"), and re-grounds that one step. The rest stay byte for byte. It re-crystallizes the spec and hands you a git diff with a single locator changed.
+
+## Why not a model that re-resolves selectors as the test runs
+
+A model in that loop charges you inference on every CI execution, including the green builds that never needed it. Hover's healed spec is plain Playwright. CI runs it with no agent in the loop. You spend the model call once, at the moment the contract changed, inside a diff you read before committing.
+
+## What healing leaves red on purpose
+
+Healing has a deliberate limit. When a step fails because the flow itself broke, say the Save button now throws an error instead of saving, re-grounding finds no equivalent control and the spec stays red. That red is a real bug in your app. A heal loop that cleared it automatically would erase the reason you keep the suite.
+
+CI-driven healing, where Hover opens the fix as a pull request off a red run, is on the roadmap. Today you heal from your editor, read the diff, and commit.
+
+[Read the self-heal docs →](/docs/features/self-heal)

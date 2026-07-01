@@ -1,0 +1,29 @@
+---
+title: "Log in once and reuse the session across every Playwright test"
+description: "The naive suite logs in at the top of every spec and pastes credentials into ten files. Hover lifts the login into an auth setup project, wires storageState, and keeps the password in an env var."
+date: 2026-07-01
+author: "Hover"
+tags: [playwright, authentication, storageState]
+---
+
+# Log in once and reuse the session across every Playwright test
+
+Behind a login, the naive suite signs in again at the top of every spec. Ten specs, ten logins, ten copies of the same email and password sitting in your test files. The run drags, and your credentials now live in git.
+
+Playwright has an answer: `storageState`. Log in once, save the browser's cookies and local storage to a file, and load that file into every other test so it starts already signed in. Wiring it up by hand means writing a setup project, pointing the config at it, and threading the state file through. Most people skip that and paste the login into each spec.
+
+## Hover writes the wiring
+
+When Hover sees a login prefix repeated across your specs, it lifts those steps into `auth.setup.ts`, which signs in and saves the session to disk. It adds a `setup` project to your `playwright.config.ts` and points the browser project at the saved state. Every other spec drops its inline login and starts authenticated. The upgrade runs in any order: before or after you have specs, it edits the config in place with ts-morph instead of clobbering your settings.
+
+## Credentials stay out of the file
+
+Fill a password field during recording and Hover redacts the value to `process.env.HOVER_PASSWORD`, writing the env var name into the spec and its sidecar, never the secret itself. The setup file reads the password from the environment at run time. Your CI supplies it as a secret. Your repo never sees it.
+
+## It carries through to your API tests
+
+The session that authenticates your UI specs also authenticates the requests Hover captured while you explored, so an [API spec](/blog/api-tests-from-the-traffic-your-app-already-makes/) asserts the contract as a logged-in user without you re-supplying a token.
+
+You end up with a suite that logs in one time, keeps no secrets in git, and reads cleanly in review: no login boilerplate stacked on top of ten files, just the test.
+
+[Read the auth docs →](/docs/features/auth)
