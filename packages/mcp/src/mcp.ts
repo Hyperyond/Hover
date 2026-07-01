@@ -5,8 +5,9 @@ import {
   writeSpec,
   writeApiSpec,
   writeFact,
-  loadMemory,
-  formatMemoryForPrompt,
+  recallMemory,
+  readFact,
+  formatFact,
   readSidecar,
   detectExtractableFlows,
   extractPageObjects,
@@ -72,7 +73,11 @@ const controller = new HoverMcpController({
   },
   recordFact: (title, rule, type) =>
     writeFact(DEV_ROOT, { name: title, description: title, type, body: rule }),
-  recall: async () => formatMemoryForPrompt(await loadMemory(DEV_ROOT)),
+  recall: () => recallMemory(DEV_ROOT),
+  recallFact: async (name: string) => {
+    const fact = await readFact(DEV_ROOT, name);
+    return fact ? formatFact(fact) : null;
+  },
   readSpecSteps: async (slug: string) => {
     const sc = await readSidecar(DEV_ROOT, slug);
     return sc ? { steps: sc.steps, startUrl: TARGET } : null;

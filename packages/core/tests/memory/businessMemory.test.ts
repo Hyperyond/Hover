@@ -6,6 +6,11 @@ import {
   loadMemory,
   writeFact,
   formatMemoryForPrompt,
+  formatMemoryIndex,
+  recallMemory,
+  readFact,
+  formatFact,
+  RECALL_INLINE_BUDGET,
   memoryDir,
   slugify,
   type BusinessFact,
@@ -97,5 +102,57 @@ describe('formatMemoryForPrompt', () => {
     expect(out).toContain('KNOWN BUSINESS KNOWLEDGE');
     expect(out).toContain('- rule A — body A');
     expect(out).toContain('- body B');
+  });
+});
+
+describe('progressive recall (index vs full + on-demand)', () => {
+  const bulk = (n: number): BusinessFact[] =>
+    Array.from({ length: n }, (_, i) => ({
+      name: `rule-${i}`,
+      description: `desc ${i}`,
+      type: 'business-rule' as const,
+      body: 'x'.repeat(200), // fat body so the set blows the inline budget
+    }));
+
+  it('formatMemoryIndex lists one name/description/type line per rule, no bodies', () => {
+    const out = formatMemoryIndex([
+      { name: 'guests-cannot-checkout', description: 'must log in first', type: 'access-policy', body: 'LONG BODY TEXT' },
+    ]);
+    expect(out).toContain('recall_fact');
+    expect(out).toContain('- guests-cannot-checkout — must log in first (access-policy)');
+    expect(out).not.toContain('LONG BODY TEXT');
+  });
+
+  it('recallMemory inlines full bodies when the set is small', async () => {
+    await writeFact(devRoot, { name: 'small', description: 'd', type: 'validation', body: 'the full body' });
+    const out = await recallMemory(devRoot);
+    expect(out).toContain('the full body'); // full, not index
+    expect(out.length).toBeLessThanOrEqual(RECALL_INLINE_BUDGET + 500);
+  });
+
+  it('recallMemory switches to the INDEX when the set is large', async () => {
+    for (const f of bulk(20)) await writeFact(devRoot, f);
+    const out = await recallMemory(devRoot);
+    expect(out).toContain('20 rules'); // index header
+    expect(out).toContain('recall_fact');
+    expect(out).not.toContain('x'.repeat(200)); // no bodies inlined
+  });
+
+  it('recallMemory is empty when nothing is remembered', async () => {
+    expect(await recallMemory(devRoot)).toBe('');
+  });
+
+  it('readFact fetches one rule by exact, then fuzzy, name; null when absent', async () => {
+    await writeFact(devRoot, { name: 'checkout-tax', description: 'VAT', type: 'business-rule', body: 'includes 20% VAT' });
+    expect((await readFact(devRoot, 'checkout-tax'))?.body).toContain('20% VAT');
+    expect((await readFact(devRoot, 'Checkout Tax'))?.name).toBe('checkout-tax'); // slugified match
+    expect((await readFact(devRoot, 'checkout'))?.name).toBe('checkout-tax'); // prefix match
+    expect(await readFact(devRoot, 'nonexistent')).toBeNull();
+  });
+
+  it('formatFact renders the body verbatim (not whitespace-collapsed)', () => {
+    const out = formatFact({ name: 'r', description: 'd', type: 'validation', body: 'line one\n\nline two' });
+    expect(out).toContain('r — d (validation)');
+    expect(out).toContain('line one\n\nline two');
   });
 });

@@ -57,8 +57,12 @@ export interface McpDeps {
   crystallizeApi: (name: string, description: string | undefined, checks: ApiCheck[]) => Promise<{ path: string }>;
   /** Persist a learned business rule to .hover/memory/ (rules only — no secrets). */
   recordFact?: (title: string, rule: string, type: FactType) => Promise<{ path: string } | { error: string }>;
-  /** Recall known business knowledge from .hover/memory/ as a prompt block ('' if none). */
+  /** Recall known business knowledge from .hover/memory/ ('' if none). Progressive:
+   *  full bodies when the set is small, the index alone when it's large. */
   recall?: () => Promise<string>;
+  /** Read ONE remembered rule's full text by name/slug (behind recall_fact), or
+   *  null if nothing matches — the on-demand tier of progressive recall. */
+  recallFact?: (name: string) => Promise<string | null>;
   /** Read a saved spec's recorded grounded steps (its `.hover/sidecars/<slug>.json`)
    *  so self-heal can replay them against the live app. */
   readSpecSteps?: (slug: string) => Promise<{ steps: SkillStep[]; startUrl?: string } | null>;
@@ -262,11 +266,20 @@ export class HoverMcpController {
     }
   }
 
-  /** Recall what earlier runs learned about this app's business rules. */
+  /** Recall what earlier runs learned about this app's business rules. Progressive:
+   *  a large memory comes back as an INDEX; use recallFact to pull one rule's body. */
   async recall(): Promise<string> {
     if (!this.deps.recall) return 'No business memory available.';
     const known = await this.deps.recall();
     return known || 'No business knowledge recorded yet for this app.';
+  }
+
+  /** Read one remembered rule's full text by name (the on-demand tier — used when
+   *  recall returned only the index and the agent needs a specific rule's body). */
+  async recallFact(name: string): Promise<string> {
+    if (!this.deps.recallFact) return 'Rule lookup unavailable in this server.';
+    const body = await this.deps.recallFact(name);
+    return body ?? `No remembered rule matches "${name}". Call recall_business_knowledge to see the index of known rules.`;
   }
 
   /** Persist a confirmed business RULE so future runs don't re-ask it. Rules
