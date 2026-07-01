@@ -1168,6 +1168,23 @@ async function ensurePlaywrightConfig(devRoot: string, steps: SpecStep[], startU
     return;
   }
   await writeFile(join(devRoot, 'playwright.config.ts'), renderScaffoldConfig(origin, authFile), 'utf-8');
+  await ensurePlaywrightDep(devRoot);
+}
+
+/** When Hover scaffolds the config it also ensures `@playwright/test` is a
+ *  devDependency — otherwise `npx playwright test` can't run the specs locally.
+ *  Best-effort + idempotent: skips if already present (either dep list) or if
+ *  there's no package.json. Reformats to 2-space JSON (the npm norm). */
+const PLAYWRIGHT_TEST_RANGE = '^1.50.0';
+async function ensurePlaywrightDep(devRoot: string): Promise<void> {
+  const pkgPath = join(devRoot, 'package.json');
+  if (!existsSync(pkgPath)) return;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as Record<string, Record<string, string> | undefined>;
+    if (pkg.dependencies?.['@playwright/test'] || pkg.devDependencies?.['@playwright/test']) return;
+    pkg.devDependencies = { ...(pkg.devDependencies ?? {}), '@playwright/test': PLAYWRIGHT_TEST_RANGE };
+    await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+  } catch { /* best-effort — never break Save */ }
 }
 
 function stripBaseUrl(url: string): string {
