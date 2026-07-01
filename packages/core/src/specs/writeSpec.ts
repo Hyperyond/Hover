@@ -21,7 +21,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SkillStep } from '../specs/specStep.js';
 import { humanSteps, humanStep } from './humanSteps.js';
-import { writeSidecar } from './sidecar.js';
+import { writeSidecar, readSidecar } from './sidecar.js';
 import {
   readPageObjectManifest,
   type PageObjectEntry,
@@ -232,6 +232,34 @@ export async function writeSpec(opts: WriteSpecOptions): Promise<WriteSpecResult
   return writeOneSpec(opts, slugify(opts.name), opts.name, opts.steps);
 }
 
+/**
+ * Re-crystallize an already-saved spec from its sidecar — FAITHFULLY. Used by
+ * self-heal (re-render the healed flow) and Page-Object extraction (fold a
+ * newly-extracted shared flow into the specs that use it). Reads the v2 sidecar
+ * context so the re-render re-applies the SAME auth-fixture + base URL + reset —
+ * NOT a degraded pass that would drop the login into the spec.
+ *
+ * Credentials never round-trip: the sidecar stores env-var NAMES only and its
+ * steps are already redacted, so we pass `{ value: '', envVar }` placeholders —
+ * enough for authPrefixLength to re-detect the login prefix, with no literal
+ * secret anywhere. Returns null if the spec has no sidecar.
+ */
+export async function reRenderSpec(devRoot: string, slug: string): Promise<WriteSpecResult | null> {
+  const sc = await readSidecar(devRoot, slug);
+  if (!sc) return null;
+  return writeSpec({
+    devRoot,
+    name: sc.name,
+    steps: sc.steps,
+    assertions: sc.assertions,
+    startUrl: sc.startUrl,
+    resetRecipe: sc.resetRecipe,
+    authFixture: sc.authFixture,
+    redactions: (sc.redactionEnvVars ?? []).map((envVar) => ({ value: '', envVar })),
+    overwrite: true,
+  });
+}
+
 /** Write ONE spec file from a (sub)set of steps. The single-file path and each
  *  per-flow file both go through here, so rendering / sidecar / config logic is
  *  identical whether or not the run was split. */
@@ -349,6 +377,12 @@ async function writeOneSpec(
     name: displayName,
     steps,
     assertions: opts.assertions ?? [],
+    // v2 context — NAMES only (no literal creds), so a faithful re-render can
+    // re-apply auth-fixture + base URL + reset without re-driving the browser.
+    redactionEnvVars: (opts.redactions ?? []).map(r => r.envVar),
+    startUrl: opts.startUrl,
+    resetRecipe: opts.resetRecipe,
+    authFixture: opts.authFixture,
   });
   // Session-ledger patch, best-effort by contract: markSessionSaved swallows
   // its own failures — it must never break Save-as-spec.

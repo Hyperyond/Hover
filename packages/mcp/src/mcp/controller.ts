@@ -7,6 +7,8 @@ import {
   type ApiCheck,
   type ReplayStep,
   type Redaction,
+  type SharedFlow,
+  type ExtractResult,
 } from '@hover-dev/core/engine';
 
 /*
@@ -59,6 +61,10 @@ export interface McpDeps {
   /** Read a saved spec's recorded grounded steps (its `.hover/sidecars/<slug>.json`)
    *  so self-heal can replay them against the live app. */
   readSpecSteps?: (slug: string) => Promise<{ steps: SkillStep[]; startUrl?: string } | null>;
+  /** Detect NON-login flows shared across saved specs (for the extract offer). */
+  detectSharedFlows?: () => Promise<SharedFlow[]>;
+  /** Lift shared flows into Page Objects + fold the specs that use them. */
+  extractPageObjects?: () => Promise<ExtractResult>;
 }
 
 function describe(g: GroundedTarget): string {
@@ -311,5 +317,34 @@ export class HoverMcpController {
       null,
       2,
     );
+  }
+
+  /** Report NON-login flows repeated across the saved specs — so the agent can
+   *  ASK the user whether to lift them into a shared Page Object. Read-only. */
+  async detectSharedFlows(): Promise<string> {
+    if (!this.deps.detectSharedFlows) return 'Shared-flow detection unavailable in this server.';
+    const flows = await this.deps.detectSharedFlows();
+    if (!flows.length) {
+      return 'No extractable shared flows — no set of specs shares a non-login entry flow (login is already handled by the auth setup). Nothing to lift.';
+    }
+    return JSON.stringify(
+      flows.map((f) => ({ sharedBy: f.specs, steps: f.prose })),
+      null,
+      2,
+    );
+  }
+
+  /** Lift the detected shared flows into `pages/*` + `fixtures.ts` and fold the
+   *  specs that use them. Call ONLY after the user approves (detectSharedFlows
+   *  → ask → this). Deterministic; login flows are excluded (auth-fixture owns). */
+  async extractPageObjects(): Promise<string> {
+    if (!this.deps.extractPageObjects) return 'Page Object extraction unavailable in this server.';
+    const res = await this.deps.extractPageObjects();
+    if (!res.pages.length) return 'Nothing to extract — no shared non-login flow found.';
+    return `✓ lifted ${res.pages.length} Page Object${res.pages.length === 1 ? '' : 's'} (${res.pages
+      .map((p) => p.className)
+      .join(', ')}) into __vibe_tests__/pages + fixtures.ts; folded ${res.folded.length} spec${
+      res.folded.length === 1 ? '' : 's'
+    } (${res.folded.join(', ')}) to consume them.`;
   }
 }

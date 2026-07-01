@@ -17,9 +17,14 @@
 export { writeSpec } from './specs/writeSpec.js';
 export type { WriteSpecOptions, WriteSpecResult, Redaction } from './specs/writeSpec.js';
 export type { SkillStep } from './specs/specStep.js';
+export { reRenderSpec } from './specs/writeSpec.js';
 // API-layer crystallizer — observed/replayed requests → *.api-test.spec.ts.
 export { writeApiSpec } from './specs/writeApiSpec.js';
 export type { ApiCheck, WriteApiSpecOptions, WriteApiSpecResult } from './specs/writeApiSpec.js';
+// Page-Object extraction — lift NON-login shared flows into pages/ + fixtures.
+export { extractPageObjects, detectExtractableFlows } from './specs/extractPageObjects.js';
+export type { ExtractResult, ExtractedPage } from './specs/extractPageObjects.js';
+export type { SharedFlow } from './specs/detectSharedFlows.js';
 // Creation-verification + self-heal: replay a flow's grounded steps over CDP (no playwright test).
 export { replayGroundedSteps, replayOnPage, applyGroundedStep, groundedLocate } from './specs/replayGrounded.js';
 export type { ReplayResult, ReplayFailure, ReplayStep, GroundedTarget } from './specs/replayGrounded.js';

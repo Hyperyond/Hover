@@ -79,10 +79,28 @@ export function stepSignature(tool: string, rawInput: unknown): string | null {
     }
     case 'browser_press_key':
       return `press:${String(i.key ?? '')}`;
+    // Grounded control tools (MCP-first): the target is role+name/testId/text on
+    // the input. The typed/selected value is data; only the target is structure.
+    case 'click_control':
+      return `click:${normGround(i)}`;
+    case 'fill_control':
+      return `type:${normGround(i)}`;
+    case 'select_control':
+      return `select:${normGround(i)}`;
+    case 'check_control':
+      return `check:${normGround(i)}`;
     default:
-      // Diagnostics / browser_tabs / browser_wait_for — not flow structure.
+      // Diagnostics / assert_visible / browser_tabs / browser_wait_for — not
+      // flow structure (an assertion isn't part of a reusable action prefix).
       return null;
   }
+}
+
+/** Normalize a GROUNDED target ({ role, name, testId, text }) to a stable
+ *  signature fragment — the *_control sibling of normElement. */
+function normGround(i: Record<string, unknown>): string {
+  const parts = [i.role, i.name, i.testId, i.text].filter((v): v is string => typeof v === 'string' && v.length > 0);
+  return normElement(parts.join('|'));
 }
 
 /** Read and parse every sidecar under `.hover/sidecars/`, unioned with any
