@@ -362,14 +362,20 @@ Drive the browser ONLY through these tools — they actuate via grounded selecto
 (role+name → testId → text), so every spec you save replays EXACTLY what you did
 (record==replay). Never write spec files yourself; only \`crystallize_spec\` does.
 
-Tools: \`recall_business_knowledge\` · \`browser_navigate\` · \`browser_snapshot\` (ARIA
-tree — read before acting) · \`click_control\` / \`fill_control\` / \`select_control\` /
-\`check_control\` (grounded target from the snapshot) · \`assert_visible\` ·
-\`record_fact\` · \`crystallize_spec(name, description?)\`. API layer:
-\`capture_requests\` · \`replay_request\` · \`crystallize_api_spec\`. Suite:
-\`detect_shared_flows\` · \`extract_page_objects\` · \`replay_spec\`.
+Tools: \`recall_business_knowledge\` / \`recall_fact\` · \`browser_navigate\` ·
+\`browser_snapshot\` (ARIA tree — read before acting) · \`click_control\` /
+\`fill_control\` / \`select_control\` / \`check_control\` (grounded target from the
+snapshot) · \`assert_visible\` · \`record_fact\` · \`crystallize_spec(name, description?)\`.
+API layer: \`capture_requests\` · \`replay_request\` · \`crystallize_api_spec\`. Suite:
+\`detect_shared_flows\` · \`extract_page_objects\` · \`replay_spec\` · \`lint_map\`.
 
 Target: the app at HOVER_TARGET (set in the server's env). Scope: ${target}.
+
+## First: are you bootstrapping or extending? (load only what this run needs)
+Check whether \`.hover/hover-map.md\` already exists.
+- **It exists → you're EXTENDING.** Read it + call \`recall_business_knowledge\`, then go straight to Phase 2 and cover the uncovered \`[ ]\` lines. Skip the Phase-1 code-mapping — the map already IS the plan. Only re-map if the user says the app changed.
+- **It's absent → you're BOOTSTRAPPING.** Do the full Phase 1 below to build the map first.
+This keeps a returning run cheap: you don't re-derive a map you already have.
 
 ## Ground rules (they protect record==replay AND the user's real app)
 - **Grounded targets only.** Pass role+name EXACTLY as they appear in the LATEST \`browser_snapshot\`. If a locate fails, re-snapshot and read the real target — never guess, invent, or reuse a stale name.
@@ -380,7 +386,7 @@ Target: the app at HOVER_TARGET (set in the server's env). Scope: ${target}.
 Work in PHASES — this is what lets it scale from a tiny app to a large one.
 
 ## Phase 1 — Map the business lines (read the CODE, don't click around)
-- FIRST call \`recall_business_knowledge\` — rules earlier runs learned (and read \`.hover/hover-map.md\` if it exists, the running map; CONTINUE it, don't start over). Treat both as ground truth; don't re-ask what they already answer.
+- FIRST call \`recall_business_knowledge\` — rules earlier runs learned (and read \`.hover/hover-map.md\` if it exists, the running map; CONTINUE it, don't start over). Treat both as ground truth; don't re-ask what they already answer. For an app with many remembered rules this returns an INDEX (one line per rule); when a rule is relevant to what you're about to test, pull its full text with \`recall_fact("<name>")\`.
 - Use YOUR OWN file tools (read / grep / glob) to find the app's ROUTES + navigation: the router config, route/page files, the nav components. Enumerate the user-facing BUSINESS LINES (a coherent task a user performs), each with its entry route, grouped by area. Reading code is cheaper + more complete than clicking around, and finds areas behind auth / nav you'd otherwise miss.
 - Write/update \`.hover/hover-map.md\` as a checklist (4-space indent = a code block):
 
@@ -405,6 +411,7 @@ As you drive each flow, Hover passively captures the app's xhr/fetch traffic. Af
 
 ## Phase 4 — Update coverage
 - Mark each covered line \`[x]\` in \`.hover/hover-map.md\` with its spec filename. Report covered vs still-open. A LARGE app doesn't have to finish in one go — covering a batch + updating the map is a complete, resumable unit; re-invoke to continue the uncovered lines.
+- Then call \`lint_map\` to catch wiki drift you may have introduced (a covered line whose spec now fails, a stale spec reference, a spec no line maps) and fix or report it. \`/mcp__hover__lint\` runs the deeper check any time.
 
 ## Phase 5 — Lift shared flows into Page Objects (ASK first)
 Once specs are crystallized, call \`detect_shared_flows\`. If it reports a NON-login flow repeated across specs (login is already handled by the auth setup), tell the user which specs share it and ASK whether to lift it into a shared Page Object (so a UI change to that flow is a one-place fix). On yes → \`extract_page_objects\` (generates \`pages/*\` + \`fixtures.ts\` and folds the specs to \`await xPage.x()\`). If nothing is shared, skip silently — most small suites have nothing to lift; don't force it.
