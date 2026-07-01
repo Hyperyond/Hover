@@ -51,6 +51,18 @@ export function humanStep(tool: string, rawInput: unknown): string | null {
       const key = String(input.key ?? '');
       return key ? `Press ${key}` : null;
     }
+    // Grounded control tools (MCP-first) — the target is role+name/testId/text
+    // ON the input itself, not an `element` string.
+    case 'click_control':
+      return `Click ${describeGrounded(input)}`;
+    case 'fill_control':
+      return `Fill ${describeGrounded(input)} with ${quote(String(input.value ?? ''))}`;
+    case 'select_control':
+      return `Select ${quote(String(input.value ?? ''))} in ${describeGrounded(input)}`;
+    case 'check_control':
+      return `${input.checked === false ? 'Uncheck' : 'Check'} ${describeGrounded(input)}`;
+    case 'assert_visible':
+      return `Expect ${describeGrounded(input)} to be visible`;
     // Diagnostic / read-only — same skip list as writeSpec.translateStep.
     case 'browser_wait_for':
     case 'browser_tabs':
@@ -101,6 +113,20 @@ export function humanSteps(steps: SkillStep[]): string[] {
 function describe(raw: unknown): string {
   const s = String(raw ?? '').trim();
   return s.length > 0 ? s : 'the target element';
+}
+
+/** Human phrase for a GROUNDED target ({ role, name, testId, text }) — the shape
+ *  the *_control tools carry, vs the old browser_* tools' `element` string. */
+function describeGrounded(input: Record<string, unknown>): string {
+  const role = typeof input.role === 'string' ? input.role : '';
+  const name = typeof input.name === 'string' ? input.name : '';
+  const testId = typeof input.testId === 'string' ? input.testId : '';
+  const text = typeof input.text === 'string' ? input.text : '';
+  if (role && name) return `${role} "${name}"`;
+  if (name) return `"${name}"`;
+  if (testId) return `testId "${testId}"`;
+  if (text) return `"${text}"`;
+  return 'the target element';
 }
 
 /** Wrap in double-quotes for prose; escape internal quotes. A redacted

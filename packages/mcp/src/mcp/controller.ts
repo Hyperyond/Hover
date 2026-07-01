@@ -6,6 +6,7 @@ import {
   type SkillStep,
   type ApiCheck,
   type ReplayStep,
+  type Redaction,
 } from '@hover-dev/core/engine';
 
 /*
@@ -40,8 +41,15 @@ export interface CapturedRequest {
 export interface McpDeps {
   /** Resolve the live page on the app under test (launch/connect lazily). */
   getPage: () => Promise<Page>;
-  /** Write the buffered steps to a UI spec; returns the written path. */
-  crystallize: (name: string, description: string | undefined, steps: SkillStep[]) => Promise<{ path: string }>;
+  /** Write the buffered steps to a UI spec; returns the written path. `redactions`
+   *  parameterize captured credentials into `process.env.<envVar>` refs (and let
+   *  auth-fixture detect the login prefix). */
+  crystallize: (
+    name: string,
+    description: string | undefined,
+    steps: SkillStep[],
+    redactions: Redaction[],
+  ) => Promise<{ path: string }>;
   /** Write selected API checks to a `*.api-test.spec.ts`; returns the path. */
   crystallizeApi: (name: string, description: string | undefined, checks: ApiCheck[]) => Promise<{ path: string }>;
   /** Persist a learned business rule to .hover/memory/ (rules only — no secrets). */
@@ -65,6 +73,10 @@ const MAX_CAPTURED = 200; // ring-buffer cap so a long run can't grow unbounded
 export class HoverMcpController {
   /** The grounded-action buffer — sliced by `crystallize`. */
   readonly steps: SkillStep[] = [];
+  /** Credentials typed into password fields — parameterized to process.env in
+   *  the crystallized spec (never written literally) + used to detect the login
+   *  prefix for auth-as-fixture. */
+  private readonly redactions: Redaction[] = [];
   /** Passively-observed xhr/fetch traffic — read by `capture_requests`. */
   private readonly captured: CapturedRequest[] = [];
   /** Pages we've already attached a network listener to (avoid duplicates). */
@@ -147,6 +159,20 @@ export class HoverMcpController {
     const loc = await this.resolve(g);
     await loc.fill(value, { timeout: 8000 });
     this.push('fill_control', { ...g, value });
+    // A value typed into a password field is a secret: parameterize it to
+    // process.env so it never lands literally in the spec/sidecar, and so
+    // auth-as-fixture can detect this fill as part of the login prefix.
+    if (value) {
+      let isPassword = false;
+      try {
+        isPassword = (await loc.getAttribute('type')) === 'password';
+      } catch {
+        /* locator has no getAttribute (test mock) or field gone — treat as non-secret */
+      }
+      if (isPassword && !this.redactions.some((r) => r.value === value)) {
+        this.redactions.push({ value, envVar: 'HOVER_PASSWORD' });
+      }
+    }
     return `✓ filled ${describe(g)}`;
   }
 
@@ -239,7 +265,7 @@ export class HoverMcpController {
   async crystallize(name: string, description?: string): Promise<string> {
     if (this.steps.length === 0) return 'Nothing to crystallize yet — actuate some controls first.';
     const flow = [...this.steps];
-    const { path } = await this.deps.crystallize(name, description, flow);
+    const { path } = await this.deps.crystallize(name, description, flow, [...this.redactions]);
     this.steps.length = 0;
     return `✓ wrote ${path} (${flow.length} step${flow.length === 1 ? '' : 's'})`;
   }
