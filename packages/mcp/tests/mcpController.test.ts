@@ -129,6 +129,32 @@ describe('HoverMcpController', () => {
     expect(await c.saveOptimized('checkout', 'code')).toContain('unavailable');
   });
 
+  it('lintWiki renders findings, a clean pass, and a no-map message', async () => {
+    const base = { getPage: async () => mockPage(), crystallize: async () => ({ path: 'x' }) };
+    const withFindings = new HoverMcpController({ ...base, lintWiki: async () => ({
+      ok: false, hasMap: true,
+      findings: [{ kind: 'regressed-coverage' as const, severity: 'warn' as const, line: 'Checkout', spec: 'checkout.spec.ts', message: 'Checkout regressed', fix: '/mcp__hover__heal checkout' }],
+      summary: { areas: 1, lines: 2, covered: 1, specs: 3 },
+    }) });
+    const out = await withFindings.lintWiki();
+    expect(out).toContain('1/2 lines covered');
+    expect(out).toContain('⚠ [regressed-coverage]');
+    expect(out).toContain('/mcp__hover__heal checkout');
+
+    const clean = new HoverMcpController({ ...base, lintWiki: async () => ({
+      ok: true, hasMap: true, findings: [], summary: { areas: 1, lines: 1, covered: 1, specs: 1 },
+    }) });
+    expect(await clean.lintWiki()).toContain('No drift');
+
+    const empty = new HoverMcpController({ ...base, lintWiki: async () => ({
+      ok: true, hasMap: false, findings: [], summary: { areas: 0, lines: 0, covered: 0, specs: 0 },
+    }) });
+    expect(await empty.lintWiki()).toContain('test_app first');
+
+    const absent = new HoverMcpController(base);
+    expect(await absent.lintWiki()).toContain('unavailable');
+  });
+
   it('assert_visible throws (→ ✗ to the agent) when the target is not visible', async () => {
     const c = new HoverMcpController({ getPage: async () => mockPage({ visible: false }), crystallize: async () => ({ path: 'x' }) });
     await expect(c.assertVisible({ text: 'Welcome' })).rejects.toThrow('not visible');

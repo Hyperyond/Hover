@@ -218,6 +218,17 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     () => guard(() => c.extractPageObjects()),
   );
 
+  // ── Wiki lint (LLM-Wiki P1) ──────────────────────────────────────────────
+  server.registerTool(
+    'lint_map',
+    {
+      description:
+        "Health-check the app's test wiki (.hover/): cross-check the business map against the real spec files and the run ledger. Reports deleted specs (a line points at a missing *.spec.ts), regressed coverage (a covered line's spec last ran fail/flaky → heal it), and orphan specs (a spec no line maps). Deterministic; no LLM. Run it to find drift, then fix each finding (heal / re-map / drop the stale ref).",
+      inputSchema: {},
+    },
+    () => guard(() => c.lintWiki()),
+  );
+
   // ── Optimize (F7) ────────────────────────────────────────────────────────
   // The IMPROVEMENT is the agent's (the /mcp__hover__optimize prompt gives it the
   // brief); this tool is Hover's guardrail + write path — it validates the agent's
@@ -264,6 +275,20 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     }),
   );
 
+  // Wiki-lint workflow — surfaced as `/mcp__hover__lint`. The tool does the
+  // mechanical checks; the prompt drives the LLM-judged half on top.
+  server.registerPrompt(
+    'lint',
+    {
+      title: 'Hover — lint the test wiki',
+      description: "Health-check .hover/: deterministic drift (dead spec refs, regressed coverage, unmapped specs) plus LLM-judged checks (contradictory rules, code routes missing from the map), then offer fixes.",
+      argsSchema: {},
+    },
+    () => ({
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lintPrompt() } }],
+    }),
+  );
+
   // Self-heal workflow — surfaced as `/mcp__hover__heal`.
   server.registerPrompt(
     'heal',
@@ -278,6 +303,22 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
   );
 
   return server;
+}
+
+/** Wiki-lint workflow body. `lint_map` does the mechanical checks; the agent
+ *  layers the LLM-judged checks (contradictions, unmapped code routes) and fixes. */
+function lintPrompt(): string {
+  return `Lint this app's **test wiki** (\`.hover/\`) using the Hover MCP tools, then fix what you find. The wiki = the business map (\`.hover/hover-map.md\`), the business-rule memory (\`.hover/memory/*.md\`), and the crystallized specs it points at.
+
+1. **Deterministic drift** — call \`lint_map\`. It cross-checks the map against the real spec files and the run ledger and reports:
+   - **deleted-spec** — a line points at a \`*.spec.ts\` that's gone. Re-crystallize the flow, or drop the stale reference from the map.
+   - **regressed-coverage** — a covered line whose spec last ran fail/flaky. Heal it with \`/mcp__hover__heal <slug>\` (or say it's a real app bug to fix).
+   - **orphan-spec** — a spec no line maps. Add its business line to the map (\`[x]\` with the spec).
+2. **Contradictory rules (LLM-judged)** — read \`.hover/memory/*.md\`. If two facts conflict (e.g. one says guests can check out, another says they can't), surface the pair and ASK the user which holds; correct the wrong one with \`record_fact\` (or delete it).
+3. **Unmapped code routes (LLM-judged)** — with your own file tools, grep the app's router for user-facing routes. Any real route absent from \`.hover/hover-map.md\` is a coverage gap — add it as an uncovered \`[ ]\` line under the right area so the map stays honest.
+4. **Report + fix** — summarize the findings, apply the safe fixes (re-map, add gaps, correct rules), and for anything destructive (dropping a spec, deleting a rule) ASK first. Update \`.hover/hover-map.md\` as you go.
+
+Stay on the app under test. Don't invent business lines that don't exist in the code.`;
 }
 
 /** Self-heal workflow body. The agent uses `replay_spec` to find the drift,

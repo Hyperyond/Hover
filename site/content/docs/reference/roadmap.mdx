@@ -21,10 +21,11 @@ The through-line is the artifact: owned, portable `@playwright/test` in your rep
 - **[Self-heal — mode A (local, on-demand)](/docs/features/self-heal/).** `/mcp__hover__heal` replays a saved spec against the live app, finds the first drifted step, and re-grounds only that step. Record == replay preserved.
 - **[Page Object extraction](/docs/features/page-objects/).** NON-login flows repeated across specs are lifted into `pages/` + `fixtures.ts` and the specs folded onto them — deterministically.
 - **[Auth as a fixture](/docs/features/auth/).** A detected login is lifted into an `auth.setup.ts` setup project that logs in once and reuses `storageState`; the password is redacted to `process.env.HOVER_PASSWORD`.
+- **[Wiki lint](/docs/features/mcp-tools/#the-mcp-prompts).** `/mcp__hover__lint` health-checks `.hover/`: it cross-checks the business map against your spec files and run ledger for deleted spec refs, regressed coverage, and unmapped specs, then layers judged checks (contradictory rules, code routes missing from the map) and offers fixes.
 
 ## What's next
 
-- **A deeper test-knowledge graph.** A richer `.hover/` memory layer — a relationship graph linking flows, pages, and the endpoints they touch, plus coverage-gap detection — over the Business Map + remembered rules that ship today. No source uploaded.
+- **A deeper test-knowledge graph.** A richer `.hover/` memory layer — a relationship graph linking flows, pages, and the endpoints they touch — over the Business Map, remembered rules, and the wiki lint that ship today. No source uploaded.
 - **CI-driven self-heal (mode B).** A red CI run offering to heal the drifted spec automatically. Local, on-demand heal ships today; the CI-triggered path is planned.
 - **Hover Cloud (planned, not shipped).** A hosted layer over the specs you already own: parallel runs, scheduled monitoring, and a flakiness dashboard. Authoring always stays local and free; the cloud only ever *runs and monitors* specs you already own — never authoring lock-in.
 

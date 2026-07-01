@@ -23,11 +23,14 @@ The server ships its workflows as MCP prompts, surfaced by Claude Code as slash 
 /mcp__hover__heal               # replay every saved spec, fix any drift
 /mcp__hover__heal login.spec.ts # …or heal one spec
 /mcp__hover__optimize checkout  # enrich one spec with observed assertions
+/mcp__hover__lint               # health-check the .hover/ test wiki
 ```
 
 **`test_app [scope]`** walks the agent through a scale-aware loop: **map the business lines** (the agent reads your routes + nav with its own file tools), **pick a scope**, **cover each flow one at a time** (navigate → snapshot → exercise → assert → crystallize), optionally add an [API-layer check](/docs/features/api-testing/) (Phase 3.5) and lift [shared flows into Page Objects](/docs/features/page-objects/) (Phase 5), then **update coverage** in `.hover/hover-map.md`. A large app doesn't have to finish in one pass — covering a batch and updating the map is a resumable unit.
 
 **`heal [spec]`** runs the [self-heal](/docs/features/self-heal/) loop: replay a saved spec's recorded steps against the live app, find the first step that no longer locates, and re-ground just that step. Omit the argument to scan every spec.
+
+**`lint`** health-checks your `.hover/` test wiki. `lint_map` runs the mechanical checks: a business line that points at a deleted spec, a covered line whose spec last ran fail or flaky (a heal candidate), and a spec no line maps. The prompt layers the judged checks your agent does well — contradictory rules in `.hover/memory/`, and routes in your code that the map never mentions — then offers to fix each: heal the regression, add the missing line, correct the rule. It keeps the map honest as your app grows.
 
 **`optimize <spec>`** enriches a crystallized spec. It hands your agent the spec, the outcome the recording session observed, and your existing Page Objects, and asks it to add assertions for that observed feedback, replace this-run values (a generated id, an order number) with stable ones, and reuse a Page Object where a step sequence matches. Your agent does the thinking; Hover picks no model. The result goes through `save_optimized_spec`, which validates it and writes a candidate under `.hover/cache/optimized/`. Your spec stays as it was until you review the diff and promote the candidate.
 
@@ -61,6 +64,7 @@ While the agent drives the UI, Hover passively captures the app's browser traffi
 | Tool | Purpose |
 |---|---|
 | `replay_spec(slug)` | Replay a saved spec's **recorded grounded steps** against the live app and report the first step that no longer locates — its index and the `role+name` it was looking for. Drift detection without running `playwright test`. See [Self-heal](/docs/features/self-heal/). |
+| `lint_map()` | Health-check the `.hover/` test wiki: cross-check the business map against the real spec files and the run ledger. Reports deleted spec refs, regressed coverage (a candidate for heal), and unmapped specs. Deterministic — no LLM. |
 
 ### Suite tools
 
