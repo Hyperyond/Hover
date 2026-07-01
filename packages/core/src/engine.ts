@@ -25,6 +25,11 @@ export type { ApiCheck, WriteApiSpecOptions, WriteApiSpecResult } from './specs/
 // file its result as a reviewed candidate. No Hover-owned model runs.
 export { buildOptimizeBrief, saveOptimizedCandidate, OptimizeError } from './specs/optimizeSpec.js';
 export type { OptimizeResult } from './specs/optimizeSpec.js';
+// LLM-Wiki P1 Lint — deterministic health check over .hover/ (map vs specs vs runs).
+export { lintWiki, parseRunStatuses } from './specs/lintWiki.js';
+export type { LintResult, LintFinding, LintKind, LintSeverity } from './specs/lintWiki.js';
+export { parseBusinessMap } from './specs/businessMap.js';
+export type { BusinessMapGraph, MapNode, MapEdge } from './specs/businessMap.js';
 // Page-Object extraction — lift NON-login shared flows into pages/ + fixtures.
 export { extractPageObjects, detectExtractableFlows } from './specs/extractPageObjects.js';
 export type { ExtractResult, ExtractedPage } from './specs/extractPageObjects.js';

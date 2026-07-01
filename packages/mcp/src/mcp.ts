@@ -12,6 +12,7 @@ import {
   extractPageObjects,
   buildOptimizeBrief,
   saveOptimizedCandidate,
+  lintWiki,
   type SkillStep,
   type ApiCheck,
   type Redaction,
@@ -87,6 +88,7 @@ const controller = new HoverMcpController({
     }
   },
   saveOptimized: (slug: string, code: string) => saveOptimizedCandidate(DEV_ROOT, slug, code),
+  lintWiki: () => lintWiki(DEV_ROOT),
 });
 
 const server = createHoverMcpServer(controller);

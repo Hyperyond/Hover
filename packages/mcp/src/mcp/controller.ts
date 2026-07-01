@@ -9,6 +9,7 @@ import {
   type Redaction,
   type SharedFlow,
   type ExtractResult,
+  type LintResult,
 } from '@hover-dev/core/engine';
 
 /*
@@ -73,6 +74,8 @@ export interface McpDeps {
    *  deterministic guardrails, soft-batch, and write `.hover/cache/optimized/
    *  <slug>.spec.ts.draft` (never the original). Throws if it fails validation. */
   saveOptimized?: (slug: string, code: string) => Promise<{ candidatePath: string }>;
+  /** Deterministic health check over `.hover/`: map vs spec files vs run ledger. */
+  lintWiki?: () => Promise<LintResult>;
 }
 
 function describe(g: GroundedTarget): string {
@@ -325,6 +328,29 @@ export class HoverMcpController {
       null,
       2,
     );
+  }
+
+  /** LLM-Wiki P1 Lint: run the deterministic `.hover/` health check (map vs
+   *  specs vs runs) and return it as a readable report the agent acts on (heal a
+   *  regressed line, map an orphan spec, drop a dead ref). The LLM-judged checks
+   *  (contradictory rules, code routes missing from the map) are driven on top of
+   *  this by the /mcp__hover__lint prompt. */
+  async lintWiki(): Promise<string> {
+    if (!this.deps.lintWiki) return 'Wiki lint is unavailable in this server.';
+    const res = await this.deps.lintWiki();
+    if (!res.hasMap) {
+      return 'No .hover/hover-map.md yet — nothing to lint. Run /mcp__hover__test_app first to map the app and crystallize specs.';
+    }
+    const { areas, lines, covered, specs } = res.summary;
+    const head = `Wiki lint — ${covered}/${lines} lines covered across ${areas} area${areas === 1 ? '' : 's'}, ${specs} spec file${specs === 1 ? '' : 's'}.`;
+    if (res.findings.length === 0) {
+      return `${head}\n✓ No drift: every mapped spec exists, no covered line is failing, no spec is unmapped.`;
+    }
+    const icon = { error: '✗', warn: '⚠', info: '·' } as const;
+    const body = res.findings
+      .map((f) => `${icon[f.severity]} [${f.kind}] ${f.message}${f.fix ? `\n   → ${f.fix}` : ''}`)
+      .join('\n');
+    return `${head}\n${res.findings.length} finding${res.findings.length === 1 ? '' : 's'}:\n${body}`;
   }
 
   /** Report NON-login flows repeated across the saved specs — so the agent can
