@@ -79,12 +79,13 @@ Because the agent acts through grounded tools, this isn't a hope — the grounde
 
 ## When selectors do break
 
-Sometimes the UI changes enough that the semantic selector itself goes stale — a button renamed `Sign in`, a label refactored, a role swapped. The saved spec turns red. You have two options:
+Sometimes the UI changes enough that the semantic selector itself goes stale — a button renamed `Sign in`, a label refactored, a role swapped. The saved spec turns red. You have three options:
 
-1. **Hand-edit** — open the `.spec.ts`, change the selector. The file is plain `@playwright/test` and yours to own; fast if you know exactly what changed.
-2. **Re-crystallize** — re-run `/mcp__hover__test_app <flow>` and let the agent re-author the flow against the current UI.
+1. **[Self-heal](/docs/features/self-heal/)** — run `/mcp__hover__heal <spec>` and the agent replays the spec against the live app, finds the broken step, and re-grounds just that step (record == replay preserved). The fastest path when a selector drifted.
+2. **Hand-edit** — open the `.spec.ts`, change the selector. The file is plain `@playwright/test` and yours to own; fast if you know exactly what changed.
+3. **Re-crystallize** — re-run `/mcp__hover__test_app <flow>` and let the agent re-author the flow against the current UI.
 
-Automatic, on-failure healing — replaying a spec's intent against the current UI and proposing a diff — is the planned path for **[Hover Cloud](/docs/reference/roadmap/)**, not a local feature. Locally, CI stays deterministic and free; you fix selectors deliberately. The [FAQ](/docs/faq/#my-ui-changed-and-my-saved-spec-breaks-what-now) covers the trade-offs in depth.
+Self-heal today is **local and on-demand** (mode A) — you trigger it in your agent. Automatic, on-failure healing driven by a red CI run is planned (see the [roadmap](/docs/reference/roadmap/)). CI itself stays deterministic and free. The [FAQ](/docs/faq/#my-ui-changed-and-my-saved-spec-breaks-what-now) covers the trade-offs in depth.
 
 ## CI is plain Playwright
 

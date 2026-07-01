@@ -1,0 +1,47 @@
+# Login & credentials
+
+A test suite has to log in without leaking the password and without re-typing it in every test. Hover handles both: it **redacts the credential** out of the spec, and it **lifts the login into a fixture** that runs once for the whole suite.
+
+## Credential redaction
+
+A value typed into a **password field** is parameterized to `process.env.HOVER_PASSWORD` in the generated spec. The literal password is **never written** to the spec, the JSDoc header, or the sidecar:
+
+```ts
+await page.getByLabel('Password').fill(process.env.HOVER_PASSWORD!);
+```
+
+## Auth as a fixture
+
+When a login is detected, Hover doesn't inline it into every spec. It lifts the login into **`auth.setup.ts`** — a Playwright **setup project** that logs in **once** and saves the browser's `storageState`. Every other spec then starts already authenticated, so login doesn't re-run per test.
+
+The scaffolded `playwright.config.ts` gains a `setup` project and a global `storageState` pointing at what the setup wrote:
+
+```ts
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  use: { baseURL: process.env.HOVER_BASE_URL ?? 'http://localhost:5173' },
+  projects: [
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'], storageState: '.auth/user.json' },
+      dependencies: ['setup'],
+    },
+  ],
+});
+```
+
+The `chromium` project depends on `setup`, so the login runs first and the saved `storageState` is reused for the rest of the run.
+
+## Runnable out of the box
+
+Hover scaffolds the `playwright.config.ts` (its `baseURL` comes from the run's target; override it in CI with `HOVER_BASE_URL`) and adds `@playwright/test` to your `devDependencies`. So a fresh suite just runs:
+
+```bash
+npx playwright test
+```
+
+## In CI
+
+Provide the password as the **`HOVER_PASSWORD`** env / secret, and set **`HOVER_BASE_URL`** if CI runs against a different origin. Nothing else about auth is embedded — the session lives in `storageState`, produced by the setup project at run time.
