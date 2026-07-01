@@ -8,6 +8,8 @@ import {
   loadMemory,
   formatMemoryForPrompt,
   readSidecar,
+  detectExtractableFlows,
+  extractPageObjects,
   type SkillStep,
   type ApiCheck,
   type Redaction,
@@ -72,6 +74,8 @@ const controller = new HoverMcpController({
     const sc = await readSidecar(DEV_ROOT, slug);
     return sc ? { steps: sc.steps, startUrl: TARGET } : null;
   },
+  detectSharedFlows: () => detectExtractableFlows(DEV_ROOT),
+  extractPageObjects: () => extractPageObjects(DEV_ROOT),
 });
 
 const server = createHoverMcpServer(controller);

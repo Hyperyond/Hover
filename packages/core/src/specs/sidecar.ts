@@ -22,7 +22,7 @@ import type { SpecAssertion } from './writeSpec.js';
 
 /** Current sidecar schema version. Bump when the shape changes so readers
  *  (Stage 2 detection, Stage 7 optimization) can migrate or skip cleanly. */
-export const SIDECAR_VERSION = 1;
+export const SIDECAR_VERSION = 2;
 
 export interface SpecSidecar {
   version: number;
@@ -31,10 +31,23 @@ export interface SpecSidecar {
   /** ISO timestamp the sidecar was written. */
   createdAt: string;
   /** The full captured session, structured and verbatim — never re-derived
-   *  from the generated `.spec.ts`. */
+   *  from the generated `.spec.ts`. Steps are already REDACTED (credentials are
+   *  `process.env.<X>` refs, never literals), so the sidecar carries no secret. */
   steps: SkillStep[];
   /** Alt-click assertions captured alongside the session. */
   assertions: SpecAssertion[];
+  // ── v2: crystallize context, so a re-render (self-heal, POM fold) re-applies
+  // the SAME auth-fixture + base URL + reset. NAMES only — never the literal
+  // credential values (those never leave the browser). ──
+  /** The env-var NAMES the run redacted credentials to (e.g. ['HOVER_PASSWORD']).
+   *  Lets a re-render re-detect the login prefix without the literal secret. */
+  redactionEnvVars?: string[];
+  /** The run's target origin — re-render uses it for baseURL / goto synthesis. */
+  startUrl?: string;
+  /** Recon reset recipe (debt-2), so a re-render re-emits the reset beforeEach. */
+  resetRecipe?: { tier: number; storageKeys?: string[]; hook?: string };
+  /** Whether the run had approved editing an existing user config (Stage 4). */
+  authFixture?: boolean;
 }
 
 /** Project-root `.hover/` directory — the single home for Hover-derived data

@@ -197,6 +197,27 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     ({ slug }) => guard(() => c.replaySpec(slug)),
   );
 
+  // ── Page Object extraction (detect → ask → extract) ──────────────────────
+  server.registerTool(
+    'detect_shared_flows',
+    {
+      description:
+        'After crystallizing the suite, report NON-login flows repeated across specs (login is already handled by the auth setup). Use it to decide whether to OFFER lifting a shared flow into a Page Object — then ASK the user before extracting.',
+      inputSchema: {},
+    },
+    () => guard(() => c.detectSharedFlows()),
+  );
+
+  server.registerTool(
+    'extract_page_objects',
+    {
+      description:
+        'Lift the shared flows into __vibe_tests__/pages/* + fixtures.ts and fold the specs that use them (they call `await xPage.x()` from ./fixtures). Deterministic. Call ONLY after the user approves the offer from detect_shared_flows.',
+      inputSchema: {},
+    },
+    () => guard(() => c.extractPageObjects()),
+  );
+
   // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
   // it as `/mcp__hover__test_app`, so adding the server brings both the tools
   // AND the command. No project scaffolding needed.
@@ -261,7 +282,8 @@ Tools: \`recall_business_knowledge\` · \`browser_navigate\` · \`browser_snapsh
 tree — read before acting) · \`click_control\` / \`fill_control\` / \`select_control\` /
 \`check_control\` (grounded target from the snapshot) · \`assert_visible\` ·
 \`record_fact\` · \`crystallize_spec(name, description?)\`. API layer:
-\`capture_requests\` · \`replay_request\` · \`crystallize_api_spec\`.
+\`capture_requests\` · \`replay_request\` · \`crystallize_api_spec\`. Suite:
+\`detect_shared_flows\` · \`extract_page_objects\` · \`replay_spec\`.
 
 Target: the app at HOVER_TARGET (set in the server's env). Scope: ${target}.
 
@@ -299,6 +321,9 @@ As you drive each flow, Hover passively captures the app's xhr/fetch traffic. Af
 
 ## Phase 4 — Update coverage
 - Mark each covered line \`[x]\` in \`.hover/hover-map.md\` with its spec filename. Report covered vs still-open. A LARGE app doesn't have to finish in one go — covering a batch + updating the map is a complete, resumable unit; re-invoke to continue the uncovered lines.
+
+## Phase 5 — Lift shared flows into Page Objects (ASK first)
+Once specs are crystallized, call \`detect_shared_flows\`. If it reports a NON-login flow repeated across specs (login is already handled by the auth setup), tell the user which specs share it and ASK whether to lift it into a shared Page Object (so a UI change to that flow is a one-place fix). On yes → \`extract_page_objects\` (generates \`pages/*\` + \`fixtures.ts\` and folds the specs to \`await xPage.x()\`). If nothing is shared, skip silently — most small suites have nothing to lift; don't force it.
 
 ## Understand the business — ASK, then REMEMBER
 When you genuinely can't resolve something on your own — is this a bug or by-design? which flows matter? what does this domain term mean? — ASK the user (don't guess, don't stop). When they confirm a durable business RULE, call \`record_fact\` to persist it (RULES ONLY — never credentials/secrets/PII). Also ASK when blocked on something only they can provide (login credentials, a file). Stay on the app under test — never navigate to external origins.`;

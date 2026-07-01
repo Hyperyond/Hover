@@ -479,7 +479,7 @@ describe('writeSpec — structured sidecar (Stage 1)', () => {
     const r = await writeSpec({ devRoot, name: 'login + counter', steps: session });
     const sidecarPath = join(devRoot, '.hover', 'sidecars', `${r.slug}.json`);
     const sc = JSON.parse(readFileSync(sidecarPath, 'utf-8'));
-    expect(sc.version).toBe(1);
+    expect(sc.version).toBe(2);
     expect(sc.slug).toBe(r.slug);
     expect(sc.name).toBe('login + counter');
     expect(typeof sc.createdAt).toBe('string');
