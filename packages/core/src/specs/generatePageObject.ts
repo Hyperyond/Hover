@@ -17,6 +17,7 @@ import {
   selectorForFormField,
   emitInteraction,
   blockScope,
+  groundedSelector,
 } from './writeSpec.js';
 
 const PAGE_VAR = 'this.page';
@@ -91,8 +92,30 @@ export function generatePageObject(
       case 'browser_press_key':
         body.push(`await ${PAGE_VAR}.keyboard.press(${JSON.stringify(String(i.key ?? ''))});`);
         break;
+      // Grounded control tools (MCP-first): target is role+name/testId/text on
+      // the input; the typed/selected value is data → a method parameter (D4).
+      case 'click_control':
+        body.push(...blockScope(emitInteraction(groundedSelector(i, PAGE_VAR), 'click()')));
+        break;
+      case 'fill_control': {
+        const p = uniqueParam(paramName(groundLabel(i)), used);
+        params.push(p);
+        body.push(...blockScope(emitInteraction(groundedSelector(i, PAGE_VAR), `fill(${p})`)));
+        break;
+      }
+      case 'select_control': {
+        const withRole = i.role ? i : { ...i, role: i.name ? 'combobox' : undefined };
+        const p = uniqueParam(paramName(groundLabel(i)), used);
+        params.push(p);
+        body.push(...blockScope(emitInteraction(groundedSelector(withRole, PAGE_VAR), `selectOption(${p})`)));
+        break;
+      }
+      case 'check_control':
+        body.push(...blockScope(emitInteraction(
+          groundedSelector(i, PAGE_VAR), i.checked === false ? 'uncheck()' : 'check()')));
+        break;
       default:
-        break; // diagnostics / non-replayable — skipped
+        break; // diagnostics / assert_visible / non-replayable — skipped
     }
   }
 
@@ -173,6 +196,11 @@ function pascal(raw: string): string {
 
 /** Parameter name derived from a field/element label. */
 const paramName = camel;
+
+/** A grounded target's label (name → testId → text) for naming its data param. */
+function groundLabel(i: Record<string, unknown>): string {
+  return String(i.name ?? i.testId ?? i.text ?? 'value');
+}
 
 function uniqueParam(base: string, used: Set<string>): string {
   const root = base || 'value';

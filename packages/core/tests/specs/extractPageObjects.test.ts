@@ -34,7 +34,13 @@ describe('extractPageObjects', () => {
 
     // A page object + fixtures were written.
     expect(existsSync(join(dir, '__vibe_tests__', 'fixtures.ts'))).toBe(true);
-    expect((await readdir(join(dir, '__vibe_tests__', 'pages'))).length).toBeGreaterThan(0);
+    const pageFiles = await readdir(join(dir, '__vibe_tests__', 'pages'));
+    expect(pageFiles.length).toBeGreaterThan(0);
+    // The Page Object METHOD BODY must replay the shared grounded steps — not
+    // just the navigation (guards the grounded-tool gap in generatePageObject).
+    const po = await readFile(join(dir, '__vibe_tests__', 'pages', pageFiles[0]), 'utf-8');
+    expect(po).toContain('getByRole("button", { name: "Overview"');
+    expect(po).toContain('.click()');
 
     // The folded specs now import from ./fixtures and call the page method.
     const reports = await readFile(join(dir, '__vibe_tests__', 'open-reports.spec.ts'), 'utf-8');

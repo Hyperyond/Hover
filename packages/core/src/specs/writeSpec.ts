@@ -963,7 +963,7 @@ export function selectorFromDescription(desc: string, pageVar = 'page'): string 
  * (no free-form description, hence no confabulation). Mirrors
  * `locate()` in `mcp/actuateServer.ts`.
  */
-function groundedSelector(input: Record<string, unknown>, pageVar = 'page'): string {
+export function groundedSelector(input: Record<string, unknown>, pageVar = 'page'): string {
   const role = typeof input.role === 'string' ? input.role : '';
   const name = typeof input.name === 'string' ? input.name : '';
   const testId = typeof input.testId === 'string' ? input.testId : '';
