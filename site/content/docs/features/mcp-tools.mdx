@@ -13,16 +13,20 @@ claude mcp add hover -- hover-mcp
 
 Adding the server brings both the tools and the `/mcp__hover__test_app` command. See [Install](/docs/get-started/install/) for other agents.
 
-## The `test_app` prompt
+## The MCP prompts
 
-The server ships its workflow as an MCP prompt, surfaced by Claude Code as `/mcp__hover__test_app`:
+The server ships its workflows as MCP prompts, surfaced by Claude Code as slash commands:
 
 ```
 /mcp__hover__test_app           # map the app and crystallize a suite
 /mcp__hover__test_app login     # …or scope it to one area
+/mcp__hover__heal               # replay every saved spec, fix any drift
+/mcp__hover__heal login.spec.ts # …or heal one spec
 ```
 
-The prompt walks the agent through a scale-aware loop: **map the business lines** (the agent reads your routes + nav with its own file tools), **pick a scope**, **cover each flow one at a time** (navigate → snapshot → exercise → assert → crystallize), then **update coverage** in `.hover/hover-map.md`. A large app doesn't have to finish in one pass — covering a batch and updating the map is a resumable unit.
+**`test_app [scope]`** walks the agent through a scale-aware loop: **map the business lines** (the agent reads your routes + nav with its own file tools), **pick a scope**, **cover each flow one at a time** (navigate → snapshot → exercise → assert → crystallize), optionally add an [API-layer check](/docs/features/api-testing/) (Phase 3.5) and lift [shared flows into Page Objects](/docs/features/page-objects/) (Phase 5), then **update coverage** in `.hover/hover-map.md`. A large app doesn't have to finish in one pass — covering a batch and updating the map is a resumable unit.
+
+**`heal [spec]`** runs the [self-heal](/docs/features/self-heal/) loop: replay a saved spec's recorded steps against the live app, find the first step that no longer locates, and re-ground just that step. Omit the argument to scan every spec.
 
 ## The tools
 
@@ -38,6 +42,29 @@ The prompt walks the agent through a scale-aware loop: **map the business lines*
 | `recall_business_knowledge()` | Recall what earlier runs learned about this app (business rules, expected behaviours, access policies). The agent calls this at the start. |
 | `record_fact(title, rule, type?)` | Remember a durable **business rule** so neither this run nor a future one re-asks it. Rules only — never secrets, passwords, tokens, or personal data. |
 | `crystallize_spec(name, description?)` | Save the flow the agent just performed (the grounded actions since the last crystallize) as a plain `@playwright/test` spec in `__vibe_tests__/`. |
+
+### API-layer tools
+
+While the agent drives the UI, Hover passively captures the app's browser traffic off the same CDP connection — no MITM proxy, no cert. These tools turn that traffic into a plain `*.api-test.spec.ts`. See [API testing](/docs/features/api-testing/).
+
+| Tool | Purpose |
+|---|---|
+| `capture_requests(urlContains?, method?)` | Return the app's xhr / fetch calls observed while driving — method, url, status, content-type, request body, response shape. Optional `urlContains` / `method` filters narrow the list. |
+| `replay_request(...)` | Re-send a (possibly mutated) request to verify a check before crystallizing, so no status code is confabulated. `authenticated: false` uses a fresh context with no session — the way to prove a "requires auth" boundary returns 401 / 403. |
+| `crystallize_api_spec(name, description?, checks[])` | Write the verified checks as a plain `@playwright/test` `*.api-test.spec.ts` using Playwright's `request` fixture. |
+
+### Self-heal tools
+
+| Tool | Purpose |
+|---|---|
+| `replay_spec(slug)` | Replay a saved spec's **recorded grounded steps** against the live app and report the first step that no longer locates — its index and the `role+name` it was looking for. Drift detection without running `playwright test`. See [Self-heal](/docs/features/self-heal/). |
+
+### Suite tools
+
+| Tool | Purpose |
+|---|---|
+| `detect_shared_flows()` | Report NON-login flows repeated across your saved specs. |
+| `extract_page_objects()` | Lift those shared flows into `pages/` + `fixtures.ts` and fold the specs onto them. Deterministic — no LLM. See [Page Object extraction](/docs/features/page-objects/). |
 
 ### The grounded target
 

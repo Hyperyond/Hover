@@ -1,0 +1,39 @@
+# Page Object extraction
+
+When the same flow shows up across several specs, a UI change to that flow means editing every spec. Hover lifts the repeated flow into a shared **Page Object** so the change becomes a **one-file fix**.
+
+## What it produces
+
+A Page Object under `pages/<Name>.ts` plus a `fixtures.ts` entry point. The specs stop repeating the steps inline and instead consume the fixture and call the method:
+
+```ts
+import { test, expect } from './fixtures';
+
+test('checkout after adding to cart', async ({ cartPage, page }) => {
+  await cartPage.addItemAndCheckout('Blue Widget', 2);
+  await expect(page.getByRole('heading', { name: /order confirmed/i })).toBeVisible();
+});
+```
+
+```
+__vibe_tests__/
+├── pages/CartPage.ts   # the lifted Page Object
+├── fixtures.ts         # exposes it as a fixture
+└── checkout.spec.ts    # consumes await cartPage.x() + import from './fixtures'
+```
+
+Data values that varied in the flow (an item name, a quantity) become **method parameters**.
+
+## When it triggers
+
+During `test_app` **Phase 5**, after crystallizing, Hover scans your specs with `detect_shared_flows`. If a **NON-login** flow is repeated across specs, the agent **asks you** whether to lift it. On yes, `extract_page_objects` generates the Page Object and folds the specs onto it. The extraction is **deterministic** — no LLM writes the code.
+
+Login is **excluded on purpose**: it's already handled by auth-as-fixture, so it never re-runs per test — see [Login & credentials](/docs/features/auth/).
+
+## Honest scope
+
+The value scales with the suite. A small suite of distinct flows correctly finds nothing to lift — there's no shared non-login flow to share. The payoff shows up in **large suites** where several specs walk through the same non-login entry flow before doing their own thing.
+
+## Still plain Playwright
+
+Page Objects and fixtures are Playwright's own primitives. The folded specs run in CI with `npx playwright test`, no agent and no Hover runtime in the loop.

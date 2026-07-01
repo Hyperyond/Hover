@@ -6,15 +6,21 @@ What Hover does today, across its four surfaces — authored through the MCP, re
 
 The authoring engine is an **MCP server** (`@hover-dev/mcp`) you add to the coding agent you already run. Once it's wired in, your agent gets Hover's grounded browser tools plus a `test_app` prompt that explores your app and crystallizes a suite.
 
-- **[The MCP tools](/docs/features/mcp-tools/)** — the grounded actuation tools (`click_control` / `fill_control` / `select_control` / `check_control`), `browser_navigate` / `browser_snapshot`, `crystallize_spec`, the `recall` / `record_fact` memory tools, and the `test_app` prompt. The agent acts through these so the selector that drove an action is the exact one saved.
-- **[@account multi-environment credentials](/docs/get-started/first-session/#step-2-set-up-an-environment-optional)** — define test accounts per environment; the agent logs in via `@account`. Credentials are parameterized into `process.env` references — never written into the spec, the JSDoc, or the sidecar.
+- **[The MCP tools](/docs/features/mcp-tools/)** — the grounded actuation tools (`click_control` / `fill_control` / `select_control` / `check_control`), `browser_navigate` / `browser_snapshot`, `crystallize_spec`, the `recall` / `record_fact` memory tools, and the `test_app` / `heal` prompts. The agent acts through these so the selector that drove an action is the exact one saved.
+- **[API testing](/docs/features/api-testing/)** — Hover passively captures the app's browser traffic off the same CDP connection (no proxy) and crystallizes the checks worth pinning into a plain `*.api-test.spec.ts` — verified with `replay_request` so no status code is confabulated.
+- **[Login & credentials](/docs/features/auth/)** — the agent logs in via a per-environment `@account`; the password is redacted to `process.env.HOVER_PASSWORD`, and the login is lifted into an `auth.setup.ts` fixture that runs once for the whole suite. Never written into the spec, the JSDoc, or the sidecar.
 - **white-box source reading** — an opt-in, read-only source reader the agent can use to ground its testing in your code. Off by default; fenced to read-only.
 
 ## Output
 
 - **[Crystallize a spec](/docs/features/save-as-spec/)** — `__vibe_tests__/<slug>.spec.ts` using `getByRole` / `getByLabel` / `getByTestId`, emitted **deterministically** (no LLM writing code). Runs in CI without Hover. Every interaction is wrapped in a visibility prelude so UI drift fails in ~3 s with `Locator expected to be visible` instead of a 30 s actionability timeout.
-- **[Structured spec output](/docs/features/structured-output/)** — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, a `.hover/sidecars/<slug>.json` sidecar, and Page Objects + fixtures lifted from flows repeated across specs.
+- **[Structured spec output](/docs/features/structured-output/)** — the saved spec grows an architecture: `test.step` stages, popup / new-tab `Promise.all` pairing, and a `.hover/sidecars/<slug>.json` sidecar.
+- **[Page Object extraction](/docs/features/page-objects/)** — when a NON-login flow recurs across specs, Hover lifts it into `pages/` + `fixtures.ts` and folds the specs, so a change to that flow is a one-file fix. Deterministic, no LLM.
 - **[Optimize a spec](/docs/features/optimization-pass/)** — an optional, off-by-default AI pass polishes a deterministic draft into a diff-reviewed candidate: adds the assertions the run observed, flags buggy behaviour `// KNOWN BUG`, always keeps the original.
+
+## Maintenance
+
+- **[Self-heal a drifted spec](/docs/features/self-heal/)** — when the UI changes and a recorded selector stops matching, `/mcp__hover__heal` replays the spec against the live app, finds the broken step, and re-grounds only that step. Record == replay is preserved.
 
 ## Memory
 
