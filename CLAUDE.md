@@ -50,6 +50,7 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` (plus the `site
   - `memory/*.md` + `MEMORY.md` — business rules / facts written via `record_fact` (`packages/core/src/memory/businessMemory.ts`) and recalled via `recall_business_knowledge`.
   - `sidecars/<slug>.json` — the structured `SpecStep[]` record per spec (readers fall back to the legacy nested `__vibe_tests__/.hover/` and lazily migrate).
   - `runs/<id>.json` — the **Playwright spec-run-results** ledger (written by ▶ Run / CI sync, read by the Dashboard).
+  - `log.md` — the **append-only run history** (LLM-Wiki P3), one machine-parseable `- <ISO> · <kind> · <summary>` line per wiki mutation (crystallize / api / extract), written deterministically by `appendWikiLog` (`packages/core/src/specs/wikiLog.ts`) as the MCP server crystallizes/extracts. Best-effort; never breaks a write.
   - `conventions.md` — project conventions.
   - `cache/` — disposable (optimization candidates live at `cache/optimized/`).
 
