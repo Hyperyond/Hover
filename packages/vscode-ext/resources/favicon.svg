@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2C6E49" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <!-- The grounded reticle — Hover's primary mark (see DESIGN.md §2.1). -->
+  <path d="M4 8.5V4h4.5"/>
+  <path d="M19.5 8.5V4H15"/>
+  <path d="M4 15.5V20h4.5"/>
+  <path d="M19.5 15.5V20H15"/>
+  <circle cx="12" cy="12" r="1.7" fill="#2C6E49" stroke="none"/>
+</svg>
