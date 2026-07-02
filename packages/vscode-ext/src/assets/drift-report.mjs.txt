@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+/*
+ * Hover self-heal mode B1 — drift dispatcher. Generated into your repo at
+ * .github/hover/drift-report.mjs by the Hover extension. Runs in CI after a
+ * failed Hover E2E run: it reads the Playwright JSON report, lists the specs
+ * that FAILED, and writes a PR-comment body dispatching a LOCAL heal for each.
+ *
+ * No AI runs in CI. Healing happens in YOUR coding agent, against YOUR live app,
+ * as a human-reviewed diff — this step only surfaces WHAT drifted and HOW to fix
+ * it, the moment the run goes red, on the PR instead of buried in logs.
+ */
+import { readFileSync, appendFileSync, writeFileSync } from 'node:fs';
+
+let report;
+try {
+  report = JSON.parse(readFileSync('hover-results.json', 'utf8'));
+} catch {
+  process.exit(0); // no report (or unreadable) — nothing to dispatch
+}
+
+// Walk the Playwright JSON suites for specs whose latest result was not ok.
+const failed = new Set();
+const walk = (suite) => {
+  for (const spec of suite.specs || []) {
+    const file = (suite.file || spec.file || '').split('/').pop();
+    if (spec.ok === false && file) failed.add(file);
+  }
+  for (const child of suite.suites || []) walk(child);
+};
+for (const s of report.suites || []) walk(s);
+if (!failed.size) process.exit(0);
+
+const slugs = [...failed].map((f) => f.replace('.spec.tsx', '').replace('.spec.ts', ''));
+const commands = slugs.map((s) => '- `/mcp__hover__heal ' + s + '`').join('\n');
+const body =
+  '### 🏥 Hover — ' + slugs.length + ' spec(s) drifted\n\n' +
+  'These specs failed. If the app changed (a rename / moved control, not a real bug), ' +
+  'heal them in your coding agent — the heal replays each against your live app, ' +
+  're-grounds only the broken step, and re-crystallizes:\n\n' +
+  commands +
+  '\n\n_Healing runs locally (your browser + your own agent) as a reviewed diff. ' +
+  'No AI runs in CI — a red check is a real regression until you heal it._\n';
+
+if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, body);
+writeFileSync('hover-drift.md', body);
