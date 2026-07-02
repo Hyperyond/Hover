@@ -25,7 +25,7 @@ import { registerBusinessMapView } from './businessMapView.js';
 import { syncCiResults as ghSyncCiResults } from './githubCi.js';
 import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar } from './environments.js';
 import { registerEnvironmentsView } from './environmentsView.js';
-import { buildWorkflowYaml, DRIFT_REPORT_SCRIPT } from './ciWorkflow.js';
+import { buildWorkflowYaml, buildAutohealWorkflowYaml, DRIFT_REPORT_SCRIPT } from './ciWorkflow.js';
 import { candidateUri, uriExists } from './optimized.js';
 
 let extContext: vscode.ExtensionContext | undefined;
@@ -405,17 +405,26 @@ async function addCiWorkflow(): Promise<void> {
     vscode.Uri.joinPath(folder.uri, '.github', 'hover', 'drift-report.mjs'),
     Buffer.from(DRIFT_REPORT_SCRIPT, 'utf8'),
   );
+  // Self-heal B2: the opt-in auto-heal workflow (inert until the user adds the
+  // ANTHROPIC_API_KEY secret + HOVER_AUTOHEAL=true variable). Safe to write now.
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(folder.uri, '.github', 'workflows', 'hover-autoheal.yml'),
+    Buffer.from(buildAutohealWorkflowYaml({ packageManager, devScript, appUrl, secretNames }), 'utf8'),
+  );
   await vscode.window.showTextDocument(fileUri);
 
+  // Auto-heal (B2) is opt-in + inert until enabled — one line so the user knows it's there.
+  const autohealNote =
+    ' Also wrote hover-autoheal.yml (opt-in self-heal: add secret ANTHROPIC_API_KEY + variable HOVER_AUTOHEAL=true to let a failed run open a healed PR with your own Claude).';
   if (secretNames.length) {
     const pick = await vscode.window.showInformationMessage(
-      `Hover: wrote .github/workflows/hover-e2e.yml. Add these GitHub repo secrets so the specs can log in: ${secretNames.join(', ')}`,
+      `Hover: wrote .github/workflows/hover-e2e.yml. Add these GitHub repo secrets so the specs can log in: ${secretNames.join(', ')}.${autohealNote}`,
       'Copy secret names',
     );
     if (pick === 'Copy secret names') await vscode.env.clipboard.writeText(secretNames.join('\n'));
   } else {
     void vscode.window.showInformationMessage(
-      'Hover: wrote .github/workflows/hover-e2e.yml. Add test accounts in the Environments view if your specs need to log in.',
+      `Hover: wrote .github/workflows/hover-e2e.yml. Add test accounts in the Environments view if your specs need to log in.${autohealNote}`,
     );
   }
 }
