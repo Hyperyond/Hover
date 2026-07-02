@@ -18,6 +18,7 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import { registerCloud } from './cloud';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { SpecLensProvider } from './specLens.js';
 import { registerDashboardView } from './dashboardView.js';
@@ -88,6 +89,10 @@ export function activate(context: vscode.ExtensionContext): void {
       void pollAppStatus();
     }),
   );
+
+  // Hover Cloud pull channel: the connect command + the CI-drift poller
+  // (notifies when cloud.gethover.dev queues a heal request for this user).
+  registerCloud(context);
 
   // Poll the dev-server status so resolveTargetUrl() can auto-detect a running
   // dev server (auto-probe common ports when no URL is configured).
