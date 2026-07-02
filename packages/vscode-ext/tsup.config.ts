@@ -21,7 +21,7 @@ export default defineConfig({
   // Import `.css` as a plain string (inlined into the webview <style>) instead
   // of esbuild's default CSS bundling — lets the chat stylesheet live in a real
   // .css file the maintainer can edit with full tooling, no JS-template escaping.
-  loader: { '.css': 'text' },
+  loader: { '.css': 'text', '.txt': 'text' },
   clean: true,
   sourcemap: true,
 });

@@ -25,7 +25,7 @@ import { registerBusinessMapView } from './businessMapView.js';
 import { syncCiResults as ghSyncCiResults } from './githubCi.js';
 import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar } from './environments.js';
 import { registerEnvironmentsView } from './environmentsView.js';
-import { buildWorkflowYaml } from './ciWorkflow.js';
+import { buildWorkflowYaml, DRIFT_REPORT_SCRIPT } from './ciWorkflow.js';
 import { candidateUri, uriExists } from './optimized.js';
 
 let extContext: vscode.ExtensionContext | undefined;
@@ -399,6 +399,12 @@ async function addCiWorkflow(): Promise<void> {
   }
   await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(folder.uri, '.github', 'workflows'));
   await vscode.workspace.fs.writeFile(fileUri, Buffer.from(yaml, 'utf8'));
+  // Self-heal B1: the drift-dispatch script the workflow runs on a red PR run.
+  await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(folder.uri, '.github', 'hover'));
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(folder.uri, '.github', 'hover', 'drift-report.mjs'),
+    Buffer.from(DRIFT_REPORT_SCRIPT, 'utf8'),
+  );
   await vscode.window.showTextDocument(fileUri);
 
   if (secretNames.length) {

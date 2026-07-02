@@ -14,7 +14,18 @@
  * (via GitHub) to surface CI failures in the editor and offer 🏥 Heal on drifted
  * specs, with the heal running locally. No AI in CI; a red check is a real
  * regression until you heal it.
+ *
+ * Self-heal mode B1 (this file): on a red PR run, a `Report drifted specs` step
+ * runs `.github/hover/drift-report.mjs` (DRIFT_REPORT_SCRIPT, written alongside
+ * the workflow) to comment the drifted specs + a paste-ready `/mcp__hover__heal
+ * <slug>` per spec on the PR — surfacing the heal task the moment it's red. Still
+ * NO AI in CI: the heal itself runs locally. (Mode B2 — an opt-in job that heals
+ * in CI with the user's own Claude + opens a PR — is a separate workflow.)
  */
+import DRIFT_REPORT_SCRIPT from './assets/drift-report.mjs.txt';
+
+/** The CI drift-dispatch script, written to `.github/hover/drift-report.mjs`. */
+export { DRIFT_REPORT_SCRIPT };
 
 export interface CiWorkflowOptions {
   /** pnpm | yarn | bun | npm */
@@ -95,6 +106,18 @@ ${secretEnv}
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+      # Self-heal B1: on a red PR run, comment the drifted specs + a paste-ready
+      # /mcp__hover__heal command for each. The heal still runs LOCALLY (your
+      # browser + your agent) — this just surfaces it on the PR, no AI in CI.
+      - name: Report drifted specs (Hover self-heal)
+        if: \${{ failure() && github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          node .github/hover/drift-report.mjs || exit 0
+          if [ -f hover-drift.md ]; then
+            gh pr comment "\${{ github.event.pull_request.number }}" --body-file hover-drift.md || true
+          fi
       # The hover-results artifact (Playwright JSON) is what the Hover VS Code
       # extension reads to surface CI failures in the editor and offer 🏥 Heal on
       # drifted specs — the heal runs LOCALLY (your browser + your agent), no AI
