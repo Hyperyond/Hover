@@ -27,7 +27,7 @@ Earlier history (for context only): a pre-extension surface was a dev-server-inj
 
 ## Workspace directories
 
-Workspace packages come from `pnpm-workspace.yaml`: `packages/*` (plus the `site` docs app). The repo is pnpm + ESM throughout.
+Workspace packages come from `pnpm-workspace.yaml`: `packages/*`. The repo is pnpm + ESM throughout.
 
 - `packages/core` is `@hover-dev/core` — the **engine library**. Owns grounded-actuation logic, `writeSpec` (the deterministic crystallizer), grounded-step replay (`replayGroundedSteps`), the optimize / architecture passes (ts-morph), business memory (`.hover/memory/`), `launchDebugChrome`, and the `@hover-dev/core/engine` barrel. Published to npm (public). Its **only consumer now is `@hover-dev/mcp`** — the extension no longer touches it, so the old WS staged-engine surface (`runSession`, the `./service` host + `service/*`, the Playwright-MCP config in `resolveMcpConfig` / `buildGroundedMcpConfig`, and the `mcp/actuateServer` + `sourceServer` relays) has been **removed**, and `@playwright/mcp` is no longer a dependency (it dragged ~29 MB of full Playwright into every install for nothing). `main` / `exports` point at `dist/*.js`. **Do not delete `core`.**
 - `packages/mcp` is `@hover-dev/mcp` (bin `hover-mcp`) — the **MCP stdio server**, the thin frontend and the only public-facing install. Depends on `core` via `workspace:*`. Exposes grounded browser tools — `browser_navigate`, `browser_snapshot`, `click_control`, `fill_control`, `select_control`, `check_control`, `assert_visible` — plus `recall_business_knowledge` / `record_fact` and `crystallize_spec`, and a `test_app` **MCP prompt** (the phased explore → business-map → crystallize workflow, surfaced in Claude Code as `/mcp__hover__test_app`). It spawns no agent: the calling agent IS the intelligence; Hover guarantees record == replay at the output. Config via env: `HOVER_TARGET`, `HOVER_CDP_PORT`, `HOVER_PROJECT_ROOT`, `HOVER_LANG` (language the workflow prompts tell the agent to CONVERSE in — questions/summaries/explanations; code + spec names stay English. `languageDirective` in `mcp/server.ts`, prepended to every prompt; empty for en/unset). **Published lockstep with `core` on `v*` tags** (pnpm rewrites mcp's `workspace:*` core ref to the just-published core version). Users add the MCP and `core` comes along as a dep — they never install `core` directly.
@@ -38,7 +38,7 @@ Workspace packages come from `pnpm-workspace.yaml`: `packages/*` (plus the `site
   - **Specs CodeLens (F3)** (`src/specLens.ts`) and **Run** — runs specs via the user's own Playwright in a terminal.
 
   GUTTED / REMOVED: the chat webview; the in-extension engine (`host.mjs`, `serviceClient`, the staged `engine/` dir, `scripts/stage-engine.mjs`); mode switching (normal / api-test / pentest / QA); and Heal / Optimize (no engine to run them). F2 (element → source) was deferred — it needed the cut WS relay. Builds with `tsup` to `dist/extension.cjs`; webview via Vite (`build:webview`). Publisher `hyperyond`; **published on the VS Code Marketplace + Open VSX as `hyperyond.hover-dev`** on its own `vscode-v*` tags. The `.vsix` is ~220 KB (no staged engine). A local `.vsix` from `pnpm --filter hover-dev package` is sideloaded for dev testing.
-- `site` is the docs app (`@hover-dev/site`).
+- The marketing/docs site (gethover.dev) used to live here as `site` (`@hover-dev/site`); it moved to the Hover-cloud repo as `apps/site` (`@hover-cloud/site`) on 2026-07-02.
 
 (The `examples/*` dogfood test-target apps that used to live here — `basic-app`, `e-commerce`, `stock-registration`, `canvas-paint`, `payment-provider` — have been **removed**; future test targets live separately. There is no `pnpm dev:example:*` / `pnpm test:e2e` anymore.)
 
@@ -113,7 +113,7 @@ For the extension cockpit: `pnpm --filter hover-dev package` → sideload the `.
 
 - Use Conventional Commits. Format: `<type>(<scope>): <description>`.
 - Common types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `perf`.
-- `<scope>` is the package or sub-area: `core`, `mcp`, `vscode-ext`, `site`, `playwright`, `ci`, `deps`.
+- `<scope>` is the package or sub-area: `core`, `mcp`, `vscode-ext`, `playwright`, `ci`, `deps`.
 - Commit messages are written in **English**. Hover is a public open-source repo; contributors come from everywhere.
 - The subject line is imperative, ≤72 characters, no trailing period.
 - Conventional Commits is enforced at commit time by a husky `commit-msg` hook running `commitlint`. The hook installs on `pnpm install`. Do not bypass it with `--no-verify` unless you have explicit owner sign-off.
