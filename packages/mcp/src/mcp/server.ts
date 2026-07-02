@@ -301,6 +301,20 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     }),
   );
 
+  // Query workflow (LLM-Wiki P4) — surfaced as `/mcp__hover__ask`. Read the wiki,
+  // answer with citations, optionally file a confirmed new rule back.
+  server.registerPrompt(
+    'ask',
+    {
+      title: 'Hover — ask the test wiki',
+      description: "Answer a question about this app from its .hover/ wiki (business map + remembered rules + specs + run log), with citations. Read-only; can file a confirmed new rule back.",
+      argsSchema: { question: z.string().describe('The question to answer, e.g. "what happens when a guest tries to check out?"') },
+    },
+    ({ question }) => ({
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: askPrompt(question) } }],
+    }),
+  );
+
   // Self-heal workflow — surfaced as `/mcp__hover__heal`.
   server.registerPrompt(
     'heal',
@@ -315,6 +329,20 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
   );
 
   return server;
+}
+
+/** Query workflow body (LLM-Wiki P4): read the wiki, answer with citations, and
+ *  optionally file a confirmed new rule back so the next question is cheaper. */
+function askPrompt(question: string): string {
+  return `Answer a question about this app using its **test wiki** (\`.hover/\`) as the source of truth. The wiki = the business map (\`.hover/hover-map.md\`), the remembered business rules (\`.hover/memory/\` — via \`recall_business_knowledge\` / \`recall_fact\`), the crystallized specs under \`__vibe_tests__/\`, and the run history (\`.hover/log.md\`).
+
+Question: ${question}
+
+1. **Gather (read-only — don't drive the browser).** Call \`recall_business_knowledge\` for the rule index and pull specifics with \`recall_fact\`. Read \`.hover/hover-map.md\` for the business lines, coverage, and relationships. Skim the relevant \`*.spec.ts\` and \`.hover/log.md\` with your own file tools.
+2. **Answer directly, with CITATIONS.** Ground every claim in what you read — name the rule, the business line, or the spec file it came from. If the wiki genuinely doesn't cover it, say so plainly instead of guessing (and suggest running \`/mcp__hover__test_app\` to cover that area).
+3. **Optionally file it back.** If answering established a durable business RULE the wiki was missing and the user confirms it, persist it with \`record_fact\` (RULES only — never secrets / credentials / PII) so the next run doesn't re-derive it.
+
+Stay on what the wiki + code actually say; don't invent behavior.`;
 }
 
 /** Wiki-lint workflow body. `lint_map` does the mechanical checks; the agent
