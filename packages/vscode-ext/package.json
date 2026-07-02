@@ -327,6 +327,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@hover-dev/core": "workspace:*",
     "@xyflow/react": "^12.3.0",
     "fflate": "^0.8.3"
   },

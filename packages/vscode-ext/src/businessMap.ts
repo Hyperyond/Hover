@@ -9,6 +9,11 @@
  * engine for a read-only view). Keep the two in sync if the map format changes.
  */
 
+// Lint findings + log entries are attached by the provider (via
+// @hover-dev/core/wiki) as VIEW enrichment — not produced by the parser here.
+import type { LintFinding, WikiLogEntry } from '@hover-dev/core/wiki';
+export type { LintFinding, WikiLogEntry };
+
 export type MapNodeKind = 'app' | 'area' | 'line' | 'spec';
 export type CoverageStatus = 'covered' | 'uncovered';
 export type RunStatus = 'pass' | 'fail' | 'flaky';
@@ -27,6 +32,8 @@ export interface MapNode {
   /** Latest run outcome for this node's spec, from `.hover/runs/*.json`
    *  (resolved by the provider). On line nodes = worst of their specs. */
   run?: RunStatus;
+  /** Lint drift touching this line (attached by the provider from lintWiki). */
+  lintFindings?: LintFinding[];
 }
 export interface MapEdge {
   source: string;
@@ -45,6 +52,10 @@ export interface BusinessMapGraph {
   /** Inter-line relationships from the `## Relationships` block (may be empty). */
   relations: MapRelation[];
   stats: { lines: number; covered: number; areas: number };
+  /** Wiki lint result (attached by the provider; undefined until gathered). */
+  lint?: { ok: boolean; findings: LintFinding[] };
+  /** Recent run-history entries from `.hover/log.md` (newest last). */
+  timeline?: WikiLogEntry[];
 }
 
 const RELATION_KINDS: readonly RelationKind[] = ['depends-on', 'shares-state', 'navigates-to'];

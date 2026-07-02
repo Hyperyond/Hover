@@ -15,10 +15,18 @@
  * "Run spec" works), and `.hover/runs/*.json` is folded in for live run colors.
  */
 import * as vscode from 'vscode';
+import { dirname } from 'node:path';
+import { lintWiki, readWikiLog } from '@hover-dev/core/wiki';
 import { renderWebviewHtml } from './webviewHost.js';
 import { parseBusinessMap, type BusinessMapGraph, type RunStatus } from './businessMap.js';
 import { parsePlaywrightRun, type Status } from './dashboardView.js';
 import { resolveTargetUrl } from './extension.js';
+
+/** kebab-case a line label the way parseBusinessMap does, so lint findings
+ *  (keyed by line LABEL) can be matched back to line NODES (keyed by slug). */
+function slugLabel(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
+}
 
 async function findMap(): Promise<vscode.Uri | null> {
   const hits = await vscode.workspace.findFiles('**/.hover/hover-map.md', '**/node_modules/**', 1);
@@ -89,6 +97,32 @@ async function gather(): Promise<BusinessMapGraph | null> {
       if (!line.path && node.path) line.path = node.path;
       line.run = worseRun(line.run, run);
     }
+  }
+
+  // Fold in the wiki health check + run-history log (both pure `.hover/` reads
+  // from @hover-dev/core/wiki). devRoot = the dir that OWNS this .hover (the map
+  // is <devRoot>/.hover/hover-map.md). Best-effort — a failure just omits them.
+  const devRoot = dirname(dirname(uri.fsPath));
+  try {
+    const lint = await lintWiki(devRoot);
+    graph.lint = { ok: lint.ok, findings: lint.findings };
+    // Attach each line-scoped finding to its line node (matched by label slug).
+    for (const f of lint.findings) {
+      if (!f.line) continue;
+      const target = slugLabel(f.line);
+      for (const n of graph.nodes) {
+        if (n.kind === 'line' && slugLabel(n.label) === target) {
+          (n.lintFindings ??= []).push(f);
+        }
+      }
+    }
+  } catch {
+    /* lint unavailable — omit */
+  }
+  try {
+    graph.timeline = await readWikiLog(devRoot, 25);
+  } catch {
+    /* log unavailable — omit */
   }
   return graph;
 }
@@ -217,7 +251,7 @@ export function registerBusinessMapView(extensionUri: vscode.Uri): vscode.Dispos
   );
   const refresh = vscode.commands.registerCommand('hover.refreshBusinessMap', refreshAll);
 
-  const watcher = vscode.workspace.createFileSystemWatcher('**/.hover/{hover-map.md,runs/*.json}');
+  const watcher = vscode.workspace.createFileSystemWatcher('**/.hover/{hover-map.md,log.md,runs/*.json}');
   watcher.onDidCreate(refreshAll);
   watcher.onDidChange(refreshAll);
   watcher.onDidDelete(refreshAll);

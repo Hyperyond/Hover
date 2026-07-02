@@ -15,7 +15,9 @@ export default defineConfig({
   // pnpm's symlinked node_modules; an un-bundled dep → "Cannot find module" at
   // activation).
   external: ['vscode'],
-  noExternal: ['fflate'],
+  // `@hover-dev/core/wiki` is the pure-read wiki entry (fs/path only — no
+  // playwright/ts-morph); bundling it keeps the .vsix self-contained + tiny.
+  noExternal: ['fflate', '@hover-dev/core'],
   // Import `.css` as a plain string (inlined into the webview <style>) instead
   // of esbuild's default CSS bundling — lets the chat stylesheet live in a real
   // .css file the maintainer can edit with full tooling, no JS-template escaping.

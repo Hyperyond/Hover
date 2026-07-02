@@ -97,6 +97,9 @@ importers:
 
   packages/vscode-ext:
     dependencies:
+      '@hover-dev/core':
+        specifier: workspace:*
+        version: link:../core
       '@xyflow/react':
         specifier: ^12.3.0
         version: 12.11.1(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)

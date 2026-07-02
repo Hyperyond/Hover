@@ -30,6 +30,10 @@
     "./engine": {
       "types": "./dist/engine.d.ts",
       "import": "./dist/engine.js"
+    },
+    "./wiki": {
+      "types": "./dist/wiki.d.ts",
+      "import": "./dist/wiki.js"
     }
   },
   "files": [
