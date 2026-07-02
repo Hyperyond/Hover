@@ -127,6 +127,12 @@
         "icon": "$(plug)"
       },
       {
+        "command": "hover.connectCloud",
+        "title": "Connect Hover Cloud",
+        "category": "Hover",
+        "icon": "$(cloud)"
+      },
+      {
         "command": "hover.addCiWorkflow",
         "title": "Add CI Workflow (run specs on PR)",
         "category": "Hover",
@@ -233,6 +239,11 @@
           "type": "string",
           "default": "",
           "description": "Your dev server URL (e.g. http://localhost:5173). Leave empty to auto-detect common dev ports."
+        },
+        "hover.cloudUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Hover Cloud base URL. Leave empty for https://cloud.gethover.dev — only set for a self-configured deployment."
         }
       }
     },

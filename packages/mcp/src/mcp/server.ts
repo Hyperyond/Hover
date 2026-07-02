@@ -312,6 +312,18 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
     ({ slug }) => guard(() => c.promoteOptimized(slug)),
   );
 
+  server.registerTool(
+    'cloud_failures',
+    {
+      description:
+        "Hover Cloud's open heal queue: the specs whose CI runs drifted (each with its failing locator + branch + CI link). Heal one locally with `/mcp__hover__heal <slug>`; an entry closes automatically when CI next sees that spec pass. Needs a connected cloud account (HOVER_CLOUD_TOKEN or ~/.hover/credentials.json).",
+      inputSchema: {
+        repo: z.string().optional().describe('Limit to one GitHub repo ("owner/name"). Omit for all your projects.'),
+      },
+    },
+    ({ repo }) => guard(() => c.cloudFailures(repo)),
+  );
+
   // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
   // it as `/mcp__hover__test_app`, so adding the server brings both the tools
   // AND the command. No project scaffolding needed.
@@ -444,6 +456,8 @@ function healPrompt(spec?: string): string {
   return `Heal ${scope} for this app using the **Hover MCP tools** — repair specs whose UI drifted, without rewriting them by hand.
 
 A spec "drifted" when the app changed so a recorded step no longer locates its control (a renamed button, a moved field). Healing = re-grounding ONLY the broken step against the current UI, keeping everything else, so record==replay still holds.
+
+Drift found in CI (a Hover Cloud heal request)? Call \`cloud_failures\` first — it lists each drifted spec's slug, failing locator, and branch, so you know what to heal and why.
 
 Work ONE spec at a time:
 

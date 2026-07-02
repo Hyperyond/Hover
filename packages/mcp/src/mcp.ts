@@ -21,6 +21,7 @@ import {
   type ApiCheck,
   type Redaction,
 } from '@hover-dev/core/engine';
+import { fetchHealRequests, readCloudCredentials } from '@hover-dev/core/cloud';
 import { HoverMcpController } from './mcp/controller.js';
 import { createHoverMcpServer } from './mcp/server.js';
 
@@ -108,6 +109,20 @@ const controller = new HoverMcpController({
   saveOptimized: (slug: string, code: string) => saveOptimizedCandidate(DEV_ROOT, slug, code),
   promoteOptimized: (slug: string) => promoteOptimizedCandidate(DEV_ROOT, slug),
   lintWiki: () => lintWiki(DEV_ROOT),
+  cloudFailures: async (repo?: string) => {
+    const creds = readCloudCredentials();
+    if (!creds) {
+      return {
+        error:
+          'Hover Cloud not connected — set HOVER_CLOUD_TOKEN (mint one at https://cloud.gethover.dev → Settings → Access tokens) or run "Hover: Connect Hover Cloud" in VS Code.',
+      };
+    }
+    try {
+      return await fetchHealRequests(creds, { status: 'open', ...(repo ? { repo } : {}) });
+    } catch (e) {
+      return { error: e instanceof Error ? e.message.split('\n')[0] : String(e) };
+    }
+  },
 });
 
 const server = createHoverMcpServer(controller, { lang: LANG });
