@@ -394,7 +394,11 @@ Work in PHASES — this is what lets it scale from a tiny app to a large one.
         ## Auth
         - [ ] Log in — /login
         - [x] Checkout — /checkout — checkout.spec.ts
+        ## Relationships
+        - Checkout depends-on Log in
+        - Cart shares-state Checkout
 
+- Optionally add a \`## Relationships\` block recording inter-line edges you notice — \`<line> depends-on <line>\`, \`<line> shares-state <line>\`, or \`<line> navigates-to <line>\` (names must match lines above). These become graph edges in the cockpit's Business Map; they also tell a later run what a flow depends on. Record only real edges; skip the block if none stand out.
 - Don't test yet. For a large app, this map IS the plan.
 
 ## Phase 2 — Pick the scope

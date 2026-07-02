@@ -12,6 +12,8 @@
 export type MapNodeKind = 'app' | 'area' | 'line' | 'spec';
 export type CoverageStatus = 'covered' | 'uncovered';
 export type RunStatus = 'pass' | 'fail' | 'flaky';
+/** Inter-line relationship kinds from the map's `## Relationships` block. */
+export type RelationKind = 'depends-on' | 'shares-state' | 'navigates-to';
 
 export interface MapNode {
   id: string;
@@ -30,12 +32,23 @@ export interface MapEdge {
   source: string;
   target: string;
 }
+/** A resolved inter-line edge: source/target are `line:` node ids. */
+export interface MapRelation {
+  source: string;
+  target: string;
+  kind: RelationKind;
+}
 export interface BusinessMapGraph {
   app: string;
   nodes: MapNode[];
   edges: MapEdge[];
+  /** Inter-line relationships from the `## Relationships` block (may be empty). */
+  relations: MapRelation[];
   stats: { lines: number; covered: number; areas: number };
 }
+
+const RELATION_KINDS: readonly RelationKind[] = ['depends-on', 'shares-state', 'navigates-to'];
+const RELATION_RE = new RegExp(`^\\s*-\\s+(.+?)\\s+(${RELATION_KINDS.join('|')})\\s+(.+?)\\s*$`);
 
 function slug(s: string): string {
   return (
@@ -83,20 +96,36 @@ export function parseBusinessMap(md: string, fallbackApp = 'app'): BusinessMapGr
   add({ id: 'app', label: app, kind: 'app' });
 
   let area: { id: string } | null = null;
+  let inRelationships = false;
   let covered = 0;
   let lineCount = 0;
   let areaCount = 0;
+  const lineBySlug = new Map<string, string>();
+  const rawRelations: { source: string; kind: RelationKind; target: string }[] = [];
 
   for (const raw of md.split('\n')) {
     const line = raw.trimEnd();
     const areaM = line.match(/^##\s+(.+)$/);
     if (areaM) {
       const label = areaM[1].trim();
+      // The Relationships block is metadata, not an area — its items are edges,
+      // not business lines (don't node them).
+      if (slug(label) === 'relationships') {
+        inRelationships = true;
+        area = null;
+        continue;
+      }
+      inRelationships = false;
       const id = `area:${slug(label)}`;
       area = { id };
       add({ id, label, kind: 'area' });
       edges.push({ source: 'app', target: id });
       areaCount++;
+      continue;
+    }
+    if (inRelationships) {
+      const relM = line.match(RELATION_RE);
+      if (relM) rawRelations.push({ source: relM[1].trim(), kind: relM[2] as RelationKind, target: relM[3].trim() });
       continue;
     }
     const itemM = line.match(/^\s*-\s*\[([ xX])\]\s+(.+)$/);
@@ -106,6 +135,7 @@ export function parseBusinessMap(md: string, fallbackApp = 'app'): BusinessMapGr
       const parentId = area?.id ?? 'app';
       const lineId = `line:${slug(area ? area.id.slice(5) : 'top')}/${slug(name)}`;
       add({ id: lineId, label: name, kind: 'line', status, route, spec });
+      if (!lineBySlug.has(slug(name))) lineBySlug.set(slug(name), lineId);
       edges.push({ source: parentId, target: lineId });
       lineCount++;
       if (status === 'covered') covered++;
@@ -117,5 +147,12 @@ export function parseBusinessMap(md: string, fallbackApp = 'app'): BusinessMapGr
     }
   }
 
-  return { app, nodes, edges, stats: { lines: lineCount, covered, areas: areaCount } };
+  const relations: MapRelation[] = [];
+  for (const r of rawRelations) {
+    const source = lineBySlug.get(slug(r.source));
+    const target = lineBySlug.get(slug(r.target));
+    if (source && target && source !== target) relations.push({ source, target, kind: r.kind });
+  }
+
+  return { app, nodes, edges, relations, stats: { lines: lineCount, covered, areas: areaCount } };
 }
