@@ -13,6 +13,16 @@ claude mcp add hover -- hover-mcp
 
 Prefer the global install — the `npx -y @hover-dev/mcp` one-liner re-downloads on first launch and can exceed your agent's 30s MCP connect timeout.
 
+### Prefer another language?
+
+By default Hover's workflows have your agent talk to you in English. To make it converse in your language — the questions it asks, its summaries and explanations — set `HOVER_LANG` when you register the server:
+
+```bash
+claude mcp add hover -e HOVER_LANG=zh -- hover-mcp
+```
+
+`HOVER_LANG` takes a code (`zh`, `zh-TW`, `ja`, `es`, …) or a plain language name. Only the human-facing prose is translated — code, spec/test names, and identifiers stay English.
+
 That's the whole install. The MCP server runs under your agent and exposes Hover's grounded browser tools + `/mcp__hover__test_app`. It bundles no LLM and takes no API keys — it rides the agent and subscription you already pay for.
 
 ## Updating

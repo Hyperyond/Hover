@@ -10,6 +10,30 @@ import type { HoverMcpController } from './controller.js';
 const md = (text: string) => ({ content: [{ type: 'text' as const, text }] });
 const errLine = (e: unknown) => (e instanceof Error ? e.message.split('\n')[0] : String(e));
 
+/** Common language-code aliases → a name the model reads unambiguously. Anything
+ *  else passes through verbatim (so HOVER_LANG=Français or =中文 also works). */
+const LANG_NAMES: Record<string, string> = {
+  zh: 'Chinese (简体中文)', 'zh-cn': 'Chinese (简体中文)', 'zh-hans': 'Chinese (简体中文)',
+  'zh-tw': 'Chinese (繁體中文)', 'zh-hant': 'Chinese (繁體中文)',
+  ja: 'Japanese', ko: 'Korean', es: 'Spanish', fr: 'French', de: 'German',
+  pt: 'Portuguese', it: 'Italian', ru: 'Russian', ar: 'Arabic', hi: 'Hindi',
+};
+
+/** A prompt prefix telling the agent which language to CONVERSE in with the user.
+ *  Empty for English / unset (the default). Code stays English regardless — we
+ *  localize the interaction, not the artifacts. */
+export function languageDirective(lang?: string): string {
+  const raw = (lang ?? '').trim();
+  if (!raw || /^(en|en-.*|english)$/i.test(raw)) return '';
+  const name = LANG_NAMES[raw.toLowerCase()] ?? raw;
+  return (
+    `IMPORTANT — Communicate with the user in ${name}: every question you ask, ` +
+    `status update, summary, and explanation must be in ${name}. Keep code, spec / ` +
+    `test names, identifiers, file paths, and \`slash-commands\` in English. Only the ` +
+    `human-facing prose is translated.\n\n`
+  );
+}
+
 const GROUND = {
   role: z.string().optional().describe("ARIA role from the snapshot, e.g. 'button', 'textbox', 'link'. Pair with `name`."),
   name: z.string().optional().describe('Accessible name from the snapshot, exactly as shown. Pair with `role`.'),
@@ -33,9 +57,16 @@ const API_CHECK = z.object({
   note: z.string().optional().describe('Emitted as a leading comment, e.g. "authz: no session → 401".'),
 });
 
-export function createHoverMcpServer(c: HoverMcpController): McpServer {
+/** Options for the MCP server. `lang` (from HOVER_LANG) makes the workflow
+ *  prompts tell the agent which language to CONVERSE in with the user. */
+export interface HoverServerOptions {
+  lang?: string;
+}
+
+export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOptions = {}): McpServer {
   const server = new McpServer({ name: 'hover', version: '0.1.0' });
   const guard = (fn: () => Promise<string>) => fn().then(md, (e) => md(`✗ ${errLine(e)}`));
+  const lang = languageDirective(opts.lang);
 
   server.registerTool(
     'browser_navigate',
@@ -292,7 +323,7 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       argsSchema: { scope: z.string().optional().describe('An area/flow to focus on. Omit to cover the whole app.') },
     },
     ({ scope }) => ({
-      messages: [{ role: 'user', content: { type: 'text', text: workflowPrompt(scope) } }],
+      messages: [{ role: 'user', content: { type: 'text', text: lang + workflowPrompt(scope) } }],
     }),
   );
 
@@ -309,7 +340,7 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       messages: [
         {
           role: 'user' as const,
-          content: { type: 'text' as const, text: spec?.trim() ? await c.optimizeBrief(spec.trim()) : optimizeAllPrompt() },
+          content: { type: 'text' as const, text: lang + (spec?.trim() ? await c.optimizeBrief(spec.trim()) : optimizeAllPrompt()) },
         },
       ],
     }),
@@ -325,7 +356,7 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       argsSchema: {},
     },
     () => ({
-      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lintPrompt() } }],
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lang + lintPrompt() } }],
     }),
   );
 
@@ -339,7 +370,7 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       argsSchema: { question: z.string().describe('The question to answer, e.g. "what happens when a guest tries to check out?"') },
     },
     ({ question }) => ({
-      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: askPrompt(question) } }],
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lang + askPrompt(question) } }],
     }),
   );
 
@@ -352,7 +383,7 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       argsSchema: { spec: z.string().optional().describe('A spec slug to heal (e.g. "login"). Omit to check every spec.') },
     },
     ({ spec }) => ({
-      messages: [{ role: 'user', content: { type: 'text', text: healPrompt(spec) } }],
+      messages: [{ role: 'user', content: { type: 'text', text: lang + healPrompt(spec) } }],
     }),
   );
 
