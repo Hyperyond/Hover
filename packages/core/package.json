@@ -34,6 +34,10 @@
     "./wiki": {
       "types": "./dist/wiki.d.ts",
       "import": "./dist/wiki.js"
+    },
+    "./cloud": {
+      "types": "./dist/cloud.d.ts",
+      "import": "./dist/cloud.js"
     }
   },
   "files": [
