@@ -78,6 +78,9 @@ export interface McpDeps {
    *  deterministic guardrails, soft-batch, and write `.hover/cache/optimized/
    *  <slug>.spec.ts.draft` (never the original). Throws if it fails validation. */
   saveOptimized?: (slug: string, code: string) => Promise<{ candidatePath: string }>;
+  /** Promote a reviewed candidate: overwrite the real spec with its draft + drop
+   *  the draft. The one place a candidate replaces the original — user-approved. */
+  promoteOptimized?: (slug: string) => Promise<{ path: string }>;
   /** Deterministic health check over `.hover/`: map vs spec files vs run ledger. */
   lintWiki?: () => Promise<LintResult>;
 }
@@ -403,7 +406,14 @@ export class HoverMcpController {
   async saveOptimized(slug: string, code: string): Promise<string> {
     if (!this.deps.saveOptimized) return 'Optimize is unavailable in this server.';
     const { candidatePath } = await this.deps.saveOptimized(slug, code);
-    return `✓ filed optimized candidate at ${candidatePath} (your spec is untouched). Tell the user to diff it against __vibe_tests__/${slug}.spec.ts and, to keep it, replace the spec with the candidate.`;
+    return `✓ filed optimized candidate at ${candidatePath} (your spec is untouched). Show the user the diff vs __vibe_tests__/${slug}.spec.ts; if they approve, call promote_optimized_spec("${slug}") to apply it (or they can review + promote in the VS Code cockpit).`;
+  }
+
+  /** Apply a reviewed candidate over the real spec (user-approved). */
+  async promoteOptimized(slug: string): Promise<string> {
+    if (!this.deps.promoteOptimized) return 'Optimize is unavailable in this server.';
+    const { path } = await this.deps.promoteOptimized(slug);
+    return `✓ promoted the candidate → ${path} (draft removed). Run it to confirm: npx playwright test ${path}`;
   }
 
   /** Lift the detected shared flows into `pages/*` + `fixtures.ts` and fold the

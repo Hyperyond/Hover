@@ -10,7 +10,7 @@
  * The LLM call is injected (`runCodegen`) so callers wire their own agent and
  * tests run deterministically without spawning anything.
  */
-import { readFile, mkdir, writeFile, readdir } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Project } from 'ts-morph';
 import { readSidecar, type SpecSidecar } from './sidecar.js';
@@ -120,8 +120,9 @@ export async function buildOptimizeBrief(
     `.ts file as \`code\`. Hover validates it (semantic selectors, no waitForTimeout/XPath), ` +
     `soft-batches trailing assertions, and files it as a REVIEW CANDIDATE at ` +
     `.hover/cache/optimized/${slug}.spec.ts.draft — it does NOT touch your spec. If it comes ` +
-    `back with a ✗ (a rejected check), fix that and call it again. Then tell the user the ` +
-    `candidate path so they can diff it against __vibe_tests__/${slug}.spec.ts and promote it.`;
+    `back with a ✗ (a rejected check), fix that and call it again. Then show the user the ` +
+    `diff vs __vibe_tests__/${slug}.spec.ts; if they approve, call \`promote_optimized_spec("${slug}")\` ` +
+    `to apply it (it overwrites the spec + removes the draft — no manual mv). They can also promote in the VS Code cockpit.`;
 
   return { prompt: buildOptimizePrompt(draft, sidecar, seeds, suite, outputInstruction), original: draft };
 }
@@ -156,6 +157,58 @@ export async function saveOptimizedCandidate(
   const candidatePath = join(dir, `${slug}.spec.ts.draft`);
   await writeFile(candidatePath, code.endsWith('\n') ? code : `${code}\n`, 'utf-8');
   return { candidatePath, code };
+}
+
+/** Find the on-disk spec whose basename is `<slug>.spec.ts` under __vibe_tests__/
+ *  (grouped specs live in subfolders), or the flat default path if none exists. */
+async function findSpecPath(devRoot: string, slug: string): Promise<string> {
+  const root = join(devRoot, '__vibe_tests__');
+  const want = `${slug}.spec.ts`;
+  const walk = async (d: string): Promise<string | null> => {
+    let entries: import('node:fs').Dirent[];
+    try {
+      entries = await readdir(d, { withFileTypes: true });
+    } catch {
+      return null;
+    }
+    for (const e of entries) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'pages' || e.name === '.hover' || e.name === 'node_modules') continue;
+        const hit = await walk(p);
+        if (hit) return hit;
+      } else if (e.name === want) {
+        return p;
+      }
+    }
+    return null;
+  };
+  return (await walk(root)) ?? join(root, want);
+}
+
+/**
+ * Promote a reviewed optimization candidate: overwrite the real spec with the
+ * `.hover/cache/optimized/<slug>.spec.ts.draft` and remove the draft. This is the
+ * one place a candidate replaces the original — done ONLY on the user's say-so
+ * (they reviewed the diff), never automatically as part of optimize. Re-validates
+ * the draft (in case it was hand-edited) before applying. Throws if no draft.
+ */
+export async function promoteOptimizedCandidate(devRoot: string, slug: string): Promise<{ path: string }> {
+  const draftPath = join(devRoot, '.hover', 'cache', 'optimized', `${slug}.spec.ts.draft`);
+  let draft: string;
+  try {
+    draft = await readFile(draftPath, 'utf-8');
+  } catch {
+    throw new OptimizeError(`no optimization candidate for "${slug}" (looked at ${draftPath}). Run optimize first.`);
+  }
+  const check = validateSpecCode(draft);
+  if (!check.ok) {
+    throw new OptimizeError(`candidate for "${slug}" is invalid — ${check.errors.join('; ')}. Not promoting.`);
+  }
+  const specPath = await findSpecPath(devRoot, slug);
+  await writeFile(specPath, draft.endsWith('\n') ? draft : `${draft}\n`, 'utf-8');
+  await rm(draftPath, { force: true });
+  return { path: specPath };
 }
 
 /**

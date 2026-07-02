@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   optimizeSpec, buildOptimizePrompt, extractCode, validateSpecCode, OptimizeError, gatherSuiteContext,
-  buildOptimizeBrief, saveOptimizedCandidate,
+  buildOptimizeBrief, saveOptimizedCandidate, promoteOptimizedCandidate,
 } from '../../src/specs/optimizeSpec.js';
 import type { SpecSidecar } from '../../src/specs/sidecar.js';
 
@@ -259,5 +259,19 @@ test('checkout', async ({ page }) => {
     seedSpec();
     await expect(saveOptimizedCandidate(devRoot, 'checkout', 'await page.waitForTimeout(9999);'))
       .rejects.toThrow(OptimizeError);
+  });
+
+  it('promoteOptimizedCandidate applies the draft over the spec + removes the draft', async () => {
+    seedSpec();
+    const improved = `import { test, expect } from '@playwright/test';\ntest('checkout', async ({ page }) => {\n  await expect(page.getByText('Order confirmed')).toBeVisible();\n});`;
+    const { candidatePath } = await saveOptimizedCandidate(devRoot, 'checkout', improved);
+    const { path } = await promoteOptimizedCandidate(devRoot, 'checkout');
+    expect(path.endsWith(join('__vibe_tests__', 'checkout.spec.ts'))).toBe(true);
+    expect(readFileSync(path, 'utf-8')).toContain("getByText('Order confirmed')"); // spec now = the candidate
+    expect(existsSync(candidatePath)).toBe(false); // draft removed
+  });
+
+  it('promoteOptimizedCandidate throws when there is no candidate', async () => {
+    await expect(promoteOptimizedCandidate(devRoot, 'ghost')).rejects.toThrow(OptimizeError);
   });
 });

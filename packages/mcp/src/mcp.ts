@@ -14,6 +14,7 @@ import {
   extractPageObjects,
   buildOptimizeBrief,
   saveOptimizedCandidate,
+  promoteOptimizedCandidate,
   lintWiki,
   appendWikiLog,
   type SkillStep,
@@ -28,13 +29,15 @@ import { createHoverMcpServer } from './mcp/server.js';
  * Cursor, …); the agent drives the app through Hover's grounded tools and calls
  * crystallize_spec to save a plain Playwright spec. Hover spawns no agent here —
  * the calling agent IS the intelligence; Hover guarantees record==replay at the
- * output. Config via env: HOVER_TARGET, HOVER_CDP_PORT, HOVER_PROJECT_ROOT.
+ * output. Config via env: HOVER_TARGET, HOVER_CDP_PORT, HOVER_PROJECT_ROOT,
+ * HOVER_LANG (language the workflow prompts tell the agent to converse in).
  *
  * NOTE: stdio is the MCP transport — never write to stdout from this process.
  */
 
 const TARGET = process.env.HOVER_TARGET || 'http://localhost:5173';
 const PORT = Number(process.env.HOVER_CDP_PORT || 9222);
+const LANG = process.env.HOVER_LANG;
 const DEV_ROOT = process.env.HOVER_PROJECT_ROOT || process.cwd();
 const CDP_URL = `http://localhost:${PORT}`;
 
@@ -103,8 +106,9 @@ const controller = new HoverMcpController({
     }
   },
   saveOptimized: (slug: string, code: string) => saveOptimizedCandidate(DEV_ROOT, slug, code),
+  promoteOptimized: (slug: string) => promoteOptimizedCandidate(DEV_ROOT, slug),
   lintWiki: () => lintWiki(DEV_ROOT),
 });
 
-const server = createHoverMcpServer(controller);
+const server = createHoverMcpServer(controller, { lang: LANG });
 await server.connect(new StdioServerTransport());

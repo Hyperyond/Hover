@@ -10,6 +10,30 @@ import type { HoverMcpController } from './controller.js';
 const md = (text: string) => ({ content: [{ type: 'text' as const, text }] });
 const errLine = (e: unknown) => (e instanceof Error ? e.message.split('\n')[0] : String(e));
 
+/** Common language-code aliases → a name the model reads unambiguously. Anything
+ *  else passes through verbatim (so HOVER_LANG=Français or =中文 also works). */
+const LANG_NAMES: Record<string, string> = {
+  zh: 'Chinese (简体中文)', 'zh-cn': 'Chinese (简体中文)', 'zh-hans': 'Chinese (简体中文)',
+  'zh-tw': 'Chinese (繁體中文)', 'zh-hant': 'Chinese (繁體中文)',
+  ja: 'Japanese', ko: 'Korean', es: 'Spanish', fr: 'French', de: 'German',
+  pt: 'Portuguese', it: 'Italian', ru: 'Russian', ar: 'Arabic', hi: 'Hindi',
+};
+
+/** A prompt prefix telling the agent which language to CONVERSE in with the user.
+ *  Empty for English / unset (the default). Code stays English regardless — we
+ *  localize the interaction, not the artifacts. */
+export function languageDirective(lang?: string): string {
+  const raw = (lang ?? '').trim();
+  if (!raw || /^(en|en-.*|english)$/i.test(raw)) return '';
+  const name = LANG_NAMES[raw.toLowerCase()] ?? raw;
+  return (
+    `IMPORTANT — Communicate with the user in ${name}: every question you ask, ` +
+    `status update, summary, and explanation must be in ${name}. Keep code, spec / ` +
+    `test names, identifiers, file paths, and \`slash-commands\` in English. Only the ` +
+    `human-facing prose is translated.\n\n`
+  );
+}
+
 const GROUND = {
   role: z.string().optional().describe("ARIA role from the snapshot, e.g. 'button', 'textbox', 'link'. Pair with `name`."),
   name: z.string().optional().describe('Accessible name from the snapshot, exactly as shown. Pair with `role`.'),
@@ -33,9 +57,16 @@ const API_CHECK = z.object({
   note: z.string().optional().describe('Emitted as a leading comment, e.g. "authz: no session → 401".'),
 });
 
-export function createHoverMcpServer(c: HoverMcpController): McpServer {
+/** Options for the MCP server. `lang` (from HOVER_LANG) makes the workflow
+ *  prompts tell the agent which language to CONVERSE in with the user. */
+export interface HoverServerOptions {
+  lang?: string;
+}
+
+export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOptions = {}): McpServer {
   const server = new McpServer({ name: 'hover', version: '0.1.0' });
   const guard = (fn: () => Promise<string>) => fn().then(md, (e) => md(`✗ ${errLine(e)}`));
+  const lang = languageDirective(opts.lang);
 
   server.registerTool(
     'browser_navigate',
@@ -243,8 +274,19 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
 
   // ── Optimize (F7) ────────────────────────────────────────────────────────
   // The IMPROVEMENT is the agent's (the /mcp__hover__optimize prompt gives it the
-  // brief); this tool is Hover's guardrail + write path — it validates the agent's
-  // result and files it as a review candidate, never touching the spec.
+  // brief); these tools are Hover's guardrail + write path.
+  server.registerTool(
+    'optimize_brief',
+    {
+      description:
+        "Get the improvement brief for ONE spec (its current code + the outcome its recording session observed + your Page Objects + the improvement rules). Use this when optimizing every spec (`/mcp__hover__optimize` with no arg): call it per spec, follow the brief it returns, then call save_optimized_spec. For a single spec, `/mcp__hover__optimize <slug>` already hands you the brief.",
+      inputSchema: {
+        slug: z.string().describe('The spec slug to optimize (its filename without .spec.ts).'),
+      },
+    },
+    ({ slug }) => guard(() => c.optimizeBrief(slug)),
+  );
+
   server.registerTool(
     'save_optimized_spec',
     {
@@ -258,6 +300,18 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     ({ slug, code }) => guard(() => c.saveOptimized(slug, code)),
   );
 
+  server.registerTool(
+    'promote_optimized_spec',
+    {
+      description:
+        "Apply a reviewed optimization candidate: overwrite __vibe_tests__/<slug>.spec.ts with its .hover/cache/optimized/<slug>.spec.ts.draft and remove the draft. Call this ONLY after the user has seen the diff and approved — it's the one action that replaces the original spec. Re-validates the draft first.",
+      inputSchema: {
+        slug: z.string().describe('The spec slug whose candidate to promote (its filename without .spec.ts).'),
+      },
+    },
+    ({ slug }) => guard(() => c.promoteOptimized(slug)),
+  );
+
   // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
   // it as `/mcp__hover__test_app`, so adding the server brings both the tools
   // AND the command. No project scaffolding needed.
@@ -269,7 +323,7 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       argsSchema: { scope: z.string().optional().describe('An area/flow to focus on. Omit to cover the whole app.') },
     },
     ({ scope }) => ({
-      messages: [{ role: 'user', content: { type: 'text', text: workflowPrompt(scope) } }],
+      messages: [{ role: 'user', content: { type: 'text', text: lang + workflowPrompt(scope) } }],
     }),
   );
 
@@ -278,12 +332,17 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
   server.registerPrompt(
     'optimize',
     {
-      title: 'Hover — enrich a spec with observed assertions',
-      description: 'Improve a crystallized spec: add assertions for what the session observed, de-literalize volatile values, reuse Page Objects. Files a review candidate; never overwrites the spec.',
-      argsSchema: { spec: z.string().describe('The spec slug to optimize (e.g. "checkout" for checkout.spec.ts).') },
+      title: 'Hover — enrich specs with observed assertions',
+      description: 'Improve crystallized specs: add assertions for what the session observed, de-literalize volatile values, reuse Page Objects. Pass a spec to optimize one, or omit to optimize every spec. Files review candidates; never overwrites a spec.',
+      argsSchema: { spec: z.string().optional().describe('A spec slug to optimize (e.g. "checkout"). Omit to optimize EVERY spec.') },
     },
     async ({ spec }) => ({
-      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: await c.optimizeBrief(spec) } }],
+      messages: [
+        {
+          role: 'user' as const,
+          content: { type: 'text' as const, text: lang + (spec?.trim() ? await c.optimizeBrief(spec.trim()) : optimizeAllPrompt()) },
+        },
+      ],
     }),
   );
 
@@ -297,7 +356,7 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       argsSchema: {},
     },
     () => ({
-      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lintPrompt() } }],
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lang + lintPrompt() } }],
     }),
   );
 
@@ -311,7 +370,7 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       argsSchema: { question: z.string().describe('The question to answer, e.g. "what happens when a guest tries to check out?"') },
     },
     ({ question }) => ({
-      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: askPrompt(question) } }],
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lang + askPrompt(question) } }],
     }),
   );
 
@@ -324,11 +383,26 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
       argsSchema: { spec: z.string().optional().describe('A spec slug to heal (e.g. "login"). Omit to check every spec.') },
     },
     ({ spec }) => ({
-      messages: [{ role: 'user', content: { type: 'text', text: healPrompt(spec) } }],
+      messages: [{ role: 'user', content: { type: 'text', text: lang + healPrompt(spec) } }],
     }),
   );
 
   return server;
+}
+
+/** Optimize-ALL workflow body: enrich every spec, one at a time. Each spec's
+ *  brief comes from the optimize_brief tool (same brief the single-spec prompt
+ *  delivers inline), so quality is identical; only the loop differs. */
+function optimizeAllPrompt(): string {
+  return `Optimize EVERY crystallized spec for this app using the **Hover MCP tools** — enrich each with the assertions its recording session observed, without changing what it tests.
+
+1. **List the specs** — the \`*.spec.ts\` files under \`__vibe_tests__/\` (skip \`*.api-test.spec.ts\` and \`pages/\`). Use your own file tools.
+2. **For each spec, ONE at a time:**
+   - \`optimize_brief("<slug>")\` — returns that spec's current code + the outcome its session observed + your Page Objects + the improvement rules.
+   - Follow the brief: add assertions for the observed feedback, de-literalize volatile values (a generated id, an order number → a stable anchor), reuse a Page Object where a step sequence matches. Don't invent steps the session didn't perform.
+   - \`save_optimized_spec("<slug>", <the complete improved .ts>)\` — Hover validates it and files a candidate at \`.hover/cache/optimized/<slug>.spec.ts.draft\`. It NEVER overwrites your spec. On a ✗, fix it and call again.
+3. **Be selective per spec** — only add assertions that matter (a real outcome, a stable heading). A spec that's already tight needs no candidate; skip it and say so. Over-asserting a changing value is the failure we're avoiding.
+4. **Report + apply** — list which specs got a candidate. For each, show the user the diff vs \`__vibe_tests__/<slug>.spec.ts\`; on their approval call \`promote_optimized_spec("<slug>")\` to apply it (overwrites the spec + removes the draft — no manual mv). Nothing lands until they approve.`;
 }
 
 /** Query workflow body (LLM-Wiki P4): read the wiki, answer with citations, and
