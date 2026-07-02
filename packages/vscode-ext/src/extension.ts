@@ -383,7 +383,33 @@ async function addCiWorkflow(): Promise<void> {
     }
   }
   const secretNames = [...secretSet];
-  const yaml = buildWorkflowYaml({ packageManager, devScript, appUrl, secretNames });
+
+  // Parallelism (Playwright shards) — 1 is the well-tested default.
+  const shardPick = await vscode.window.showQuickPick(
+    [
+      { label: '1 — single job (default)', shards: 1 },
+      { label: '2 shards', shards: 2 },
+      { label: '3 shards', shards: 3 },
+      { label: '4 shards', shards: 4 },
+    ],
+    { title: 'Hover CI: parallel shards', placeHolder: 'Split the suite across parallel runners (faster on a big suite)' },
+  );
+  if (!shardPick) return; // cancelled
+  const shards = shardPick.shards;
+
+  // Optional scheduled monitoring (a cron trigger on top of PRs).
+  const monitorPick = await vscode.window.showQuickPick(
+    [
+      { label: 'PRs only (default)', cron: undefined as string | undefined },
+      { label: 'Also run daily', cron: '0 6 * * *' },
+      { label: 'Also run hourly', cron: '0 * * * *' },
+    ],
+    { title: 'Hover CI: scheduled monitoring', placeHolder: 'Run the suite on a schedule too?' },
+  );
+  if (!monitorPick) return; // cancelled
+  const monitorCron = monitorPick.cron;
+
+  const yaml = buildWorkflowYaml({ packageManager, devScript, appUrl, secretNames, shards, monitorCron });
 
   const fileUri = vscode.Uri.joinPath(folder.uri, '.github', 'workflows', 'hover-e2e.yml');
   try {
