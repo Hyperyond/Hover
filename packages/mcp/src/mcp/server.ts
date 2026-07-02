@@ -243,8 +243,19 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
 
   // ── Optimize (F7) ────────────────────────────────────────────────────────
   // The IMPROVEMENT is the agent's (the /mcp__hover__optimize prompt gives it the
-  // brief); this tool is Hover's guardrail + write path — it validates the agent's
-  // result and files it as a review candidate, never touching the spec.
+  // brief); these tools are Hover's guardrail + write path.
+  server.registerTool(
+    'optimize_brief',
+    {
+      description:
+        "Get the improvement brief for ONE spec (its current code + the outcome its recording session observed + your Page Objects + the improvement rules). Use this when optimizing every spec (`/mcp__hover__optimize` with no arg): call it per spec, follow the brief it returns, then call save_optimized_spec. For a single spec, `/mcp__hover__optimize <slug>` already hands you the brief.",
+      inputSchema: {
+        slug: z.string().describe('The spec slug to optimize (its filename without .spec.ts).'),
+      },
+    },
+    ({ slug }) => guard(() => c.optimizeBrief(slug)),
+  );
+
   server.registerTool(
     'save_optimized_spec',
     {
@@ -278,12 +289,17 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
   server.registerPrompt(
     'optimize',
     {
-      title: 'Hover — enrich a spec with observed assertions',
-      description: 'Improve a crystallized spec: add assertions for what the session observed, de-literalize volatile values, reuse Page Objects. Files a review candidate; never overwrites the spec.',
-      argsSchema: { spec: z.string().describe('The spec slug to optimize (e.g. "checkout" for checkout.spec.ts).') },
+      title: 'Hover — enrich specs with observed assertions',
+      description: 'Improve crystallized specs: add assertions for what the session observed, de-literalize volatile values, reuse Page Objects. Pass a spec to optimize one, or omit to optimize every spec. Files review candidates; never overwrites a spec.',
+      argsSchema: { spec: z.string().optional().describe('A spec slug to optimize (e.g. "checkout"). Omit to optimize EVERY spec.') },
     },
     async ({ spec }) => ({
-      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: await c.optimizeBrief(spec) } }],
+      messages: [
+        {
+          role: 'user' as const,
+          content: { type: 'text' as const, text: spec?.trim() ? await c.optimizeBrief(spec.trim()) : optimizeAllPrompt() },
+        },
+      ],
     }),
   );
 
@@ -329,6 +345,21 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
   );
 
   return server;
+}
+
+/** Optimize-ALL workflow body: enrich every spec, one at a time. Each spec's
+ *  brief comes from the optimize_brief tool (same brief the single-spec prompt
+ *  delivers inline), so quality is identical; only the loop differs. */
+function optimizeAllPrompt(): string {
+  return `Optimize EVERY crystallized spec for this app using the **Hover MCP tools** — enrich each with the assertions its recording session observed, without changing what it tests.
+
+1. **List the specs** — the \`*.spec.ts\` files under \`__vibe_tests__/\` (skip \`*.api-test.spec.ts\` and \`pages/\`). Use your own file tools.
+2. **For each spec, ONE at a time:**
+   - \`optimize_brief("<slug>")\` — returns that spec's current code + the outcome its session observed + your Page Objects + the improvement rules.
+   - Follow the brief: add assertions for the observed feedback, de-literalize volatile values (a generated id, an order number → a stable anchor), reuse a Page Object where a step sequence matches. Don't invent steps the session didn't perform.
+   - \`save_optimized_spec("<slug>", <the complete improved .ts>)\` — Hover validates it and files a candidate at \`.hover/cache/optimized/<slug>.spec.ts.draft\`. It NEVER overwrites your spec. On a ✗, fix it and call again.
+3. **Be selective per spec** — only add assertions that matter (a real outcome, a stable heading). A spec that's already tight needs no candidate; skip it and say so. Over-asserting a changing value is the failure we're avoiding.
+4. **Report** — list which specs got a candidate + where, so the user can diff each against \`__vibe_tests__/<slug>.spec.ts\` and promote the ones they want. Nothing is applied until they do.`;
 }
 
 /** Query workflow body (LLM-Wiki P4): read the wiki, answer with citations, and
