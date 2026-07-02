@@ -11,6 +11,7 @@ import {
   type ExtractResult,
   type LintResult,
 } from '@hover-dev/core/engine';
+import { healSlug, type CloudHealRequest } from '@hover-dev/core/cloud';
 
 /*
  * The hover-mcp engine, decoupled from the MCP wire layer so it's testable with
@@ -83,6 +84,10 @@ export interface McpDeps {
   promoteOptimized?: (slug: string) => Promise<{ path: string }>;
   /** Deterministic health check over `.hover/`: map vs spec files vs run ledger. */
   lintWiki?: () => Promise<LintResult>;
+  /** Hover Cloud's open heal queue (specs CI saw drift), or `{ error }` when
+   *  the cloud isn't connected / reachable. Pull-only — the cloud never
+   *  reaches into this machine. */
+  cloudFailures?: (repo?: string) => Promise<CloudHealRequest[] | { error: string }>;
 }
 
 function describe(g: GroundedTarget): string {
@@ -344,6 +349,34 @@ export class HoverMcpController {
       null,
       2,
     );
+  }
+
+  /** The Hover Cloud heal queue: specs whose CI run drifted, pulled from
+   *  cloud.gethover.dev. Read-only surfacing — the heal itself is the same
+   *  local replay_spec → re-ground → crystallize loop, human-reviewed. */
+  async cloudFailures(repo?: string): Promise<string> {
+    if (!this.deps.cloudFailures) return 'Hover Cloud unavailable in this server.';
+    const res = await this.deps.cloudFailures(repo);
+    if (!Array.isArray(res)) return `✗ ${res.error}`;
+    if (res.length === 0) {
+      return `✓ Hover Cloud reports no drifted specs${repo ? ` for ${repo}` : ''} — the CI heal queue is empty.`;
+    }
+    const lines = res.map((r) => {
+      const what = r.hint.failingLocator
+        ? `${r.hint.failingAction ?? 'failure'} on \`${r.hint.failingLocator}\``
+        : r.hint.error;
+      const where = [r.project.repo, r.run.branch && `@ ${r.run.branch}`, r.run.ciUrl]
+        .filter(Boolean)
+        .join(' · ');
+      return `- **${healSlug(r.specFile)}** — ${what}\n  ${where}`;
+    });
+    return [
+      `${res.length} spec(s) drifted in CI (Hover Cloud heal queue):`,
+      '',
+      ...lines,
+      '',
+      'Heal locally, one at a time: `/mcp__hover__heal <slug>` (replays the recorded steps, re-grounds the drifted one in the live app; the user reviews the diff). A queue entry closes automatically when CI next sees that spec pass.',
+    ].join('\n');
   }
 
   /** LLM-Wiki P1 Lint: run the deterministic `.hover/` health check (map vs
