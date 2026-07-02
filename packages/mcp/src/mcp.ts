@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -14,6 +15,7 @@ import {
   buildOptimizeBrief,
   saveOptimizedCandidate,
   lintWiki,
+  appendWikiLog,
   type SkillStep,
   type ApiCheck,
   type Redaction,
@@ -65,10 +67,12 @@ const controller = new HoverMcpController({
   getPage,
   crystallize: async (name: string, description: string | undefined, steps: SkillStep[], redactions: Redaction[]) => {
     const res = await writeSpec({ devRoot: DEV_ROOT, name, description, steps, redactions, startUrl: TARGET, overwrite: true });
+    await appendWikiLog(DEV_ROOT, 'crystallize', `${basename(res.path)} — ${name}`);
     return { path: res.path };
   },
   crystallizeApi: async (name: string, description: string | undefined, checks: ApiCheck[]) => {
     const res = await writeApiSpec({ devRoot: DEV_ROOT, name, description, checks, startUrl: TARGET, overwrite: true });
+    await appendWikiLog(DEV_ROOT, 'api', `${basename(res.path)} — ${name}`);
     return { path: res.path };
   },
   recordFact: (title, rule, type) =>
@@ -83,7 +87,13 @@ const controller = new HoverMcpController({
     return sc ? { steps: sc.steps, startUrl: TARGET } : null;
   },
   detectSharedFlows: () => detectExtractableFlows(DEV_ROOT),
-  extractPageObjects: () => extractPageObjects(DEV_ROOT),
+  extractPageObjects: async () => {
+    const res = await extractPageObjects(DEV_ROOT);
+    if (res.pages.length) {
+      await appendWikiLog(DEV_ROOT, 'extract', `${res.pages.length} page object(s), folded ${res.folded.length} spec(s)`);
+    }
+    return res;
+  },
   optimizeBrief: async (slug: string) => {
     try {
       const { prompt } = await buildOptimizeBrief(DEV_ROOT, slug);
