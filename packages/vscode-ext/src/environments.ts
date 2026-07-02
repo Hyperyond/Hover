@@ -2,7 +2,7 @@
  * Environment + test-account store for the "Environments" sidebar view.
  *
  * Three storage layers, by sensitivity:
- *   • The roster (environments + account labels/roles/usernames) lives in
+ *   • The roster (environments + account labels/emails) lives in
  *     `.hover/environments.json` — commit-worthy, so a team shares one set of
  *     environment definitions that follow the repo.
  *   • Account passwords live in VSCode SecretStorage (per-user, never committed,
@@ -25,10 +25,8 @@ export const LOCAL_ENV_ID = 'local';
 export interface HoverAccount {
   /** Stable label the agent / spec references, e.g. "paid-user". */
   label: string;
-  /** Free-text role, e.g. "admin" / "free" — shown in the tree, optional. */
-  role?: string;
-  /** Login identifier (email / username). The password is in SecretStorage. */
-  username?: string;
+  /** Login email. The password is in SecretStorage. */
+  email?: string;
 }
 
 /** How this app resets to a clean starting state (debt-2 reproducible-state-
@@ -66,8 +64,7 @@ interface EnvironmentsFile {
  *  spec reads them from. */
 export interface ResolvedAccount {
   label: string;
-  role?: string;
-  username?: string;
+  email?: string;
   password?: string;
   userEnvVar: string;
   passEnvVar: string;
@@ -102,7 +99,15 @@ export class EnvironmentStore {
         /* missing or malformed — fall back to a seeded local env */
       }
     }
-    for (const e of envs) if (!Array.isArray(e.accounts)) e.accounts = [];
+    for (const e of envs) {
+      if (!Array.isArray(e.accounts)) e.accounts = [];
+      // Migrate pre-simplification rosters: `username` → `email`, drop `role`.
+      for (const a of e.accounts as (HoverAccount & { username?: string; role?: string })[]) {
+        if (!a.email && a.username) a.email = a.username;
+        delete a.username;
+        delete a.role;
+      }
+    }
     if (!envs.some((e) => e.id === LOCAL_ENV_ID)) envs.unshift(defaultLocal());
     // Keep `local` pinned to the top.
     envs.sort((a, b) => (a.id === LOCAL_ENV_ID ? -1 : b.id === LOCAL_ENV_ID ? 1 : 0));
@@ -209,7 +214,7 @@ export class EnvironmentStore {
   }
 
   /** Resolve `@label` mentions in a prompt against the active environment's
-   *  accounts. Returns the matched accounts WITH credentials (username from the
+   *  accounts. Returns the matched accounts WITH credentials (email from the
    *  roster, password from SecretStorage) plus the env-var names a saved spec
    *  will read. Used to (a) hand the agent creds to log in, and (b) build the
    *  redactions that keep those creds out of the spec. */
@@ -224,8 +229,7 @@ export class EnvironmentStore {
       if (!mentioned.has(a.label)) continue;
       out.push({
         label: a.label,
-        role: a.role,
-        username: a.username,
+        email: a.email,
         password: await this.getPassword(active.id, a.label),
         userEnvVar: accountEnvVar(a.label, 'USER'),
         passEnvVar: accountEnvVar(a.label, 'PASS'),
@@ -240,7 +244,7 @@ export class EnvironmentStore {
   async accountEnvEntries(env: HoverEnvironment): Promise<{ name: string; value: string }[]> {
     const out: { name: string; value: string }[] = [];
     for (const a of env.accounts) {
-      if (a.username) out.push({ name: accountEnvVar(a.label, 'USER'), value: a.username });
+      if (a.email) out.push({ name: accountEnvVar(a.label, 'USER'), value: a.email });
       const pw = await this.getPassword(env.id, a.label);
       if (pw) out.push({ name: accountEnvVar(a.label, 'PASS'), value: pw });
     }

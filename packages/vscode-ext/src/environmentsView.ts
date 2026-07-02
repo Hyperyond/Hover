@@ -37,9 +37,8 @@ class EnvironmentItem extends vscode.TreeItem {
 class AccountItem extends vscode.TreeItem {
   constructor(readonly envId: string, readonly account: HoverAccount, readonly hasPassword: boolean) {
     super(account.label, vscode.TreeItemCollapsibleState.None);
-    const base = [account.role, account.username].filter(Boolean).join(' · ');
-    this.description = (base ? base + '  ' : '') + (hasPassword ? '🔑' : '⚠ no password');
-    this.tooltip = `Account "${account.label}"${account.username ? ` (${account.username})` : ''}\n${
+    this.description = (account.email ? account.email + '  ' : '') + (hasPassword ? '🔑' : '⚠ no password');
+    this.tooltip = `Account "${account.label}"${account.email ? ` (${account.email})` : ''}\n${
       hasPassword
         ? 'Password stored in SecretStorage — never written to a spec.'
         : 'No password stored. Use "Set / Update Password" so the agent can log in.'
@@ -205,10 +204,11 @@ export function registerEnvironmentsView(
       if (!envId) return;
       const label = await vscode.window.showInputBox({ title: 'Hover: add account', prompt: 'Label the agent / spec references (e.g. paid-user)' });
       if (!label) return;
-      const role = await vscode.window.showInputBox({ title: 'Hover: account role (optional)', prompt: 'e.g. admin, free, paid' });
-      const username = await vscode.window.showInputBox({ title: 'Hover: username / email (optional)', prompt: 'Login identifier' });
-      const password = await vscode.window.showInputBox({ title: 'Hover: password (optional)', prompt: 'Stored in SecretStorage — never written to a spec', password: true });
-      await store.addAccount(envId, { label, role: role || undefined, username: username || undefined }, password || undefined);
+      const email = await vscode.window.showInputBox({ title: 'Hover: login email', prompt: 'The email the agent logs in with' });
+      if (!email) return;
+      const password = await vscode.window.showInputBox({ title: 'Hover: password', prompt: 'Stored in SecretStorage — never written to a spec', password: true });
+      if (!password) return;
+      await store.addAccount(envId, { label, email }, password);
     }),
 
     vscode.commands.registerCommand('hover.env.setPassword', async (item?: AccountItem) => {
