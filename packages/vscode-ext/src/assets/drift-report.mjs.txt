@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /*
- * Hover self-heal mode B1 — drift dispatcher. Generated into your repo at
- * .github/hover/drift-report.mjs by the Hover extension. Runs in CI after a
- * failed Hover E2E run: it reads the Playwright JSON report, lists the specs
- * that FAILED, and writes a PR-comment body dispatching a LOCAL heal for each.
+ * Hover CI report — generated into your repo at .github/hover/drift-report.mjs
+ * by the Hover extension. Runs after a Hover E2E run: it reads the Playwright
+ * JSON report, writes a pass/fail SUMMARY to the run's Step Summary, and — when
+ * specs failed — a PR-comment body dispatching a LOCAL heal for each drifted spec.
  *
  * No AI runs in CI. Healing happens in YOUR coding agent, against YOUR live app,
  * as a human-reviewed diff — this step only surfaces WHAT drifted and HOW to fix
@@ -15,21 +15,38 @@ let report;
 try {
   report = JSON.parse(readFileSync('hover-results.json', 'utf8'));
 } catch {
-  process.exit(0); // no report (or unreadable) — nothing to dispatch
+  process.exit(0); // no report (or unreadable) — nothing to report
 }
 
-// Walk the Playwright JSON suites for specs whose latest result was not ok.
+// Walk the Playwright JSON suites, counting outcomes + collecting failed specs.
+let passed = 0;
+let failedCount = 0;
 const failed = new Set();
 const walk = (suite) => {
   for (const spec of suite.specs || []) {
     const file = (suite.file || spec.file || '').split('/').pop();
-    if (spec.ok === false && file) failed.add(file);
+    if (spec.ok === false) {
+      failedCount++;
+      if (file) failed.add(file);
+    } else {
+      passed++;
+    }
   }
   for (const child of suite.suites || []) walk(child);
 };
 for (const s of report.suites || []) walk(s);
+
+// Always: a one-line summary to the run's Step Summary.
+const total = passed + failedCount;
+const summary =
+  '### Hover E2E — ' +
+  (failedCount === 0 ? '✅ all ' + total + ' passed' : '❌ ' + failedCount + ' of ' + total + ' failed') +
+  '\n';
+if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+
 if (!failed.size) process.exit(0);
 
+// On failure: a heal-dispatch body (Step Summary + hover-drift.md for a PR comment).
 const slugs = [...failed].map((f) => f.replace('.spec.tsx', '').replace('.spec.ts', ''));
 const commands = slugs.map((s) => '- `/mcp__hover__heal ' + s + '`').join('\n');
 const body =
