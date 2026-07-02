@@ -16,68 +16,29 @@
  *
  * Webview (not a TreeView) because the coloured run-history strip can't be drawn
  * with TreeItems — and folding the Specs tree in here is exactly what removed
- * the separate view. Read-only over a plain `DashboardData` model so a Cloud
- * API can later feed the same webview (see project-hover-cloud-direction).
+ * the separate view.
+ *
+ * The `DashboardData` shape + all pure computation live in
+ * `@hover-dev/core/dashboard` — the v1 contract Hover Cloud's
+ * `GET /api/v1/dashboard` also emits. This file only owns the IO: local
+ * gathering (workspace fs), the cloud fetch when connected (merged into ONE
+ * timeline — a CI run synced locally as `ci-<id>.json` and the same run
+ * ingested by the cloud dedup to the cloud copy), and the webview plumbing.
  */
 import * as vscode from 'vscode';
+import { fetchDashboard, readCloudCredentials } from '@hover-dev/core/cloud';
+import {
+  MAX_RUNS,
+  buildDashboard,
+  dashboardRunSlices,
+  mergeRunSlices,
+  parsePlaywrightRun,
+  type DashboardData,
+  type RunSlice,
+  type SpecFileRef,
+} from '@hover-dev/core/dashboard';
+import { originRepo } from './githubCi.js';
 import { renderWebviewHtml } from './webviewHost.js';
-
-export type Status = 'pass' | 'fail' | 'flaky';
-
-interface SpecRow {
-  name: string;
-  /** Absolute fsPath, or null for a spec seen only in run history (file gone). */
-  path: string | null;
-  /** Folder group under `__vibe_tests__/` ('' = top level). */
-  group: string;
-  security: boolean;
-  cells: (Status | null)[];
-  /** Inconsistent across the window (both passed and failed, or a flaky run) —
-   *  a candidate for 🏥 Heal. */
-  flaky: boolean;
-}
-
-/** Flaky = a spec that both passed and failed across the window (or a run marked
- *  it flaky on retry). Shared by the per-row flag and the aggregate tile. */
-function cellsFlaky(cells: (Status | null)[]): boolean {
-  const seen = new Set(cells.filter(Boolean));
-  return seen.has('flaky') || (seen.has('pass') && seen.has('fail'));
-}
-
-interface DashboardData {
-  hasRuns: boolean;
-  tiles: { specs: number; passRate: number | null; flaky: number; tokens7d: number };
-  runs: { id: string; ts: string }[];
-  rows: SpecRow[];
-}
-
-const MAX_RUNS = 14;
-
-/** Worst-wins ranking when a single run file reports several specs in one file. */
-function worse(a: Status | undefined, b: Status): Status {
-  const rank: Record<Status, number> = { pass: 0, flaky: 1, fail: 2 };
-  if (!a) return b;
-  return rank[b] > rank[a] ? b : a;
-}
-
-/** Parse a Playwright json report into { specBasename → status }. Defensive:
- *  an unexpected shape just yields no entries. */
-export function parsePlaywrightRun(json: unknown): Record<string, Status> {
-  const out: Record<string, Status> = {};
-  const visit = (suite: { file?: string; specs?: unknown[]; suites?: unknown[] }, inherited?: string): void => {
-    const file = suite.file ?? inherited;
-    for (const raw of suite.specs ?? []) {
-      const spec = raw as { ok?: boolean; tests?: { status?: string }[]; file?: string };
-      const key = (file ?? spec.file ?? 'unknown').split(/[\\/]/).pop() ?? 'unknown';
-      let status: Status = spec.ok ? 'pass' : 'fail';
-      if (spec.ok && (spec.tests ?? []).some((t) => t.status === 'flaky')) status = 'flaky';
-      out[key] = worse(out[key], status);
-    }
-    for (const child of suite.suites ?? []) visit(child as typeof suite, file);
-  };
-  for (const s of (json as { suites?: unknown[] }).suites ?? []) visit(s as Parameters<typeof visit>[0]);
-  return out;
-}
 
 async function readJson(uri: vscode.Uri): Promise<unknown | null> {
   try {
@@ -87,63 +48,22 @@ async function readJson(uri: vscode.Uri): Promise<unknown | null> {
   }
 }
 
-/** Folder segments between the nearest `__vibe_tests__` and the file (excl. the
- *  filename), joined by '/'. `__vibe_tests__/auth/login.spec.ts` → 'auth'. */
-function specGroup(fsPath: string): string {
-  const parts = fsPath.split(/[\\/]/);
-  const idx = parts.lastIndexOf('__vibe_tests__');
-  return idx >= 0 ? parts.slice(idx + 1, -1).join('/') : '';
-}
-
-async function gather(): Promise<DashboardData> {
-  const specUris = await vscode.workspace.findFiles('**/__vibe_tests__/**/*.spec.ts', '**/node_modules/**');
-  // basename → its file (for actions / open). Multiple specs can't share a
-  // basename across folders in practice; last one wins, which is fine for the
-  // run-history lookup keyed by basename.
-  const byName = new Map<string, vscode.Uri>();
-  for (const u of specUris) byName.set(u.path.split('/').pop() ?? '', u);
-
+async function localRunSlices(): Promise<RunSlice[]> {
   const runUris = (await vscode.workspace.findFiles('**/.hover/runs/*.json', '**/node_modules/**'))
     .sort((a, b) => a.path.localeCompare(b.path)) // filename is the ISO stamp → chronological
     .slice(-MAX_RUNS);
-  const runs: { id: string; ts: string; specs: Record<string, Status> }[] = [];
+  const runs: RunSlice[] = [];
   for (const uri of runUris) {
     const json = await readJson(uri);
     if (!json) continue;
     const id = (uri.path.split('/').pop() ?? '').replace(/\.json$/, '');
     runs.push({ id, ts: id, specs: parsePlaywrightRun(json) });
   }
+  return runs;
+}
 
-  // Rows = catalogue specs ∪ any spec seen in a run. Each cell = that spec's
-  // status in that run (null = not part of that run).
-  const allNames = new Set<string>(byName.keys());
-  for (const r of runs) for (const k of Object.keys(r.specs)) allNames.add(k);
-  const rows: SpecRow[] = [...allNames]
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => {
-      const uri = byName.get(name);
-      const cells = runs.map((r) => r.specs[name] ?? null) as (Status | null)[];
-      return {
-        name,
-        path: uri ? uri.fsPath : null,
-        group: uri ? specGroup(uri.fsPath) : '',
-        security: name.endsWith('.api-test.spec.ts'),
-        cells,
-        flaky: cellsFlaky(cells),
-      };
-    });
-
-  const flaky = rows.filter((r) => r.flaky).length;
-
-  // Pass rate of the latest run.
-  let passRate: number | null = null;
-  const last = runs[runs.length - 1];
-  if (last) {
-    const vals = Object.values(last.specs);
-    if (vals.length) passRate = Math.round((vals.filter((s) => s === 'pass').length / vals.length) * 100);
-  }
-
-  // Agent runs (one meta.json per run, grouped by conversation) → 7-day token spend.
+/** Agent runs (one meta.json per run, grouped by conversation) → 7-day token spend. */
+async function localTokens7d(): Promise<number> {
   const sessUris = (await vscode.workspace.findFiles('**/.hover/conversations/*/*/meta.json', '**/node_modules/**'))
     .sort((a, b) => b.path.localeCompare(a.path))
     .slice(0, 40);
@@ -155,13 +75,62 @@ async function gather(): Promise<DashboardData> {
     const started = s.startedAt ? Date.parse(s.startedAt) : NaN;
     if (typeof s.tokensUsed === 'number' && (Number.isNaN(started) || started >= weekAgo)) tokens7d += s.tokensUsed;
   }
+  return tokens7d;
+}
 
-  return {
-    hasRuns: runs.length > 0,
-    tiles: { specs: byName.size, passRate, flaky, tokens7d },
-    runs: runs.map((r) => ({ id: r.id, ts: r.ts })),
-    rows,
-  };
+// The cloud fetch is best-effort decoration of the local dashboard: bounded so
+// a slow network can't wedge a refresh, cached so file-watcher refresh bursts
+// don't hammer the API, null (→ local-only) on any miss.
+const CLOUD_TIMEOUT_MS = 8_000;
+const CLOUD_TTL_MS = 60_000;
+let cloudCache: { at: number; data: DashboardData | null } | undefined;
+
+/** True when Hover Cloud credentials are present (the panel's poll trigger). */
+export function cloudConnected(): boolean {
+  return readCloudCredentials() !== null;
+}
+
+async function fetchCloudDashboard(): Promise<DashboardData | null> {
+  if (cloudCache && Date.now() - cloudCache.at < CLOUD_TTL_MS) return cloudCache.data;
+  const data = await (async () => {
+    const creds = readCloudCredentials();
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!creds || !folder) return null;
+    const repo = await originRepo(folder.uri.fsPath);
+    if (!repo) return null;
+    try {
+      return await fetchDashboard(creds, `${repo.owner}/${repo.repo}`, (url, init) =>
+        fetch(url, { ...init, signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS) }),
+      );
+    } catch {
+      return null; // offline / no project for this repo / revoked token
+    }
+  })();
+  cloudCache = { at: Date.now(), data };
+  return data;
+}
+
+async function gather(): Promise<DashboardData> {
+  const specUris = await vscode.workspace.findFiles('**/__vibe_tests__/**/*.spec.ts', '**/node_modules/**');
+  // basename → its file (for actions / open). Multiple specs can't share a
+  // basename across folders in practice; last one wins, which is fine for the
+  // run-history lookup keyed by basename.
+  const files = new Map<string, SpecFileRef>();
+  for (const u of specUris) files.set(u.path.split('/').pop() ?? '', { path: u.fsPath });
+  const catalogueCount = files.size;
+
+  let runs = await localRunSlices();
+  const cloud = await fetchCloudDashboard();
+  if (cloud?.hasRuns) {
+    runs = mergeRunSlices(runs, dashboardRunSlices(cloud));
+    // Cloud-only specs (no local file — deleted, or authored on another
+    // machine) still get a row, keyed to their repo-relative path.
+    for (const row of cloud.rows) {
+      if (!files.has(row.name)) files.set(row.name, { path: null, specFile: row.specFile });
+    }
+  }
+
+  return buildDashboard(runs, files, await localTokens7d(), catalogueCount);
 }
 
 export class DashboardViewProvider implements vscode.WebviewViewProvider {
@@ -206,7 +175,15 @@ export function registerDashboardView(extensionUri: vscode.Uri): vscode.Disposab
   const view = vscode.window.registerWebviewViewProvider(DashboardViewProvider.viewId, provider, {
     webviewOptions: { retainContextWhenHidden: true },
   });
-  const refresh = vscode.commands.registerCommand('hover.refreshDashboard', () => provider.refresh());
+  const refresh = vscode.commands.registerCommand('hover.refreshDashboard', () => {
+    cloudCache = undefined; // an explicit refresh skips the cloud TTL
+    provider.refresh();
+  });
+  // Cloud runs land without touching local files — poll just past the cache TTL
+  // when connected. Disconnected, the tick is a no-op re-read of local state.
+  const cloudTick = setInterval(() => {
+    if (cloudConnected()) provider.refresh();
+  }, CLOUD_TTL_MS + 5_000);
   const watcher = vscode.workspace.createFileSystemWatcher('**/.hover/{runs/*.json,conversations/**}');
   watcher.onDidCreate(() => provider.refresh());
   watcher.onDidChange(() => provider.refresh());
@@ -214,5 +191,5 @@ export function registerDashboardView(extensionUri: vscode.Uri): vscode.Disposab
   const specs = vscode.workspace.createFileSystemWatcher('**/__vibe_tests__/**/*.spec.ts');
   specs.onDidCreate(() => provider.refresh());
   specs.onDidDelete(() => provider.refresh());
-  return [view, refresh, watcher, specs];
+  return [view, refresh, watcher, specs, { dispose: () => clearInterval(cloudTick) }];
 }

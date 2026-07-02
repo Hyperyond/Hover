@@ -19,7 +19,7 @@ import { dirname } from 'node:path';
 import { lintWiki, readWikiLog } from '@hover-dev/core/wiki';
 import { renderWebviewHtml } from './webviewHost.js';
 import { parseBusinessMap, type BusinessMapGraph, type RunStatus } from './businessMap.js';
-import { parsePlaywrightRun, type Status } from './dashboardView.js';
+import { parsePlaywrightRun, type Status } from '@hover-dev/core/dashboard';
 import { resolveTargetUrl } from './extension.js';
 
 /** kebab-case a line label the way parseBusinessMap does, so lint findings
@@ -43,7 +43,7 @@ function worseRun(a: RunStatus | undefined, b: RunStatus | undefined): RunStatus
 
 /** Latest run status per spec basename, merged across `.hover/runs/*.json`
  *  (later runs win — same chronological-by-filename convention the dashboard
- *  uses). Reuses dashboardView's `parsePlaywrightRun`. */
+ *  uses). Reuses the shared `parsePlaywrightRun` from @hover-dev/core. */
 async function gatherRunStatus(): Promise<Record<string, Status>> {
   const runUris = (await vscode.workspace.findFiles('**/.hover/runs/*.json', '**/node_modules/**')).sort((a, b) =>
     a.path.localeCompare(b.path),

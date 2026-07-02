@@ -32,7 +32,8 @@ export function parseRepoFromRemote(url: string): { owner: string; repo: string 
   return m ? { owner: m[1], repo: m[2] } : null;
 }
 
-async function originRepo(cwd: string): Promise<{ owner: string; repo: string } | null> {
+/** The workspace's GitHub `origin` repo, or null (no remote / not a git repo). */
+export async function originRepo(cwd: string): Promise<{ owner: string; repo: string } | null> {
   try {
     const { stdout } = await exec('git', ['config', '--get', 'remote.origin.url'], { cwd });
     return parseRepoFromRemote(stdout);

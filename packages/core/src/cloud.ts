@@ -17,6 +17,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { RunFailure } from './specs/runFailures.js';
+import type { DashboardData } from './dashboard.js';
 
 export const DEFAULT_CLOUD_URL = 'https://cloud.gethover.dev';
 
@@ -41,6 +42,9 @@ export interface CloudHealRequest {
     branch: string | null;
     commitSha: string | null;
     ciUrl: string | null;
+    /** Environment the spec drifted on — heal against THIS env's URL (matched
+     *  to `.hover/environments.json`), not localhost. Null on older runs. */
+    environment?: string | null;
     createdAt: string;
   };
 }
@@ -148,6 +152,25 @@ export async function updateHealRequest(
     { method: 'PATCH', body: JSON.stringify({ status }) },
     fetchImpl,
   );
+}
+
+/** One project's dashboard, computed cloud-side from ingested CI runs — the
+ *  same `DashboardData` shape the local gatherer builds from `.hover/runs`, so
+ *  a dashboard surface can swap data sources without a UI change. `repo` is the
+ *  GitHub `owner/name` the project was created with. */
+export async function fetchDashboard(
+  creds: CloudCredentials,
+  repo: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DashboardData> {
+  const qs = `?${new URLSearchParams({ repo })}`;
+  const data = await cloudJson<{ dashboard: DashboardData }>(
+    creds,
+    `/api/v1/dashboard${qs}`,
+    {},
+    fetchImpl,
+  );
+  return data.dashboard;
 }
 
 /** The heal slug for a queued request (`checkout.spec.ts` → `checkout`) — what

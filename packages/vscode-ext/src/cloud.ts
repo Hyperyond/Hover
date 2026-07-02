@@ -78,6 +78,7 @@ async function connectCloud(): Promise<void> {
     `Hover: connected to Hover Cloud. Credentials saved to ${p} — the Hover MCP picks them up automatically.`,
   );
   void pollCloud();
+  void vscode.commands.executeCommand('hover.refreshDashboard'); // pull CI runs into the panel now
 }
 
 let polling = false; // re-entrancy guard — a slow sweep must not stack
