@@ -18,6 +18,8 @@ npm i -g @hover-dev/mcp
 claude mcp add hover -- hover-mcp
 ```
 
+Already installed? Update the MCP with `npm i -g @hover-dev/mcp@latest`, then reload your agent (no need to re-run `claude mcp add`). This extension updates itself from the Marketplace.
+
 Then, in your agent: `/mcp__hover__test_app` explores your app and crystallizes specs into `__vibe_tests__/`. Come back here to review the Business Map, watch the Dashboard, and run the suite. The differentiator is **record == replay** — the agent acts through grounded tools, so the selector that drove a click is the exact one saved, and the saved tests run in your CI with **zero AI**.
 
 ## Requirements

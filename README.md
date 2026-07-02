@@ -32,6 +32,8 @@ npm i -g @hover-dev/mcp
 claude mcp add hover -- hover-mcp
 ```
 
+**Already installed?** Update with `npm i -g @hover-dev/mcp@latest`, then reload your agent so it re-spawns the server — no need to re-run `claude mcp add`. ([Updating →](https://www.gethover.dev/docs/get-started/install/#updating))
+
 Then, in your agent:
 
 ```
