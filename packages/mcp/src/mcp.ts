@@ -14,6 +14,7 @@ import {
   extractPageObjects,
   buildOptimizeBrief,
   saveOptimizedCandidate,
+  promoteOptimizedCandidate,
   lintWiki,
   appendWikiLog,
   type SkillStep,
@@ -103,6 +104,7 @@ const controller = new HoverMcpController({
     }
   },
   saveOptimized: (slug: string, code: string) => saveOptimizedCandidate(DEV_ROOT, slug, code),
+  promoteOptimized: (slug: string) => promoteOptimizedCandidate(DEV_ROOT, slug),
   lintWiki: () => lintWiki(DEV_ROOT),
 });
 

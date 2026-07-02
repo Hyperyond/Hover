@@ -23,7 +23,7 @@ export { writeApiSpec } from './specs/writeApiSpec.js';
 export type { ApiCheck, WriteApiSpecOptions, WriteApiSpecResult } from './specs/writeApiSpec.js';
 // Optimize (F7) — build the improvement brief for the user's own agent, then
 // file its result as a reviewed candidate. No Hover-owned model runs.
-export { buildOptimizeBrief, saveOptimizedCandidate, OptimizeError } from './specs/optimizeSpec.js';
+export { buildOptimizeBrief, saveOptimizedCandidate, promoteOptimizedCandidate, OptimizeError } from './specs/optimizeSpec.js';
 export type { OptimizeResult } from './specs/optimizeSpec.js';
 // LLM-Wiki P3 log — append-only, machine-parseable run history at .hover/log.md.
 export { appendWikiLog, readWikiLog, wikiLogPath } from './specs/wikiLog.js';

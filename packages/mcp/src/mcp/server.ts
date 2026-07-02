@@ -269,6 +269,18 @@ export function createHoverMcpServer(c: HoverMcpController): McpServer {
     ({ slug, code }) => guard(() => c.saveOptimized(slug, code)),
   );
 
+  server.registerTool(
+    'promote_optimized_spec',
+    {
+      description:
+        "Apply a reviewed optimization candidate: overwrite __vibe_tests__/<slug>.spec.ts with its .hover/cache/optimized/<slug>.spec.ts.draft and remove the draft. Call this ONLY after the user has seen the diff and approved — it's the one action that replaces the original spec. Re-validates the draft first.",
+      inputSchema: {
+        slug: z.string().describe('The spec slug whose candidate to promote (its filename without .spec.ts).'),
+      },
+    },
+    ({ slug }) => guard(() => c.promoteOptimized(slug)),
+  );
+
   // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
   // it as `/mcp__hover__test_app`, so adding the server brings both the tools
   // AND the command. No project scaffolding needed.
@@ -359,7 +371,7 @@ function optimizeAllPrompt(): string {
    - Follow the brief: add assertions for the observed feedback, de-literalize volatile values (a generated id, an order number → a stable anchor), reuse a Page Object where a step sequence matches. Don't invent steps the session didn't perform.
    - \`save_optimized_spec("<slug>", <the complete improved .ts>)\` — Hover validates it and files a candidate at \`.hover/cache/optimized/<slug>.spec.ts.draft\`. It NEVER overwrites your spec. On a ✗, fix it and call again.
 3. **Be selective per spec** — only add assertions that matter (a real outcome, a stable heading). A spec that's already tight needs no candidate; skip it and say so. Over-asserting a changing value is the failure we're avoiding.
-4. **Report** — list which specs got a candidate + where, so the user can diff each against \`__vibe_tests__/<slug>.spec.ts\` and promote the ones they want. Nothing is applied until they do.`;
+4. **Report + apply** — list which specs got a candidate. For each, show the user the diff vs \`__vibe_tests__/<slug>.spec.ts\`; on their approval call \`promote_optimized_spec("<slug>")\` to apply it (overwrites the spec + removes the draft — no manual mv). Nothing lands until they approve.`;
 }
 
 /** Query workflow body (LLM-Wiki P4): read the wiki, answer with citations, and
