@@ -2,10 +2,13 @@
 
 **A place to see, run, and watch the Playwright suite your agent authored.** Hover is an open-source **Vibe Testing** suite: you add its [MCP server](https://www.npmjs.com/package/@hover-dev/mcp) to the coding agent you already run (Claude Code, Cursor, …), and the agent explores your app and crystallizes each flow into a plain `@playwright/test` spec you own. **This extension is the optional cockpit on top of that** — it drives no agent and ships no engine; it's where you review the suite, its coverage, and its run health.
 
+Everything lives under a **single Hover view** in the Activity Bar — Dashboard, Environments, and Business Map as sections in one panel.
+
 ## What it gives you
 
-- **Business Map** — a graph of your app's business flows read from `.hover/hover-map.md`: areas → business lines → the spec each one produced, coloured by coverage. Lives in its own Activity Bar view and a full editor panel.
-- **Dashboard** — the spec × run health matrix (pass / fail / flaky), with a per-spec flaky flag and a 🏥 Heal action on every row. Hover generates the CI workflow and pulls each GitHub Actions run's Playwright results back into the view; **connect Hover Cloud** and your Cloud-ingested CI runs merge into the same timeline (deduped against local runs). One click to install the MCP, one to open [gethover.dev](https://www.gethover.dev/).
+- **Sign in to Hover Cloud** — one button at the top of the Dashboard. Signed in, the panel doubles as your Cloud dashboard: CI runs ingested by Hover Cloud merge into the timeline and the heal queue surfaces here. Signed out, everything still works local-first off `.hover/`.
+- **Business Map** — a graph of your app's business flows read from `.hover/hover-map.md`: areas → business lines → the spec each one produced, coloured by coverage. A section in the Hover view, with a full editor panel.
+- **Dashboard** — the spec × run health matrix (pass / fail / flaky), with a per-spec flaky flag and a 🏥 Heal action on every row. Hover generates the CI workflow and pulls each GitHub Actions run's Playwright results back into the view; **sign in to Hover Cloud** and your Cloud-ingested CI runs merge into the same timeline (deduped against local runs). One click to install the MCP, one to open [gethover.dev](https://www.gethover.dev/).
 - **Environments** — define Local + remote targets (the roster commits to `.hover/environments.json`). Each test account is just a **label + email + password** — passwords stay in VS Code SecretStorage, never in a spec. Pick the active environment for running specs, and export an environment's `HOVER_<LABEL>_USER/PASS` vars to a local `.env` or your clipboard for CI secrets.
 - **Run specs (F3)** — a CodeLens on every `*.spec.ts` runs it through *your own* Playwright in a terminal. No agent, no tokens — just `@playwright/test`.
 

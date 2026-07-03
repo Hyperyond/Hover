@@ -13,8 +13,10 @@
  * the account away from the MCP server.
  */
 import * as vscode from 'vscode';
+import { rmSync } from 'node:fs';
 import {
   DEFAULT_CLOUD_URL,
+  credentialsPath,
   fetchHealRequests,
   healSlug,
   readCloudCredentials,
@@ -27,6 +29,7 @@ const POLL_MS = 5 * 60_000;
 export function registerCloud(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('hover.connectCloud', () => connectCloud()),
+    vscode.commands.registerCommand('hover.disconnectCloud', () => disconnectCloud()),
   );
   void pollCloud();
   const timer = setInterval(() => void pollCloud(), POLL_MS);
@@ -79,6 +82,36 @@ async function connectCloud(): Promise<void> {
   );
   void pollCloud();
   void vscode.commands.executeCommand('hover.refreshDashboard'); // pull CI runs into the panel now
+}
+
+/** Sign out: remove the shared credentials file so every surface (extension +
+ *  MCP) disconnects. The env-var channel (HOVER_CLOUD_TOKEN) can't be cleared
+ *  from here, so we say so when it's what's keeping the session alive. */
+async function disconnectCloud(): Promise<void> {
+  if (!readCloudCredentials()) {
+    void vscode.window.showInformationMessage('Hover: not connected to Hover Cloud.');
+    return;
+  }
+  const ok = await vscode.window.showWarningMessage(
+    'Sign out of Hover Cloud? This removes the saved token from ~/.hover/credentials.json — the Hover MCP uses the same file.',
+    { modal: true },
+    'Sign out',
+  );
+  if (ok !== 'Sign out') return;
+  try {
+    rmSync(credentialsPath());
+  } catch {
+    /* already gone */
+  }
+  notified.clear();
+  if (readCloudCredentials()) {
+    void vscode.window.showWarningMessage(
+      'Hover: still connected via the HOVER_CLOUD_TOKEN environment variable — unset it to fully sign out.',
+    );
+  } else {
+    void vscode.window.showInformationMessage('Hover: signed out of Hover Cloud.');
+  }
+  void vscode.commands.executeCommand('hover.refreshDashboard');
 }
 
 let polling = false; // re-entrancy guard — a slow sweep must not stack

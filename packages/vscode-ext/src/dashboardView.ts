@@ -26,7 +26,7 @@
  * ingested by the cloud dedup to the cloud copy), and the webview plumbing.
  */
 import * as vscode from 'vscode';
-import { fetchDashboard, readCloudCredentials } from '@hover-dev/core/cloud';
+import { DEFAULT_CLOUD_URL, fetchDashboard, readCloudCredentials } from '@hover-dev/core/cloud';
 import {
   MAX_RUNS,
   buildDashboard,
@@ -154,6 +154,12 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
       else if (msg.type === 'open' && msg.path) void vscode.window.showTextDocument(vscode.Uri.file(msg.path));
       else if (msg.type === 'installMcp') void vscode.commands.executeCommand('hover.installMcp');
       else if (msg.type === 'openSite') void vscode.commands.executeCommand('hover.openSite');
+      else if (msg.type === 'connectCloud') void vscode.commands.executeCommand('hover.connectCloud');
+      else if (msg.type === 'disconnectCloud') void vscode.commands.executeCommand('hover.disconnectCloud');
+      else if (msg.type === 'openCloud') {
+        const url = (readCloudCredentials()?.url ?? DEFAULT_CLOUD_URL).replace(/\/$/, '');
+        void vscode.env.openExternal(vscode.Uri.parse(`${url}/dashboard`));
+      }
     });
   }
 
@@ -163,7 +169,9 @@ export class DashboardViewProvider implements vscode.WebviewViewProvider {
 
   private async push(): Promise<void> {
     if (!this.view) return;
-    void this.view.webview.postMessage({ type: 'data', data: await gather() });
+    const creds = readCloudCredentials();
+    const cloud = creds ? { connected: true as const, url: creds.url } : { connected: false as const };
+    void this.view.webview.postMessage({ type: 'data', data: await gather(), cloud });
   }
 
 }

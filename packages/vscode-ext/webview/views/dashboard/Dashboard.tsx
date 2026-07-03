@@ -19,10 +19,11 @@ interface SpecRow {
 }
 interface DashboardData {
   hasRuns: boolean;
-  tiles: { specs: number; passRate: number | null; flaky: number; tokens7d: number };
+  tiles: { specs: number; passRate: number | null; flaky: number; tokens7d: number | null };
   runs: { id: string; ts: string }[];
   rows: SpecRow[];
 }
+type CloudState = { connected: true; url: string } | { connected: false };
 
 const fmtTok = (n: number) => {
   n = n || 0;
@@ -35,6 +36,34 @@ const Shield = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="none
 const Beaker = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M6 2v4L3 12.5a1 1 0 0 0 .9 1.5h8.2a1 1 0 0 0 .9-1.5L10 6V2M5 2h6" /></svg>);
 const Play = () => (<svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M4 3l9 5-9 5z" /></svg>);
 const Folder = () => (<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" className="opacity-70"><path d="M2 4.5h4l1.2 1.5H14v6.5H2z" /></svg>);
+const Cloud = () => (<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M4.5 12a2.8 2.8 0 0 1-.3-5.6A3.5 3.5 0 0 1 11 5.6a2.6 2.6 0 0 1 .4 6.4z" strokeLinejoin="round" /></svg>);
+
+/** Cloud sign-in / connected bar. Signed out → the primary CTA (Cloud becomes
+ *  the dashboard once you're in); signed in → a compact status with open + out. */
+function CloudBar({ cloud }: { cloud: CloudState }) {
+  if (!cloud.connected) {
+    return (
+      <button
+        className="w-full p-2 mb-2 rounded-lg border border-accent/60 bg-accent/10 text-fg text-[12px] font-medium cursor-pointer inline-flex items-center justify-center gap-1.5 hover:bg-accent/20"
+        title="Sign in to Hover Cloud — CI run history, trends, and the heal queue, in this panel"
+        onClick={() => post({ type: "connectCloud" })}
+      >
+        <Cloud /> Sign in to Hover Cloud
+      </button>
+    );
+  }
+  const host = cloud.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  return (
+    <div className="w-full mb-2 rounded-lg border border-line bg-bg2 px-2.5 py-1.5 flex items-center gap-1.5 text-[11px]">
+      <span className="text-accent inline-flex"><Cloud /></span>
+      <span className="text-muted flex-1 min-w-0 truncate" title={"Connected to " + host}>
+        <span className="text-fg font-medium">Hover Cloud</span> · {host}
+      </span>
+      <button className="flex-none text-muted hover:text-fg cursor-pointer inline-flex items-center gap-0.5" title="Open your Cloud dashboard in the browser" onClick={() => post({ type: "openCloud" })}>open ↗</button>
+      <button className="flex-none text-faint hover:text-fg cursor-pointer" title="Sign out of Hover Cloud" onClick={() => post({ type: "disconnectCloud" })}>sign out</button>
+    </div>
+  );
+}
 
 const TILE_CLS: Record<string, string> = { ok: "text-pass", bad: "text-fail", warn: "text-flaky" };
 const CELL_CLS: Record<string, string> = { pass: "bg-pass", fail: "bg-fail", flaky: "bg-flaky" };
@@ -72,10 +101,16 @@ function Row({ r }: { r: SpecRow }) {
 
 export function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [cloud, setCloud] = useState<CloudState | null>(null);
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    const off = onMessage((m) => { if (m.type === "data") setData(m.data as DashboardData); });
+    const off = onMessage((m) => {
+      if (m.type === "data") {
+        setData(m.data as DashboardData);
+        if (m.cloud) setCloud(m.cloud as CloudState);
+      }
+    });
     post({ type: "ready" });
     return off;
   }, []);
@@ -93,6 +128,7 @@ export function Dashboard() {
 
   return (
     <div className="p-[10px] text-[12px] text-fg">
+      {cloud && <CloudBar cloud={cloud} />}
       <button className="w-full p-2 mb-2 rounded-lg bg-accent text-[#0c2417] text-[12.5px] font-semibold cursor-pointer inline-flex items-center justify-center gap-1.5 hover:brightness-110" onClick={() => post({ type: "runAll" })}>
         <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l9 5-9 5z" /></svg> Run all specs
       </button>
