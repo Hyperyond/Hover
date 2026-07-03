@@ -21,6 +21,7 @@ import * as vscode from 'vscode';
 import {
   DEFAULT_CLOUD_URL,
   fetchHealRequests,
+  fetchProjects,
   healSlug,
   readCloudCredentials,
   type CloudHealRequest,
@@ -36,10 +37,15 @@ import {
 } from './dashboardView.js';
 import { gatherMapSummary } from './businessMapView.js';
 import { serializeEnvironments, type EnvVM } from './environmentsView.js';
+import { originRepo } from './githubCi.js';
 import type { EnvironmentStore } from './environments.js';
 
 type Source = 'local' | 'remote';
 const SOURCE_KEY = 'hover.dashboardSource';
+// A per-workspace override for which Cloud project (owner/name) this checkout
+// maps to — set via the project picker when git-remote detection misses.
+const REPO_KEY = 'hover.repoOverride';
+const CLOUD_TIMEOUT_MS = 8_000;
 
 interface HealVM {
   id: string;
@@ -54,6 +60,8 @@ interface HealVM {
 interface HomePayload {
   type: 'data';
   cloud: ReturnType<typeof cloudState>;
+  /** The Cloud project (owner/name) this workspace maps to; null when unknown. */
+  repo: string | null;
   source: Source;
   remoteAvailable: boolean;
   dashboard: DashboardData;
@@ -62,23 +70,26 @@ interface HomePayload {
   heal: HealVM[];
 }
 
-// Cache the heal queue like the remote dashboard — bounded + TTL'd so refresh
-// bursts don't hammer the API.
-const HEAL_TIMEOUT_MS = 8_000;
-let healCache: { at: number; items: HealVM[] } | undefined;
+// Cache the heal queue like the remote dashboard — bounded + TTL'd, keyed by
+// repo so a project switch can't serve another repo's queue.
+let healCache: { at: number; repo: string; items: HealVM[] } | undefined;
 
-async function gatherHeal(force = false): Promise<HealVM[]> {
-  if (!force && healCache && Date.now() - healCache.at < CLOUD_TTL_MS) return healCache.items;
+/** The open heal queue for a SPECIFIC repo. `repo` must be resolved by the
+ *  caller — passing undefined returns [] rather than every project's queue
+ *  (the bug that showed one repo another project's heal requests). */
+async function gatherHeal(repo: string | undefined, force = false): Promise<HealVM[]> {
+  if (!repo) return [];
+  if (!force && healCache && healCache.repo === repo && Date.now() - healCache.at < CLOUD_TTL_MS) {
+    return healCache.items;
+  }
   const items = await (async (): Promise<HealVM[]> => {
     const creds = readCloudCredentials();
-    const folder = vscode.workspace.workspaceFolders?.[0];
     if (!creds) return [];
-    const repo = folder ? await originRepoSafe(folder.uri.fsPath) : undefined;
     try {
       const rows = await fetchHealRequests(
         creds,
         { status: 'open', repo },
-        (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(HEAL_TIMEOUT_MS) }),
+        (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS) }),
       );
       return rows.map((r) => ({
         id: r.id,
@@ -93,20 +104,20 @@ async function gatherHeal(force = false): Promise<HealVM[]> {
       return [];
     }
   })();
-  healCache = { at: Date.now(), items };
+  healCache = { at: Date.now(), repo, items };
   return items;
 }
 
-// originRepo lives in githubCi (shells out to git); import lazily to keep this
-// module's import graph small and tolerate a non-git workspace.
-async function originRepoSafe(cwd: string): Promise<string | undefined> {
-  try {
-    const { originRepo } = await import('./githubCi.js');
-    const r = await originRepo(cwd);
-    return r ? `${r.owner}/${r.repo}` : undefined;
-  } catch {
-    return undefined;
-  }
+/** The Cloud project this checkout maps to: the manual override if set, else
+ *  the GitHub `owner/name` from the git origin remote. Undefined = unknown, and
+ *  every cloud gather returns empty rather than leaking another project's data. */
+async function resolveRepo(ctx: vscode.ExtensionContext): Promise<string | undefined> {
+  const override = ctx.workspaceState.get<string>(REPO_KEY);
+  if (override) return override;
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) return undefined;
+  const r = await originRepo(folder.uri.fsPath);
+  return r ? `${r.owner}/${r.repo}` : undefined;
 }
 
 export class HomeViewProvider implements vscode.WebviewViewProvider {
@@ -160,17 +171,18 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       void this.view.webview.postMessage({ type: 'data', cloud } satisfies Partial<HomePayload>);
       return;
     }
+    const repo = await resolveRepo(this.context);
     const [remote, environments, map, heal] = await Promise.all([
-      gatherRemoteDashboard(force),
+      gatherRemoteDashboard(repo, force),
       serializeEnvironments(this.store),
       gatherMapSummary(),
-      gatherHeal(force),
+      gatherHeal(repo, force),
     ]);
     const remoteAvailable = !!remote?.hasRuns;
     // Fall back to Local when Remote has nothing to show yet.
     const source: Source = this.source === 'remote' && !remoteAvailable ? 'local' : this.source;
     const dashboard = source === 'remote' && remote ? remote : await gatherLocalDashboard();
-    const payload: HomePayload = { type: 'data', cloud, source, remoteAvailable, dashboard, environments, map, heal };
+    const payload: HomePayload = { type: 'data', cloud, repo: repo ?? null, source, remoteAvailable, dashboard, environments, map, heal };
     void this.view.webview.postMessage(payload);
   }
 
@@ -226,6 +238,9 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       case 'openMap':
         void vscode.commands.executeCommand('hover.openBusinessMap');
         return;
+      case 'pickRepo':
+        void this.pickRepo();
+        return;
       case 'copyTestApp':
         void copyCmd('/mcp__hover__test_app', 'map + test your app');
         return;
@@ -258,6 +273,40 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
         void vscode.commands.executeCommand('hover.env.removeAccount', { envId, label });
         return;
     }
+  }
+
+  /** Manual project selection — for when git-remote auto-detection misses (a
+   *  fork, a rename, a monorepo). Lists the user's Cloud projects; the choice
+   *  is stored per-workspace and overrides detection. "Auto-detect" clears it. */
+  private async pickRepo(): Promise<void> {
+    const creds = readCloudCredentials();
+    if (!creds) return;
+    let projects;
+    try {
+      projects = await fetchProjects(creds, (url, init) =>
+        fetch(url, { ...init, signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS) }),
+      );
+    } catch {
+      void vscode.window.showErrorMessage("Hover: couldn't load your Hover Cloud projects.");
+      return;
+    }
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    const detected = folder ? await originRepo(folder.uri.fsPath) : null;
+    const detectedRepo = detected ? `${detected.owner}/${detected.repo}` : undefined;
+    const items: (vscode.QuickPickItem & { repo?: string; auto?: boolean })[] = [
+      { label: '$(sync) Auto-detect from git remote', description: detectedRepo ?? 'no GitHub origin remote', auto: true },
+      ...(projects.length ? [{ label: 'Your projects', kind: vscode.QuickPickItemKind.Separator }] : []),
+      ...projects.map((p) => ({ label: p.repo, description: `${p.name} · ${p.org}`, repo: p.repo })),
+    ];
+    const pick = await vscode.window.showQuickPick(items, {
+      title: 'Hover: which Cloud project is this workspace?',
+      placeHolder: projects.length ? 'Pick a project, or auto-detect from git' : 'No projects yet — create one at cloud.gethover.dev',
+    });
+    if (!pick) return;
+    await this.context.workspaceState.update(REPO_KEY, pick.auto ? undefined : pick.repo);
+    invalidateRemoteCache();
+    healCache = undefined;
+    this.refresh();
   }
 }
 

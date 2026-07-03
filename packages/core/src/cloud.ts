@@ -154,6 +154,30 @@ export async function updateHealRequest(
   );
 }
 
+/** A project the signed-in user can see, for the editor's "pick a project"
+ *  fallback when git-remote auto-detection misses. */
+export interface CloudProject {
+  id: string;
+  name: string;
+  /** GitHub `owner/name` — what `repo=` filters on across the API. */
+  repo: string;
+  org: string;
+}
+
+/** Every project the token's user can see (across their org memberships). */
+export async function fetchProjects(
+  creds: CloudCredentials,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CloudProject[]> {
+  const data = await cloudJson<{ projects: CloudProject[] }>(
+    creds,
+    `/api/v1/projects`,
+    {},
+    fetchImpl,
+  );
+  return data.projects;
+}
+
 /** One project's dashboard, computed cloud-side from ingested CI runs — the
  *  same `DashboardData` shape the local gatherer builds from `.hover/runs`, so
  *  a dashboard surface can swap data sources without a UI change. `repo` is the

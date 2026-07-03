@@ -21,8 +21,6 @@ import {
   type RunSlice,
   type SpecFileRef,
 } from '@hover-dev/core/dashboard';
-import { originRepo } from './githubCi.js';
-
 /** Cloud connection state pushed to the webview (drives the sign-in gate). */
 export type CloudState = { connected: true; url: string } | { connected: false };
 
@@ -86,21 +84,24 @@ export async function gatherLocalDashboard(): Promise<DashboardData> {
 }
 
 // Cache the cloud fetch so file-watcher refresh bursts don't hammer the API.
-let remoteCache: { at: number; data: DashboardData | null } | undefined;
+// Keyed by repo so switching the linked project can't serve a stale dashboard.
+let remoteCache: { at: number; repo: string; data: DashboardData | null } | undefined;
 
-/** This repo's Cloud dashboard (CI runs Cloud ingested), or null when not
- *  connected / no repo / offline / no project for the repo. Local paths get
- *  filled in so Remote rows can still open + run the on-disk spec. */
-export async function gatherRemoteDashboard(force = false): Promise<DashboardData | null> {
-  if (!force && remoteCache && Date.now() - remoteCache.at < CLOUD_TTL_MS) return remoteCache.data;
+/** A specific repo's Cloud dashboard (CI runs Cloud ingested), or null when no
+ *  repo is given / not connected / offline / no project for that repo. The repo
+ *  MUST be resolved by the caller — never fall back to "all", or one repo's
+ *  panel would show another project's data. Local paths get filled in so Remote
+ *  rows can still open + run the on-disk spec. */
+export async function gatherRemoteDashboard(repo: string | undefined, force = false): Promise<DashboardData | null> {
+  if (!repo) return null;
+  if (!force && remoteCache && remoteCache.repo === repo && Date.now() - remoteCache.at < CLOUD_TTL_MS) {
+    return remoteCache.data;
+  }
   const data = await (async (): Promise<DashboardData | null> => {
     const creds = readCloudCredentials();
-    const folder = vscode.workspace.workspaceFolders?.[0];
-    if (!creds || !folder) return null;
-    const repo = await originRepo(folder.uri.fsPath);
-    if (!repo) return null;
+    if (!creds) return null;
     try {
-      const remote = await fetchDashboard(creds, `${repo.owner}/${repo.repo}`, (url, init) =>
+      const remote = await fetchDashboard(creds, repo, (url, init) =>
         fetch(url, { ...init, signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS) }),
       );
       // Resolve each remote spec basename to a local file, so its row can still
@@ -114,7 +115,7 @@ export async function gatherRemoteDashboard(force = false): Promise<DashboardDat
       return null;
     }
   })();
-  remoteCache = { at: Date.now(), data };
+  remoteCache = { at: Date.now(), repo, data };
   return data;
 }
 

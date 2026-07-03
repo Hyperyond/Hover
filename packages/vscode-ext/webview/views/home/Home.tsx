@@ -16,6 +16,7 @@ interface HealVM { id: string; specFile: string; slug: string; status: string; b
 interface MapSummary { exists: boolean; app?: string; stats?: { lines: number; covered: number; areas: number } }
 interface Payload {
   cloud: CloudState;
+  repo?: string | null;
   source?: Source;
   remoteAvailable?: boolean;
   dashboard?: DashboardData;
@@ -179,6 +180,19 @@ export function Home() {
         <button className="flex-none text-muted hover:text-fg cursor-pointer" title="Open your Cloud dashboard" onClick={() => post({ type: "openCloud" })}>open ↗</button>
         <button className="flex-none text-faint hover:text-fg cursor-pointer" title="Sign out" onClick={() => post({ type: "disconnectCloud" })}>sign out</button>
       </div>
+
+      {/* Linked project — scopes Remote + Heal to this repo */}
+      {p.repo ? (
+        <div className="w-full mb-2.5 px-1 flex items-center gap-1.5 text-[10.5px] text-faint">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M2 4.5h4l1.2 1.5H14v6.5H2z" /></svg>
+          <span className="flex-1 min-w-0 truncate" title={"Cloud project: " + p.repo}>{p.repo}</span>
+          <button className="flex-none hover:text-fg cursor-pointer" title="Link a different Cloud project" onClick={() => post({ type: "pickRepo" })}>change</button>
+        </div>
+      ) : (
+        <button className="w-full mb-2.5 p-1.5 rounded-lg border border-flaky/50 bg-flaky/10 text-fg text-[11px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:bg-flaky/20" title="Couldn't match this workspace to a Cloud project from its git remote" onClick={() => post({ type: "pickRepo" })}>
+          ⚠ No Cloud project linked — select one
+        </button>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-0.5 p-0.5 mb-2.5 rounded-lg border border-line bg-bg2">
