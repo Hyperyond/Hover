@@ -517,8 +517,16 @@ Work in PHASES — this is what lets it scale from a tiny app to a large one.
 - Optionally add a \`## Relationships\` block recording inter-line edges you notice — \`<line> depends-on <line>\`, \`<line> shares-state <line>\`, or \`<line> navigates-to <line>\` (names must match lines above). These become graph edges in the cockpit's Business Map; they also tell a later run what a flow depends on. Record only real edges; skip the block if none stand out.
 - Don't test yet. For a large app, this map IS the plan.
 
+## Phase 1.5 — Confirm the business with the user (bootstrap only)
+On a FIRST run (no pre-existing map), show the user the business lines you drafted and ask — in ONE message, before testing:
+1. **Priority** — which lines matter most / which to cover now (this absorbs Phase 2's scope question; offer "all").
+2. **Invisible rules** — what the code doesn't show: roles/permissions ("which features need login?"), paywalls/quotas, is this a safe test environment (real payments? real emails?), known trouble spots.
+3. **Corrections** — lines that are wrong, missing, or mis-grouped.
+
+\`record_fact\` each durable rule they confirm — this single checkpoint is where the app's business knowledge base gets seeded. If they say "just proceed" (or don't engage), continue with your inferred map — the checkpoint is one message, never a gate. On an EXTEND run (a map already exists), SKIP this — recall + the map already hold the answers; only surface a contradiction.
+
 ## Phase 2 — Pick the scope
-- If a scope was given, cover that. Otherwise show the uncovered lines and ask which to cover now (offer "all uncovered"). For a small app, just cover them all.
+- If a scope was given, cover that. On a bootstrap run the scope question was already asked in Phase 1.5. Otherwise (extend run, no scope given) show the uncovered lines and ask which to cover now (offer "all uncovered"); for a small app, just cover them all.
 
 ## Phase 3 — Cover each chosen line, ONE AT A TIME
 For each line: \`browser_navigate\` to its route → \`browser_snapshot\` → EXERCISE the real flow (click / fill / select / check — you are a tester, never just describe the page) → \`assert_visible\` on the OUTCOME (a success message, the new row, the next screen) → \`crystallize_spec("<short imperative English name>")\`. Crystallize the MOMENT each flow is done, before the next — the buffer is per-flow. The tools share ONE browser, so cover lines SEQUENTIALLY.
@@ -536,6 +544,9 @@ As you drive each flow, Hover passively captures the app's xhr/fetch traffic. Af
 ## Phase 5 — Lift shared flows into Page Objects (ASK first)
 Once specs are crystallized, call \`detect_shared_flows\`. If it reports a NON-login flow repeated across specs (login is already handled by the auth setup), tell the user which specs share it and ASK whether to lift it into a shared Page Object (so a UI change to that flow is a one-place fix). On yes → \`extract_page_objects\` (generates \`pages/*\` + \`fixtures.ts\` and folds the specs to \`await xPage.x()\`). If nothing is shared, skip silently — most small suites have nothing to lift; don't force it.
 
-## Understand the business — ASK, then REMEMBER
-When you genuinely can't resolve something on your own — is this a bug or by-design? which flows matter? what does this domain term mean? — ASK the user (don't guess, don't stop). When they confirm a durable business RULE, call \`record_fact\` to persist it (RULES ONLY — never credentials/secrets/PII). Also ASK when blocked on something only they can provide (login credentials, a file). Stay on the app under test — never navigate to external origins.`;
+## Understand the business — OBSERVE, ASK, REMEMBER
+The knowledge base only compounds if you actually write to it — every run should leave \`.hover/memory/\` knowing more than it started:
+- **Observed → record directly.** When the app itself demonstrates a durable rule, \`record_fact\` it without asking — a redirect to /login proves that feature needs auth; a limit message proves a quota; a disabled button for this role proves a permission. State it as a clean rule ("Word practice requires a signed-in user").
+- **Ambiguous → ASK, don't guess.** Bug or by-design? Which flows matter? What does this domain term mean? ASK the user (don't guess, don't stop). Batch small confirmations at natural pauses (end of a line, end of the run) instead of interrupting per item. When they confirm a rule, \`record_fact\` it.
+- RULES ONLY — never credentials/secrets/PII. Also ASK when blocked on something only they can provide (login credentials, a file). Stay on the app under test — never navigate to external origins.`;
 }
