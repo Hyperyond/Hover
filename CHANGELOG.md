@@ -6,6 +6,8 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-07-03
+
 ### Changed
 
 - **mcp:** business elicitation is now an active checkpoint, not an exception path. On a bootstrap `test_app` run the agent presents the drafted business map and asks — in one message — for priorities, invisible rules (roles/paywalls/safe-environment), and corrections, seeding `.hover/memory/` via `record_fact`. During coverage it records rules the app itself demonstrates (a /login redirect, a quota message) without asking, and batches ambiguous "bug or by-design?" confirmations at natural pauses. Previously the agent only asked when "genuinely unable to resolve" something — which a strong model never is, so the knowledge base never accumulated.
