@@ -1,4 +1,9 @@
-<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-  <path fill="currentColor" d="M12 2.2l2.05 6.7 6.7 2.05a1 1 0 0 1 0 1.9l-6.7 2.05L12 21.8a1 1 0 0 1-1.9 0l-2.05-6.9-6.7-2.05a1 1 0 0 1 0-1.9l6.7-2.05L10.1 2.2a1 1 0 0 1 1.9 0z"/>
-  <path fill="currentColor" d="M18.5 2.5l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/>
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <!-- The grounded reticle — Hover's primary mark (matches icon.png + the site favicon).
+       currentColor so the Activity Bar tints it per the active theme. -->
+  <path d="M4 8.5V4h4.5"/>
+  <path d="M19.5 8.5V4H15"/>
+  <path d="M4 15.5V20h4.5"/>
+  <path d="M19.5 15.5V20H15"/>
+  <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/>
 </svg>

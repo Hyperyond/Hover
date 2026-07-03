@@ -5,8 +5,8 @@
 ## What it gives you
 
 - **Business Map** — a graph of your app's business flows read from `.hover/hover-map.md`: areas → business lines → the spec each one produced, coloured by coverage. Lives in its own Activity Bar view and a full editor panel.
-- **Dashboard** — the spec × run health matrix (pass / fail / flaky), wired to your GitHub Actions runs: Hover can generate the CI workflow and pull each run's Playwright results back into the view. One click to install the MCP, one to open [gethover.dev](https://www.gethover.dev/).
-- **Environments** — define Local + remote targets (the roster commits to `.hover/environments.json`); account passwords stay in VS Code SecretStorage. Pick the active environment for running specs.
+- **Dashboard** — the spec × run health matrix (pass / fail / flaky), with a per-spec flaky flag and a 🏥 Heal action on every row. Hover generates the CI workflow and pulls each GitHub Actions run's Playwright results back into the view; **connect Hover Cloud** and your Cloud-ingested CI runs merge into the same timeline (deduped against local runs). One click to install the MCP, one to open [gethover.dev](https://www.gethover.dev/).
+- **Environments** — define Local + remote targets (the roster commits to `.hover/environments.json`). Each test account is just a **label + email + password** — passwords stay in VS Code SecretStorage, never in a spec. Pick the active environment for running specs, and export an environment's `HOVER_<LABEL>_USER/PASS` vars to a local `.env` or your clipboard for CI secrets.
 - **Run specs (F3)** — a CodeLens on every `*.spec.ts` runs it through *your own* Playwright in a terminal. No agent, no tokens — just `@playwright/test`.
 
 ## How authoring works
