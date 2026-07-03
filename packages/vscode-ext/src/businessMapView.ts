@@ -5,10 +5,11 @@
  * it and lets you act on each flow (open its route, run its spec, or hand an
  * uncovered flow to your coding agent).
  *
- * Two surfaces share ONE wiring (`wireBusinessMap`): a narrow sidebar
- * WebviewView (the `hover.businessMap` view) AND a full editor-area panel
- * (`hover.openBusinessMap`). Both speak the same `{type:'data', graph}` protocol
- * and the same inbound handlers (ready/refresh/open/openRoute/runSpec/handoff).
+ * This is the full editor-area panel (`hover.openBusinessMap`) — the rich
+ * reactflow graph. The Hover sidebar panel's Map tab shows only a coverage
+ * summary (via `gatherMapSummary`) and opens this panel for the full graph.
+ * The panel speaks `{type:'data', graph}` with inbound handlers
+ * (ready/refresh/open/openRoute/runSpec/handoff).
  *
  * Data source: `<workspace>/.hover/hover-map.md` → parseBusinessMap → graph;
  * spec basenames are resolved to absolute paths (so clicking a spec opens it and
@@ -127,6 +128,17 @@ async function gather(): Promise<BusinessMapGraph | null> {
   return graph;
 }
 
+/** A cheap read of the map for the Hover panel's Map tab: does a map exist, and
+ *  its coverage headline. The full graph stays in the editor panel. */
+export async function gatherMapSummary(): Promise<{
+  exists: boolean;
+  app?: string;
+  stats?: { lines: number; covered: number; areas: number };
+}> {
+  const g = await gather();
+  return g ? { exists: true, app: g.app, stats: g.stats } : { exists: false };
+}
+
 /** Inbound message shape (sidebar + panel both send these). */
 interface InMsg {
   type: string;
@@ -176,32 +188,8 @@ async function handoff(line: string): Promise<void> {
   );
 }
 
-export class BusinessMapViewProvider implements vscode.WebviewViewProvider {
-  static readonly viewId = 'hover.businessMap';
-  private wired?: { refresh: () => void; dispose: vscode.Disposable };
-
-  constructor(private readonly extensionUri: vscode.Uri) {}
-
-  resolveWebviewView(view: vscode.WebviewView): void {
-    view.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')],
-    };
-    view.webview.html = renderWebviewHtml(view.webview, this.extensionUri, 'business-map');
-    this.wired = wireBusinessMap(view.webview);
-    view.onDidDispose(() => {
-      this.wired?.dispose.dispose();
-      this.wired = undefined;
-    });
-  }
-
-  refresh(): void {
-    this.wired?.refresh();
-  }
-}
-
 /** Open (or reveal) the full editor-area Business Map panel. One panel at a
- *  time; reuses the same wiring as the sidebar. */
+ *  time; the sidebar shows only a summary now (the panel is the full graph). */
 function openBusinessMapPanel(extensionUri: vscode.Uri, track: (p: BusinessMapPanel) => void): void {
   const panel = vscode.window.createWebviewPanel(
     'hover.businessMap.panel',
@@ -225,14 +213,13 @@ interface BusinessMapPanel {
   refresh: () => void;
 }
 
-/** Register the Business Map view + panel command + a single file watcher that
- *  keeps BOTH surfaces live as the map / specs / runs change. */
-export function registerBusinessMapView(extensionUri: vscode.Uri): vscode.Disposable[] {
-  const provider = new BusinessMapViewProvider(extensionUri);
-  const view = vscode.window.registerWebviewViewProvider(BusinessMapViewProvider.viewId, provider, {
-    webviewOptions: { retainContextWhenHidden: true },
-  });
-
+/** Register the Business Map editor PANEL (the full graph) + its watcher. The
+ *  sidebar Map tab (a summary) lives in the Hover panel; `onChange` lets it
+ *  refresh when the map / specs / runs change. */
+export function registerBusinessMapPanel(
+  extensionUri: vscode.Uri,
+  onChange: () => void,
+): vscode.Disposable[] {
   // Track open panels so the watcher refreshes them too (and drop them on dispose).
   let panels: BusinessMapPanel[] = [];
   const track = (p: BusinessMapPanel): void => {
@@ -242,8 +229,8 @@ export function registerBusinessMapView(extensionUri: vscode.Uri): vscode.Dispos
     });
   };
   const refreshAll = (): void => {
-    provider.refresh();
     for (const p of panels) p.refresh();
+    onChange(); // the Hover panel's Map-tab summary
   };
 
   const open = vscode.commands.registerCommand('hover.openBusinessMap', () =>
@@ -258,5 +245,5 @@ export function registerBusinessMapView(extensionUri: vscode.Uri): vscode.Dispos
   const specs = vscode.workspace.createFileSystemWatcher('**/__vibe_tests__/**/*.spec.ts');
   specs.onDidCreate(refreshAll);
   specs.onDidDelete(refreshAll);
-  return [view, open, refresh, watcher, specs];
+  return [open, refresh, watcher, specs];
 }

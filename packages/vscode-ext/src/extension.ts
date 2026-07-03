@@ -21,11 +21,11 @@ import * as path from 'node:path';
 import { registerCloud } from './cloud';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { SpecLensProvider } from './specLens.js';
-import { registerDashboardView } from './dashboardView.js';
-import { registerBusinessMapView } from './businessMapView.js';
+import { registerHomeView } from './homeView.js';
+import { registerBusinessMapPanel } from './businessMapView.js';
 import { syncCiResults as ghSyncCiResults } from './githubCi.js';
 import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar } from './environments.js';
-import { registerEnvironmentsView } from './environmentsView.js';
+import { registerEnvironmentCommands } from './environmentsView.js';
 import { buildWorkflowYaml, buildAutohealWorkflowYaml, DRIFT_REPORT_SCRIPT } from './ciWorkflow.js';
 import { candidateUri, uriExists } from './optimized.js';
 
@@ -81,13 +81,14 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
-  // Sidebar under the Hover Activity Bar container: the native + webview views.
+  // The single Hover panel (tabs: Overview / Heal / Environments / Map) + the
+  // full-graph Business Map editor panel + the env/account commands its tab
+  // drives. Everything refreshes the one panel through home.provider.refresh().
+  const home = registerHomeView(context.extensionUri, envStore, context, () => void pollAppStatus());
   context.subscriptions.push(
-    ...registerDashboardView(context.extensionUri),
-    ...registerBusinessMapView(context.extensionUri),
-    ...registerEnvironmentsView(envStore, () => {
-      void pollAppStatus();
-    }),
+    ...home.disposables,
+    ...registerBusinessMapPanel(context.extensionUri, () => home.provider.refresh()),
+    ...registerEnvironmentCommands(envStore, () => home.provider.refresh()),
   );
 
   // Hover Cloud pull channel: the connect command + the CI-drift poller

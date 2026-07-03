@@ -1,6 +1,6 @@
 {
   "name": "hover-dev",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "displayName": "Hover — Vibe Testing cockpit",
   "description": "Open-source, local-first Vibe Testing — the review cockpit. Add Hover's MCP to the coding agent you already run (Claude Code / Codex / Cursor); it explores your app through grounded tools and crystallizes each flow into a plain @playwright/test spec you own, passing CI with zero AI. This extension is where you see it: a Business Map of flows + coverage, a Dashboard of run health synced from GitHub CI or Hover Cloud, and one-click runs. record == replay · API testing · self-heal drifted specs.",
   "keywords": [
@@ -213,23 +213,10 @@
     "views": {
       "hover": [
         {
-          "id": "hover.dashboard",
-          "name": "Dashboard",
+          "id": "hover.home",
+          "name": "Hover",
           "type": "webview",
           "icon": "$(dashboard)",
-          "contextualTitle": "Hover"
-        },
-        {
-          "id": "hover.environments",
-          "name": "Environments",
-          "icon": "$(globe)",
-          "contextualTitle": "Hover"
-        },
-        {
-          "id": "hover.businessMap",
-          "name": "Business Map",
-          "type": "webview",
-          "icon": "$(type-hierarchy)",
           "contextualTitle": "Hover"
         }
       ]
@@ -259,71 +246,9 @@
       ],
       "view/title": [
         {
-          "command": "hover.addCiWorkflow",
-          "when": "view == hover.dashboard",
-          "group": "navigation@2"
-        },
-        {
           "command": "hover.refreshDashboard",
-          "when": "view == hover.dashboard",
-          "group": "navigation@3"
-        },
-        {
-          "command": "hover.openBusinessMap",
-          "when": "view == hover.businessMap",
+          "when": "view == hover.home",
           "group": "navigation@1"
-        },
-        {
-          "command": "hover.env.add",
-          "when": "view == hover.environments",
-          "group": "navigation@1"
-        },
-        {
-          "command": "hover.refreshEnvironments",
-          "when": "view == hover.environments",
-          "group": "navigation@2"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "hover.env.addAccount",
-          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
-          "group": "inline@1"
-        },
-        {
-          "command": "hover.env.exportEnv",
-          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
-          "group": "inline@2"
-        },
-        {
-          "command": "hover.env.editUrl",
-          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Unverified)?$/",
-          "group": "1_env@1"
-        },
-        {
-          "command": "hover.env.exportEnv",
-          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
-          "group": "1_env@2"
-        },
-        {
-          "command": "hover.env.addAccount",
-          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Local|Unverified)?$/",
-          "group": "1_env@2"
-        },
-        {
-          "command": "hover.env.remove",
-          "when": "view == hover.environments && viewItem =~ /^hoverEnv(Unverified)?$/",
-          "group": "1_env@3"
-        },
-        {
-          "command": "hover.env.setPassword",
-          "when": "view == hover.environments && viewItem == hoverAccount",
-          "group": "inline@1"
-        },
-        {
-          "command": "hover.env.removeAccount",
-          "when": "view == hover.environments && viewItem == hoverAccount",
-          "group": "inline@2"
         }
       ]
     }

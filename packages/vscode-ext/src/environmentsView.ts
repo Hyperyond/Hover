@@ -1,136 +1,74 @@
 /**
- * The "Environments" sidebar view — a native TreeView listing the test
- * environments (Local + any verified domains the user configures) and the test
- * accounts under each. Sits alongside Specs / Sessions.
+ * Environments — commands + a serializer for the Hover panel's Environments tab.
  *
- * This is the local-only first cut: you add environments + accounts here, pick
- * the active one (drives the run target URL), and store account passwords in
- * SecretStorage. Cloud-backed rows (real DNS-TXT domain verification, account
- * sync) render as dimmed, command-less placeholders — visibly present but
- * non-clickable until Hover Cloud ships.
+ * The UI used to be a native TreeView; it now lives as a tab in the single
+ * Hover webview (see homeView.ts + webview/views/home). This file keeps the
+ * env/account COMMANDS (add / edit URL / remove / set active / export env vars /
+ * add / set-password / remove account) — the webview buttons post messages that
+ * run them — and exposes `serializeEnvironments()` so the tab can render the
+ * roster. Add/edit dialogs stay native `showInputBox` prompts; passwords never
+ * leave SecretStorage.
  *
- * `EnvironmentStore` owns persistence; this file owns the tree + the commands.
+ * Command args are plain ids (`{ envId, label }`) so both the webview and the
+ * Command Palette can call them; a missing id falls back to a quick-pick.
  */
 import * as vscode from 'vscode';
-import { EnvironmentStore, LOCAL_ENV_ID, type HoverEnvironment, type HoverAccount } from './environments.js';
+import { EnvironmentStore, LOCAL_ENV_ID } from './environments.js';
 
-/** A test environment row (Local / Staging / …). */
-class EnvironmentItem extends vscode.TreeItem {
-  constructor(readonly env: HoverEnvironment, readonly active: boolean) {
-    super(env.name, env.accounts.length ? (active ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed) : vscode.TreeItemCollapsibleState.None);
-    const host = env.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const badge = env.id === LOCAL_ENV_ID ? '' : env.verified ? '  ✓' : '  ⚠';
-    this.description = host + badge;
-    this.tooltip = `${env.name} — ${env.url}${
-      env.id === LOCAL_ENV_ID ? '' : env.verified ? '\nDomain verified.' : '\nDomain not verified (verification arrives with Hover Cloud).'
-    }${active ? '\n\nActive run target.' : '\n\nClick to make this the active run target.'}`;
-    this.iconPath = new vscode.ThemeIcon(
-      active ? 'circle-large-filled' : 'circle-large-outline',
-      active ? new vscode.ThemeColor('charts.green') : undefined,
-    );
-    this.contextValue = env.id === LOCAL_ENV_ID ? 'hoverEnvLocal' : env.verified ? 'hoverEnv' : 'hoverEnvUnverified';
-    this.command = { command: 'hover.env.setActive', title: 'Set active', arguments: [this] };
-  }
+/** One account as the Environments tab renders it (no secrets — just presence). */
+export interface EnvAccountVM {
+  label: string;
+  email?: string;
+  hasPassword: boolean;
 }
 
-/** A test account under an environment. */
-class AccountItem extends vscode.TreeItem {
-  constructor(readonly envId: string, readonly account: HoverAccount, readonly hasPassword: boolean) {
-    super(account.label, vscode.TreeItemCollapsibleState.None);
-    this.description = (account.email ? account.email + '  ' : '') + (hasPassword ? '🔑' : '⚠ no password');
-    this.tooltip = `Account "${account.label}"${account.email ? ` (${account.email})` : ''}\n${
-      hasPassword
-        ? 'Password stored in SecretStorage — never written to a spec.'
-        : 'No password stored. Use "Set / Update Password" so the agent can log in.'
-    }`;
-    this.iconPath = new vscode.ThemeIcon('account');
-    this.contextValue = 'hoverAccount';
-  }
+/** One environment as the Environments tab renders it. */
+export interface EnvVM {
+  id: string;
+  name: string;
+  url: string;
+  verified?: boolean;
+  isLocal: boolean;
+  active: boolean;
+  accounts: EnvAccountVM[];
 }
 
-/** A dimmed, command-less Cloud placeholder row. */
-class CloudPlaceholderItem extends vscode.TreeItem {
-  constructor(label: string, tooltip: string) {
-    super(label, vscode.TreeItemCollapsibleState.None);
-    this.description = 'Hover Cloud';
-    this.tooltip = tooltip;
-    this.iconPath = new vscode.ThemeIcon('cloud', new vscode.ThemeColor('disabledForeground'));
-    this.contextValue = 'hoverCloudSoon';
-    // No `command` → the row is inert (non-clickable).
-  }
-}
-
-export class EnvironmentsTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-  private readonly changed = new vscode.EventEmitter<void>();
-  readonly onDidChangeTreeData = this.changed.event;
-  private refreshTimer: ReturnType<typeof setTimeout> | undefined;
-
-  constructor(private readonly store: EnvironmentStore) {
-    store.onDidChange(() => this.refresh());
-  }
-
-  /** Coalesce bursts — a single save() fires both store.onDidChange AND the
-   *  .hover/environments.json file watcher, and each rebuild does per-account
-   *  SecretStorage reads. Debounce so they collapse into one rebuild. */
-  refresh(): void {
-    if (this.refreshTimer) clearTimeout(this.refreshTimer);
-    this.refreshTimer = setTimeout(() => {
-      this.refreshTimer = undefined;
-      this.changed.fire();
-    }, 60);
-  }
-
-  getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-    return element;
-  }
-
-  async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
-    if (element instanceof EnvironmentItem) {
-      return Promise.all(
-        element.env.accounts.map(async (a) =>
-          new AccountItem(element.env.id, a, await this.store.hasPassword(element.env.id, a.label)),
-        ),
-      );
-    }
-    if (element) return [];
-
-    if (!vscode.workspace.workspaceFolders?.length) {
-      const note = new vscode.TreeItem('Open a project folder to configure environments.');
-      note.iconPath = new vscode.ThemeIcon('info');
-      return [note];
-    }
-    const envs = await this.store.load();
-    const activeId = this.store.getActiveId();
-    const items: vscode.TreeItem[] = envs.map((e) => new EnvironmentItem(e, e.id === activeId));
-    items.push(
-      new CloudPlaceholderItem(
-        'Verify a domain',
-        'Real DNS-TXT domain ownership verification arrives with Hover Cloud. Until then, add an environment and confirm you own it.',
+/** The roster + active selection + per-account password presence, for the tab. */
+export async function serializeEnvironments(store: EnvironmentStore): Promise<EnvVM[]> {
+  const envs = await store.load();
+  const activeId = store.getActiveId();
+  return Promise.all(
+    envs.map(async (e) => ({
+      id: e.id,
+      name: e.name,
+      url: e.url,
+      verified: e.verified,
+      isLocal: e.id === LOCAL_ENV_ID,
+      active: e.id === activeId,
+      accounts: await Promise.all(
+        e.accounts.map(async (a) => ({
+          label: a.label,
+          email: a.email,
+          hasPassword: await store.hasPassword(e.id, a.label),
+        })),
       ),
-      new CloudPlaceholderItem(
-        'Sign in to Hover Cloud',
-        'Cross-machine sync, team-shared environments, and run dashboards arrive with Hover Cloud.',
-      ),
-    );
-    return items;
-  }
+    })),
+  );
 }
+
+type EnvArg = { envId?: string; label?: string } | undefined;
 
 /**
- * Register the Environments view + all env/account commands + a watcher on the
- * roster file. `onActiveChange` lets the extension refresh the chat header pill
- * and re-probe the target when the active environment changes.
+ * Register every env/account command + a watcher on the roster file. `onChange`
+ * refreshes the Hover panel (and re-probes the target when the active env
+ * changes). Returns disposables.
  */
-export function registerEnvironmentsView(
+export function registerEnvironmentCommands(
   store: EnvironmentStore,
-  onActiveChange: () => void,
+  onChange: () => void,
 ): vscode.Disposable[] {
-  const provider = new EnvironmentsTreeProvider(store);
-  const view = vscode.window.createTreeView('hover.environments', { treeDataProvider: provider });
-
   const disposables: vscode.Disposable[] = [
-    view,
-    vscode.commands.registerCommand('hover.refreshEnvironments', () => provider.refresh()),
+    vscode.commands.registerCommand('hover.refreshEnvironments', () => onChange()),
 
     vscode.commands.registerCommand('hover.env.add', async () => {
       const name = await vscode.window.showInputBox({ title: 'Hover: add environment', prompt: 'Name (e.g. Staging, Prod)' });
@@ -145,42 +83,46 @@ export function registerEnvironmentsView(
       await store.addEnvironment(name, url);
     }),
 
-    vscode.commands.registerCommand('hover.env.editUrl', async (item?: EnvironmentItem) => {
-      if (!(item instanceof EnvironmentItem)) return;
+    vscode.commands.registerCommand('hover.env.editUrl', async (arg?: EnvArg) => {
+      const env = await resolveEnv(store, arg);
+      if (!env) return;
       const url = await vscode.window.showInputBox({
-        title: `Hover: ${item.env.name} URL`,
-        value: item.env.url,
+        title: `Hover: ${env.name} URL`,
+        value: env.url,
         validateInput: (v) => (/^https?:\/\/.+/.test(v) ? null : 'Enter a full http(s) URL'),
       });
       if (url === undefined) return;
-      await store.updateEnvironmentUrl(item.env.id, url);
-      onActiveChange();
+      await store.updateEnvironmentUrl(env.id, url);
+      onChange();
     }),
 
-    vscode.commands.registerCommand('hover.env.remove', async (item?: EnvironmentItem) => {
-      if (!(item instanceof EnvironmentItem) || item.env.id === LOCAL_ENV_ID) return;
+    vscode.commands.registerCommand('hover.env.remove', async (arg?: EnvArg) => {
+      const env = await resolveEnv(store, arg);
+      if (!env || env.id === LOCAL_ENV_ID) return;
       const ok = await vscode.window.showWarningMessage(
-        `Remove environment "${item.env.name}" and its account credentials?`,
+        `Remove environment "${env.name}" and its account credentials?`,
         { modal: true },
         'Remove',
       );
       if (ok !== 'Remove') return;
-      await store.removeEnvironment(item.env.id);
-      onActiveChange();
+      await store.removeEnvironment(env.id);
+      onChange();
     }),
 
-    vscode.commands.registerCommand('hover.env.setActive', async (item?: EnvironmentItem) => {
-      if (!(item instanceof EnvironmentItem)) return;
-      await store.setActiveId(item.env.id);
-      onActiveChange();
+    vscode.commands.registerCommand('hover.env.setActive', async (arg?: EnvArg) => {
+      const env = await resolveEnv(store, arg);
+      if (!env) return;
+      await store.setActiveId(env.id);
+      onChange();
     }),
 
-    vscode.commands.registerCommand('hover.env.exportEnv', async (item?: EnvironmentItem) => {
-      if (!(item instanceof EnvironmentItem)) return;
-      const block = await buildEnvBlock(store, item.env);
+    vscode.commands.registerCommand('hover.env.exportEnv', async (arg?: EnvArg) => {
+      const env = await resolveEnv(store, arg);
+      if (!env) return;
+      const block = await buildEnvBlock(store, env);
       if (!block) {
         void vscode.window.showInformationMessage(
-          `Hover: ${item.env.name} has no accounts with credentials to export. Add an account + password first.`,
+          `Hover: ${env.name} has no accounts with credentials to export. Add an account + password first.`,
         );
         return;
       }
@@ -189,18 +131,18 @@ export function registerEnvironmentsView(
           { label: '$(clipboard) Copy to clipboard', detail: 'For pasting into CI secrets or a shell', action: 'copy' },
           { label: '$(file) Write to .hover/.env', detail: 'Local dotenv — gitignored; plaintext on disk', action: 'write' },
         ],
-        { title: `Hover: export ${item.env.name} env vars` },
+        { title: `Hover: export ${env.name} env vars` },
       );
       if (pick?.action === 'copy') {
         await vscode.env.clipboard.writeText(block + '\n');
-        void vscode.window.showInformationMessage(`Hover: copied ${item.env.name} env vars to the clipboard.`);
+        void vscode.window.showInformationMessage(`Hover: copied ${env.name} env vars to the clipboard.`);
       } else if (pick?.action === 'write') {
         await writeEnvFile(block);
       }
     }),
 
-    vscode.commands.registerCommand('hover.env.addAccount', async (item?: EnvironmentItem) => {
-      const envId = item instanceof EnvironmentItem ? item.env.id : await pickEnvId(store);
+    vscode.commands.registerCommand('hover.env.addAccount', async (arg?: EnvArg) => {
+      const envId = arg?.envId ?? (await pickEnvId(store));
       if (!envId) return;
       const label = await vscode.window.showInputBox({ title: 'Hover: add account', prompt: 'Label the agent / spec references (e.g. paid-user)' });
       if (!label) return;
@@ -209,45 +151,56 @@ export function registerEnvironmentsView(
       const password = await vscode.window.showInputBox({ title: 'Hover: password', prompt: 'Stored in SecretStorage — never written to a spec', password: true });
       if (!password) return;
       await store.addAccount(envId, { label, email }, password);
+      onChange();
     }),
 
-    vscode.commands.registerCommand('hover.env.setPassword', async (item?: AccountItem) => {
-      if (!(item instanceof AccountItem)) return;
+    vscode.commands.registerCommand('hover.env.setPassword', async (arg?: EnvArg) => {
+      if (!arg?.envId || !arg.label) return;
       const password = await vscode.window.showInputBox({
-        title: `Hover: password for "${item.account.label}"`,
+        title: `Hover: password for "${arg.label}"`,
         prompt: 'Stored in SecretStorage — never written to a spec. Blank to cancel.',
         password: true,
       });
       if (!password) return;
-      await store.updatePassword(item.envId, item.account.label, password);
-      void vscode.window.showInformationMessage(`Hover: password set for "${item.account.label}".`);
+      await store.updatePassword(arg.envId, arg.label, password);
+      void vscode.window.showInformationMessage(`Hover: password set for "${arg.label}".`);
+      onChange();
     }),
 
-    vscode.commands.registerCommand('hover.env.removeAccount', async (item?: AccountItem) => {
-      if (!(item instanceof AccountItem)) return;
+    vscode.commands.registerCommand('hover.env.removeAccount', async (arg?: EnvArg) => {
+      if (!arg?.envId || !arg.label) return;
       const ok = await vscode.window.showWarningMessage(
-        `Remove account "${item.account.label}"?`,
+        `Remove account "${arg.label}"?`,
         { modal: true },
         'Remove',
       );
       if (ok !== 'Remove') return;
-      await store.removeAccount(item.envId, item.account.label);
+      await store.removeAccount(arg.envId, arg.label);
+      onChange();
     }),
   ];
 
-  // Keep the tree live when the roster file changes on disk (e.g. git pull).
+  // Keep the panel live when the roster file changes on disk (e.g. git pull).
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (folder) {
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(folder, '.hover/environments.json'),
     );
-    watcher.onDidCreate(() => provider.refresh());
-    watcher.onDidChange(() => provider.refresh());
-    watcher.onDidDelete(() => provider.refresh());
+    watcher.onDidCreate(onChange);
+    watcher.onDidChange(onChange);
+    watcher.onDidDelete(onChange);
     disposables.push(watcher);
   }
 
   return disposables;
+}
+
+/** Resolve an env from a `{envId}` arg, or fall back to a quick-pick. */
+async function resolveEnv(store: EnvironmentStore, arg: EnvArg) {
+  const envs = await store.load();
+  if (arg?.envId) return envs.find((e) => e.id === arg.envId);
+  const id = await pickEnvId(store);
+  return id ? envs.find((e) => e.id === id) : undefined;
 }
 
 async function pickEnvId(store: EnvironmentStore): Promise<string | undefined> {
@@ -261,8 +214,10 @@ async function pickEnvId(store: EnvironmentStore): Promise<string | undefined> {
 
 /** A dotenv block for an environment: BASE_URL + each account's USER/PASS.
  *  Returns null if there's nothing with credentials to export. */
-async function buildEnvBlock(store: EnvironmentStore, env: HoverEnvironment): Promise<string | null> {
-  const entries = await store.accountEnvEntries(env);
+async function buildEnvBlock(store: EnvironmentStore, env: { id: string; name: string; url: string }): Promise<string | null> {
+  const full = (await store.load()).find((e) => e.id === env.id);
+  if (!full) return null;
+  const entries = await store.accountEnvEntries(full);
   if (!entries.length) return null;
   const lines = [
     `# Hover — ${env.name} test credentials. Plaintext secrets: keep gitignored, never commit.`,
