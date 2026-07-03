@@ -3,6 +3,31 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.32.1 — 2026-07-03
+
+- **Fixed:** the heal queue and the Remote (Cloud) dashboard now scope to the current repo, and a project picker appears when your token spans several — instead of pooling every project's queue into one list.
+
+## 0.32.0 — 2026-07-03
+
+**Device-link sign-in for Hover Cloud — approve in the browser, no token to paste.**
+
+- **Hover: Connect Hover Cloud** now opens the Cloud approval page with a short code and shows a cancellable progress toast; on approval the access token is handed back automatically (one-time, 10-minute TTL) and saved to `~/.hover/credentials.json` — so the Hover MCP is signed in too. Falls back to the paste-a-token flow when the browser approval doesn't complete or the cloud lacks the endpoints.
+
+## 0.29.0–0.31.0 — 2026-07-03
+
+**One tabbed Hover panel (mini-cloud).**
+
+- The separate views merged into a single tabbed **Hover** panel, with Cloud sign-in in the panel itself. The **Dashboard** tab reads Cloud CI runs through the shared `DashboardData` contract — the same UI whether the data comes from local `.hover/runs` or from Hover Cloud.
+- Slimmer icon assets + the reticle favicon; the Activity Bar icon aligned to the brand mark.
+
+## 0.25.0–0.28.0 — 2026-07-02
+
+**Self-heal in CI + the Hover Cloud pull channel.**
+
+- **Hover Cloud pull channel.** The extension polls the cloud heal queue (credentials in `~/.hover/credentials.json`, shared with the MCP) and notifies you when a spec drifts in CI. Nothing in the cloud drives your machine — it copies `/mcp__hover__heal <spec>` for your own agent, and the queue entry closes only when CI sees the spec pass again.
+- **Self-heal mode B.** The generated CI can dispatch a drift-heal back to the editor (B1) and, opt-in, open a Claude auto-heal PR (B2).
+- **Strengthened generated CI.** Sharding, scheduled monitoring, concurrency, and a run summary.
+
 ## 0.24.0 — 2026-06-27
 
 **🏥 Self-heal — when a spec breaks because the app changed, repair it in chat instead of by hand.**

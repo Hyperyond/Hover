@@ -6,6 +6,66 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-07-03
+
+**Hover Cloud integration — the editor/MCP side of the cloud ↔ editor loop.**
+
+### Added
+
+- **core:** a Hover Cloud client (`@hover-dev/core/cloud`) — a credentials chain (`HOVER_CLOUD_TOKEN` env → `~/.hover/credentials.json`, `0600`, shared by the extension *and* the MCP), `fetchHealRequests` / `updateHealRequest`, `fetchDashboard` (the shared `DashboardData` contract, so an editor surface reads Cloud runs with the same UI it uses for local `.hover/runs`), and device-link helpers (`startDeviceLink` / `claimDeviceLink`) for browser-approved sign-in.
+- **mcp:** `cloud_failures` tool — pulls the Cloud heal queue so the agent can work a drifted spec from the failure hint Cloud extracted.
+- **ci:** an opt-in Hover Cloud reporter step in the generated workflow — POSTs `hover-results.json` to Cloud with an environment tag, after the specs run. Execution stays entirely in the user's Actions.
+
+### Changed
+
+- **env:** test accounts simplified to label + email + password.
+
+_(Extension device-link sign-in shipped as `hover-dev` 0.32.0 — see the extension changelog.)_
+
+## [0.26.0] — 2026-07-02
+
+**Self-heal in CI + the Hover Cloud pull channel.**
+
+### Added
+
+- **core / mcp / vscode-ext:** the Hover Cloud **pull channel** (#169) — nothing in the cloud can reach an editor, so the extension and MCP poll the cloud heal queue and surface drift; the fix stays the existing local, human-reviewed hand-off. A queue entry closes only when CI sees the spec pass again.
+- **vscode-ext:** **self-heal mode B** (#165) — the generated CI can dispatch a drift-heal back to the editor (B1) and, opt-in, open a Claude auto-heal PR (B2).
+- **vscode-ext:** strengthened the generated CI (#168) — sharding, scheduled monitoring, concurrency, and a run summary.
+- **mcp:** `optimize-all` + one-command promote + `HOVER_LANG` (converse in your language) (#167).
+
+## [0.24.0] — 2026-07-02
+
+**LLM-Wiki — test knowledge that compounds.**
+
+### Added
+
+- **mcp:** the living test wiki — business-map relationships / inter-line edges (P2, #162), a run-history log at `.hover/log.md` (P3, #161), ask-the-wiki via a `/ask` prompt (P4, #163), and a state-aware `test_app` prompt that distinguishes bootstrap vs. extend with `recall_fact` + lint (#160).
+- **vscode-ext:** render the wiki in the Business Map — relationships, lint, and log (#164).
+
+## [0.23.0] — 2026-07-01
+
+### Added
+
+- **mcp:** progressive recall — index-first business memory + `recall_fact` (#159).
+- **mcp:** wiki lint (P1) — a `lint_map` tool + `/lint` prompt (#158).
+- **mcp:** agent-driven optimize (F7) — a `/optimize` prompt + `save_optimized_spec` (#157).
+
+## [0.22.0] — 2026-07-01
+
+### Added
+
+- **core + mcp:** Page Object extraction — detect shared flows across specs → ask → lift into Page Objects and fold the specs onto them (#154).
+
+## [0.21.0] — 2026-07-01
+
+### Added
+
+- **core + mcp:** open-box-run + auth — dogfood-driven crystallization fixes on a real project (#153).
+
+### Docs
+
+- Documented API testing, self-heal, Page Objects, and auth (shipped v0.19–0.22) (#155); SEO blog posts for the same (#156).
+
 ## [0.20.0] — 2026-06-18
 
 ### Added
