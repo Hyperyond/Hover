@@ -173,6 +173,71 @@ export async function fetchDashboard(
   return data.dashboard;
 }
 
+/* ── Device link — browser-approved sign-in ────────────────────────────────
+ * The no-paste connect flow: start() mints a short user code (shown to the
+ * user + baked into a verification URL) and a secret device code; the user
+ * approves in a signed-in browser at /link, which mints a PAT; claim() polls
+ * with the secret until the token arrives. The token is handed over exactly
+ * once, then the link row is gone. */
+
+export interface DeviceLink {
+  userCode: string;
+  deviceCode: string;
+  verificationUrl: string;
+  /** Suggested seconds between claim polls. */
+  interval: number;
+  /** Seconds until the code expires. */
+  expiresIn: number;
+}
+
+export async function startDeviceLink(
+  url: string,
+  name: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DeviceLink> {
+  const res = await fetchImpl(`${url.replace(/\/$/, '')}/api/link/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    throw new CloudApiError(res.status, `/api/link/start → ${res.status}`);
+  }
+  const data = (await res.json()) as {
+    user_code: string;
+    device_code: string;
+    verification_url: string;
+    interval: number;
+    expires_in: number;
+  };
+  return {
+    userCode: data.user_code,
+    deviceCode: data.device_code,
+    verificationUrl: data.verification_url,
+    interval: data.interval,
+    expiresIn: data.expires_in,
+  };
+}
+
+/** One claim poll: the token once approved, null while pending. Throws
+ *  CloudApiError(410) when the code expired — stop polling on that. */
+export async function claimDeviceLink(
+  url: string,
+  deviceCode: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | null> {
+  const res = await fetchImpl(`${url.replace(/\/$/, '')}/api/link/claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_code: deviceCode }),
+  });
+  if (res.status === 202) return null;
+  if (!res.ok) {
+    throw new CloudApiError(res.status, `/api/link/claim → ${res.status}`);
+  }
+  return ((await res.json()) as { token: string }).token;
+}
+
 /** The heal slug for a queued request (`checkout.spec.ts` → `checkout`) — what
  *  `/mcp__hover__heal <slug>` takes. */
 export function healSlug(specFile: string): string {

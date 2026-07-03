@@ -15,11 +15,14 @@
 import * as vscode from 'vscode';
 import { rmSync } from 'node:fs';
 import {
+  CloudApiError,
   DEFAULT_CLOUD_URL,
+  claimDeviceLink,
   credentialsPath,
   fetchHealRequests,
   healSlug,
   readCloudCredentials,
+  startDeviceLink,
   writeCloudCredentials,
   type CloudHealRequest,
 } from '@hover-dev/core/cloud';
@@ -43,10 +46,61 @@ function cloudUrl(): string {
   );
 }
 
-/** Browser-assisted connect: mint a PAT on the cloud settings page, paste it
- *  here; validated against the API before it's persisted for every surface. */
+/** Device-link connect: the browser approves a short code and the token comes
+ *  back over a one-shot claim — nothing to copy. Paste stays as the fallback
+ *  (air-gapped browser, self-hosted cloud without /link, etc.). */
 async function connectCloud(): Promise<void> {
   const url = cloudUrl();
+
+  let link;
+  try {
+    link = await startDeviceLink(url, `vscode · ${vscode.env.machineId.slice(0, 6)}`);
+  } catch {
+    // Older/self-hosted cloud without the device-link endpoints.
+    return connectCloudByPaste(url);
+  }
+
+  await vscode.env.openExternal(vscode.Uri.parse(link.verificationUrl));
+
+  const token = await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Hover Cloud: approve code ${link.userCode} in the browser…`,
+      cancellable: true,
+    },
+    async (_progress, cancel): Promise<string | null> => {
+      const deadline = Date.now() + link.expiresIn * 1000;
+      while (Date.now() < deadline && !cancel.isCancellationRequested) {
+        await new Promise((r) => setTimeout(r, Math.max(2, link.interval) * 1000));
+        try {
+          const t = await claimDeviceLink(url, link.deviceCode);
+          if (t) return t;
+        } catch (e) {
+          if (e instanceof CloudApiError && e.status === 410) return null; // expired
+          // transient — keep polling until the deadline
+        }
+      }
+      return null;
+    },
+  );
+
+  if (!token) {
+    const paste = 'Paste a token instead';
+    const pick = await vscode.window.showWarningMessage(
+      'Hover: the browser approval didn’t complete.',
+      'Try again',
+      paste,
+    );
+    if (pick === 'Try again') return connectCloud();
+    if (pick === paste) return connectCloudByPaste(url);
+    return;
+  }
+
+  await finishConnect(url, token);
+}
+
+/** Fallback connect: mint a PAT on the cloud settings page and paste it. */
+async function connectCloudByPaste(url: string): Promise<void> {
   const open = 'Open Hover Cloud settings';
   const pick = await vscode.window.showInformationMessage(
     'Hover: mint a personal access token at Hover Cloud → Settings → Access tokens, then paste it here.',
@@ -66,7 +120,11 @@ async function connectCloud(): Promise<void> {
     })
   )?.trim();
   if (!token) return;
+  await finishConnect(url, token);
+}
 
+/** Validate against the API, persist for every surface, kick the panel. */
+async function finishConnect(url: string, token: string): Promise<void> {
   try {
     await fetchHealRequests({ token, url }, { status: 'open' });
   } catch (e) {
