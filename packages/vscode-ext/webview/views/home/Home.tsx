@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { post, onMessage } from "../../shared/vscode";
 import { DashboardTab, type DashboardData, type Source } from "../dashboard/Dashboard";
 
@@ -51,8 +51,22 @@ function SignIn() {
 }
 
 // ── Heal tab ─────────────────────────────────────────────────────────────────
-function Chip({ children }: { children: ReactNode }) {
-  return <span className="text-[9.5px] text-muted bg-bg3 border border-line rounded px-1 py-px">{children}</span>;
+const BranchIcon = () => (<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="4" cy="3.5" r="1.6" /><circle cx="4" cy="12.5" r="1.6" /><circle cx="12" cy="5" r="1.6" /><path d="M4 5v6M12 6.6c0 2.4-2 2.9-4 3.4" strokeLinecap="round" /></svg>);
+const EnvIcon = () => (<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8" r="5.5" /><path d="M2.5 8h11M8 2.5c1.8 2 1.8 9 0 11M8 2.5c-1.8 2-1.8 9 0 11" /></svg>);
+
+/** A labelled metadata chip. Env chips are accent-tinted, branch chips neutral,
+ *  each with an icon + explicit tooltip so the two never blur together. */
+function MetaChip({ kind, value }: { kind: "env" | "branch"; value: string }) {
+  const isEnv = kind === "env";
+  return (
+    <span
+      className={"inline-flex items-center gap-1 text-[9.5px] rounded px-1 py-px border " + (isEnv ? "text-accent border-accent/40 bg-accent/10" : "text-muted border-line bg-bg3")}
+      title={isEnv ? `Environment the CI run targeted: ${value}` : `Git branch: ${value}`}
+    >
+      {isEnv ? <EnvIcon /> : <BranchIcon />}
+      {value}
+    </span>
+  );
 }
 function HealTab({ heal }: { heal: HealVM[] }) {
   if (!heal.length) return <div className="text-faint text-center py-[22px] px-2 text-[11.5px] leading-normal">No open heal requests.<br />When a spec drifts in CI, it shows up here to fix locally.</div>;
@@ -66,8 +80,8 @@ function HealTab({ heal }: { heal: HealVM[] }) {
             {h.ciUrl && <button className="flex-none text-faint text-[10px] hover:text-fg cursor-pointer" title="Open the CI run" onClick={() => post({ type: "openUrl", url: h.ciUrl! })}>CI ↗</button>}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
-            {h.environment && <Chip>{h.environment}</Chip>}
-            {h.branch && <Chip>{h.branch}</Chip>}
+            {h.environment && <MetaChip kind="env" value={h.environment} />}
+            {h.branch && <MetaChip kind="branch" value={h.branch} />}
           </div>
           <button className="w-full mt-0.5 p-1.5 rounded-md border border-accent/60 bg-accent/10 text-fg text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:bg-accent/20" onClick={() => post({ type: "copyHeal", slug: h.slug })}>
             Copy heal command
