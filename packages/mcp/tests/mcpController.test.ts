@@ -89,8 +89,17 @@ describe('HoverMcpController', () => {
     const c = new HoverMcpController({ getPage: async () => mockPage(), crystallize: async () => ({ path: 'x' }), recordFact, recall });
 
     expect(await c.recordFact('guests cannot checkout', 'must log in before checkout')).toContain('✓ remembered');
-    expect(recordFact).toHaveBeenCalledWith('guests cannot checkout', 'must log in before checkout', 'business-rule');
+    expect(recordFact).toHaveBeenCalledWith('guests cannot checkout', 'must log in before checkout', 'business-rule', undefined);
     expect(await c.recall()).toContain('guests cannot checkout');
+  });
+
+  it('record_fact threads the optional business line through to the writer', async () => {
+    const recordFact = vi.fn(async () => ({ path: 'x' }));
+    const c = new HoverMcpController({ getPage: async () => mockPage(), crystallize: async () => ({ path: 'x' }), recordFact });
+    expect(
+      await c.recordFact('login needs auth', 'practice redirects anon users to /login', 'access-policy', 'Log in'),
+    ).toContain('(on Log in)');
+    expect(recordFact).toHaveBeenCalledWith('login needs auth', 'practice redirects anon users to /login', 'access-policy', 'Log in');
   });
 
   it('record_fact / recall degrade gracefully when the deps are absent', async () => {
