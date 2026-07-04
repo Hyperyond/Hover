@@ -3,6 +3,19 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.33.0–0.36.0 — 2026-07-04
+
+**The panel is one environment-aware console; sign-in is optional again.**
+
+- **One Hover view.** Dashboard, Environments, and Business Map are now tabs in a single panel — **Overview / Heal / Environments / Map** — under one Activity Bar icon, instead of three separate views.
+- **Local-first, optional sign-in.** The panel works signed out (Overview·Local, Environments, Map); signing in (device-link — approve in the browser) unlocks the Remote source + the Heal queue. Cloud-only chrome hides when signed out.
+- **Guided first run.** A two-step setup wizard — optional sign-in → choose your environment (Use Local / Add an environment / Import from Cloud) — runs before the panel opens, so the active environment is a conscious choice, not a silent default.
+- **Environment scope.** An environment selector filters the Remote spec matrix and the Heal queue; CI runs are per-environment end to end.
+- **Env tab ↔ Cloud.** When a Cloud project is linked, the Env tab mirrors its Cloud-managed environments (name + URL), read-only, above the local roster.
+- **The MCP follows the active environment.** The active env is published to `.hover/active.json`; the Hover MCP targets its URL for test/heal and loads `.hover/.env` for login. An **Agent (MCP) target** card exports the active env's credentials in one click.
+- **Undo on delete.** Removing an environment or account offers **Undo** — restored verbatim with its SecretStorage passwords.
+- **Fixed:** heal cards label environment vs branch (were two bare, ambiguous chips).
+
 ## 0.32.1 — 2026-07-03
 
 - **Fixed:** the heal queue and the Remote (Cloud) dashboard now scope to the current repo, and a project picker appears when your token spans several — instead of pooling every project's queue into one list.

@@ -6,6 +6,13 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-07-04
+
+### Added
+
+- **core/mcp:** environment-aware Cloud client + an active-environment marker. `fetchDashboard` takes an `env` filter and `DashboardData` carries the project's environment list; `fetchProjects` / `CloudProject` expose each project's environments (name+URL) and accounts (label+env) — names/URLs only, never secrets. New `.hover/active.json` marker via the light `@hover-dev/core/activeEnv` subpath: the editor records the active environment, and the MCP reads it so a drive/heal targets that env's URL instead of a fixed `HOVER_TARGET`, plus loads `.hover/.env` for `HOVER_<LABEL>_USER/PASS` login.
+- **vscode-ext (0.33–0.36):** the sidebar is now a single environment-aware panel (Overview / Heal / Environments / Map) with optional (local-first) sign-in, a two-step first-run setup wizard, per-environment scope for the Remote view + heal queue, a read-only mirror of Cloud-managed environments, MCP-targets-the-active-env wiring, and Undo on environment/account delete. See `packages/vscode-ext/CHANGELOG.md`.
+
 ## [0.31.0] — 2026-07-04
 
 ### Added
