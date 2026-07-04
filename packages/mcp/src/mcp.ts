@@ -17,10 +17,13 @@ import {
   promoteOptimizedCandidate,
   lintWiki,
   appendWikiLog,
+  readActiveEnv,
   type SkillStep,
   type ApiCheck,
   type Redaction,
 } from '@hover-dev/core/engine';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fetchHealRequests, readCloudCredentials } from '@hover-dev/core/cloud';
 import { HoverMcpController } from './mcp/controller.js';
 import { createHoverMcpServer } from './mcp/server.js';
@@ -36,11 +39,33 @@ import { createHoverMcpServer } from './mcp/server.js';
  * NOTE: stdio is the MCP transport — never write to stdout from this process.
  */
 
-const TARGET = process.env.HOVER_TARGET || 'http://localhost:5173';
 const PORT = Number(process.env.HOVER_CDP_PORT || 9222);
 const LANG = process.env.HOVER_LANG;
 const DEV_ROOT = process.env.HOVER_PROJECT_ROOT || process.cwd();
 const CDP_URL = `http://localhost:${PORT}`;
+
+// Load `.hover/.env` (the extension's "export env vars" output) into process.env
+// so a drive/heal can log in with HOVER_<LABEL>_USER/PASS. Never overrides an
+// already-set var; missing file is fine. Plaintext + gitignored, local only.
+function loadHoverDotenv(devRoot: string): void {
+  const p = join(devRoot, '.hover', '.env');
+  if (!existsSync(p)) return;
+  try {
+    for (const line of readFileSync(p, 'utf8').split('\n')) {
+      const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line.trim());
+      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+    }
+  } catch {
+    /* unreadable — skip */
+  }
+}
+loadHoverDotenv(DEV_ROOT);
+
+// Target precedence: explicit HOVER_TARGET wins (CI, autoheal); otherwise follow
+// the environment the user activated in the editor (.hover/active.json); else a
+// sensible localhost default.
+const TARGET =
+  process.env.HOVER_TARGET || readActiveEnv(DEV_ROOT)?.url || 'http://localhost:5173';
 
 const originOf = (u: string): string | null => {
   try {

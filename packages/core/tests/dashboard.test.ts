@@ -222,11 +222,19 @@ describe('fetchDashboard', () => {
     const data = await fetchDashboard(
       { token: 'hover_pat_x', url: 'https://cloud.example.com' },
       'o/r',
+      {},
       fetchImpl,
     );
     expect(data).toEqual(dashboard);
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe('https://cloud.example.com/api/v1/dashboard?repo=o%2Fr');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer hover_pat_x');
+  });
+
+  it('passes the env filter through as a query param', async () => {
+    const dashboard = { hasRuns: false, tiles: { specs: 0, passRate: null, flaky: 0, tokens7d: null }, runs: [], rows: [] };
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ dashboard }), { status: 200 }));
+    await fetchDashboard({ token: 't', url: 'https://c.example.com' }, 'o/r', { env: 'staging' }, fetchImpl);
+    expect(fetchImpl.mock.calls[0]![0]).toBe('https://c.example.com/api/v1/dashboard?repo=o%2Fr&env=staging');
   });
 });

@@ -162,6 +162,12 @@ export interface CloudProject {
   /** GitHub `owner/name` — what `repo=` filters on across the API. */
   repo: string;
   org: string;
+  /** Environments Cloud manages for this project (name + base URL). Empty when
+   *  the project has none beyond the in-CI localhost default. */
+  environments?: { name: string; url: string }[];
+  /** Test accounts configured through Cloud (label + which env). Metadata only —
+   *  passwords live exclusively in GitHub Actions secrets, never returned. */
+  accounts?: { label: string; environment: string }[];
 }
 
 /** Every project the token's user can see (across their org memberships). */
@@ -185,12 +191,14 @@ export async function fetchProjects(
 export async function fetchDashboard(
   creds: CloudCredentials,
   repo: string,
+  opts: { env?: string } = {},
   fetchImpl: typeof fetch = fetch,
 ): Promise<DashboardData> {
-  const qs = `?${new URLSearchParams({ repo })}`;
+  const params = new URLSearchParams({ repo });
+  if (opts.env) params.set('env', opts.env);
   const data = await cloudJson<{ dashboard: DashboardData }>(
     creds,
-    `/api/v1/dashboard${qs}`,
+    `/api/v1/dashboard?${params}`,
     {},
     fetchImpl,
   );

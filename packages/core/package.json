@@ -42,6 +42,10 @@
     "./dashboard": {
       "types": "./dist/dashboard.d.ts",
       "import": "./dist/dashboard.js"
+    },
+    "./activeEnv": {
+      "types": "./dist/activeEnv.d.ts",
+      "import": "./dist/activeEnv.js"
     }
   },
   "files": [

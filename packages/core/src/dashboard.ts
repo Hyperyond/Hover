@@ -57,6 +57,9 @@ export interface DashboardData {
   };
   runs: DashboardRun[];
   rows: SpecRow[];
+  /** Distinct environments the project has runs for (cloud source only) — the
+   *  Remote view's environment filter. Omitted/undefined for the local source. */
+  environments?: string[];
 }
 
 /** One run as a computable unit: its column header + per-spec statuses. The

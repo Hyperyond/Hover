@@ -28,6 +28,9 @@ export type { OptimizeResult } from './specs/optimizeSpec.js';
 // LLM-Wiki P3 log — append-only, machine-parseable run history at .hover/log.md.
 export { appendWikiLog, readWikiLog, wikiLogPath } from './specs/wikiLog.js';
 export type { WikiLogKind, WikiLogEntry } from './specs/wikiLog.js';
+// Active-environment marker (.hover/active.json) — the extension writes which
+// env is active; the MCP reads it so a drive/heal targets that env's URL.
+export { readActiveEnv, writeActiveEnv, activeEnvPath, type ActiveEnv } from './activeEnv.js';
 // LLM-Wiki P1 Lint — deterministic health check over .hover/ (map vs specs vs runs).
 export { lintWiki, parseRunStatuses } from './specs/lintWiki.js';
 export type { LintResult, LintFinding, LintKind, LintSeverity } from './specs/lintWiki.js';
