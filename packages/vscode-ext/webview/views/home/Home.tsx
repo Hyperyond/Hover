@@ -30,6 +30,7 @@ interface Payload {
   cloudEnvironments?: CloudEnv[];
   cloudAccounts?: CloudAccount[];
   envFileExists?: boolean;
+  needsEnvSetup?: boolean;
 }
 
 const Cloud = ({ cls = "" }: { cls?: string }) => (<svg className={cls} width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M4.5 12a2.8 2.8 0 0 1-.3-5.6A3.5 3.5 0 0 1 11 5.6a2.6 2.6 0 0 1 .4 6.4z" strokeLinejoin="round" /></svg>);
@@ -42,6 +43,48 @@ function SignInBanner() {
       <span className="text-accent flex-none"><Cloud /></span>
       <span className="flex-1 min-w-0 text-[11px] text-muted leading-snug">Sign in to unlock Cloud CI runs &amp; the heal queue.</span>
       <button className="flex-none px-2 py-1 rounded-md bg-accent text-[#0c2417] text-[11px] font-semibold cursor-pointer hover:brightness-110" onClick={() => post({ type: "connectCloud" })}>Sign in</button>
+    </div>
+  );
+}
+
+// ── Setup flow (locked until an environment is chosen) ───────────────────────
+// The active environment drives everything (run target + the MCP's test/heal
+// URL & account), so we make choosing it a required first step rather than a
+// silent default. Local-first: "Use Local" is a valid completion.
+function SetupChoice({ title, sub, onClick, primary }: { title: string; sub: string; onClick: () => void; primary?: boolean }) {
+  return (
+    <button
+      className={"w-full text-left rounded-lg border px-3 py-2.5 cursor-pointer transition-colors " + (primary ? "border-accent/60 bg-accent/10 hover:bg-accent/20" : "border-line bg-bg2 hover:bg-bg3")}
+      onClick={onClick}
+    >
+      <div className="text-[12.5px] font-medium text-fg">{title}</div>
+      <div className="text-[10.5px] text-faint mt-0.5 leading-snug">{sub}</div>
+    </button>
+  );
+}
+function SetupScreen({ p }: { p: Payload }) {
+  const connected = p.cloud.connected;
+  const cloudEnvs = p.cloudEnvironments ?? [];
+  return (
+    <div className="p-4 text-[12px] text-fg flex flex-col gap-3">
+      <div className="flex flex-col items-center text-center gap-1.5 mt-2">
+        <span className="text-accent"><EnvIcon /></span>
+        <div className="text-[14px] font-semibold">Set your test environment</div>
+        <div className="text-faint text-[11px] leading-normal">Hover runs &amp; heals against this — pick where your app lives. You can change it anytime.</div>
+      </div>
+      <div className="flex flex-col gap-2 mt-1">
+        <SetupChoice primary title="Use Local (localhost)" sub="Test the dev server on your machine." onClick={() => post({ type: "useLocalEnv" })} />
+        <SetupChoice title="Add an environment" sub="A deployed URL — staging, prod, a preview." onClick={() => post({ type: "envAdd" })} />
+        {connected && cloudEnvs.length > 0 && (
+          <SetupChoice title={`Import ${cloudEnvs.length} from Hover Cloud`} sub={cloudEnvs.map((e) => e.name).join(", ")} onClick={() => post({ type: "importCloudEnvs" })} />
+        )}
+      </div>
+      {!connected && (
+        <div className="text-center text-[10.5px] text-faint mt-1">
+          Have staging / prod in Hover Cloud?{" "}
+          <button className="text-accent hover:underline cursor-pointer" onClick={() => post({ type: "connectCloud" })}>Sign in</button> to import them.
+        </div>
+      )}
     </div>
   );
 }
@@ -242,6 +285,8 @@ export function Home() {
   }, []);
 
   if (!p) return <div className="p-4 text-faint text-center text-[12px]">Loading…</div>;
+  // Locked first-run flow: choose an environment before the panel opens.
+  if (p.needsEnvSetup) return <SetupScreen p={p} />;
 
   const connected = p.cloud.connected;
   const cloudUrl = p.cloud.connected ? p.cloud.url : "";

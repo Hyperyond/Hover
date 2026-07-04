@@ -50,6 +50,9 @@ const SOURCE_KEY = 'hover.dashboardSource';
 const REPO_KEY = 'hover.repoOverride';
 // The environment the Remote view + Heal queue are scoped to ('' / unset = all).
 const ENV_KEY = 'hover.remoteEnv';
+// Set once the user has consciously chosen/created a test environment, so the
+// first-run setup prompt stops showing.
+const SETUP_KEY = 'hover.envConfirmed';
 const CLOUD_TIMEOUT_MS = 8_000;
 
 interface HealVM {
@@ -84,6 +87,8 @@ interface HomePayload {
   /** Whether `.hover/.env` exists — i.e. the active env's creds are exported so
    *  the MCP can log in during test/heal. Drives the Env tab's MCP-ready hint. */
   envFileExists: boolean;
+  /** First run: no custom environment yet + not dismissed → show the setup prompt. */
+  needsEnvSetup: boolean;
 }
 
 // Cache the heal queue like the remote dashboard — bounded + TTL'd, keyed by
@@ -186,6 +191,9 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
     const folder = vscode.workspace.workspaceFolders?.[0];
     return !!folder && existsSync(join(folder.uri.fsPath, '.hover', '.env'));
   }
+  private confirmSetup(): Thenable<void> {
+    return this.context.workspaceState.update(SETUP_KEY, true);
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
@@ -250,6 +258,10 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       cloudEnvironments: project?.environments ?? [],
       cloudAccounts: project?.accounts ?? [],
       envFileExists: this.envFileExists(),
+      // Nudge only until they act: no custom env yet AND not confirmed/dismissed.
+      needsEnvSetup:
+        !this.context.workspaceState.get<boolean>(SETUP_KEY) &&
+        environments.filter((e) => !e.isLocal).length === 0,
     };
     void this.view.webview.postMessage(payload);
   }
@@ -322,7 +334,19 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
         if (typeof msg.slug === 'string') void copyCmd(`/mcp__hover__heal ${msg.slug}`, 'heal this spec');
         return;
       case 'envAdd':
+        // Adding a real env clears the setup lock on its own (a custom env now
+        // exists), so canceling the dialog keeps the user on the setup flow.
         void vscode.commands.executeCommand('hover.env.add');
+        return;
+      case 'useLocalEnv':
+        // "I'm testing localhost" is a valid, conscious choice — record it so
+        // the setup flow completes without forcing a remote env.
+        void this.confirmSetup().then(() =>
+          vscode.commands.executeCommand('hover.env.setActive', { envId: 'local' }),
+        );
+        return;
+      case 'importCloudEnvs':
+        void this.importCloudEnvs();
         return;
       case 'envSyncMcp':
         void vscode.commands.executeCommand('hover.env.syncMcp');
@@ -349,6 +373,32 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
         void vscode.commands.executeCommand('hover.env.removeAccount', { envId, label });
         return;
     }
+  }
+
+  /** First-run convenience: pull the linked Cloud project's environments into
+   *  the local roster (name+URL) so the user can activate one + add creds.
+   *  Passwords aren't imported (GitHub secrets are write-only). */
+  private async importCloudEnvs(): Promise<void> {
+    const repo = await resolveRepo(this.context);
+    const project = await gatherCloudProject(repo, true);
+    const envs = project?.environments ?? [];
+    if (!envs.length) {
+      void vscode.window.showInformationMessage('Hover: no Cloud environments to import for this project.');
+      return;
+    }
+    for (const e of envs) await this.store.addEnvironment(e.name, e.url);
+    await this.store.setActiveId(await this.firstImportedId(envs[0].name));
+    await this.confirmSetup();
+    void vscode.window.showInformationMessage(
+      `Hover: imported ${envs.length} environment${envs.length > 1 ? 's' : ''} from Cloud. Add a password to each account so the agent can log in.`,
+    );
+    this.refresh();
+  }
+
+  /** Resolve the store id an imported env got (addEnvironment slugifies the name). */
+  private async firstImportedId(name: string): Promise<string> {
+    const all = await this.store.load();
+    return all.find((e) => e.name === name)?.id ?? 'local';
   }
 
   /** Manual project selection — for when git-remote auto-detection misses (a
