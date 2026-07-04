@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-07-04
+
+### Added
+
+- **core:** `ensureKnowledgeTracked(devRoot)` — keeps the repo's `.gitignore` set up to COMMIT the knowledge base (`.hover/hover-map.md`, `.hover/memory/`, `.hover/log.md`) while ignoring working files (sidecars, runs, cache, `.env`). It rewrites a bare `.hover` blanket-ignore into the `.hover/*` + `!` exceptions form git actually honors (a bare `.hover` makes git skip the dir, so subdir re-includes and a nested `.hover/.gitignore` don't work). Called best-effort whenever Hover writes memory (`writeFact`) or the run log (`appendWikiLog`) — idempotent via a sentinel, never throws, opt out with `HOVER_NO_GITIGNORE=1`. Makes Hover Cloud's business-rules-on-the-map + knowledge timeline work for a fresh repo without hand-editing `.gitignore`.
+
 ## [0.30.0] — 2026-07-04
 
 ### Added
