@@ -105,8 +105,21 @@ export function registerEnvironmentCommands(
         'Remove',
       );
       if (ok !== 'Remove') return;
+      // Snapshot env + passwords BEFORE deleting, so Undo can fully restore.
+      const passwords: Record<string, string> = {};
+      for (const a of env.accounts) {
+        const pw = await store.getPassword(env.id, a.label);
+        if (pw) passwords[a.label] = pw;
+      }
+      const wasActive = store.getActiveId() === env.id;
       await store.removeEnvironment(env.id);
       onChange();
+      const undo = await vscode.window.showInformationMessage(`Hover: removed "${env.name}".`, 'Undo');
+      if (undo === 'Undo') {
+        await store.restoreEnvironment(env, passwords);
+        if (wasActive) await store.setActiveId(env.id);
+        onChange();
+      }
     }),
 
     vscode.commands.registerCommand('hover.env.setActive', async (arg?: EnvArg) => {
@@ -193,8 +206,18 @@ export function registerEnvironmentCommands(
         'Remove',
       );
       if (ok !== 'Remove') return;
+      // Snapshot account + password so Undo can restore both.
+      const env = (await store.load()).find((e) => e.id === arg.envId);
+      const account = env?.accounts.find((a) => a.label === arg.label);
+      const password = await store.getPassword(arg.envId, arg.label);
       await store.removeAccount(arg.envId, arg.label);
       onChange();
+      if (!account) return;
+      const undo = await vscode.window.showInformationMessage(`Hover: removed account "${arg.label}".`, 'Undo');
+      if (undo === 'Undo') {
+        await store.restoreAccount(arg.envId, account, password);
+        onChange();
+      }
     }),
   ];
 

@@ -152,6 +152,25 @@ export class EnvironmentStore {
     if (this.getActiveId() === id) await this.setActiveId(LOCAL_ENV_ID);
   }
 
+  /** Restore a removed environment verbatim (preserving its id) + its account
+   *  passwords — powers the "Undo" after an accidental delete. */
+  async restoreEnvironment(env: HoverEnvironment, passwords: Record<string, string>): Promise<void> {
+    const envs = await this.load();
+    if (!envs.some((e) => e.id === env.id)) envs.push(env);
+    await this.save(envs);
+    for (const [label, pw] of Object.entries(passwords)) await this.setPassword(env.id, label, pw);
+  }
+
+  /** Restore a removed account (+ its password) into an env — the account "Undo". */
+  async restoreAccount(envId: string, account: HoverAccount, password?: string): Promise<void> {
+    const envs = await this.load();
+    const env = envs.find((e) => e.id === envId);
+    if (!env) return;
+    if (!env.accounts.some((a) => a.label === account.label)) env.accounts.push(account);
+    await this.save(envs);
+    if (password) await this.setPassword(envId, account.label, password);
+  }
+
   async addAccount(envId: string, account: HoverAccount, password?: string): Promise<void> {
     const envs = await this.load();
     const env = envs.find((e) => e.id === envId);

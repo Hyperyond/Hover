@@ -62,28 +62,56 @@ function SetupChoice({ title, sub, onClick, primary }: { title: string; sub: str
     </button>
   );
 }
+function StepDots({ step }: { step: 1 | 2 }) {
+  return (
+    <div className="flex items-center justify-center gap-1.5 mb-1">
+      {[1, 2].map((n) => (
+        <span key={n} className={"h-1.5 rounded-full transition-all " + (n === step ? "w-4 bg-accent" : "w-1.5 bg-line")} />
+      ))}
+    </div>
+  );
+}
 function SetupScreen({ p }: { p: Payload }) {
   const connected = p.cloud.connected;
   const cloudEnvs = p.cloudEnvironments ?? [];
+  // Two-step flow: 1) optional sign-in, 2) choose environment. Signing in flips
+  // `connected` on the next payload → auto-advance to step 2.
+  const [step, setStep] = useState<1 | 2>(connected ? 2 : 1);
+  useEffect(() => { if (connected) setStep(2); }, [connected]);
+
   return (
     <div className="p-4 text-[12px] text-fg flex flex-col gap-3">
-      <div className="flex flex-col items-center text-center gap-1.5 mt-2">
-        <span className="text-accent"><EnvIcon /></span>
-        <div className="text-[14px] font-semibold">Set your test environment</div>
-        <div className="text-faint text-[11px] leading-normal">Hover runs &amp; heals against this — pick where your app lives. You can change it anytime.</div>
-      </div>
-      <div className="flex flex-col gap-2 mt-1">
-        <SetupChoice primary title="Use Local (localhost)" sub="Test the dev server on your machine." onClick={() => post({ type: "useLocalEnv" })} />
-        <SetupChoice title="Add an environment" sub="A deployed URL — staging, prod, a preview." onClick={() => post({ type: "envAdd" })} />
-        {connected && cloudEnvs.length > 0 && (
-          <SetupChoice title={`Import ${cloudEnvs.length} from Hover Cloud`} sub={cloudEnvs.map((e) => e.name).join(", ")} onClick={() => post({ type: "importCloudEnvs" })} />
-        )}
-      </div>
-      {!connected && (
-        <div className="text-center text-[10.5px] text-faint mt-1">
-          Have staging / prod in Hover Cloud?{" "}
-          <button className="text-accent hover:underline cursor-pointer" onClick={() => post({ type: "connectCloud" })}>Sign in</button> to import them.
-        </div>
+      <StepDots step={step} />
+      {step === 1 ? (
+        <>
+          <div className="flex flex-col items-center text-center gap-1.5">
+            <span className="text-accent"><Cloud /></span>
+            <div className="text-[14px] font-semibold">Sign in to Hover Cloud</div>
+            <div className="text-faint text-[11px] leading-normal">Optional. Unlocks CI run history, the heal queue, and importing your staging / prod environments. Hover works locally without it.</div>
+          </div>
+          <div className="flex flex-col gap-2 mt-1">
+            <SetupChoice primary title="Sign in to Hover Cloud" sub="Approve in the browser — no token to paste." onClick={() => post({ type: "connectCloud" })} />
+            <SetupChoice title="Skip — use Hover locally" sub="Continue without an account. You can sign in later." onClick={() => setStep(2)} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-col items-center text-center gap-1.5">
+            <span className="text-accent"><EnvIcon /></span>
+            <div className="text-[14px] font-semibold">Set your test environment</div>
+            <div className="text-faint text-[11px] leading-normal">Hover runs &amp; heals against this — pick where your app lives. Change it anytime.</div>
+          </div>
+          <div className="flex flex-col gap-2 mt-1">
+            <SetupChoice primary title="Use Local (localhost)" sub="Test the dev server on your machine." onClick={() => post({ type: "useLocalEnv" })} />
+            <SetupChoice title="Add an environment" sub="A deployed URL — staging, prod, a preview." onClick={() => post({ type: "envAdd" })} />
+            {connected && cloudEnvs.length > 0 && (
+              <SetupChoice title={`Import ${cloudEnvs.length} from Hover Cloud`} sub={cloudEnvs.map((e) => e.name).join(", ")} onClick={() => post({ type: "importCloudEnvs" })} />
+            )}
+          </div>
+          {!connected && (
+            <button className="text-faint text-[10.5px] hover:text-fg cursor-pointer mt-0.5" onClick={() => setStep(1)}>← Back to sign-in</button>
+          )}
+        </>
       )}
     </div>
   );
