@@ -29,6 +29,7 @@ interface Payload {
   remoteEnvironments?: string[];
   cloudEnvironments?: CloudEnv[];
   cloudAccounts?: CloudAccount[];
+  envFileExists?: boolean;
 }
 
 const Cloud = ({ cls = "" }: { cls?: string }) => (<svg className={cls} width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M4.5 12a2.8 2.8 0 0 1-.3-5.6A3.5 3.5 0 0 1 11 5.6a2.6 2.6 0 0 1 .4 6.4z" strokeLinejoin="round" /></svg>);
@@ -117,10 +118,45 @@ function CloudEnvGroup({ cloudEnvs, cloudAccounts }: { cloudEnvs: CloudEnv[]; cl
   );
 }
 
-function EnvTab({ envs, cloudEnvs, cloudAccounts }: { envs: EnvVM[]; cloudEnvs: CloudEnv[]; cloudAccounts: CloudAccount[] }) {
+/** Guidance for the D-flow: the active environment is what the MCP (your agent)
+ *  targets for test/heal — its URL rides in .hover/active.json; this exports its
+ *  credentials to .hover/.env so the agent can log in. One button to wire it up. */
+function McpTargetCard({ active, envFileExists }: { active?: EnvVM; envFileExists: boolean }) {
+  const hasAccounts = !!active?.accounts.length;
+  return (
+    <div className="rounded-lg border border-line bg-bg2 px-2.5 py-2 text-[11px]">
+      <div className="text-[10px] uppercase tracking-wider text-faint font-semibold mb-1">Agent (MCP) target</div>
+      <div className="text-muted leading-snug">
+        Your agent tests &amp; heals against{" "}
+        <span className="text-fg font-medium">{active?.name ?? "Local"}</span>
+        {active ? <span className="text-faint"> · {hostOf(active.url)}</span> : null}
+      </div>
+      <div className="mt-1 text-[10.5px]">
+        <span className={envFileExists ? "text-pass" : "text-flaky"}>
+          {envFileExists ? "✓ credentials exported for login" : "⚠ credentials not exported"}
+        </span>
+      </div>
+      {hasAccounts ? (
+        <button
+          className="w-full mt-1.5 p-1.5 rounded-md border border-accent/60 bg-accent/10 text-fg cursor-pointer hover:bg-accent/20"
+          title="Write this environment's HOVER_<LABEL>_USER/PASS to .hover/.env so the MCP can log in during test/heal"
+          onClick={() => post({ type: "envSyncMcp" })}
+        >
+          {envFileExists ? "Re-export credentials for MCP" : "Export credentials for MCP"}
+        </button>
+      ) : (
+        <div className="text-faint mt-1 text-[10px] leading-snug">Add an account with a password below so the agent can log in.</div>
+      )}
+    </div>
+  );
+}
+
+function EnvTab({ envs, cloudEnvs, cloudAccounts, envFileExists }: { envs: EnvVM[]; cloudEnvs: CloudEnv[]; cloudAccounts: CloudAccount[]; envFileExists: boolean }) {
   const host = hostOf;
+  const active = envs.find((e) => e.active);
   return (
     <div className="flex flex-col gap-2">
+      <McpTargetCard active={active} envFileExists={envFileExists} />
       <CloudEnvGroup cloudEnvs={cloudEnvs} cloudAccounts={cloudAccounts} />
       {cloudEnvs.length > 0 && <div className="text-[10px] uppercase tracking-wider text-faint font-semibold px-1">Local</div>}
       <button className="w-full p-1.5 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3" onClick={() => post({ type: "envAdd" })}>+ Add environment</button>
@@ -274,7 +310,7 @@ export function Home() {
 
       {activeTab === "overview" && p.dashboard && <DashboardTab data={p.dashboard} source={p.source ?? "local"} remoteAvailable={!!p.remoteAvailable} connected={connected} />}
       {activeTab === "heal" && <HealTab heal={p.heal ?? []} />}
-      {activeTab === "env" && <EnvTab envs={p.environments ?? []} cloudEnvs={p.cloudEnvironments ?? []} cloudAccounts={p.cloudAccounts ?? []} />}
+      {activeTab === "env" && <EnvTab envs={p.environments ?? []} cloudEnvs={p.cloudEnvironments ?? []} cloudAccounts={p.cloudAccounts ?? []} envFileExists={!!p.envFileExists} />}
       {activeTab === "map" && <MapTab map={p.map ?? { exists: false }} />}
 
       {/* Shared footer */}

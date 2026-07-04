@@ -141,6 +141,24 @@ export function registerEnvironmentCommands(
       }
     }),
 
+    // One-click "prepare the active env for the MCP": write its creds to
+    // `.hover/.env` (the file the MCP loads for HOVER_<LABEL>_USER/PASS). The
+    // env's URL already flows via `.hover/active.json` (kept in sync by onChange).
+    vscode.commands.registerCommand('hover.env.syncMcp', async () => {
+      const envs = await store.load();
+      const active = envs.find((e) => e.id === store.getActiveId()) ?? envs[0];
+      if (!active) return;
+      const block = await buildEnvBlock(store, active);
+      if (!block) {
+        void vscode.window.showInformationMessage(
+          `Hover: "${active.name}" has no account credentials to export. Add an account + password first, then sync for MCP.`,
+        );
+        return;
+      }
+      await writeEnvFile(block);
+      onChange(); // re-publish active.json + refresh the panel's MCP-ready hint
+    }),
+
     vscode.commands.registerCommand('hover.env.addAccount', async (arg?: EnvArg) => {
       const envId = arg?.envId ?? (await pickEnvId(store));
       if (!envId) return;

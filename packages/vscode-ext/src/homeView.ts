@@ -18,6 +18,8 @@
  * just orchestrates + debounces refreshes.
  */
 import * as vscode from 'vscode';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   DEFAULT_CLOUD_URL,
   fetchHealRequests,
@@ -79,6 +81,9 @@ interface HomePayload {
   cloudEnvironments: { name: string; url: string }[];
   /** Test accounts Cloud tracks (label + which env); no secrets. */
   cloudAccounts: { label: string; environment: string }[];
+  /** Whether `.hover/.env` exists — i.e. the active env's creds are exported so
+   *  the MCP can log in during test/heal. Drives the Env tab's MCP-ready hint. */
+  envFileExists: boolean;
 }
 
 // Cache the heal queue like the remote dashboard — bounded + TTL'd, keyed by
@@ -176,6 +181,11 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
   private get selectedEnv(): string | undefined {
     return this.context.workspaceState.get<string>(ENV_KEY) || undefined;
   }
+  /** Whether `.hover/.env` (the exported creds the MCP loads) exists. */
+  private envFileExists(): boolean {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    return !!folder && existsSync(join(folder.uri.fsPath, '.hover', '.env'));
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
@@ -239,6 +249,7 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       remoteEnvironments: remote?.environments ?? [],
       cloudEnvironments: project?.environments ?? [],
       cloudAccounts: project?.accounts ?? [],
+      envFileExists: this.envFileExists(),
     };
     void this.view.webview.postMessage(payload);
   }
@@ -312,6 +323,9 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
         return;
       case 'envAdd':
         void vscode.commands.executeCommand('hover.env.add');
+        return;
+      case 'envSyncMcp':
+        void vscode.commands.executeCommand('hover.env.syncMcp');
         return;
       case 'envSetActive':
         void vscode.commands.executeCommand('hover.env.setActive', { envId });
