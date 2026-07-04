@@ -14,6 +14,8 @@ interface EnvAccountVM { label: string; email?: string; hasPassword: boolean }
 interface EnvVM { id: string; name: string; url: string; verified?: boolean; isLocal: boolean; active: boolean; accounts: EnvAccountVM[] }
 interface HealVM { id: string; specFile: string; slug: string; status: string; branch: string | null; environment: string | null; ciUrl: string | null }
 interface MapSummary { exists: boolean; app?: string; stats?: { lines: number; covered: number; areas: number } }
+interface CloudEnv { name: string; url: string }
+interface CloudAccount { label: string; environment: string }
 interface Payload {
   cloud: CloudState;
   repo?: string | null;
@@ -23,6 +25,10 @@ interface Payload {
   environments?: EnvVM[];
   map?: MapSummary;
   heal?: HealVM[];
+  env?: string | null;
+  remoteEnvironments?: string[];
+  cloudEnvironments?: CloudEnv[];
+  cloudAccounts?: CloudAccount[];
 }
 
 const Cloud = ({ cls = "" }: { cls?: string }) => (<svg className={cls} width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M4.5 12a2.8 2.8 0 0 1-.3-5.6A3.5 3.5 0 0 1 11 5.6a2.6 2.6 0 0 1 .4 6.4z" strokeLinejoin="round" /></svg>);
@@ -82,10 +88,41 @@ function HealTab({ heal }: { heal: HealVM[] }) {
 }
 
 // ── Environments tab ──────────────────────────────────────────────────────────
-function EnvTab({ envs }: { envs: EnvVM[] }) {
-  const host = (u: string) => u.replace(/^https?:\/\//, "").replace(/\/$/, "");
+const hostOf = (u: string) => u.replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+/** Read-only mirror of the environments Hover Cloud manages for this project
+ *  (URLs from the project's CI config / GitHub Environments). Editing happens in
+ *  Cloud; the local roster below is for local dev + credentials. */
+function CloudEnvGroup({ cloudEnvs, cloudAccounts }: { cloudEnvs: CloudEnv[]; cloudAccounts: CloudAccount[] }) {
+  if (!cloudEnvs.length) return null;
+  return (
+    <div className="rounded-lg border border-accent/30 bg-accent/5 px-2.5 py-2">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-accent font-semibold mb-1.5">
+        <Cloud /> Cloud environments
+      </div>
+      {cloudEnvs.map((e) => {
+        const accts = cloudAccounts.filter((a) => a.environment === e.name);
+        return (
+          <div key={e.name} className="py-1 border-t border-line first:border-t-0">
+            <div className="text-[12px] font-medium">{e.name}</div>
+            <div className="text-faint text-[10.5px] truncate">{hostOf(e.url)}</div>
+            {accts.length > 0 && (
+              <div className="text-muted text-[10px] mt-0.5">accounts: {accts.map((a) => a.label).join(", ")}</div>
+            )}
+          </div>
+        );
+      })}
+      <div className="text-faint text-[9.5px] mt-1.5 leading-snug">Managed in Hover Cloud. Set passwords locally below for MCP test/heal.</div>
+    </div>
+  );
+}
+
+function EnvTab({ envs, cloudEnvs, cloudAccounts }: { envs: EnvVM[]; cloudEnvs: CloudEnv[]; cloudAccounts: CloudAccount[] }) {
+  const host = hostOf;
   return (
     <div className="flex flex-col gap-2">
+      <CloudEnvGroup cloudEnvs={cloudEnvs} cloudAccounts={cloudAccounts} />
+      {cloudEnvs.length > 0 && <div className="text-[10px] uppercase tracking-wider text-faint font-semibold px-1">Local</div>}
       <button className="w-full p-1.5 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3" onClick={() => post({ type: "envAdd" })}>+ Add environment</button>
       {envs.map((e) => (
         <div key={e.id} className="rounded-lg border border-line bg-bg2 px-2.5 py-2">
@@ -201,6 +238,21 @@ export function Home() {
               ⚠ No Cloud project linked — select one
             </button>
           )}
+          {/* Environment scope — filters Remote runs + the Heal queue */}
+          {(p.remoteEnvironments?.length ?? 0) > 0 && (
+            <div className="w-full mb-2.5 px-1 flex items-center gap-1.5 text-[10.5px] text-faint">
+              <EnvIcon />
+              <span className="flex-none">Environment</span>
+              <select
+                className="flex-1 min-w-0 bg-bg3 border border-line rounded px-1 py-0.5 text-[10.5px] text-fg cursor-pointer focus:outline-none focus:border-focus"
+                value={p.env ?? ""}
+                onChange={(e) => post({ type: "setEnv", env: e.target.value })}
+              >
+                <option value="">All environments</option>
+                {p.remoteEnvironments!.map((e) => (<option key={e} value={e}>{e}</option>))}
+              </select>
+            </div>
+          )}
         </>
       ) : (
         <SignInBanner />
@@ -222,7 +274,7 @@ export function Home() {
 
       {activeTab === "overview" && p.dashboard && <DashboardTab data={p.dashboard} source={p.source ?? "local"} remoteAvailable={!!p.remoteAvailable} connected={connected} />}
       {activeTab === "heal" && <HealTab heal={p.heal ?? []} />}
-      {activeTab === "env" && <EnvTab envs={p.environments ?? []} />}
+      {activeTab === "env" && <EnvTab envs={p.environments ?? []} cloudEnvs={p.cloudEnvironments ?? []} cloudAccounts={p.cloudAccounts ?? []} />}
       {activeTab === "map" && <MapTab map={p.map ?? { exists: false }} />}
 
       {/* Shared footer */}

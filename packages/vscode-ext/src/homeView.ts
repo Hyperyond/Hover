@@ -25,6 +25,7 @@ import {
   healSlug,
   readCloudCredentials,
   type CloudHealRequest,
+  type CloudProject,
 } from '@hover-dev/core/cloud';
 import type { DashboardData } from '@hover-dev/core/dashboard';
 import { renderWebviewHtml } from './webviewHost.js';
@@ -45,6 +46,8 @@ const SOURCE_KEY = 'hover.dashboardSource';
 // A per-workspace override for which Cloud project (owner/name) this checkout
 // maps to — set via the project picker when git-remote detection misses.
 const REPO_KEY = 'hover.repoOverride';
+// The environment the Remote view + Heal queue are scoped to ('' / unset = all).
+const ENV_KEY = 'hover.remoteEnv';
 const CLOUD_TIMEOUT_MS = 8_000;
 
 interface HealVM {
@@ -68,6 +71,14 @@ interface HomePayload {
   environments: EnvVM[];
   map: { exists: boolean; app?: string; stats?: { lines: number; covered: number; areas: number } };
   heal: HealVM[];
+  /** Environment the Remote view + Heal are scoped to (null = all). */
+  env: string | null;
+  /** Distinct environments the Cloud project has runs for — the env filter. */
+  remoteEnvironments: string[];
+  /** Environments Cloud manages for this project (name + URL) — shown in Env tab. */
+  cloudEnvironments: { name: string; url: string }[];
+  /** Test accounts Cloud tracks (label + which env); no secrets. */
+  cloudAccounts: { label: string; environment: string }[];
 }
 
 // Cache the heal queue like the remote dashboard — bounded + TTL'd, keyed by
@@ -108,6 +119,30 @@ async function gatherHeal(repo: string | undefined, force = false): Promise<Heal
   return items;
 }
 
+// The linked project's Cloud config (environments + accounts), cached by repo.
+let projectCache: { at: number; repo: string; project: CloudProject | null } | undefined;
+
+async function gatherCloudProject(repo: string | undefined, force = false): Promise<CloudProject | null> {
+  if (!repo) return null;
+  if (!force && projectCache && projectCache.repo === repo && Date.now() - projectCache.at < CLOUD_TTL_MS) {
+    return projectCache.project;
+  }
+  const project = await (async (): Promise<CloudProject | null> => {
+    const creds = readCloudCredentials();
+    if (!creds) return null;
+    try {
+      const all = await fetchProjects(creds, (url, init) =>
+        fetch(url, { ...init, signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS) }),
+      );
+      return all.find((p) => p.repo === repo) ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  projectCache = { at: Date.now(), repo, project };
+  return project;
+}
+
 /** The Cloud project this checkout maps to: the manual override if set, else
  *  the GitHub `owner/name` from the git origin remote. Undefined = unknown, and
  *  every cloud gather returns empty rather than leaking another project's data. */
@@ -129,7 +164,6 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly store: EnvironmentStore,
     private readonly context: vscode.ExtensionContext,
-    private readonly onActiveEnvChange: () => void,
   ) {}
 
   private get source(): Source {
@@ -137,6 +171,10 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
   }
   private setSource(s: Source): Thenable<void> {
     return this.context.workspaceState.update(SOURCE_KEY, s);
+  }
+  /** The environment the Remote view + Heal are scoped to; undefined = all. */
+  private get selectedEnv(): string | undefined {
+    return this.context.workspaceState.get<string>(ENV_KEY) || undefined;
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -169,12 +207,16 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
     // Local-first: Overview·Local / Env / Map always work. Remote + Heal need
     // Cloud, so only fetch those (and resolve the repo) when signed in.
     const repo = cloud.connected ? await resolveRepo(this.context) : undefined;
-    const [remote, environments, map, heal] = await Promise.all([
-      cloud.connected ? gatherRemoteDashboard(repo, force) : Promise.resolve(null),
+    const env = cloud.connected ? this.selectedEnv : undefined;
+    const [remote, environments, map, healAll, project] = await Promise.all([
+      cloud.connected ? gatherRemoteDashboard(repo, env, force) : Promise.resolve(null),
       serializeEnvironments(this.store),
       gatherMapSummary(),
       cloud.connected ? gatherHeal(repo, force) : Promise.resolve([] as HealVM[]),
+      cloud.connected ? gatherCloudProject(repo, force) : Promise.resolve(null),
     ]);
+    // Scope the heal queue to the selected env too (its items carry environment).
+    const heal = env ? healAll.filter((h) => h.environment === env) : healAll;
     const remoteAvailable = !!remote?.hasRuns;
     // Signed out forces Local; signed in, fall back to Local when Remote is empty.
     const source: Source = !cloud.connected
@@ -183,7 +225,21 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
         ? 'local'
         : this.source;
     const dashboard = source === 'remote' && remote ? remote : await gatherLocalDashboard();
-    const payload: HomePayload = { type: 'data', cloud, repo: repo ?? null, source, remoteAvailable, dashboard, environments, map, heal };
+    const payload: HomePayload = {
+      type: 'data',
+      cloud,
+      repo: repo ?? null,
+      source,
+      remoteAvailable,
+      dashboard,
+      environments,
+      map,
+      heal,
+      env: env ?? null,
+      remoteEnvironments: remote?.environments ?? [],
+      cloudEnvironments: project?.environments ?? [],
+      cloudAccounts: project?.accounts ?? [],
+    };
     void this.view.webview.postMessage(payload);
   }
 
@@ -196,11 +252,17 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       case 'refresh':
         invalidateRemoteCache();
         healCache = undefined;
+        projectCache = undefined;
         void this.push(true);
         return;
       case 'setSource':
         if (msg.source === 'local' || msg.source === 'remote') void this.setSource(msg.source).then(() => this.push());
         return;
+      case 'setEnv': {
+        const next = typeof msg.env === 'string' && msg.env ? msg.env : undefined;
+        void this.context.workspaceState.update(ENV_KEY, next).then(() => this.push());
+        return;
+      }
       case 'runAll':
         void vscode.commands.executeCommand('hover.runAllSpecs');
         return;
@@ -253,7 +315,6 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
         return;
       case 'envSetActive':
         void vscode.commands.executeCommand('hover.env.setActive', { envId });
-        this.onActiveEnvChange();
         return;
       case 'envEditUrl':
         void vscode.commands.executeCommand('hover.env.editUrl', { envId });
@@ -324,9 +385,8 @@ export function registerHomeView(
   extensionUri: vscode.Uri,
   store: EnvironmentStore,
   context: vscode.ExtensionContext,
-  onActiveEnvChange: () => void,
 ): { provider: HomeViewProvider; disposables: vscode.Disposable[] } {
-  const provider = new HomeViewProvider(extensionUri, store, context, onActiveEnvChange);
+  const provider = new HomeViewProvider(extensionUri, store, context);
   const view = vscode.window.registerWebviewViewProvider(HomeViewProvider.viewId, provider, {
     webviewOptions: { retainContextWhenHidden: true },
   });

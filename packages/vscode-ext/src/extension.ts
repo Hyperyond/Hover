@@ -26,6 +26,7 @@ import { registerBusinessMapPanel } from './businessMapView.js';
 import { syncCiResults as ghSyncCiResults } from './githubCi.js';
 import { EnvironmentStore, LOCAL_ENV_ID, accountEnvVar } from './environments.js';
 import { registerEnvironmentCommands } from './environmentsView.js';
+import { writeActiveEnv } from '@hover-dev/core/activeEnv';
 import { buildWorkflowYaml, buildAutohealWorkflowYaml, DRIFT_REPORT_SCRIPT } from './ciWorkflow.js';
 import { candidateUri, uriExists } from './optimized.js';
 
@@ -45,6 +46,26 @@ export async function resolveTargetUrl(): Promise<string | null> {
     return vscode.workspace.getConfiguration('hover').get<string>('appUrl') || detectedUrl;
   }
   return active.url;
+}
+
+/** Publish the active environment to `.hover/active.json` so the MCP targets the
+ *  same env (URL + account env-var names) the user picked. Names only — no
+ *  secrets; credentials come from `.hover/.env` / the process env. Best-effort. */
+async function syncActiveEnv(): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  const active = await envStore?.getActive();
+  if (!folder || !active) return;
+  const url = (await resolveTargetUrl()) ?? active.url;
+  if (!url) return;
+  const accountEnvVars = active.accounts.flatMap((a) => [
+    accountEnvVar(a.label, 'USER'),
+    accountEnvVar(a.label, 'PASS'),
+  ]);
+  try {
+    writeActiveEnv(folder.uri.fsPath, { id: active.id, name: active.name, url, accountEnvVars });
+  } catch {
+    /* best-effort — a read-only workspace just skips the marker */
+  }
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -84,12 +105,20 @@ export function activate(context: vscode.ExtensionContext): void {
   // The single Hover panel (tabs: Overview / Heal / Environments / Map) + the
   // full-graph Business Map editor panel + the env/account commands its tab
   // drives. Everything refreshes the one panel through home.provider.refresh().
-  const home = registerHomeView(context.extensionUri, envStore, context, () => void pollAppStatus());
+  const home = registerHomeView(context.extensionUri, envStore, context);
+  // Any env change: refresh the panel, re-probe the target, and re-publish the
+  // active-environment marker (.hover/active.json) the MCP reads.
+  const onEnvChange = (): void => {
+    home.provider.refresh();
+    void pollAppStatus();
+    void syncActiveEnv();
+  };
   context.subscriptions.push(
     ...home.disposables,
     ...registerBusinessMapPanel(context.extensionUri, () => home.provider.refresh()),
-    ...registerEnvironmentCommands(envStore, () => home.provider.refresh()),
+    ...registerEnvironmentCommands(envStore, onEnvChange),
   );
+  void syncActiveEnv(); // publish once on activate
 
   // Hover Cloud pull channel: the connect command + the CI-drift poller
   // (notifies when cloud.gethover.dev queues a heal request for this user).
