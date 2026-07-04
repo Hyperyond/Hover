@@ -94,7 +94,7 @@ function Toggle({ source, remoteAvailable }: { source: Source; remoteAvailable: 
   );
 }
 
-export function DashboardTab({ data, source, remoteAvailable }: { data: DashboardData; source: Source; remoteAvailable: boolean }) {
+export function DashboardTab({ data, source, remoteAvailable, connected }: { data: DashboardData; source: Source; remoteAvailable: boolean; connected: boolean }) {
   const [q, setQ] = useState("");
   const t = data.tiles;
   const rate = t.passRate == null ? "—" : `${t.passRate}%`;
@@ -113,7 +113,7 @@ export function DashboardTab({ data, source, remoteAvailable }: { data: Dashboar
 
   return (
     <div className="text-[12px] text-fg">
-      <Toggle source={source} remoteAvailable={remoteAvailable} />
+      {connected && <Toggle source={source} remoteAvailable={remoteAvailable} />}
       <button className="w-full p-2 mb-2 rounded-lg bg-accent text-[#0c2417] text-[12.5px] font-semibold cursor-pointer inline-flex items-center justify-center gap-1.5 hover:brightness-110" onClick={() => post({ type: "runAll" })}>
         <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l9 5-9 5z" /></svg> Run all specs
       </button>

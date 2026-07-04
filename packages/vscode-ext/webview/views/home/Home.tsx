@@ -26,26 +26,15 @@ interface Payload {
 }
 
 const Cloud = ({ cls = "" }: { cls?: string }) => (<svg className={cls} width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M4.5 12a2.8 2.8 0 0 1-.3-5.6A3.5 3.5 0 0 1 11 5.6a2.6 2.6 0 0 1 .4 6.4z" strokeLinejoin="round" /></svg>);
-const Reticle = () => (<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8.5V4h4.5" /><path d="M19.5 8.5V4H15" /><path d="M4 15.5V20h4.5" /><path d="M19.5 15.5V20H15" /><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" /></svg>);
-
-// ── Sign-in gate ────────────────────────────────────────────────────────────
-function SignIn() {
+// ── Signed-out banner ────────────────────────────────────────────────────────
+// Local-first: the panel works without signing in (Overview·Local / Env / Map).
+// This compact banner invites sign-in, which unlocks Remote + the Heal queue.
+function SignInBanner() {
   return (
-    <div className="p-4 text-[12px] text-fg flex flex-col items-center text-center gap-3 mt-8">
-      <span className="text-accent"><Reticle /></span>
-      <div>
-        <div className="text-[14px] font-semibold">Hover Cloud</div>
-        <div className="text-faint text-[11.5px] mt-1 leading-normal">Sign in to see your CI runs, trends,<br />and the heal queue in this panel.</div>
-      </div>
-      <button className="w-full max-w-[240px] p-2 mt-1 rounded-lg bg-accent text-[#0c2417] text-[12.5px] font-semibold cursor-pointer inline-flex items-center justify-center gap-1.5 hover:brightness-110" onClick={() => post({ type: "connectCloud" })}>
-        <Cloud /> Sign in to Hover Cloud
-      </button>
-      <div className="mt-3 pt-3 border-t border-line w-full max-w-[240px] flex flex-col gap-1.5">
-        <button className="text-muted text-[11px] cursor-pointer hover:text-fg inline-flex items-center justify-center gap-1.5" onClick={() => post({ type: "installMcp" })}>
-          Install Hover MCP
-        </button>
-        <button className="text-faint text-[10.5px] cursor-pointer hover:text-fg" onClick={() => post({ type: "openSite" })}>gethover.dev ↗</button>
-      </div>
+    <div className="w-full mb-2.5 rounded-lg border border-accent/50 bg-accent/10 px-2.5 py-2 flex items-center gap-2">
+      <span className="text-accent flex-none"><Cloud /></span>
+      <span className="flex-1 min-w-0 text-[11px] text-muted leading-snug">Sign in to unlock Cloud CI runs &amp; the heal queue.</span>
+      <button className="flex-none px-2 py-1 rounded-md bg-accent text-[#0c2417] text-[11px] font-semibold cursor-pointer hover:brightness-110" onClick={() => post({ type: "connectCloud" })}>Sign in</button>
     </div>
   );
 }
@@ -180,40 +169,49 @@ export function Home() {
   }, []);
 
   if (!p) return <div className="p-4 text-faint text-center text-[12px]">Loading…</div>;
-  if (!p.cloud.connected) return <SignIn />;
 
-  const host = p.cloud.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const connected = p.cloud.connected;
+  const cloudUrl = p.cloud.connected ? p.cloud.url : "";
+  const host = cloudUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const healCount = p.heal?.length ?? 0;
+  // Heal is Cloud-only; hide its tab (and any cloud-only chrome) when signed out.
+  const tabs = TABS.filter((t) => t.id !== "heal" || connected);
+  const activeTab: TabId = tabs.some((t) => t.id === tab) ? tab : "overview";
 
   return (
     <div className="p-[10px] text-[12px] text-fg">
-      {/* Cloud status bar */}
-      <div className="w-full mb-2 rounded-lg border border-line bg-bg2 px-2.5 py-1.5 flex items-center gap-1.5 text-[11px]">
-        <span className="text-accent inline-flex"><Cloud /></span>
-        <span className="text-muted flex-1 min-w-0 truncate" title={"Connected to " + host}><span className="text-fg font-medium">Hover Cloud</span> · {host}</span>
-        <button className="flex-none text-muted hover:text-fg cursor-pointer" title="Open your Cloud dashboard" onClick={() => post({ type: "openCloud" })}>open ↗</button>
-        <button className="flex-none text-faint hover:text-fg cursor-pointer" title="Sign out" onClick={() => post({ type: "disconnectCloud" })}>sign out</button>
-      </div>
-
-      {/* Linked project — scopes Remote + Heal to this repo */}
-      {p.repo ? (
-        <div className="w-full mb-2.5 px-1 flex items-center gap-1.5 text-[10.5px] text-faint">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M2 4.5h4l1.2 1.5H14v6.5H2z" /></svg>
-          <span className="flex-1 min-w-0 truncate" title={"Cloud project: " + p.repo}>{p.repo}</span>
-          <button className="flex-none hover:text-fg cursor-pointer" title="Link a different Cloud project" onClick={() => post({ type: "pickRepo" })}>change</button>
-        </div>
+      {/* Cloud status — connected bar, or a sign-in invite (local-first) */}
+      {connected ? (
+        <>
+          <div className="w-full mb-2 rounded-lg border border-line bg-bg2 px-2.5 py-1.5 flex items-center gap-1.5 text-[11px]">
+            <span className="text-accent inline-flex"><Cloud /></span>
+            <span className="text-muted flex-1 min-w-0 truncate" title={"Connected to " + host}><span className="text-fg font-medium">Hover Cloud</span> · {host}</span>
+            <button className="flex-none text-muted hover:text-fg cursor-pointer" title="Open your Cloud dashboard" onClick={() => post({ type: "openCloud" })}>open ↗</button>
+            <button className="flex-none text-faint hover:text-fg cursor-pointer" title="Sign out" onClick={() => post({ type: "disconnectCloud" })}>sign out</button>
+          </div>
+          {/* Linked project — scopes Remote + Heal to this repo */}
+          {p.repo ? (
+            <div className="w-full mb-2.5 px-1 flex items-center gap-1.5 text-[10.5px] text-faint">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M2 4.5h4l1.2 1.5H14v6.5H2z" /></svg>
+              <span className="flex-1 min-w-0 truncate" title={"Cloud project: " + p.repo}>{p.repo}</span>
+              <button className="flex-none hover:text-fg cursor-pointer" title="Link a different Cloud project" onClick={() => post({ type: "pickRepo" })}>change</button>
+            </div>
+          ) : (
+            <button className="w-full mb-2.5 p-1.5 rounded-lg border border-flaky/50 bg-flaky/10 text-fg text-[11px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:bg-flaky/20" title="Couldn't match this workspace to a Cloud project from its git remote" onClick={() => post({ type: "pickRepo" })}>
+              ⚠ No Cloud project linked — select one
+            </button>
+          )}
+        </>
       ) : (
-        <button className="w-full mb-2.5 p-1.5 rounded-lg border border-flaky/50 bg-flaky/10 text-fg text-[11px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:bg-flaky/20" title="Couldn't match this workspace to a Cloud project from its git remote" onClick={() => post({ type: "pickRepo" })}>
-          ⚠ No Cloud project linked — select one
-        </button>
+        <SignInBanner />
       )}
 
       {/* Tabs */}
       <div className="flex gap-0.5 p-0.5 mb-2.5 rounded-lg border border-line bg-bg2">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
-            className={"flex-1 px-1.5 py-1 text-[11px] rounded-md cursor-pointer transition-colors inline-flex items-center justify-center gap-1 " + (tab === t.id ? "bg-bg text-fg font-medium shadow-sm" : "text-muted hover:text-fg")}
+            className={"flex-1 px-1.5 py-1 text-[11px] rounded-md cursor-pointer transition-colors inline-flex items-center justify-center gap-1 " + (activeTab === t.id ? "bg-bg text-fg font-medium shadow-sm" : "text-muted hover:text-fg")}
             onClick={() => setTab(t.id)}
           >
             {t.label}
@@ -222,10 +220,10 @@ export function Home() {
         ))}
       </div>
 
-      {tab === "overview" && p.dashboard && <DashboardTab data={p.dashboard} source={p.source ?? "local"} remoteAvailable={!!p.remoteAvailable} />}
-      {tab === "heal" && <HealTab heal={p.heal ?? []} />}
-      {tab === "env" && <EnvTab envs={p.environments ?? []} />}
-      {tab === "map" && <MapTab map={p.map ?? { exists: false }} />}
+      {activeTab === "overview" && p.dashboard && <DashboardTab data={p.dashboard} source={p.source ?? "local"} remoteAvailable={!!p.remoteAvailable} connected={connected} />}
+      {activeTab === "heal" && <HealTab heal={p.heal ?? []} />}
+      {activeTab === "env" && <EnvTab envs={p.environments ?? []} />}
+      {activeTab === "map" && <MapTab map={p.map ?? { exists: false }} />}
 
       {/* Shared footer */}
       <div className="mt-4 pt-2.5 border-t border-line flex flex-col gap-1.5">

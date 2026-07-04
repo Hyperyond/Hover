@@ -166,21 +166,22 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
   private async push(force = false): Promise<void> {
     if (!this.view) return;
     const cloud = cloudState();
-    // Signed out → the webview only renders sign-in; skip the heavy gather.
-    if (!cloud.connected) {
-      void this.view.webview.postMessage({ type: 'data', cloud } satisfies Partial<HomePayload>);
-      return;
-    }
-    const repo = await resolveRepo(this.context);
+    // Local-first: Overview·Local / Env / Map always work. Remote + Heal need
+    // Cloud, so only fetch those (and resolve the repo) when signed in.
+    const repo = cloud.connected ? await resolveRepo(this.context) : undefined;
     const [remote, environments, map, heal] = await Promise.all([
-      gatherRemoteDashboard(repo, force),
+      cloud.connected ? gatherRemoteDashboard(repo, force) : Promise.resolve(null),
       serializeEnvironments(this.store),
       gatherMapSummary(),
-      gatherHeal(repo, force),
+      cloud.connected ? gatherHeal(repo, force) : Promise.resolve([] as HealVM[]),
     ]);
     const remoteAvailable = !!remote?.hasRuns;
-    // Fall back to Local when Remote has nothing to show yet.
-    const source: Source = this.source === 'remote' && !remoteAvailable ? 'local' : this.source;
+    // Signed out forces Local; signed in, fall back to Local when Remote is empty.
+    const source: Source = !cloud.connected
+      ? 'local'
+      : this.source === 'remote' && !remoteAvailable
+        ? 'local'
+        : this.source;
     const dashboard = source === 'remote' && remote ? remote : await gatherLocalDashboard();
     const payload: HomePayload = { type: 'data', cloud, repo: repo ?? null, source, remoteAvailable, dashboard, environments, map, heal };
     void this.view.webview.postMessage(payload);
