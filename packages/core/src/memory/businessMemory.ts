@@ -21,6 +21,7 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hoverDir } from '../specs/sidecar.js';
+import { ensureKnowledgeTracked } from './gitignore.js';
 
 /** A learned business fact about the app under test. */
 export interface BusinessFact {
@@ -181,6 +182,9 @@ export async function writeFact(
       `---\nname: ${slug}\ndescription: ${fact.description}\ntype: ${fact.type}\n${lineField}---\n\n${fact.body.trim()}\n`;
     await writeFile(join(dir, file), content, 'utf-8');
     await upsertIndex(dir, slug, fact);
+    // Best-effort: make sure the committed knowledge is actually trackable in
+    // git (memory dir, map, log). Never lets a gitignore hiccup fail the write.
+    await ensureKnowledgeTracked(devRoot);
     return { path: join(dir, file) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };

@@ -13,6 +13,7 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hoverDir } from './sidecar.js';
+import { ensureKnowledgeTracked } from '../memory/gitignore.js';
 
 export type WikiLogKind = 'crystallize' | 'api' | 'extract' | 'heal' | 'note';
 
@@ -46,6 +47,9 @@ export async function appendWikiLog(devRoot: string, kind: WikiLogKind, summary:
     const iso = new Date().toISOString();
     const line = `- ${iso} · ${kind} · ${summary.replace(/\s+/g, ' ').trim()}\n`;
     await appendFile(path, `${existing ? '' : HEADER}${line}`, 'utf-8');
+    // The log is written every run — the broadest hook to keep the knowledge
+    // base trackable in git (idempotent; opt out with HOVER_NO_GITIGNORE).
+    await ensureKnowledgeTracked(devRoot);
   } catch {
     /* best-effort: a wiki-log failure must not break the write that triggered it */
   }

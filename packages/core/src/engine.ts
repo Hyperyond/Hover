@@ -53,6 +53,7 @@ export type { LaunchOptions, LaunchResult } from './playwright/launchChrome.js';
 // readFact = the on-demand single-rule fetch behind recall_fact.
 export { loadMemory, formatMemoryForPrompt, formatMemoryIndex, recallMemory, readFact, formatFact, writeFact, memoryDir } from './memory/businessMemory.js';
 export type { BusinessFact } from './memory/businessMemory.js';
+export { ensureKnowledgeTracked } from './memory/gitignore.js';
 
 // ── QA intensity (step budget; parked until wired into the workflow) ──────────
 export { QA_INTENSITY, DEFAULT_QA_INTENSITY, asQaIntensity, qaBudgetDirective } from './qa/intensity.js';
