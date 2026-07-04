@@ -30,6 +30,13 @@ export interface BusinessFact {
   description: string;
   /** What kind of knowledge this is. */
   type: 'business-rule' | 'expected-behavior' | 'validation' | 'access-policy';
+  /**
+   * The business line this rule governs, as named in `.hover/hover-map.md`
+   * (optional). Anchors the rule to a node in the business map so a map view
+   * can show "this line's rules" and a heal can weigh a recent rule change
+   * against a failure. App-wide rules leave it blank.
+   */
+  line?: string;
   /** The fact itself (markdown). */
   body: string;
 }
@@ -63,8 +70,9 @@ function parseFact(slug: string, raw: string): BusinessFact | null {
   const rawType = field('type');
   const types = ['business-rule', 'expected-behavior', 'validation', 'access-policy'] as const;
   const type = (types as readonly string[]).includes(rawType) ? (rawType as BusinessFact['type']) : 'business-rule';
+  const line = field('line');
   if (!body) return null;
-  return { name: field('name') || slug, description, type, body };
+  return { name: field('name') || slug, description, type, ...(line ? { line } : {}), body };
 }
 
 /** Load every fact under `.hover/memory/` (excluding the MEMORY.md index).
@@ -168,8 +176,9 @@ export async function writeFact(
     await mkdir(dir, { recursive: true });
     const slug = slugify(fact.name);
     const file = `${slug}.md`;
+    const lineField = fact.line?.trim() ? `line: ${fact.line.trim()}\n` : '';
     const content =
-      `---\nname: ${slug}\ndescription: ${fact.description}\ntype: ${fact.type}\n---\n\n${fact.body.trim()}\n`;
+      `---\nname: ${slug}\ndescription: ${fact.description}\ntype: ${fact.type}\n${lineField}---\n\n${fact.body.trim()}\n`;
     await writeFile(join(dir, file), content, 'utf-8');
     await upsertIndex(dir, slug, fact);
     return { path: join(dir, file) };

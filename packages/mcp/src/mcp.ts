@@ -79,8 +79,8 @@ const controller = new HoverMcpController({
     await appendWikiLog(DEV_ROOT, 'api', `${basename(res.path)} — ${name}`);
     return { path: res.path };
   },
-  recordFact: (title, rule, type) =>
-    writeFact(DEV_ROOT, { name: title, description: title, type, body: rule }),
+  recordFact: (title, rule, type, line) =>
+    writeFact(DEV_ROOT, { name: title, description: title, type, body: rule, ...(line ? { line } : {}) }),
   recall: () => recallMemory(DEV_ROOT),
   recallFact: async (name: string) => {
     const fact = await readFact(DEV_ROOT, name);

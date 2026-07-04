@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-07-04
+
+### Added
+
+- **core / mcp:** business rules can now be anchored to a business line. `record_fact` takes an optional `line` (the line's name as in `.hover/hover-map.md`); `BusinessFact` carries it through frontmatter (`line:`), and the `test_app` prompt instructs the agent to set it for line-specific rules and leave it blank for app-wide ones. This lets a map view hang each rule under its line and lets drift analysis weigh a recent rule change against a failure. Backward compatible — existing facts (no `line`) load unchanged.
+
 ## [0.29.0] — 2026-07-03
 
 ### Changed

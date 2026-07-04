@@ -158,9 +158,15 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
           .enum(['business-rule', 'expected-behavior', 'validation', 'access-policy'])
           .optional()
           .describe('What kind of knowledge this is. Defaults to business-rule.'),
+        line: z
+          .string()
+          .optional()
+          .describe(
+            "The business line this rule governs, named EXACTLY as it appears in .hover/hover-map.md (e.g. 'Log in', 'Checkout'). Anchors the rule to that line so it surfaces with the line. Omit for an app-wide rule (theming, global auth) that no single line owns.",
+          ),
       },
     },
-    ({ title, rule, type }) => guard(() => c.recordFact(title, rule, type ?? 'business-rule')),
+    ({ title, rule, type, line }) => guard(() => c.recordFact(title, rule, type ?? 'business-rule', line)),
   );
 
   server.registerTool(
@@ -548,5 +554,6 @@ Once specs are crystallized, call \`detect_shared_flows\`. If it reports a NON-l
 The knowledge base only compounds if you actually write to it — every run should leave \`.hover/memory/\` knowing more than it started:
 - **Observed → record directly.** When the app itself demonstrates a durable rule, \`record_fact\` it without asking — a redirect to /login proves that feature needs auth; a limit message proves a quota; a disabled button for this role proves a permission. State it as a clean rule ("Word practice requires a signed-in user").
 - **Ambiguous → ASK, don't guess.** Bug or by-design? Which flows matter? What does this domain term mean? ASK the user (don't guess, don't stop). Batch small confirmations at natural pauses (end of a line, end of the run) instead of interrupting per item. When they confirm a rule, \`record_fact\` it.
+- **Anchor each rule to its line.** When a rule governs a specific business line, pass \`record_fact\`'s \`line\` = that line's name EXACTLY as in \`.hover/hover-map.md\` (a rule about the login flow -> \`line: "Log in"\`), so it hangs under that line in the map. Leave \`line\` blank only for a genuinely app-wide rule (theming, global auth policy) no single line owns.
 - RULES ONLY — never credentials/secrets/PII. Also ASK when blocked on something only they can provide (login credentials, a file). Stay on the app under test — never navigate to external origins.`;
 }
