@@ -57,7 +57,12 @@ export interface McpDeps {
   /** Write selected API checks to a `*.api-test.spec.ts`; returns the path. */
   crystallizeApi: (name: string, description: string | undefined, checks: ApiCheck[]) => Promise<{ path: string }>;
   /** Persist a learned business rule to .hover/memory/ (rules only — no secrets). */
-  recordFact?: (title: string, rule: string, type: FactType) => Promise<{ path: string } | { error: string }>;
+  recordFact?: (
+    title: string,
+    rule: string,
+    type: FactType,
+    line?: string,
+  ) => Promise<{ path: string } | { error: string }>;
   /** Recall known business knowledge from .hover/memory/ ('' if none). Progressive:
    *  full bodies when the set is small, the index alone when it's large. */
   recall?: () => Promise<string>;
@@ -292,10 +297,17 @@ export class HoverMcpController {
 
   /** Persist a confirmed business RULE so future runs don't re-ask it. Rules
    *  only — never secrets / credentials / PII. */
-  async recordFact(title: string, rule: string, type: FactType = 'business-rule'): Promise<string> {
+  async recordFact(
+    title: string,
+    rule: string,
+    type: FactType = 'business-rule',
+    line?: string,
+  ): Promise<string> {
     if (!this.deps.recordFact) return 'Memory channel unavailable; continuing.';
-    const res = await this.deps.recordFact(title, rule, type);
-    return 'error' in res ? `✗ could not save fact: ${res.error}` : `✓ remembered: ${title}`;
+    const res = await this.deps.recordFact(title, rule, type, line);
+    return 'error' in res
+      ? `✗ could not save fact: ${res.error}`
+      : `✓ remembered: ${title}${line ? ` (on ${line})` : ''}`;
   }
 
   /** Crystallize the buffered UI flow → a plain Playwright spec, then clear the
