@@ -6,7 +6,7 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
-## [0.32.0] — 2026-07-05
+## [0.33.0] — 2026-07-05
 
 **Guard-first development — define the behavior, ship the code, keep the regression.**
 
