@@ -270,6 +270,62 @@ export async function claimDeviceLink(
   return ((await res.json()) as { token: string }).token;
 }
 
+/* ── Run verdicts — the build loop's eyes on CI ───────────────────────────
+ * After an agent pushes, it polls the ingested run to learn what each failure
+ * MEANS: the deterministic triage (drift/bug/unclear) + the advisory LLM
+ * judge. `pending: true` = CI hasn't reported yet; poll again (CI cadence is
+ * minutes). */
+
+export interface CloudRunSpec {
+  specFile: string;
+  title: string;
+  status: 'passed' | 'failed' | 'flaky' | 'skipped';
+  error?: string | null;
+  locator?: string | null;
+  verdict?: 'drift' | 'bug' | 'unclear' | null;
+  judge?: { score: number; recommendation: string; rationale: string } | null;
+}
+
+export interface CloudRunResult {
+  pending?: boolean;
+  run?: {
+    id: string;
+    status: 'passed' | 'failed' | 'flaky';
+    stats: Record<string, number>;
+    branch: string | null;
+    commitSha: string | null;
+    environment: string | null;
+    ciUrl: string | null;
+    createdAt: string;
+  };
+  specs?: CloudRunSpec[];
+}
+
+/** One ingested run + per-spec verdicts, for `owner/name` (+ optional commit
+ *  sha; omitted → the project's latest run). */
+export async function fetchRunResult(
+  creds: CloudCredentials,
+  repo: string,
+  sha?: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CloudRunResult> {
+  const params = new URLSearchParams({ repo });
+  if (sha) params.set('sha', sha);
+  return cloudJson<CloudRunResult>(creds, `/api/v1/runs?${params}`, {}, fetchImpl);
+}
+
+/** The repo (`owner/name`) of the project at devRoot, from git's origin URL.
+ *  Null when there's no git remote or the URL isn't GitHub-shaped. */
+export function detectRepo(devRoot: string): string | null {
+  try {
+    const config = readFileSync(join(devRoot, '.git', 'config'), 'utf-8');
+    const m = config.match(/url\s*=\s*(?:git@github\.com:|https:\/\/github\.com\/)([^\s/]+\/[^\s/]+?)(?:\.git)?\s*$/m);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The heal slug for a queued request (`checkout.spec.ts` → `checkout`) — what
  *  `/mcp__hover__heal <slug>` takes. */
 export function healSlug(specFile: string): string {

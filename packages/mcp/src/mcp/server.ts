@@ -330,6 +330,36 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
     ({ repo }) => guard(() => c.cloudFailures(repo)),
   );
 
+  server.registerTool(
+    'cloud_run_result',
+    {
+      description:
+        "One ingested CI run + what each failure MEANS: per-spec status, the deterministic verdict (drift = heal the test / bug = fix the app / unclear), and the advisory LLM judge (score + lean + rationale). The build loop's eyes after a push. Pending = CI hasn't reported yet; poll again in ~30-60s. Needs a connected cloud account.",
+      inputSchema: {
+        sha: z.string().optional().describe('The pushed commit sha (short or full). Omit for the project’s latest ingested run.'),
+        repo: z.string().optional().describe('GitHub repo "owner/name". Omit to detect from the git origin.'),
+      },
+    },
+    ({ sha, repo }) => guard(() => c.cloudRunResult(sha, repo)),
+  );
+
+  server.registerTool(
+    'declare_guard',
+    {
+      description:
+        'Declare a guard (the RED light of guard-first development): write a pending `- [ ]` business line + its acceptance criteria onto .hover/hover-map.md, BEFORE the feature is implemented. The spec itself is still RECORDED later (crystallize_spec) — never write Playwright for UI that does not exist. Record the intent’s business rules separately via record_fact.',
+      inputSchema: {
+        area: z.string().describe('Map area (## section) the line belongs to, e.g. "Practice". Created if new.'),
+        line: z.string().describe('The business-line name, e.g. "Daily check-in". Short, imperative, user-facing.'),
+        route: z.string().optional().describe('Entry route, e.g. "/checkin". Omit if not yet decided.'),
+        criteria: z
+          .array(z.string())
+          .describe('Acceptance criteria, in order — the outcomes the recorded spec must assert, e.g. ["clicking Check in shows 已打卡", "7-day streak shows a badge on /stats"].'),
+      },
+    },
+    ({ area, line, route, criteria }) => guard(() => c.declareGuard(area, line, criteria, route)),
+  );
+
   // The workflow ships WITH the server as an MCP prompt — Claude Code surfaces
   // it as `/mcp__hover__test_app`, so adding the server brings both the tools
   // AND the command. No project scaffolding needed.
@@ -405,7 +435,100 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
     }),
   );
 
+  // Guard-first development, step 1 — surfaced as `/mcp__hover__guard`.
+  // Declares WHAT SHOULD BE TRUE before any code exists: rules + a pending map
+  // line + acceptance criteria. The red light; /mcp__hover__build is the loop
+  // that drives it green.
+  server.registerPrompt(
+    'guard',
+    {
+      title: 'Hover — declare a guard (define the behavior first)',
+      description:
+        'Turn a feature intent into a declared guard BEFORE implementation: business rules + a pending line on the business map + acceptance criteria. No code, no fake specs — the executable spec is recorded later.',
+      argsSchema: {
+        intent: z.string().describe('The feature intent in plain words, e.g. "daily check-in; 7-day streak shows a badge on the stats page".'),
+      },
+    },
+    ({ intent }) => ({
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lang + guardPrompt(intent) } }],
+    }),
+  );
+
+  // Guard-first development, step 2 — surfaced as `/mcp__hover__build`.
+  server.registerPrompt(
+    'build',
+    {
+      title: 'Hover — build a declared guard to green',
+      description:
+        'Drive a declared guard to green: implement, verify against the acceptance criteria in the live app, crystallize the recorded spec, run the full regression, push, read Hover Cloud’s verdicts, and dispatch fixes until everything is green.',
+      argsSchema: {
+        line: z.string().describe('The declared business line to build, exactly as on the map, e.g. "Daily check-in".'),
+      },
+    },
+    ({ line }) => ({
+      messages: [{ role: 'user' as const, content: { type: 'text' as const, text: lang + buildPrompt(line) } }],
+    }),
+  );
+
   return server;
+}
+
+/** Guard declaration workflow — intent → rules + pending map line. The RED
+ *  light: declarative, human-confirmed, zero fabricated Playwright. */
+function guardPrompt(intent: string): string {
+  return `Declare a GUARD for this app — define what should be true BEFORE any code exists. Do NOT implement anything and do NOT write any Playwright in this workflow.
+
+Intent (from the user):
+"""
+${intent}
+"""
+
+1. **Ground yourself.** Call \`recall_business_knowledge\` and read \`.hover/hover-map.md\` (your file tools) so the new guard fits the existing map (reuse an existing area if one fits) and doesn't contradict a known rule. If it CONTRADICTS one, stop and surface the conflict — the user decides which holds.
+
+2. **Interview the gaps — ONE message.** Ask only what the intent leaves genuinely ambiguous, the things code can't reveal later: edge behavior (what happens on the boundary?), access (logged-out? which roles?), invariants (once per day? resets when?), and where it lives (route / entry point). Don't ask what the intent already answers.
+
+3. **Record the rules.** For each durable rule the user confirms (or the intent clearly states), call \`record_fact\` with \`line\` set to the business line's name — these are what Hover Cloud's judge will score future failures against, so state each as a clean, testable sentence.
+
+4. **Declare the line.** Call \`declare_guard\` with the area, the line name, the route (if known), and the ACCEPTANCE CRITERIA — the ordered, observable outcomes the future spec must assert (each criterion should name a visible outcome, e.g. 'clicking "打卡" shows "已打卡"'). This writes a pending \`- [ ]\` line on the business map: a visible, uncovered contract.
+
+5. **Confirm and stop.** Show the user what was declared — the rules, the line, the criteria — and STOP. Implementation is a separate step: \`/mcp__hover__build ${'{'}the line name${'}'}\`. Do not start it unbidden.
+
+Rules: RULES ONLY in memory (never secrets/PII). Never mark the line covered — coverage is earned by a recorded spec, not declared. If the user says "just decide", make the smallest reasonable call and note it as an assumption in the acceptance Note.`;
+}
+
+/** Build-loop workflow — drive a declared guard to green. Inner loop local,
+ *  outer loop CI + Hover Cloud verdicts. The agent implements; Hover verifies,
+ *  records, and adjudicates. */
+function buildPrompt(line: string): string {
+  return `Build the declared guard **"${line}"** to green — implement it, verify it against its acceptance criteria in the LIVE app, crystallize the recorded spec, and iterate on Hover Cloud's CI verdicts until everything is green.
+
+## Ground rules (read first)
+- **Never weaken, delete, or rewrite acceptance criteria or existing assertions to make something pass.** If making it pass would require changing what "correct" means, the intent changed — STOP and tell the user to re-run \`/mcp__hover__guard\`.
+- **Budget: ~10 inner-loop rounds, ~3 CI rounds.** If you hit either limit, stop and report exactly where it stands and what's blocking.
+- It's the user's real app — same safety rules as any Hover run (no destructive actions without confirmation).
+
+## Setup
+Read the guard: find "${line}" on \`.hover/hover-map.md\` (its route + acceptance Note) and \`recall_business_knowledge\` for its rules. If the line isn't declared, stop — run \`/mcp__hover__guard\` first.
+
+## Inner loop (local, repeat until the walk passes)
+1. **Implement** the feature in the app's codebase with your own tools — your code, your conventions. Hover doesn't write app code.
+2. **Verify in the live app**: \`browser_navigate\` to the route → \`browser_snapshot\` → walk the flow with the grounded \`*_control\` tools → \`assert_visible\` EACH acceptance criterion, in order.
+3. A criterion fails → fix the CODE (never the criterion) → repeat.
+4. All criteria pass → \`crystallize_spec("${line}")\` — the spec is now RECORDED from the real flow (record == replay). This flips the map line to covered.
+5. **Protect the estate**: run the full existing suite locally (\`npx playwright test __vibe_tests__\`). A local failure here = your change broke something — fix the code now, before CI.
+
+## Outer loop (CI + Hover Cloud, repeat until green)
+6. Commit on a feature branch and push (open a PR if there isn't one). Note the commit sha.
+7. Poll \`cloud_run_result\` with that sha (CI takes minutes — wait ~60s between polls; it answers "pending" until the run is ingested).
+8. Dispatch each failing spec by its verdict:
+   - **The new "${line}" spec fails** → the implementation doesn't meet the declared intent → back to the inner loop.
+   - **An existing spec fails, verdict \`bug\`** → your change broke existing behavior → fix the code.
+   - **An existing spec fails, verdict \`drift\` (or the judge strongly leans drift)** → the old spec is outdated BY THIS INTENT → heal it: \`/mcp__hover__heal <slug>\` flow (replay, re-ground, re-crystallize). Only heal specs whose change traces to this feature.
+   - **Verdict \`unclear\` with no strong judge lean** → do NOT guess. Stop and ask the user to rule on it (it's in the Hover Cloud heal queue with a screenshot).
+9. Push the fixes; repeat from 7.
+
+## Done
+The run comes back green (\`cloud_run_result\` reports all specs passing). Report: what was implemented, the spec recorded, any old specs healed (and why that was correct per the new intent), rules touched, and that the PR is ready for the user's review — merging is theirs, always.`;
 }
 
 /** Optimize-ALL workflow body: enrich every spec, one at a time. Each spec's

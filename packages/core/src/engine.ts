@@ -35,6 +35,7 @@ export { readActiveEnv, writeActiveEnv, activeEnvPath, type ActiveEnv } from './
 export { lintWiki, parseRunStatuses } from './specs/lintWiki.js';
 export type { LintResult, LintFinding, LintKind, LintSeverity } from './specs/lintWiki.js';
 export { parseBusinessMap } from './specs/businessMap.js';
+export { declareGuard, type GuardDeclaration } from './specs/declareGuard.js';
 export type { BusinessMapGraph, MapNode, MapEdge } from './specs/businessMap.js';
 // Page-Object extraction — lift NON-login shared flows into pages/ + fixtures.
 export { extractPageObjects, detectExtractableFlows } from './specs/extractPageObjects.js';

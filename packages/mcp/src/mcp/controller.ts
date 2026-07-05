@@ -11,7 +11,8 @@ import {
   type ExtractResult,
   type LintResult,
 } from '@hover-dev/core/engine';
-import { healSlug, type CloudHealRequest } from '@hover-dev/core/cloud';
+import { healSlug, type CloudHealRequest, type CloudRunResult } from '@hover-dev/core/cloud';
+import type { GuardDeclaration } from '@hover-dev/core/engine';
 
 /*
  * The hover-mcp engine, decoupled from the MCP wire layer so it's testable with
@@ -93,6 +94,11 @@ export interface McpDeps {
    *  the cloud isn't connected / reachable. Pull-only — the cloud never
    *  reaches into this machine. */
   cloudFailures?: (repo?: string) => Promise<CloudHealRequest[] | { error: string }>;
+  /** One ingested CI run + per-spec verdicts (drift/bug/unclear + judge) —
+   *  the build loop's eyes after a push. */
+  cloudRunResult?: (sha?: string, repo?: string) => Promise<CloudRunResult | { error: string }>;
+  /** Write a pending guard line (+ acceptance Note) onto the business map. */
+  declareGuard?: (d: GuardDeclaration) => Promise<{ path: string; created: boolean } | { error: string }>;
 }
 
 function describe(g: GroundedTarget): string {
@@ -388,6 +394,50 @@ export class HoverMcpController {
       ...lines,
       '',
       'Heal locally, one at a time: `/mcp__hover__heal <slug>` (replays the recorded steps, re-grounds the drifted one in the live app; the user reviews the diff). A queue entry closes automatically when CI next sees that spec pass.',
+    ].join('\n');
+  }
+
+  /** One ingested CI run + per-spec verdicts — the build loop's eyes after a
+   *  push. `pending` = CI hasn't reported yet; try again in ~30-60s. */
+  async cloudRunResult(sha?: string, repo?: string): Promise<string> {
+    if (!this.deps.cloudRunResult) return 'Hover Cloud unavailable in this server.';
+    const res = await this.deps.cloudRunResult(sha, repo);
+    if ('error' in res) return `✗ ${res.error}`;
+    if (res.pending || !res.run) {
+      return `⏳ No ingested run yet${sha ? ` for ${sha.slice(0, 7)}` : ''} — CI is likely still running. Poll again in ~30-60s.`;
+    }
+    const { run, specs = [] } = res;
+    const failed = specs.filter((s) => s.status === 'failed');
+    const head = `Run ${run.status.toUpperCase()} — ${JSON.stringify(run.stats)} · ${run.branch ?? '?'} @ ${run.commitSha?.slice(0, 7) ?? '?'}${run.ciUrl ? ` · ${run.ciUrl}` : ''}`;
+    if (failed.length === 0) {
+      return `✓ ${head}\nAll specs green — the guard holds.`;
+    }
+    const lines = failed.map((s) => {
+      const judge = s.judge
+        ? ` · judge ${s.judge.score}/100 leans ${s.judge.recommendation} (${s.judge.rationale})`
+        : '';
+      return `- **${healSlug(s.specFile)}** [${s.verdict ?? 'no verdict yet'}]${judge}\n  ${s.error ?? ''}${s.locator ? `\n  at \`${s.locator}\`` : ''}`;
+    });
+    return [
+      head,
+      '',
+      `${failed.length} failing:`,
+      ...lines,
+      '',
+      'Dispatch: verdict `bug` → fix the APP code (the spec is the repro). Verdict `drift` (or judge strongly leans drift) → `/mcp__hover__heal <slug>`. `unclear` with a weak judge score → STOP and ask the user to rule on it in the Hover Cloud heal queue.',
+    ].join('\n');
+  }
+
+  /** Guard declaration (the RED light): write a pending `- [ ]` line + its
+   *  acceptance Note onto the business map. Rules go through record_fact. */
+  async declareGuard(area: string, line: string, criteria: string[], route?: string): Promise<string> {
+    if (!this.deps.declareGuard) return 'Guard declaration unavailable in this server.';
+    if (!criteria.length) return '✗ at least one acceptance criterion is required.';
+    const res = await this.deps.declareGuard({ area, line, route, criteria });
+    if ('error' in res) return `✗ could not declare guard: ${res.error}`;
+    return [
+      `✓ declared: "${line}" (${area})${route ? ` — ${route}` : ''} — ${res.created ? 'new pending line on the map' : 'acceptance criteria updated'}.`,
+      `The map now carries this as an UNCOVERED contract. After the feature is implemented, walk the flow with the grounded tools, assert each criterion, and crystallize_spec("${line}") to flip it to covered.`,
     ].join('\n');
   }
 

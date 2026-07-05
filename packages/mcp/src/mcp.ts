@@ -18,13 +18,14 @@ import {
   lintWiki,
   appendWikiLog,
   readActiveEnv,
+  declareGuard,
   type SkillStep,
   type ApiCheck,
   type Redaction,
 } from '@hover-dev/core/engine';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fetchHealRequests, readCloudCredentials } from '@hover-dev/core/cloud';
+import { detectRepo, fetchHealRequests, fetchRunResult, readCloudCredentials } from '@hover-dev/core/cloud';
 import { HoverMcpController } from './mcp/controller.js';
 import { createHoverMcpServer } from './mcp/server.js';
 
@@ -148,6 +149,25 @@ const controller = new HoverMcpController({
       return { error: e instanceof Error ? e.message.split('\n')[0] : String(e) };
     }
   },
+  cloudRunResult: async (sha?: string, repo?: string) => {
+    const creds = readCloudCredentials();
+    if (!creds) {
+      return {
+        error:
+          'Hover Cloud not connected — set HOVER_CLOUD_TOKEN or run "Hover: Connect Hover Cloud" in VS Code.',
+      };
+    }
+    const target = repo ?? detectRepo(DEV_ROOT);
+    if (!target) {
+      return { error: 'No GitHub repo detected (no git origin) — pass repo: "owner/name".' };
+    }
+    try {
+      return await fetchRunResult(creds, target, sha);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message.split('\n')[0] : String(e) };
+    }
+  },
+  declareGuard: (d) => declareGuard(DEV_ROOT, d),
 });
 
 const server = createHoverMcpServer(controller, { lang: LANG });
