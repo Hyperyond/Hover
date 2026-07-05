@@ -6,6 +6,18 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-07-05
+
+**Guard-first development — define the behavior, ship the code, keep the regression.**
+
+### Added
+
+- **mcp:** `/mcp__hover__guard <intent>` — declare a guard BEFORE implementation: interviews the ambiguous edges, records the intent as line-anchored business rules (`record_fact`), and writes a pending `- [ ]` line + acceptance criteria onto the business map via the new `declare_guard` tool. Declarative red, recorded green — no fabricated Playwright; the executable spec is still crystallized from the real flow later, so record == replay holds.
+- **mcp:** `/mcp__hover__build <line>` — drive a declared guard to green: implement → verify each acceptance criterion in the live app (grounded tools) → `crystallize_spec` → run the full local regression → push → poll Hover Cloud's per-spec verdicts → dispatch (bug → fix the code; drift → heal the outdated spec; weak-judge unclear → stop and escalate to the human). Budgeted (~10 inner / ~3 CI rounds); never weakens an assertion to pass; merging stays human.
+- **mcp:** `cloud_run_result` tool — one ingested CI run + what each failure means (status, drift/bug/unclear verdict, advisory judge score + rationale), polling Cloud's new `/api/v1/runs`. Repo auto-detected from the git origin (`detectRepo`).
+- **core:** `declareGuard` (deterministic map writer for pending guard lines — idempotent, tail-section aware, never flips `[x]` back) + `fetchRunResult` / `detectRepo` in the cloud client.
+
+
 ## [0.32.0] — 2026-07-04
 
 ### Added
