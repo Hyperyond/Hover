@@ -45,6 +45,9 @@ export interface CloudHealRequest {
     /** Environment the spec drifted on — heal against THIS env's URL (matched
      *  to `.hover/environments.json`), not localhost. Null on older runs. */
     environment?: string | null;
+    /** The drifted environment's base URL (joined from the project's CI config),
+     *  so a local heal can target it without a second lookup. Null when unknown. */
+    envUrl?: string | null;
     createdAt: string;
   };
 }
@@ -184,6 +187,20 @@ export async function fetchProjects(
   return data.projects;
 }
 
+/** Who the token belongs to + every project it can see — one-call orientation
+ *  for a signed-in agent (identity + projects with their environments/accounts). */
+export interface CloudMe {
+  user: { id: string; email: string | null };
+  projects: CloudProject[];
+}
+
+export async function fetchMe(
+  creds: CloudCredentials,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CloudMe> {
+  return cloudJson<CloudMe>(creds, `/api/v1/me`, {}, fetchImpl);
+}
+
 /** One project's dashboard, computed cloud-side from ingested CI runs — the
  *  same `DashboardData` shape the local gatherer builds from `.hover/runs`, so
  *  a dashboard surface can swap data sources without a UI change. `repo` is the
@@ -295,6 +312,8 @@ export interface CloudRunResult {
     branch: string | null;
     commitSha: string | null;
     environment: string | null;
+    /** The run environment's base URL (joined from the project's CI config). */
+    envUrl?: string | null;
     ciUrl: string | null;
     createdAt: string;
   };

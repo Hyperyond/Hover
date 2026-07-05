@@ -14,6 +14,24 @@ import {
 import { healSlug, type CloudHealRequest, type CloudRunResult } from '@hover-dev/core/cloud';
 import type { GuardDeclaration } from '@hover-dev/core/engine';
 
+/** One-call orientation for a signed-in agent — assembled in mcp.ts from
+ *  fetchMe + git repo + the active-env marker, rendered by `cloudContext()`. */
+export interface CloudContext {
+  email: string | null;
+  /** This checkout's GitHub repo (owner/name), or null (no git origin). */
+  repo: string | null;
+  /** The Cloud project matching `repo`, or null when the repo isn't linked. */
+  project: {
+    name: string;
+    org: string;
+    repo: string;
+    environments: { name: string; url: string }[];
+    accounts: { label: string; environment: string }[];
+  } | null;
+  /** The environment active in the editor (`.hover/active.json`), or null. */
+  activeEnv: { name: string; url: string } | null;
+}
+
 /*
  * The hover-mcp engine, decoupled from the MCP wire layer so it's testable with
  * a mock Page. The user's OWN agent (Claude Code / Cursor) calls these via MCP:
@@ -97,6 +115,9 @@ export interface McpDeps {
   /** One ingested CI run + per-spec verdicts (drift/bug/unclear + judge) —
    *  the build loop's eyes after a push. */
   cloudRunResult?: (sha?: string, repo?: string) => Promise<CloudRunResult | { error: string }>;
+  /** Signed-in orientation: identity + this repo's project + environments +
+   *  the active env. `{ error }` when not connected / unreachable. */
+  cloudContext?: () => Promise<CloudContext | { error: string }>;
   /** Write a pending guard line (+ acceptance Note) onto the business map. */
   declareGuard?: (d: GuardDeclaration) => Promise<{ path: string; created: boolean } | { error: string }>;
 }
@@ -383,7 +404,12 @@ export class HoverMcpController {
       const what = r.hint.failingLocator
         ? `${r.hint.failingAction ?? 'failure'} on \`${r.hint.failingLocator}\``
         : r.hint.error;
-      const where = [r.project.repo, r.run.branch && `@ ${r.run.branch}`, r.run.ciUrl]
+      // Surface the drifted environment (+ its URL) so the heal targets the
+      // right deployment — activate that env before healing.
+      const env = r.run.environment
+        ? `env ${r.run.environment}${r.run.envUrl ? ` (${r.run.envUrl})` : ''}`
+        : undefined;
+      const where = [r.project.repo, r.run.branch && `@ ${r.run.branch}`, env, r.run.ciUrl]
         .filter(Boolean)
         .join(' · ');
       return `- **${healSlug(r.specFile)}** — ${what}\n  ${where}`;
@@ -393,8 +419,41 @@ export class HoverMcpController {
       '',
       ...lines,
       '',
-      'Heal locally, one at a time: `/mcp__hover__heal <slug>` (replays the recorded steps, re-grounds the drifted one in the live app; the user reviews the diff). A queue entry closes automatically when CI next sees that spec pass.',
+      'Heal locally, one at a time: `/mcp__hover__heal <slug>` (replays the recorded steps, re-grounds the drifted one in the live app; the user reviews the diff). Activate the drifted environment first so the heal runs against the right URL. A queue entry closes automatically when CI next sees that spec pass.',
     ].join('\n');
+  }
+
+  /** Signed-in orientation for the agent: who's connected, whether THIS repo is
+   *  a Cloud project, its environments (+ URLs) and accounts, and which env is
+   *  active in the editor. One call so the agent knows the lay of the land. */
+  async cloudContext(): Promise<string> {
+    if (!this.deps.cloudContext) return 'Hover Cloud unavailable in this server.';
+    const ctx = await this.deps.cloudContext();
+    if ('error' in ctx) return `✗ ${ctx.error}`;
+    const out: string[] = [
+      ctx.email ? `Connected to Hover Cloud as **${ctx.email}**.` : 'Connected to Hover Cloud.',
+    ];
+    if (!ctx.repo) {
+      out.push('No GitHub repo detected here (no git origin) — Cloud is repo-scoped, so pass a repo where needed.');
+    } else if (!ctx.project) {
+      out.push(`This repo (**${ctx.repo}**) isn't a Hover Cloud project yet — create one at cloud.gethover.dev/dashboard/new to get CI runs, the heal queue, and environments.`);
+    } else {
+      const p = ctx.project;
+      out.push(`Repo **${p.repo}** → project **${p.name}** (${p.org}).`);
+      if (p.environments.length) {
+        out.push('Environments:');
+        for (const e of p.environments) {
+          const accts = p.accounts.filter((a) => a.environment === e.name).map((a) => a.label);
+          out.push(`- **${e.name}** — ${e.url}${accts.length ? ` · accounts: ${accts.join(', ')}` : ''}`);
+        }
+      } else {
+        out.push('No Cloud-managed environments (just the in-CI localhost default).');
+      }
+    }
+    if (ctx.activeEnv) {
+      out.push('', `Active in the editor: **${ctx.activeEnv.name}** → ${ctx.activeEnv.url} — a drive / heal targets this URL.`);
+    }
+    return out.join('\n');
   }
 
   /** One ingested CI run + per-spec verdicts — the build loop's eyes after a

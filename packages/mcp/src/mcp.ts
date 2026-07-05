@@ -25,7 +25,7 @@ import {
 } from '@hover-dev/core/engine';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { detectRepo, fetchHealRequests, fetchRunResult, readCloudCredentials } from '@hover-dev/core/cloud';
+import { detectRepo, fetchHealRequests, fetchMe, fetchRunResult, readCloudCredentials } from '@hover-dev/core/cloud';
 import { HoverMcpController } from './mcp/controller.js';
 import { createHoverMcpServer } from './mcp/server.js';
 
@@ -168,6 +168,37 @@ const controller = new HoverMcpController({
     }
   },
   declareGuard: (d) => declareGuard(DEV_ROOT, d),
+  cloudContext: async () => {
+    const creds = readCloudCredentials();
+    if (!creds) {
+      return {
+        error:
+          'Hover Cloud not connected — set HOVER_CLOUD_TOKEN or run "Hover: Connect Hover Cloud" in VS Code.',
+      };
+    }
+    const repo = detectRepo(DEV_ROOT);
+    const active = readActiveEnv(DEV_ROOT);
+    try {
+      const me = await fetchMe(creds);
+      const project = repo ? me.projects.find((p) => p.repo === repo) : undefined;
+      return {
+        email: me.user.email,
+        repo,
+        project: project
+          ? {
+              name: project.name,
+              org: project.org,
+              repo: project.repo,
+              environments: project.environments ?? [],
+              accounts: project.accounts ?? [],
+            }
+          : null,
+        activeEnv: active ? { name: active.name, url: active.url } : null,
+      };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message.split('\n')[0] : String(e) };
+    }
+  },
 });
 
 const server = createHoverMcpServer(controller, { lang: LANG });

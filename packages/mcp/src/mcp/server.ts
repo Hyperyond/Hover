@@ -319,10 +319,20 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   );
 
   server.registerTool(
+    'cloud_context',
+    {
+      description:
+        "Orient yourself with Hover Cloud when signed in: who you're connected as, whether THIS repo is a Cloud project (its org + environments with URLs + test accounts), and which environment is active in the editor (what a drive/heal targets). Call it first to know the lay of the land. Needs a connected cloud account (HOVER_CLOUD_TOKEN or ~/.hover/credentials.json).",
+      inputSchema: {},
+    },
+    () => guard(() => c.cloudContext()),
+  );
+
+  server.registerTool(
     'cloud_failures',
     {
       description:
-        "Hover Cloud's open heal queue: the specs whose CI runs drifted (each with its failing locator + branch + CI link). Heal one locally with `/mcp__hover__heal <slug>`; an entry closes automatically when CI next sees that spec pass. Needs a connected cloud account (HOVER_CLOUD_TOKEN or ~/.hover/credentials.json).",
+        "Hover Cloud's open heal queue: the specs whose CI runs drifted (each with its failing locator, the environment it drifted on + that env's URL, branch, and CI link). Heal one locally with `/mcp__hover__heal <slug>` — activate the drifted environment first. An entry closes automatically when CI next sees that spec pass. Needs a connected cloud account (HOVER_CLOUD_TOKEN or ~/.hover/credentials.json).",
       inputSchema: {
         repo: z.string().optional().describe('Limit to one GitHub repo ("owner/name"). Omit for all your projects.'),
       },
