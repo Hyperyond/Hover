@@ -6,6 +6,13 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-07-05
+
+### Added
+
+- **mcp:** `cloud_context` tool — one-call orientation for a signed-in agent: who it's connected as, whether this repo is a Cloud project (org + environments with URLs + accounts), and which environment is active in the editor (what a drive/heal targets). Backed by the new `fetchMe` (`GET /api/v1/me`).
+- **core:** `fetchMe` + `CloudMe`; `envUrl` on `CloudHealRequest.run` and `CloudRunResult.run` — the drifted/run environment's base URL, joined server-side, so a heal/build targets the right deployment without a second call. `cloud_failures` now surfaces the environment + URL per drifted spec and tells the agent to activate it before healing.
+
 ## [0.33.0] — 2026-07-05
 
 **Guard-first development — define the behavior, ship the code, keep the regression.**
