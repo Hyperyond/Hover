@@ -15,6 +15,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   detectRepo,
   fetchHealRequests,
@@ -188,4 +189,8 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+// Run only when invoked as the CLI — NOT when imported (tests import
+// `looksLikeFeatureWork`; running main() there would block on stdin forever).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}
