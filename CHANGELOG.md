@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-07-05
+
+### Added
+
+- **mcp:** `hover-hook` — a second bin that wires Hover into Claude Code's hooks so its deterministic checks run inside the agent loop (no AI). Subcommands: `session-start` injects Cloud + active-environment orientation (identity, project, env URL, drifted specs) as context so the agent starts oriented; `user-prompt` nudges `/mcp__hover__guard` when a prompt looks like new behavior; `stop` surfaces `.hover/` lint at end of turn; `install` merges all three into `.claude/settings.json` idempotently. Enable with `hover-hook install`.
+
 ## [0.34.0] — 2026-07-05
 
 ### Added
