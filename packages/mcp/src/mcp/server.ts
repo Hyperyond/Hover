@@ -63,6 +63,32 @@ export interface HoverServerOptions {
   lang?: string;
 }
 
+/*
+ * ─── One capability, one home: tools vs prompts (vs hooks) ───────────────────
+ * Keep the surface non-overlapping by registering each capability on exactly
+ * ONE axis:
+ *
+ *   registerTool   = a PRIMITIVE the agent calls mid-reasoning (read a snapshot,
+ *                    click, record a fact, replay a spec, lint_map, cloud_*,
+ *                    declare_guard). Composable, idempotent/side-effect-scoped.
+ *   registerPrompt = a user-typed `/mcp__hover__*` WORKFLOW that orchestrates
+ *                    those primitives (test_app, guard, build, heal, optimize,
+ *                    lint, ask).
+ *   (hooks)        = automatic lifecycle triggers that only SURFACE/NUDGE using
+ *                    the same primitives — never orchestrate. See hook.ts.
+ *
+ * Rules to keep it clean:
+ *  - Never register the SAME workflow as both a prompt and a tool (no
+ *    `start_guard` tool mirroring the `/guard` prompt — the agent can't invoke
+ *    a prompt, but it can compose the primitives, so the prompt stays the sole
+ *    orchestration entry).
+ *  - A workflow reusing a primitive is expected (the `/lint` prompt builds on
+ *    the `lint_map` tool; `/optimize` loops over `optimize_brief`). That is
+ *    layering, not duplication.
+ *  - Name them apart on purpose: workflow = plain verb (`lint`, `optimize`,
+ *    `guard`); primitive = specific (`lint_map`, `optimize_brief`,
+ *    `declare_guard`).
+ */
 export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOptions = {}): McpServer {
   const server = new McpServer({ name: 'hover', version: '0.1.0' });
   const guard = (fn: () => Promise<string>) => fn().then(md, (e) => md(`✗ ${errLine(e)}`));

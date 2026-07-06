@@ -12,6 +12,23 @@
  * Contract: read the hook JSON on stdin, print a JSON result on stdout, exit 0.
  * These run every session/turn, so they stay light and NEVER break the session —
  * any error just prints `{}` and exits 0. Only `install` writes files / plain text.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE THIRD TRIGGER AXIS — the boundary that keeps hooks from overlapping the
+ * MCP tools/prompts (see server.ts for the tool-vs-prompt half):
+ *
+ *   Prompt  = user-typed `/mcp__hover__*`  → orchestrates a multi-step workflow
+ *   Tool    = agent-invoked                → runs ONE primitive
+ *   Hook    = lifecycle event (automatic)  → SURFACES / NUDGES, never more
+ *
+ * A hook must only READ the shared primitives (cloud data, lintWiki, …) and
+ * surface or suggest — it must NEVER orchestrate a workflow or block/gate. If a
+ * hook auto-ran `/heal` or blocked "until green", it would fight the user's own
+ * prompts and the build loop. So: session-start injects context (doesn't heal),
+ * user-prompt nudges toward /guard (doesn't declare), stop reminds via a
+ * non-blocking systemMessage (doesn't fix or block). Reusing a primitive at a
+ * new trigger point is fine; re-implementing a workflow here is not.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
