@@ -25,6 +25,8 @@ Already installed? Update the MCP with `npm i -g @hover-dev/mcp@latest`, then re
 
 Then, in your agent: `/mcp__hover__test_app` explores your app and crystallizes specs into `__vibe_tests__/`. Come back here to review the Business Map, watch the Dashboard, and run the suite. The differentiator is **record == replay** — the agent acts through grounded tools, so the selector that drove a click is the exact one saved, and the saved tests run in your CI with **zero AI**.
 
+The point of the suite is regression safety for AI-written code: you define a flow's behavior once, as a spec, and it guards that behavior on every future change — however much the AI rewrites the code underneath, the spec holds it to what you defined.
+
 ## Requirements
 
 - **VS Code 1.85** or higher.

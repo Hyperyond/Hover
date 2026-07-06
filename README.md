@@ -12,7 +12,7 @@
 
 The differentiator is **record == replay**: the agent acts through Hover's *grounded* browser tools, so the selector that drove a click is the exact one saved, and crystallization is **deterministic** (no LLM writing code). No confabulated selectors, no runtime dependency on Hover, no lock-in.
 
-> **Define the behavior. Ship the code. Keep the regression.** Beyond authoring, Hover closes a full loop: **declare** what a feature should do, let your agent **write the code**, run the specs in **CI**, and Hover Cloud **judges** each failure (drift vs bug) and routes the fix back — iterating until green. See [Guard-first development](#guard-first-development).
+> **Define the behavior. Ship the code. Keep the regression.** Vibe-coding is fast, but it edits old code as readily as new, so a flow that worked yesterday breaks quietly today. Hover flips the order: you **declare what a feature should do** first, and that spec becomes a fixed contract your agent keeps **fitting the code to** — write the code, run the specs in **CI**, and Hover Cloud **judges** each failure (drift vs bug) and routes the fix back, iterating until green. The AI fits to your spec, not the other way around. See [Guard-first development](#guard-first-development).
 
 ## The suite — four surfaces, one artifact
 
