@@ -24,7 +24,8 @@
     "access": "public"
   },
   "bin": {
-    "hover-mcp": "./dist/mcp.js"
+    "hover-mcp": "./dist/mcp.js",
+    "hover-hook": "./dist/hook.js"
   },
   "files": [
     "dist"
