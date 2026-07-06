@@ -30,9 +30,9 @@
  * new trigger point is fine; re-implementing a workflow here is not.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import {
   detectRepo,
   fetchHealRequests,
@@ -208,6 +208,17 @@ async function main(): Promise<void> {
 
 // Run only when invoked as the CLI — NOT when imported (tests import
 // `looksLikeFeatureWork`; running main() there would block on stdin forever).
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Compare REAL paths: the `hover-hook` bin is a symlink to this file, so
+// argv[1] (the symlink) won't equal import.meta.url (the realpath) directly.
+function isCliEntry(): boolean {
+  const arg = process.argv[1];
+  if (!arg) return false;
+  try {
+    return realpathSync(arg) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
+if (isCliEntry()) {
   await main();
 }
