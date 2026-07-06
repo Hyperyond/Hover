@@ -70,6 +70,9 @@ interface HomePayload {
   cloud: ReturnType<typeof cloudState>;
   /** The Cloud project (owner/name) this workspace maps to; null when unknown. */
   repo: string | null;
+  /** Whether `repo` actually resolves to a Cloud project. A detected git repo
+   *  with NO Cloud project → false (offer to create it), distinct from repo=null. */
+  projectLinked: boolean;
   source: Source;
   remoteAvailable: boolean;
   dashboard: DashboardData;
@@ -247,6 +250,7 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       type: 'data',
       cloud,
       repo: repo ?? null,
+      projectLinked: !!project,
       source,
       remoteAvailable,
       dashboard,
@@ -327,6 +331,9 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       case 'pickRepo':
         void this.pickRepo();
         return;
+      case 'openNewProject':
+        void this.openNewProject();
+        return;
       case 'copyTestApp':
         void copyCmd('/mcp__hover__test_app', 'map + test your app');
         return;
@@ -399,6 +406,16 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
   private async firstImportedId(name: string): Promise<string> {
     const all = await this.store.load();
     return all.find((e) => e.name === name)?.id ?? 'local';
+  }
+
+  /** Open Cloud's new-project page for THIS repo (pre-selected via ?repo=) —
+   *  project creation needs the GitHub App + repo writes, so it happens in the
+   *  browser, not inline. */
+  private async openNewProject(): Promise<void> {
+    const base = (readCloudCredentials()?.url ?? DEFAULT_CLOUD_URL).replace(/\/$/, '');
+    const repo = await resolveRepo(this.context);
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    void vscode.env.openExternal(vscode.Uri.parse(`${base}/dashboard/new${qs}`));
   }
 
   /** Manual project selection — for when git-remote auto-detection misses (a
