@@ -6,6 +6,17 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-07-06
+
+### Added
+
+- **mcp:** `test_app` Phase 1 (mapping the business lines from the code) can now fan out across the calling agent's own sub-agents — it's pure code-reading (no browser, no shared state), so on a large app the agent may split the codebase by area, map concurrently, and merge into one map. Called out as the ONLY parallelizable phase; Phase 3 records against a single shared browser and stays strictly sequential. Hover still spawns no agents itself.
+- **vscode-ext (0.37.0):** the panel detects whether the current repo is actually a Cloud project (not just git-detected) and offers a one-click **Create project** (opens Cloud's new-project page pre-selected to the repo) when it isn't. See `packages/vscode-ext/CHANGELOG.md`.
+
+### Fixed
+
+- **mcp (0.35.1):** `hover-hook` was a no-op when invoked via its bin symlink (the installed hook path) — the CLI-entry guard compared the symlink path to the realpath. It now compares real paths, so the Claude Code hooks fire.
+
 ## [0.35.0] — 2026-07-05
 
 ### Added

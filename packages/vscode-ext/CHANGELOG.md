@@ -3,6 +3,11 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.37.0 — 2026-07-06
+
+- **Connect the current repo to Hover Cloud, from the panel.** Signed in, the panel now tells whether *this* repo is actually a Cloud project — a detected repo with no project no longer masquerades as linked with an empty Remote/Heal. When it isn't linked, a **Create project** button opens Cloud's new-project page pre-selected to this repo (creation runs in the browser — it needs the GitHub App to write the workflow + secrets), with a **pick existing** fallback.
+- **Fixed (0.35.1):** the `hover-hook` bin was a no-op when invoked via its symlink (the installed hook path), so the Claude Code hooks silently did nothing — they now fire. Update with `npm i -g @hover-dev/mcp@latest`.
+
 ## 0.33.0–0.36.0 — 2026-07-04
 
 **The panel is one environment-aware console; sign-in is optional again.**
