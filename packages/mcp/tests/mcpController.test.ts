@@ -184,3 +184,59 @@ describe('HoverMcpController', () => {
     expect(c.steps).toHaveLength(0); // a failed assert is not buffered
   });
 });
+
+describe('verifySpecs', () => {
+  const mkSteps = (): SkillStep[] => [
+    { kind: 'step', tool: 'click_control', input: { role: 'button', name: 'Sign in' } } as unknown as SkillStep,
+  ];
+
+  it('fast mode replays each runnable spec and aggregates pass results', async () => {
+    const page = mockPage();
+    const c = new HoverMcpController({
+      getPage: async () => page,
+      crystallize: async () => ({ path: '/p/x.spec.ts' }),
+      readSpecSteps: async (slug) => ({ steps: mkSteps(), startUrl: 'http://app', redactionEnvVars: [] }),
+      listSpecSlugs: async () => ['checkout', 'log-in'],
+    });
+    const out = JSON.parse(await c.verifySpecs());
+    expect(out.mode).toBe('fast');
+    expect(out.summary).toEqual({ pass: 2, failed: 0, blocked: 0 });
+    expect(out.note).toMatch(/CI remains the source of truth/);
+  });
+
+  it('blocks a spec with missing credential env vars without touching the browser', async () => {
+    let pageRequested = false;
+    const c = new HoverMcpController({
+      getPage: async () => {
+        pageRequested = true;
+        return mockPage();
+      },
+      crystallize: async () => ({ path: '/p/x.spec.ts' }),
+      readSpecSteps: async () => ({ steps: mkSteps(), redactionEnvVars: ['HOVER_NOPE_PASS'] }),
+    });
+    delete process.env.HOVER_NOPE_PASS;
+    const out = JSON.parse(await c.verifySpecs(['log-in']));
+    expect(out.summary).toEqual({ pass: 0, failed: 0, blocked: 1 });
+    expect(out.results[0].reason).toMatch(/HOVER_NOPE_PASS.*NOT drift/s);
+    expect(pageRequested).toBe(false);
+  });
+
+  it('faithful mode maps runner results and keeps blocked preflights', async () => {
+    const c = new HoverMcpController({
+      getPage: async () => mockPage(),
+      crystallize: async () => ({ path: '/p/x.spec.ts' }),
+      readSpecSteps: async (slug) =>
+        slug === 'locked'
+          ? { steps: mkSteps(), redactionEnvVars: ['HOVER_LOCKED_PASS'] }
+          : { steps: mkSteps(), redactionEnvVars: [] },
+      runSpecTests: async (slugs) => ({
+        results: slugs.map((s) => (s === 'checkout' ? { spec: s, status: 'pass' as const } : { spec: s, status: 'fail' as const, error: 'expect failed' })),
+      }),
+    });
+    delete process.env.HOVER_LOCKED_PASS;
+    const out = JSON.parse(await c.verifySpecs(['checkout', 'cart', 'locked'], 'faithful'));
+    expect(out.summary).toEqual({ pass: 1, failed: 1, blocked: 1 });
+    const byStatus = Object.fromEntries(out.results.map((r: { spec: string; status: string }) => [r.spec, r.status]));
+    expect(byStatus).toEqual({ checkout: 'pass', cart: 'fail', locked: 'blocked' });
+  });
+});

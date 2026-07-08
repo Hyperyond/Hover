@@ -120,6 +120,13 @@ export interface McpDeps {
   /** Signed-in orientation: identity + this repo's project + environments +
    *  the active env. `{ error }` when not connected / unreachable. */
   cloudContext?: () => Promise<CloudContext | { error: string }>;
+  /** Every crystallized spec slug (one per `.hover/sidecars/<slug>.json`). */
+  listSpecSlugs?: () => Promise<string[]>;
+  /** Faithful verify: run the REAL spec files via `playwright test` (the same
+   *  engine + files CI runs). `{ error }` when playwright can't run here. */
+  runSpecTests?: (
+    slugs: string[],
+  ) => Promise<{ results: { spec: string; status: 'pass' | 'fail'; error?: string }[] } | { error: string }>;
   /** Write a pending guard line (+ acceptance Note) onto the business map. */
   declareGuard?: (d: GuardDeclaration) => Promise<{ path: string; created: boolean } | { error: string }>;
 }
@@ -397,6 +404,88 @@ export class HoverMcpController {
         lookingFor: f.target,
         error: f.error,
         next: 'Re-snapshot at this point, re-locate the control by the intent in "lookingFor" (its label/role may have changed), re-drive from here, then crystallize_spec with the SAME name to overwrite the healed spec.',
+      },
+      null,
+      2,
+    );
+  }
+
+  /** The inner-loop verify: batch-check flows after a code edit, BEFORE a push.
+   *  `fast` replays each spec's recorded grounded steps (seconds, shares the
+   *  live browser); `faithful` runs the real spec files via `playwright test`
+   *  (the same engine + files CI runs — use once before pushing). Read-only and
+   *  advisory by design: a local green means "worth pushing"; only a CI-green
+   *  run is authoritative (and only CI closes heal-queue entries). */
+  async verifySpecs(specs?: string[], mode: 'fast' | 'faithful' = 'fast'): Promise<string> {
+    if (!this.deps.readSpecSteps) return 'Verify unavailable in this server.';
+    const slugs = specs?.length ? specs : ((await this.deps.listSpecSlugs?.()) ?? []);
+    if (!slugs.length) {
+      return 'No crystallized specs to verify — nothing under .hover/sidecars. Crystallize flows first (or pass specific spec slugs).';
+    }
+
+    // Credentials preflight for EVERY requested spec, before any execution —
+    // a missing login var is a setup problem, not drift, in both modes.
+    type Item =
+      | { spec: string; status: 'pass'; steps: string }
+      | { spec: string; status: 'drift' | 'fail'; brokeAtStep?: number; tool?: string; lookingFor?: unknown; error?: string }
+      | { spec: string; status: 'blocked'; reason: string };
+    const items: Item[] = [];
+    const runnable: { slug: string; steps: SkillStep[]; startUrl?: string }[] = [];
+    for (const slug of slugs) {
+      const sc = await this.deps.readSpecSteps(slug);
+      if (!sc) {
+        items.push({ spec: slug, status: 'blocked', reason: `no sidecar (.hover/sidecars/${slug}.json) — only Hover-crystallized specs verify` });
+        continue;
+      }
+      const missing = (sc.redactionEnvVars ?? []).filter((v) => process.env[v] === undefined);
+      if (missing.length) {
+        items.push({
+          spec: slug,
+          status: 'blocked',
+          reason: `missing credential env var(s) ${missing.join(', ')} — export the environment's credentials (.hover/.env) first. Setup problem, NOT drift.`,
+        });
+        continue;
+      }
+      runnable.push({ slug, steps: sc.steps, startUrl: sc.startUrl });
+    }
+
+    if (mode === 'faithful') {
+      if (!this.deps.runSpecTests) return 'Faithful verify unavailable in this server (no playwright test runner wired).';
+      if (runnable.length) {
+        const res = await this.deps.runSpecTests(runnable.map((r) => r.slug));
+        if ('error' in res) return `✗ ${res.error}`;
+        for (const r of res.results) {
+          items.push(r.status === 'pass' ? { spec: r.spec, status: 'pass', steps: 'playwright test' } : { spec: r.spec, status: 'fail', error: r.error });
+        }
+      }
+    } else {
+      // Sequential on the ONE shared browser — never parallel.
+      for (const r of runnable) {
+        const page = await this.livePage();
+        const res = await replayOnPage(page, r.startUrl ?? page.url(), r.steps as ReplayStep[]);
+        if (res.ok) {
+          items.push({ spec: r.slug, status: 'pass', steps: `${res.ran}/${res.total} grounded steps` });
+        } else {
+          const f = res.failures[0];
+          items.push({ spec: r.slug, status: 'drift', brokeAtStep: f.index, tool: f.tool, lookingFor: f.target, error: f.error });
+        }
+      }
+    }
+
+    const summary = {
+      pass: items.filter((i) => i.status === 'pass').length,
+      failed: items.filter((i) => i.status === 'drift' || i.status === 'fail').length,
+      blocked: items.filter((i) => i.status === 'blocked').length,
+    };
+    return JSON.stringify(
+      {
+        mode,
+        summary,
+        results: items,
+        note:
+          'LOCAL verification of the current working tree — a draft signal, not the verdict. Green = worth pushing; CI remains the source of truth and only a CI-green run closes heal entries. ' +
+          'A failure right after YOUR edit usually means the edit broke the flow — fix the code (or re-record if the change was intentional); heal only confirmed UI drift.' +
+          (mode === 'fast' ? ' Before pushing, run once with mode:"faithful" — it executes the real spec files with the same engine CI uses.' : ''),
       },
       null,
       2,

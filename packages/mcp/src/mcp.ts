@@ -24,7 +24,11 @@ import {
   type Redaction,
 } from '@hover-dev/core/engine';
 import { existsSync, readFileSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
+import { parsePlaywrightRun } from '@hover-dev/core/dashboard';
 import { detectRepo, fetchHealRequests, fetchMe, fetchRunResult, readCloudCredentials } from '@hover-dev/core/cloud';
 import { HoverMcpController } from './mcp/controller.js';
 import { createHoverMcpServer } from './mcp/server.js';
@@ -200,6 +204,64 @@ const controller = new HoverMcpController({
     }
   },
   declareGuard: (d) => declareGuard(DEV_ROOT, d),
+  listSpecSlugs: async () => {
+    try {
+      const files = await readdir(join(DEV_ROOT, '.hover', 'sidecars'));
+      return files
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => f.replace(/\.json$/, ''))
+        .sort();
+    } catch {
+      return []; // no sidecars dir yet
+    }
+  },
+  // Faithful verify: the REAL spec files through the REAL engine — exactly what
+  // CI runs. BASE_URL follows the same target the drive uses.
+  runSpecTests: async (slugs) => {
+    const exec = promisify(execFile);
+    const args = ['playwright', 'test', ...slugs.map((s) => `${s}.spec.ts`), '--reporter=json'];
+    let stdout: string;
+    try {
+      ({ stdout } = await exec('npx', args, {
+        cwd: DEV_ROOT,
+        env: { ...process.env, BASE_URL: TARGET },
+        timeout: 5 * 60_000,
+        maxBuffer: 32 * 1024 * 1024,
+      }));
+    } catch (e) {
+      // `playwright test` exits non-zero when specs FAIL — that still produces
+      // the JSON report on stdout. Only a missing report is a real run error.
+      const err = e as { stdout?: string; message?: string };
+      if (!err.stdout?.trim().startsWith('{')) {
+        return {
+          error: `couldn't run \`npx playwright test\` in ${DEV_ROOT} — is @playwright/test installed in this project? (${(err.message ?? '').split('\n')[0]})`,
+        };
+      }
+      stdout = err.stdout;
+    }
+    let report: unknown;
+    try {
+      report = JSON.parse(stdout);
+    } catch {
+      return { error: 'playwright test produced no parseable JSON report' };
+    }
+    const statuses = parsePlaywrightRun(report); // { '<slug>.spec.ts': pass|fail|flaky }
+    const errors = firstErrorsByFile(report);
+    return {
+      results: slugs.map((slug) => {
+        const s = statuses[`${slug}.spec.ts`];
+        if (s === 'pass' || s === 'flaky') return { spec: slug, status: 'pass' as const };
+        return {
+          spec: slug,
+          status: 'fail' as const,
+          error:
+            s === 'fail'
+              ? (errors.get(`${slug}.spec.ts`) ?? 'failed (see playwright output)')
+              : 'did not run — the file filter matched nothing (was the spec renamed?)',
+        };
+      }),
+    };
+  },
   cloudContext: async () => {
     const creds = readCloudCredentials();
     if (!creds) {
@@ -232,6 +294,30 @@ const controller = new HoverMcpController({
     }
   },
 });
+
+/** First error line per spec-file basename from a Playwright JSON report —
+ *  enough for the agent to know WHY without the full report. Defensive walk. */
+function firstErrorsByFile(report: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  interface Suite { file?: string; specs?: Array<{ file?: string; tests?: Array<{ results?: Array<{ error?: { message?: string } }> }> }>; suites?: Suite[] }
+  const visit = (suite: Suite, inherited?: string): void => {
+    const file = suite.file ?? inherited;
+    for (const spec of suite.specs ?? []) {
+      const base = (spec.file ?? file ?? '').split(/[\\/]/).pop() ?? '';
+      if (!base || out.has(base)) continue;
+      for (const t of spec.tests ?? []) {
+        const msg = t.results?.map((r) => r.error?.message).find(Boolean);
+        if (msg) {
+          out.set(base, msg.replace(/\[[0-9;]*m/g, '').split('\n').find((l) => l.trim())?.slice(0, 300) ?? 'failed');
+          break;
+        }
+      }
+    }
+    for (const child of suite.suites ?? []) visit(child, file);
+  };
+  for (const s of ((report as { suites?: Suite[] })?.suites ?? [])) visit(s);
+  return out;
+}
 
 const server = createHoverMcpServer(controller, { lang: LANG });
 await server.connect(new StdioServerTransport());

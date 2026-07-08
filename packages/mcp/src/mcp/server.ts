@@ -272,6 +272,19 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
     ({ slug }) => guard(() => c.replaySpec(slug)),
   );
 
+  server.registerTool(
+    'verify_specs',
+    {
+      description:
+        "The inner-loop check: after editing code, verify the app's flows still pass — BEFORE pushing. mode 'fast' (default) replays each spec's recorded grounded steps against the live app in seconds; mode 'faithful' runs the real spec files via `playwright test` (the same engine + files CI runs — use once before a push). Returns structured pass/drift/blocked per spec with the exact broken step. Read-only and advisory: local green = worth pushing; CI remains the source of truth. A failure right after YOUR edit usually means the edit broke the flow — fix the code, don't heal.",
+      inputSchema: {
+        specs: z.array(z.string()).optional().describe('Spec slugs to verify (e.g. ["checkout","log-in"]). Omit to verify every crystallized spec.'),
+        mode: z.enum(['fast', 'faithful']).optional().describe("'fast' = replay recorded steps (seconds, default). 'faithful' = run the real spec files with playwright test, exactly like CI."),
+      },
+    },
+    ({ specs, mode }) => guard(() => c.verifySpecs(specs, mode ?? 'fast')),
+  );
+
   // ── Page Object extraction (detect → ask → extract) ──────────────────────
   server.registerTool(
     'detect_shared_flows',
