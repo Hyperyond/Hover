@@ -84,6 +84,28 @@ export function groundedLocate(page: Page, g: GroundedTarget): Locator | null {
   return null;
 }
 
+/** Redacted-credential form stored in the sidecar: `process.env.X ?? ''`. */
+const ENV_EXPR = /^process\.env\.([A-Za-z_][A-Za-z0-9_]*)\s*\?\?\s*''$/;
+
+/** Resolve a sidecar fill value at replay time. Credentials are stored as the
+ *  CODE EXPRESSION `process.env.X ?? ''` (never the secret), so replaying must
+ *  read the real value from the environment — typing the literal expression
+ *  into a password field would fail the login and misreport it as drift.
+ *  A referenced-but-unset variable throws (fail fast, with the fix). */
+export function resolveReplayValue(value: unknown): string {
+  const raw = String(value ?? '');
+  const m = ENV_EXPR.exec(raw.trim());
+  if (!m) return raw;
+  const resolved = process.env[m[1]];
+  if (resolved === undefined) {
+    throw new Error(
+      `missing credential env var ${m[1]} — export this environment's credentials first ` +
+        `(VS Code: Environments → "Export credentials for MCP", which writes .hover/.env), then retry`,
+    );
+  }
+  return resolved;
+}
+
 /** Replay ONE grounded step on a page. Returns 'skipped' for non-actuation
  *  steps; throws on a failed locate / action (the caller records it). */
 export async function applyGroundedStep(page: Page, step: ReplayStep): Promise<'ok' | 'skipped'> {
@@ -97,10 +119,10 @@ export async function applyGroundedStep(page: Page, step: ReplayStep): Promise<'
       await loc.click({ timeout: ACTION_TIMEOUT });
       return 'ok';
     case 'fill_control':
-      await loc.fill(String(input.value ?? ''), { timeout: ACTION_TIMEOUT });
+      await loc.fill(resolveReplayValue(input.value), { timeout: ACTION_TIMEOUT });
       return 'ok';
     case 'select_control':
-      await loc.selectOption(String(input.value ?? ''), { timeout: ACTION_TIMEOUT });
+      await loc.selectOption(resolveReplayValue(input.value), { timeout: ACTION_TIMEOUT });
       return 'ok';
     case 'check_control':
       if (input.checked === false) await loc.uncheck({ timeout: ACTION_TIMEOUT });

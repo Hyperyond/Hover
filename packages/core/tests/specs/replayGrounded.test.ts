@@ -79,3 +79,30 @@ describe('replayOnPage', () => {
     expect(res.failures[0].error).toContain('could not locate');
   });
 });
+
+describe('resolveReplayValue', () => {
+  it('passes plain values through untouched', async () => {
+    const { resolveReplayValue } = await import('../../src/specs/replayGrounded.js');
+    expect(resolveReplayValue('hello')).toBe('hello');
+    expect(resolveReplayValue('')).toBe('');
+    expect(resolveReplayValue(undefined)).toBe('');
+  });
+
+  it('resolves a redacted env expression from the environment', async () => {
+    const { resolveReplayValue } = await import('../../src/specs/replayGrounded.js');
+    process.env.HOVER_TEST_USER = 'alice@example.com';
+    try {
+      expect(resolveReplayValue("process.env.HOVER_TEST_USER ?? ''")).toBe('alice@example.com');
+    } finally {
+      delete process.env.HOVER_TEST_USER;
+    }
+  });
+
+  it('throws with the fix when the env var is unset (never types the literal)', async () => {
+    const { resolveReplayValue } = await import('../../src/specs/replayGrounded.js');
+    delete process.env.HOVER_MISSING_PASS;
+    expect(() => resolveReplayValue("process.env.HOVER_MISSING_PASS ?? ''")).toThrow(
+      /HOVER_MISSING_PASS.*Export credentials for MCP/s,
+    );
+  });
+});

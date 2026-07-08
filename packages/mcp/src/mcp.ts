@@ -64,9 +64,40 @@ loadHoverDotenv(DEV_ROOT);
 
 // Target precedence: explicit HOVER_TARGET wins (CI, autoheal); otherwise follow
 // the environment the user activated in the editor (.hover/active.json); else a
-// sensible localhost default.
-const TARGET =
-  process.env.HOVER_TARGET || readActiveEnv(DEV_ROOT)?.url || 'http://localhost:5173';
+// sensible localhost default. Track WHERE it came from so an unreachable target
+// can say exactly what to fix instead of handing the agent a blank page.
+const activeEnvAtBoot = readActiveEnv(DEV_ROOT);
+const TARGET = process.env.HOVER_TARGET || activeEnvAtBoot?.url || 'http://localhost:5173';
+const TARGET_SOURCE = process.env.HOVER_TARGET
+  ? 'HOVER_TARGET'
+  : activeEnvAtBoot?.url
+    ? `the active environment "${activeEnvAtBoot.name}" (.hover/active.json)`
+    : 'the built-in default (no HOVER_TARGET, no active environment)';
+
+/** Fail fast when the target app isn't answering — BEFORE launching a browser.
+ *  Any HTTP response (even 4xx/5xx) counts as reachable; only a network-level
+ *  failure stops. Cached once per process after a success. */
+let targetVerified = false;
+async function assertTargetReachable(): Promise<void> {
+  if (targetVerified) return;
+  try {
+    await fetch(TARGET, { method: 'HEAD', signal: AbortSignal.timeout(4000), redirect: 'manual' });
+    targetVerified = true;
+  } catch {
+    // Some dev servers reject HEAD — retry once with GET before concluding.
+    try {
+      await fetch(TARGET, { signal: AbortSignal.timeout(4000), redirect: 'manual' });
+      targetVerified = true;
+    } catch {
+      throw new Error(
+        `target ${TARGET} is not responding (from ${TARGET_SOURCE}). ` +
+          `Is the app running? Start the dev server, or point Hover at the right URL: ` +
+          `activate the correct environment in VS Code (Environments tab) or set HOVER_TARGET. ` +
+          `Nothing was driven — this is a setup problem, not app drift.`,
+      );
+    }
+  }
+}
 
 const originOf = (u: string): string | null => {
   try {
@@ -81,6 +112,7 @@ let browser: Browser | null = null;
 /** Launch/connect the debug Chrome lazily and return the page on the app. */
 async function getPage(): Promise<Page> {
   if (!browser || !browser.isConnected()) {
+    await assertTargetReachable(); // fail fast with the fix, not a blank page
     await launchDebugChrome({ port: PORT, url: TARGET });
     browser = await chromium.connectOverCDP(CDP_URL, { timeout: 8000 });
   }
@@ -114,7 +146,7 @@ const controller = new HoverMcpController({
   },
   readSpecSteps: async (slug: string) => {
     const sc = await readSidecar(DEV_ROOT, slug);
-    return sc ? { steps: sc.steps, startUrl: TARGET } : null;
+    return sc ? { steps: sc.steps, startUrl: TARGET, redactionEnvVars: sc.redactionEnvVars } : null;
   },
   detectSharedFlows: () => detectExtractableFlows(DEV_ROOT),
   extractPageObjects: async () => {

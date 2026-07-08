@@ -90,7 +90,9 @@ export interface McpDeps {
   recallFact?: (name: string) => Promise<string | null>;
   /** Read a saved spec's recorded grounded steps (its `.hover/sidecars/<slug>.json`)
    *  so self-heal can replay them against the live app. */
-  readSpecSteps?: (slug: string) => Promise<{ steps: SkillStep[]; startUrl?: string } | null>;
+  readSpecSteps?: (
+    slug: string,
+  ) => Promise<{ steps: SkillStep[]; startUrl?: string; redactionEnvVars?: string[] } | null>;
   /** Detect NON-login flows shared across saved specs (for the extract offer). */
   detectSharedFlows?: () => Promise<SharedFlow[]>;
   /** Lift shared flows into Page Objects + fold the specs that use them. */
@@ -366,6 +368,17 @@ export class HoverMcpController {
     if (!sc) {
       return `No sidecar for "${slug}" — only Hover-crystallized specs can be replayed (looked for .hover/sidecars/${slug}.json).`;
     }
+    // Fail fast BEFORE touching the browser: a spec whose login credentials
+    // aren't in the environment can't replay meaningfully — the login step
+    // would fail and be misdiagnosed as drift.
+    const missing = (sc.redactionEnvVars ?? []).filter((v) => process.env[v] === undefined);
+    if (missing.length) {
+      return (
+        `✗ Can't replay "${slug}" — missing credential env var(s): ${missing.join(', ')}. ` +
+        `Export this environment's credentials first (VS Code: Environments → "Export credentials for MCP", ` +
+        `which writes .hover/.env), then retry. Not drift — do not heal.`
+      );
+    }
     const page = await this.livePage();
     const devUrl = sc.startUrl ?? page.url();
     const res = await replayOnPage(page, devUrl, sc.steps as ReplayStep[]);
@@ -463,7 +476,12 @@ export class HoverMcpController {
     const res = await this.deps.cloudRunResult(sha, repo);
     if ('error' in res) return `✗ ${res.error}`;
     if (res.pending || !res.run) {
-      return `⏳ No ingested run yet${sha ? ` for ${sha.slice(0, 7)}` : ''} — CI is likely still running. Poll again in ~30-60s.`;
+      return (
+        `⏳ No ingested run yet${sha ? ` for ${sha.slice(0, 7)}` : ''} — CI is likely still running. Poll again in ~30-60s. ` +
+        `If CI has FINISHED and this stays pending, the repo is probably missing the HOVER_INGEST_TOKEN secret ` +
+        `(the workflow's "Report to Hover Cloud" step self-skips without it) — tell the user to add it from the ` +
+        `project's page on cloud.gethover.dev rather than polling forever.`
+      );
     }
     const { run, specs = [] } = res;
     const failed = specs.filter((s) => s.status === 'failed');
