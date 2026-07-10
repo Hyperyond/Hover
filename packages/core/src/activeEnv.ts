@@ -51,3 +51,22 @@ export function writeActiveEnv(devRoot: string, env: ActiveEnv): void {
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, `${JSON.stringify(env, null, 2)}\n`, 'utf8');
 }
+
+/** Load `.hover/.env` (the exported test-account credentials) into an env map —
+ *  by default `process.env`, never overriding vars already set. Missing or
+ *  unreadable file is fine. Shared by the MCP server and the hooks helper so
+ *  every local surface resolves HOVER_<LABEL>_USER/PASS the same way. */
+export function loadHoverEnvFile(
+  devRoot: string,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  try {
+    const raw = readFileSync(join(devRoot, '.hover', '.env'), 'utf8');
+    for (const line of raw.split('\n')) {
+      const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line.trim());
+      if (m && env[m[1]] === undefined) env[m[1]] = m[2];
+    }
+  } catch {
+    /* no .env — fine */
+  }
+}

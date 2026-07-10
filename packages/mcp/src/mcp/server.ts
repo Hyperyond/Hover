@@ -74,8 +74,10 @@ export interface HoverServerOptions {
  *   registerPrompt = a user-typed `/mcp__hover__*` WORKFLOW that orchestrates
  *                    those primitives (test_app, guard, build, heal, optimize,
  *                    lint, ask).
- *   (hooks)        = automatic lifecycle triggers that only SURFACE/NUDGE using
- *                    the same primitives — never orchestrate. See hook.ts.
+ *   (hooks)        = automatic lifecycle triggers that SURFACE/NUDGE — plus one
+ *                    opt-in deterministic Stop GATE (`install --gate`) — using
+ *                    the same primitives; never orchestrate or auto-fix. See
+ *                    hook.ts.
  *
  * Rules to keep it clean:
  *  - Never register the SAME workflow as both a prompt and a tool (no
@@ -564,17 +566,20 @@ Read the guard: find "${line}" on \`.hover/hover-map.md\` (its route + acceptanc
 2. **Verify in the live app**: \`browser_navigate\` to the route → \`browser_snapshot\` → walk the flow with the grounded \`*_control\` tools → \`assert_visible\` EACH acceptance criterion, in order.
 3. A criterion fails → fix the CODE (never the criterion) → repeat.
 4. All criteria pass → \`crystallize_spec("${line}")\` — the spec is now RECORDED from the real flow (record == replay). This flips the map line to covered.
-5. **Protect the estate**: run the full existing suite locally (\`npx playwright test __vibe_tests__\`). A local failure here = your change broke something — fix the code now, before CI.
+5. **Protect the estate (fast, every round)**: \`verify_specs\` (default mode "fast") — replays every crystallized flow against the live app in seconds. A failure right after YOUR edit means the edit broke that flow → fix the CODE (never heal here). A \`blocked\` result is a setup problem (missing credentials) — surface it, don't treat it as drift.
+
+## Pre-push check
+6. \`verify_specs\` with mode "faithful" — runs the REAL spec files through \`playwright test\`, the same engine and files CI runs. Green here = worth pushing; red here would have been red in CI, so fix it now and save a CI round.
 
 ## Outer loop (CI + Hover Cloud, repeat until green)
-6. Commit on a feature branch and push (open a PR if there isn't one). Note the commit sha.
-7. Poll \`cloud_run_result\` with that sha (CI takes minutes — wait ~60s between polls; it answers "pending" until the run is ingested).
-8. Dispatch each failing spec by its verdict:
+7. Commit on a feature branch and push (open a PR if there isn't one). Note the commit sha.
+8. Poll \`cloud_run_result\` with that sha (CI takes minutes — wait ~60s between polls; it answers "pending" until the run is ingested).
+9. Dispatch each failing spec by its verdict:
    - **The new "${line}" spec fails** → the implementation doesn't meet the declared intent → back to the inner loop.
    - **An existing spec fails, verdict \`bug\`** → your change broke existing behavior → fix the code.
    - **An existing spec fails, verdict \`drift\` (or the judge strongly leans drift)** → the old spec is outdated BY THIS INTENT → heal it: \`/mcp__hover__heal <slug>\` flow (replay, re-ground, re-crystallize). Only heal specs whose change traces to this feature.
    - **Verdict \`unclear\` with no strong judge lean** → do NOT guess. Stop and ask the user to rule on it (it's in the Hover Cloud heal queue with a screenshot).
-9. Push the fixes; repeat from 7.
+10. Push the fixes; repeat from 8.
 
 ## Done
 The run comes back green (\`cloud_run_result\` reports all specs passing). Report: what was implemented, the spec recorded, any old specs healed (and why that was correct per the new intent), rules touched, and that the PR is ready for the user's review — merging is theirs, always.`;
