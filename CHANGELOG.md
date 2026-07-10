@@ -6,6 +6,7 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+- **cloud + core (0.44.0) + vscode-ext (0.42.0):** a test account configured in the Cloud dashboard is now usable for local login. The dashboard wrote the password only to GitHub Actions secrets (CI's write-only channel), so the MCP and editor could never read it back and `account_secrets` stayed empty. Now the dashboard also encrypts the credential into `account_secrets`, the MCP pulls it at run time, core adds `fetchCredentialPresence` (`?meta=1`, presence-only), and the panel marks Cloud-stored accounts with ☁🔑 / "credentials available from Hover Cloud". Removing the account clears both stores.
 - **vscode-ext (0.41.0):** fix — Cloud-managed test accounts now appear on their environment card in the panel (importing an environment copied name+URL but not its accounts; the panel now reconciles them in, silent + idempotent).
 
 ## [0.43.0] — 2026-07-10

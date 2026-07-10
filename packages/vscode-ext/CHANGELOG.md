@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.42.0 — 2026-07-10
+
+- **Cloud-stored account passwords are now shown + usable.** An account whose password lives in Hover Cloud shows ☁🔑 on its card, and the Agent (MCP) target reads "credentials available from Hover Cloud" — the agent pulls them at run time, so no local `.env` export is needed to log in. (Pairs with the Cloud fix that writes dashboard-configured passwords into the readable encrypted store.)
+
 ## 0.41.0 — 2026-07-10
 
 - **Fix: Cloud-managed test accounts now show on the environment card.** Importing a Cloud environment copied its name + URL but not its accounts (those are Cloud metadata), so an environment like `production` listed no accounts. The panel now reconciles Cloud accounts onto the matching environment on every refresh (silent + idempotent), so each shows on its card with a set-password / export action.
