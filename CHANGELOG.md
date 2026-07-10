@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.42.0] — 2026-07-10
+
+### Added
+
+- **mcp:** credential env indirection for `fill_control`. The agent names the variable (`valueFromEnv: "HOVER_USER_PASS"`), the SERVER resolves it (re-reading `.hover/.env` lazily — no restart after an export) and types the real value; the secret never enters the agent's context. A literal value matching `process.env.HOVER_X` / bare `HOVER_X` is rescued and resolved instead of typed; an unset var refuses to type anything and says how to fix it. `cloud_context` prints each account's exact `valueFromEnv` names, and the workflow's login guidance teaches indirection first. Fixes the field bug where an agent typed the literal `process.env.HOVER_USER_USER` into a login form.
+
 ## [0.41.0] — 2026-07-10
 
 ### Added
