@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.39.0 — 2026-07-10
+
+- **The map's API layer is visible.** Lines from the map's `## API` area (written automatically by `crystallize_api_spec`, `@hover-dev` 0.40) render with a 🛡 in the Business Map graph and as hexagons in the Mermaid export — API contracts read at a glance next to the UI flows, with the same run/coverage coloring.
+
 ## 0.38.0 — 2026-07-10
 
 - **Copy the Business Map as a Mermaid diagram.** A button on the Map tab (and the `Hover: Copy Business Map as Mermaid` command) copies the map as a fenced Mermaid flowchart — paste it into a README, PR description, or doc and it renders natively on GitHub for people without Hover. app → area → business line, colored by state: green passing, red failing, amber flaky, dashed not covered; relationship edges included. Export-only — `hover-map.md` stays the source of truth.

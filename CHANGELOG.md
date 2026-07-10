@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-07-10
+
+### Added
+
+- **core/mcp:** the API layer lands on the business map. `crystallize_api_spec` now upserts its locked contracts into a conventional `## API` area on `hover-map.md` — one covered line per api spec with its `METHOD /path` endpoints. Zero new map syntax (every existing parser reads it as-is); idempotent by spec filename; a map hiccup never fails the crystallize. The map now shows both perspectives: what users do (UI flows) and what the app promises over the wire (API contracts).
+- **vscode-ext (0.39.0):** API lines render with a 🛡 in the full Business Map graph and as hexagons in the Mermaid export — distinguishable at a glance, same run/coverage coloring.
 - **vscode-ext (0.38.0):** Copy the Business Map as a Mermaid flowchart (Map-tab button + command) — a GitHub-renderable, shareable projection of the map with coverage/run coloring. Export-only; the checklist stays the source of truth.
 
 ## [0.39.0] — 2026-07-10
