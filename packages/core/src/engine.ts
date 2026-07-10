@@ -36,6 +36,9 @@ export { lintWiki, parseRunStatuses } from './specs/lintWiki.js';
 export type { LintResult, LintFinding, LintKind, LintSeverity } from './specs/lintWiki.js';
 export { parseBusinessMap } from './specs/businessMap.js';
 export { declareGuard, type GuardDeclaration } from './specs/declareGuard.js';
+// API layer on the business map — crystallize_api_spec upserts its contracts
+// into the conventional `## API` area (no new map syntax).
+export { recordApiOnMap, endpointLabel, type ApiMapEntry } from './specs/apiMap.js';
 export type { BusinessMapGraph, MapNode, MapEdge } from './specs/businessMap.js';
 // Page-Object extraction — lift NON-login shared flows into pages/ + fixtures.
 export { extractPageObjects, detectExtractableFlows } from './specs/extractPageObjects.js';

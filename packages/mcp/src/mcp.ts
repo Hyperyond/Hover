@@ -19,6 +19,8 @@ import {
   appendWikiLog,
   readActiveEnv,
   declareGuard,
+  recordApiOnMap,
+  endpointLabel,
   type SkillStep,
   type ApiCheck,
   type Redaction,
@@ -139,6 +141,14 @@ const controller = new HoverMcpController({
   crystallizeApi: async (name: string, description: string | undefined, checks: ApiCheck[]) => {
     const res = await writeApiSpec({ devRoot: DEV_ROOT, name, description, checks, startUrl: TARGET, overwrite: true });
     await appendWikiLog(DEV_ROOT, 'api', `${basename(res.path)} — ${name}`);
+    // Surface the locked contracts on the business map's `## API` area, so the
+    // API layer is visible alongside the UI flows (best-effort — the spec is
+    // already written; a map hiccup must not fail the crystallize).
+    await recordApiOnMap(DEV_ROOT, {
+      name: res.slug,
+      endpoints: checks.map((c) => endpointLabel(c.method, c.url)),
+      specFile: res.path,
+    }).catch(() => {});
     return { path: res.path };
   },
   recordFact: (title, rule, type, line) =>
