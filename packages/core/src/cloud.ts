@@ -202,6 +202,32 @@ export async function fetchCredentials(
   return data.accounts;
 }
 
+/** Presence of a project's synced credentials — no secret values pulled. The
+ *  editor uses this to show which accounts already have a Cloud-stored password. */
+export interface CloudCredentialPresence {
+  label: string;
+  environment: string;
+  email?: string;
+  hasUser: boolean;
+  hasPass: boolean;
+}
+
+export async function fetchCredentialPresence(
+  creds: CloudCredentials,
+  repo: string,
+  environment?: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CloudCredentialPresence[]> {
+  const q = environment ? `&environment=${encodeURIComponent(environment)}` : '';
+  const data = await cloudJson<{ accounts: CloudCredentialPresence[] }>(
+    creds,
+    `/api/v1/credentials?meta=1&repo=${encodeURIComponent(repo)}${q}`,
+    {},
+    fetchImpl,
+  );
+  return data.accounts;
+}
+
 /** Sync one account's values up (opt-in, from the editor). Omitted fields keep
  *  their stored value server-side; encrypted at rest (AES-256-GCM). */
 export async function pushCredential(

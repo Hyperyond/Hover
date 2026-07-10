@@ -10,8 +10,10 @@ import { DashboardTab, type DashboardData, type Source } from "../dashboard/Dash
  */
 
 type CloudState = { connected: true; url: string } | { connected: false };
-interface EnvAccountVM { label: string; email?: string; hasPassword: boolean }
+interface EnvAccountVM { label: string; email?: string; hasPassword: boolean; cloudPassword?: boolean }
 interface EnvVM { id: string; name: string; url: string; verified?: boolean; isLocal: boolean; active: boolean; accounts: EnvAccountVM[] }
+// EnvAccountVM: { label, email?, hasPassword, cloudPassword? } — hasPassword = local
+// SecretStorage; cloudPassword = present in Hover Cloud (MCP logs in with it directly).
 interface HealVM { id: string; specFile: string; slug: string; status: string; branch: string | null; environment: string | null; ciUrl: string | null }
 interface MapSummary { exists: boolean; app?: string; stats?: { lines: number; covered: number; areas: number } }
 interface CloudEnv { name: string; url: string }
@@ -195,6 +197,10 @@ function CloudEnvGroup({ cloudEnvs, cloudAccounts }: { cloudEnvs: CloudEnv[]; cl
  *  credentials to .hover/.env so the agent can log in. One button to wire it up. */
 function McpTargetCard({ active, envFileExists }: { active?: EnvVM; envFileExists: boolean }) {
   const hasAccounts = !!active?.accounts.length;
+  // The agent can log in if creds are exported locally OR held in Cloud (it
+  // pulls them at run time). Only nag when neither is true.
+  const cloudReady = !!active?.accounts.some((a) => a.cloudPassword);
+  const loginReady = envFileExists || cloudReady;
   return (
     <div className="rounded-lg border border-line bg-bg2 px-2.5 py-2 text-[11px]">
       <div className="text-[10px] uppercase tracking-wider text-faint font-semibold mb-1">Agent (MCP) target</div>
@@ -204,8 +210,12 @@ function McpTargetCard({ active, envFileExists }: { active?: EnvVM; envFileExist
         {active ? <span className="text-faint"> · {hostOf(active.url)}</span> : null}
       </div>
       <div className="mt-1 text-[10.5px]">
-        <span className={envFileExists ? "text-pass" : "text-flaky"}>
-          {envFileExists ? "✓ credentials exported for login" : "⚠ credentials not exported"}
+        <span className={loginReady ? "text-pass" : "text-flaky"}>
+          {envFileExists
+            ? "✓ credentials exported for login"
+            : cloudReady
+              ? "✓ credentials available from Hover Cloud"
+              : "⚠ credentials not exported"}
         </span>
       </div>
       {hasAccounts ? (
@@ -254,7 +264,7 @@ function EnvTab({ envs, cloudEnvs, cloudAccounts, envFileExists }: { envs: EnvVM
                 <div key={a.label} className="group flex items-center gap-1.5 text-[11px]">
                   <span className="flex-none text-muted">👤</span>
                   <span className="flex-1 min-w-0 truncate" title={a.email}>{a.label}{a.email ? <span className="text-faint"> · {a.email}</span> : null}</span>
-                  <span className="flex-none text-[9.5px]" title={a.hasPassword ? "Password in SecretStorage" : "No password"}>{a.hasPassword ? "🔑" : "⚠"}</span>
+                  <span className="flex-none text-[9.5px]" title={a.hasPassword ? "Password in local SecretStorage" : a.cloudPassword ? "Password in Hover Cloud — the agent logs in with it directly" : "No password set"}>{a.hasPassword ? "🔑" : a.cloudPassword ? "☁🔑" : "⚠"}</span>
                   <span className="flex-none hidden group-hover:flex gap-1.5 text-[10px] text-muted">
                     <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envSetPassword", envId: e.id, label: a.label })}>pw</button>
                     <button className="cursor-pointer hover:text-fail" onClick={() => post({ type: "envRemoveAccount", envId: e.id, label: a.label })}>✕</button>

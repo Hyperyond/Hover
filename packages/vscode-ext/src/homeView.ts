@@ -22,6 +22,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   DEFAULT_CLOUD_URL,
+  fetchCredentialPresence,
   fetchHealRequests,
   fetchProjects,
   healSlug,
@@ -247,6 +248,27 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       gatherMapSummary(),
       cloud.connected ? gatherHeal(repo, force) : Promise.resolve([] as HealVM[]),
     ]);
+    // Mark accounts whose password lives in Hover Cloud (presence only — no
+    // secret pulled) so the card shows the agent can log in without a local
+    // export. Best-effort; failure leaves the local-password view intact.
+    if (project && repo) {
+      try {
+        const creds = readCloudCredentials();
+        if (creds) {
+          const present = await fetchCredentialPresence(creds, repo, undefined, (u, init) =>
+            fetch(u, { ...init, signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS) }),
+          );
+          const cloudPw = new Set(present.filter((a) => a.hasPass).map((a) => `${a.environment} ${a.label}`));
+          for (const e of environments) {
+            for (const a of e.accounts) {
+              if (cloudPw.has(`${e.name} ${a.label}`)) a.cloudPassword = true;
+            }
+          }
+        }
+      } catch {
+        /* offline / store unconfigured — keep the local view */
+      }
+    }
     // Scope the heal queue to the selected env too (its items carry environment).
     const heal = env ? healAll.filter((h) => h.environment === env) : healAll;
     const remoteAvailable = !!remote?.hasRuns;

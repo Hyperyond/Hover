@@ -29,7 +29,11 @@ async function cloudSyncTarget(): Promise<{ creds: CloudCredentials; repo: strin
 export interface EnvAccountVM {
   label: string;
   email?: string;
+  /** Password present in local SecretStorage. */
   hasPassword: boolean;
+  /** Password present in Hover Cloud's encrypted store — the MCP can log in with
+   *  it directly (no local export needed). Set by the panel from the presence API. */
+  cloudPassword?: boolean;
 }
 
 /** One environment as the Environments tab renders it. */
