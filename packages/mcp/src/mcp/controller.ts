@@ -121,9 +121,10 @@ export interface McpDeps {
    *  the active env. `{ error }` when not connected / unreachable. */
   cloudContext?: () => Promise<CloudContext | { error: string }>;
   /** Resolve a credential env var for fill_control's valueFromEnv — reads the
-   *  process env, re-reading `.hover/.env` first when unset (the export may
-   *  have happened after this server booted). undefined = genuinely not set. */
-  resolveEnvVar?: (name: string) => string | undefined;
+   *  process env, re-reading `.hover/.env` when unset (the export may have
+   *  happened after this server booted), then falling back to the project's
+   *  Cloud-synced credentials when signed in. undefined = genuinely not set. */
+  resolveEnvVar?: (name: string) => string | undefined | Promise<string | undefined>;
   /** Every crystallized spec slug (one per `.hover/sidecars/<slug>.json`). */
   listSpecSlugs?: () => Promise<string[]>;
   /** Faithful verify: run the REAL spec files via `playwright test` (the same
@@ -250,12 +251,12 @@ export class HoverMcpController {
     }
     let actual: string;
     if (envVar) {
-      const resolved = this.deps.resolveEnvVar ? this.deps.resolveEnvVar(envVar) : process.env[envVar];
+      const resolved = this.deps.resolveEnvVar ? await this.deps.resolveEnvVar(envVar) : process.env[envVar];
       if (resolved === undefined) {
         return (
           `✗ ${envVar} is not set, so I refused to type the literal name into the field. ` +
           `Export this environment's credentials first (VS Code: Environments → "Export credentials for MCP", ` +
-          `which writes .hover/.env), then retry with valueFromEnv: "${envVar}".`
+          `which writes .hover/.env — or sync the account to Hover Cloud), then retry with valueFromEnv: "${envVar}".`
         );
       }
       actual = resolved;

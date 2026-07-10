@@ -31,9 +31,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { parsePlaywrightRun } from '@hover-dev/core/dashboard';
-import { detectRepo, fetchHealRequests, fetchMe, fetchRunResult, readCloudCredentials } from '@hover-dev/core/cloud';
-import { HoverMcpController } from './mcp/controller.js';
+import { detectRepo, fetchCredentials, fetchHealRequests, fetchMe, fetchRunResult, readCloudCredentials } from '@hover-dev/core/cloud';
+import { HoverMcpController, accountEnvVar } from './mcp/controller.js';
 import { createHoverMcpServer } from './mcp/server.js';
+
+/** One Cloud credential pull per process (see resolveEnvVar below). */
+let cloudCredsPulled = false;
 
 /*
  * `hover-mcp` — the MCP-first surface. Add it to your OWN agent (Claude Code,
@@ -151,11 +154,34 @@ const controller = new HoverMcpController({
     }).catch(() => {});
     return { path: res.path };
   },
-  // fill_control's valueFromEnv: resolve from the process env, re-reading
-  // .hover/.env first when unset — the user may export credentials from the
-  // editor AFTER this server booted, and a restart shouldn't be required.
-  resolveEnvVar: (name: string) => {
+  // fill_control's valueFromEnv resolution chain:
+  //   process.env → re-read .hover/.env (an export after boot needs no restart)
+  //   → Cloud-synced credentials (signed in + linked project; one fetch per
+  //     process, cached into process.env — memory only, never written to disk).
+  resolveEnvVar: async (name: string) => {
     if (process.env[name] === undefined) loadHoverDotenv(DEV_ROOT);
+    if (process.env[name] === undefined && !cloudCredsPulled) {
+      cloudCredsPulled = true; // one attempt per process — a miss shouldn't re-hit the network per fill
+      try {
+        const creds = readCloudCredentials();
+        const repo = detectRepo(DEV_ROOT);
+        if (creds && repo) {
+          const active = readActiveEnv(DEV_ROOT)?.name;
+          // Prefer the active environment's accounts; fall back to all of the
+          // project's (labels are usually unique across envs anyway).
+          const accounts = await fetchCredentials(creds, repo, active);
+          const all = accounts.length ? accounts : await fetchCredentials(creds, repo);
+          for (const a of all) {
+            const u = accountEnvVar(a.label, 'USER');
+            const p = accountEnvVar(a.label, 'PASS');
+            if (a.user !== undefined && process.env[u] === undefined) process.env[u] = a.user;
+            if (a.pass !== undefined && process.env[p] === undefined) process.env[p] = a.pass;
+          }
+        }
+      } catch {
+        /* signed out / offline / store unconfigured — the .env path still works */
+      }
+    }
     return process.env[name];
   },
   recordFact: (title, rule, type, line) =>

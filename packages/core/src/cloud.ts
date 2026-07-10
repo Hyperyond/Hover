@@ -173,6 +173,50 @@ export interface CloudProject {
   accounts?: { label: string; environment: string }[];
 }
 
+/** One synced test-account credential set, decrypted server-side for this
+ *  org-scoped PAT. TEST accounts by contract. */
+export interface CloudAccountCredential {
+  label: string;
+  environment: string;
+  email?: string;
+  user?: string;
+  pass?: string;
+}
+
+/** Pull the project's synced test-account credentials (optionally one
+ *  environment's) — the MCP's fallback when `.hover/.env` was never exported
+ *  on this machine. Values transit TLS only; cache in process env, never disk. */
+export async function fetchCredentials(
+  creds: CloudCredentials,
+  repo: string,
+  environment?: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<CloudAccountCredential[]> {
+  const q = environment ? `&environment=${encodeURIComponent(environment)}` : '';
+  const data = await cloudJson<{ accounts: CloudAccountCredential[] }>(
+    creds,
+    `/api/v1/credentials?repo=${encodeURIComponent(repo)}${q}`,
+    {},
+    fetchImpl,
+  );
+  return data.accounts;
+}
+
+/** Sync one account's values up (opt-in, from the editor). Omitted fields keep
+ *  their stored value server-side; encrypted at rest (AES-256-GCM). */
+export async function pushCredential(
+  creds: CloudCredentials,
+  account: { repo: string; environment: string; label: string; email?: string; user?: string; pass?: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  await cloudJson(
+    creds,
+    `/api/v1/credentials`,
+    { method: 'PUT', body: JSON.stringify(account) },
+    fetchImpl,
+  );
+}
+
 /** Every project the token's user can see (across their org memberships). */
 export async function fetchProjects(
   creds: CloudCredentials,

@@ -13,7 +13,17 @@
  * Command Palette can call them; a missing id falls back to a quick-pick.
  */
 import * as vscode from 'vscode';
+import { detectRepo, pushCredential, readCloudCredentials, type CloudCredentials } from '@hover-dev/core/cloud';
 import { EnvironmentStore, LOCAL_ENV_ID } from './environments.js';
+
+/** Signed in + a detectable repo → the target for account Cloud-sync; else null. */
+async function cloudSyncTarget(): Promise<{ creds: CloudCredentials; repo: string } | null> {
+  const creds = readCloudCredentials();
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!creds || !root) return null;
+  const repo = detectRepo(root);
+  return repo ? { creds, repo } : null;
+}
 
 /** One account as the Environments tab renders it (no secrets — just presence). */
 export interface EnvAccountVM {
@@ -194,8 +204,76 @@ export function registerEnvironmentCommands(
       });
       if (!password) return;
       await store.updatePassword(arg.envId, arg.label, password);
-      void vscode.window.showInformationMessage(`Hover: password set for "${arg.label}".`);
       onChange();
+      // Opt-in Cloud sync: encrypted at rest, lets the MCP log in as this
+      // account on any signed-in machine without a local .env export.
+      const target = await cloudSyncTarget();
+      if (!target) {
+        void vscode.window.showInformationMessage(`Hover: password set for "${arg.label}".`);
+        return;
+      }
+      const pick = await vscode.window.showInformationMessage(
+        `Hover: password set for "${arg.label}". Sync it to Hover Cloud (encrypted) so the MCP can use it on any signed-in machine?`,
+        'Sync to Cloud',
+        'Keep local only',
+      );
+      if (pick !== 'Sync to Cloud') return;
+      try {
+        const env = (await store.load()).find((e) => e.id === arg.envId);
+        const account = env?.accounts.find((a) => a.label === arg.label);
+        await pushCredential(target.creds, {
+          repo: target.repo,
+          environment: env?.name ?? arg.envId,
+          label: arg.label,
+          email: account?.email,
+          user: account?.email,
+          pass: password,
+        });
+        void vscode.window.showInformationMessage(`Hover: "${arg.label}" synced to Cloud (encrypted).`);
+      } catch (e) {
+        void vscode.window.showWarningMessage(`Hover: Cloud sync failed — ${e instanceof Error ? e.message : e}. The password is still stored locally.`);
+      }
+    }),
+
+    // Push EVERY local account with a password up to Cloud (encrypted) — the
+    // bulk version of the per-password opt-in above.
+    vscode.commands.registerCommand('hover.env.syncAccountsToCloud', async () => {
+      const target = await cloudSyncTarget();
+      if (!target) {
+        void vscode.window.showInformationMessage(
+          'Hover: sign in to Hover Cloud (and link this repo to a project) first — then accounts can sync.',
+        );
+        return;
+      }
+      const envs = await store.load();
+      let synced = 0;
+      const failed: string[] = [];
+      for (const env of envs) {
+        for (const account of env.accounts) {
+          const pass = await store.getPassword(env.id, account.label);
+          if (!pass) continue; // nothing secret to sync
+          try {
+            await pushCredential(target.creds, {
+              repo: target.repo,
+              environment: env.name,
+              label: account.label,
+              email: account.email,
+              user: account.email,
+              pass,
+            });
+            synced++;
+          } catch (e) {
+            failed.push(`${env.name}/${account.label}: ${e instanceof Error ? e.message : e}`);
+          }
+        }
+      }
+      if (failed.length) {
+        void vscode.window.showWarningMessage(`Hover: synced ${synced} account(s); failed — ${failed.join('; ')}`);
+      } else if (synced) {
+        void vscode.window.showInformationMessage(`Hover: synced ${synced} account(s) to Cloud (encrypted).`);
+      } else {
+        void vscode.window.showInformationMessage('Hover: no accounts with passwords to sync yet.');
+      }
     }),
 
     vscode.commands.registerCommand('hover.env.removeAccount', async (arg?: EnvArg) => {
