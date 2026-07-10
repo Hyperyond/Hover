@@ -27,6 +27,7 @@ import {
   fetchProjects,
   healSlug,
   readCloudCredentials,
+  removeCloudAccount,
   type CloudHealRequest,
   type CloudProject,
 } from '@hover-dev/core/cloud';
@@ -252,6 +253,12 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
     // secret pulled) so the card shows the agent can log in without a local
     // export. Best-effort; failure leaves the local-password view intact.
     if (project && repo) {
+      // Cloud-managed accounts (in the project's account list) → their ✕ must
+      // remove them via Cloud, not just locally (else the reconcile re-adds).
+      const cloudManaged = new Set((project.accounts ?? []).map((a) => `${a.environment} ${a.label}`));
+      for (const e of environments) {
+        for (const a of e.accounts) if (cloudManaged.has(`${e.name} ${a.label}`)) a.cloud = true;
+      }
       try {
         const creds = readCloudCredentials();
         if (creds) {
@@ -415,6 +422,39 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       case 'envRemoveAccount':
         void vscode.commands.executeCommand('hover.env.removeAccount', { envId, label });
         return;
+      case 'envRemoveCloudAccount':
+        if (envId && label) void this.removeCloudAccount(envId, label);
+        return;
+    }
+  }
+
+  /** Remove a Cloud-managed account fully (Cloud + local), so it can't reappear
+   *  via the reconcile. Cloud removal drops its metadata + encrypted secret +
+   *  GitHub secret; the local copy is cleared too. */
+  private async removeCloudAccount(envId: string, label: string): Promise<void> {
+    const creds = readCloudCredentials();
+    const repo = await resolveRepo(this.context);
+    const env = (await this.store.load()).find((e) => e.id === envId);
+    if (!creds || !repo || !env) {
+      void vscode.window.showWarningMessage('Hover: sign in and link this repo to remove a Cloud account.');
+      return;
+    }
+    const ok = await vscode.window.showWarningMessage(
+      `Remove account "${label}" from Hover Cloud (${env.name})? This deletes its stored credentials everywhere.`,
+      { modal: true },
+      'Remove',
+    );
+    if (ok !== 'Remove') return;
+    try {
+      await removeCloudAccount(creds, { repo, environment: env.name, label }, (u, init) =>
+        fetch(u, { ...init, signal: AbortSignal.timeout(CLOUD_TIMEOUT_MS) }),
+      );
+      await this.store.removeAccount(envId, label); // clear the local copy too
+      projectCache = undefined; // force a fresh project fetch so it doesn't re-add
+      void vscode.window.showInformationMessage(`Hover: removed "${label}" from ${env.name}.`);
+      this.refresh();
+    } catch (e) {
+      void vscode.window.showWarningMessage(`Hover: couldn't remove "${label}" — ${e instanceof Error ? e.message : e}`);
     }
   }
 

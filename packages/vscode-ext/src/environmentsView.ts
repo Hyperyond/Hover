@@ -34,6 +34,9 @@ export interface EnvAccountVM {
   /** Password present in Hover Cloud's encrypted store — the MCP can log in with
    *  it directly (no local export needed). Set by the panel from the presence API. */
   cloudPassword?: boolean;
+  /** This account is managed in Hover Cloud (in the project's account list), not
+   *  a purely-local one — so removing it must go through Cloud. */
+  cloud?: boolean;
 }
 
 /** One environment as the Environments tab renders it. */

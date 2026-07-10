@@ -10,7 +10,7 @@ import { DashboardTab, type DashboardData, type Source } from "../dashboard/Dash
  */
 
 type CloudState = { connected: true; url: string } | { connected: false };
-interface EnvAccountVM { label: string; email?: string; hasPassword: boolean; cloudPassword?: boolean }
+interface EnvAccountVM { label: string; email?: string; hasPassword: boolean; cloudPassword?: boolean; cloud?: boolean }
 interface EnvVM { id: string; name: string; url: string; verified?: boolean; isLocal: boolean; active: boolean; accounts: EnvAccountVM[] }
 // EnvAccountVM: { label, email?, hasPassword, cloudPassword? } — hasPassword = local
 // SecretStorage; cloudPassword = present in Hover Cloud (MCP logs in with it directly).
@@ -168,30 +168,6 @@ const hostOf = (u: string) => u.replace(/^https?:\/\//, "").replace(/\/$/, "");
 /** Read-only mirror of the environments Hover Cloud manages for this project
  *  (URLs from the project's CI config / GitHub Environments). Editing happens in
  *  Cloud; the local roster below is for local dev + credentials. */
-function CloudEnvGroup({ cloudEnvs, cloudAccounts }: { cloudEnvs: CloudEnv[]; cloudAccounts: CloudAccount[] }) {
-  if (!cloudEnvs.length) return null;
-  return (
-    <div className="rounded-lg border border-accent/30 bg-accent/5 px-2.5 py-2">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-accent font-semibold mb-1.5">
-        <Cloud /> Cloud environments
-      </div>
-      {cloudEnvs.map((e) => {
-        const accts = cloudAccounts.filter((a) => a.environment === e.name);
-        return (
-          <div key={e.name} className="py-1 border-t border-line first:border-t-0">
-            <div className="text-[12px] font-medium">{e.name}</div>
-            <div className="text-faint text-[10.5px] truncate">{hostOf(e.url)}</div>
-            {accts.length > 0 && (
-              <div className="text-muted text-[10px] mt-0.5">accounts: {accts.map((a) => a.label).join(", ")}</div>
-            )}
-          </div>
-        );
-      })}
-      <div className="text-faint text-[9.5px] mt-1.5 leading-snug">Managed in Hover Cloud. Set passwords locally below for MCP test/heal.</div>
-    </div>
-  );
-}
-
 /** Guidance for the D-flow: the active environment is what the MCP (your agent)
  *  targets for test/heal — its URL rides in .hover/active.json; this exports its
  *  credentials to .hover/.env so the agent can log in. One button to wire it up. */
@@ -233,48 +209,61 @@ function McpTargetCard({ active, envFileExists }: { active?: EnvVM; envFileExist
   );
 }
 
-function EnvTab({ envs, cloudEnvs, cloudAccounts, envFileExists }: { envs: EnvVM[]; cloudEnvs: CloudEnv[]; cloudAccounts: CloudAccount[]; envFileExists: boolean }) {
+/** One password-state chip: green when a password is available (local or Cloud),
+ *  amber when none is set yet. Text, not emoji — reads cleaner. */
+function PwChip({ a }: { a: EnvAccountVM }) {
+  if (a.hasPassword) return <span className="flex-none text-[9px] px-1 py-px rounded bg-accent/15 text-accent" title="Password in local SecretStorage">local</span>;
+  if (a.cloudPassword) return <span className="flex-none text-[9px] px-1 py-px rounded bg-accent/15 text-accent" title="Password in Hover Cloud — the agent logs in with it directly">☁ cloud</span>;
+  return <span className="flex-none text-[9px] px-1 py-px rounded bg-flaky/15 text-flaky" title="No password set">no pw</span>;
+}
+
+function EnvTab({ envs, cloudEnvs, envFileExists }: { envs: EnvVM[]; cloudEnvs: CloudEnv[]; envFileExists: boolean }) {
   const host = hostOf;
   const active = envs.find((e) => e.active);
+  const cloudNames = new Set(cloudEnvs.map((c) => c.name));
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5">
       <McpTargetCard active={active} envFileExists={envFileExists} />
-      <CloudEnvGroup cloudEnvs={cloudEnvs} cloudAccounts={cloudAccounts} />
-      {cloudEnvs.length > 0 && <div className="text-[10px] uppercase tracking-wider text-faint font-semibold px-1">Local</div>}
-      <button className="w-full p-1.5 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3" onClick={() => post({ type: "envAdd" })}>+ Add environment</button>
-      {envs.map((e) => (
-        <div key={e.id} className="rounded-lg border border-line bg-bg2 px-2.5 py-2">
-          <div className="flex items-center gap-1.5">
-            <button className="flex-none cursor-pointer" title={e.active ? "Active run target" : "Set active"} onClick={() => !e.active && post({ type: "envSetActive", envId: e.id })}>
-              <span className={"inline-block w-3 h-3 rounded-full border " + (e.active ? "bg-accent border-accent" : "border-line")} />
-            </button>
-            <span className="flex-1 min-w-0 truncate text-[12px] font-medium">{e.name}</span>
-            {!e.isLocal && <span className="flex-none text-[10px]" title={e.verified ? "Domain verified" : "Domain not verified (arrives with Hover Cloud)"}>{e.verified ? "✓" : "⚠"}</span>}
-          </div>
-          <div className="text-faint text-[10.5px] mt-0.5 truncate">{host(e.url)}</div>
-          <div className="flex gap-2 mt-1.5 text-[10.5px] text-muted">
-            {!e.isLocal && <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envEditUrl", envId: e.id })}>edit</button>}
-            <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envExport", envId: e.id })}>export env</button>
-            <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envAddAccount", envId: e.id })}>+ account</button>
-            {!e.isLocal && <button className="cursor-pointer hover:text-fail ml-auto" onClick={() => post({ type: "envRemove", envId: e.id })}>remove</button>}
-          </div>
-          {e.accounts.length > 0 && (
-            <div className="mt-1.5 pt-1.5 border-t border-line flex flex-col gap-1">
-              {e.accounts.map((a) => (
-                <div key={a.label} className="group flex items-center gap-1.5 text-[11px]">
-                  <span className="flex-none text-muted">👤</span>
-                  <span className="flex-1 min-w-0 truncate" title={a.email}>{a.label}{a.email ? <span className="text-faint"> · {a.email}</span> : null}</span>
-                  <span className="flex-none text-[9.5px]" title={a.hasPassword ? "Password in local SecretStorage" : a.cloudPassword ? "Password in Hover Cloud — the agent logs in with it directly" : "No password set"}>{a.hasPassword ? "🔑" : a.cloudPassword ? "☁🔑" : "⚠"}</span>
-                  <span className="flex-none hidden group-hover:flex gap-1.5 text-[10px] text-muted">
-                    <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envSetPassword", envId: e.id, label: a.label })}>pw</button>
-                    <button className="cursor-pointer hover:text-fail" onClick={() => post({ type: "envRemoveAccount", envId: e.id, label: a.label })}>✕</button>
-                  </span>
-                </div>
-              ))}
+      <div className="flex items-center justify-between px-0.5 pt-0.5">
+        <span className="text-[10px] uppercase tracking-wider text-faint font-semibold">Environments</span>
+        <button className="text-[11px] text-muted cursor-pointer hover:text-fg inline-flex items-center gap-1" onClick={() => post({ type: "envAdd" })}>+ Add</button>
+      </div>
+      {envs.map((e) => {
+        const isCloud = cloudNames.has(e.name);
+        return (
+          <div key={e.id} className={"rounded-xl border bg-bg2 px-3 py-2.5 transition-colors " + (e.active ? "border-accent/50" : "border-line")}>
+            <div className="flex items-center gap-2">
+              <button className="flex-none cursor-pointer" title={e.active ? "Active run target" : "Set as active run target"} onClick={() => !e.active && post({ type: "envSetActive", envId: e.id })}>
+                <span className={"inline-block w-2.5 h-2.5 rounded-full border " + (e.active ? "bg-accent border-accent" : "border-muted")} />
+              </button>
+              <span className="flex-1 min-w-0 truncate text-[12.5px] font-medium">{e.name}</span>
+              {isCloud && <span className="flex-none text-[9px] px-1 py-px rounded bg-accent/10 text-accent" title="Managed in Hover Cloud">☁ Cloud</span>}
+              {!e.isLocal && !e.verified && <span className="flex-none text-[10px] text-flaky" title="Domain not verified yet">⚠</span>}
             </div>
-          )}
-        </div>
-      ))}
+            <div className="text-faint text-[10.5px] mt-1 truncate">{host(e.url)}</div>
+            {e.accounts.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1">
+                {e.accounts.map((a) => (
+                  <div key={a.label} className="group flex items-center gap-2 text-[11px] rounded-md px-1.5 py-1 -mx-0.5 hover:bg-bg3">
+                    <span className="flex-1 min-w-0 truncate" title={a.email}>{a.label}{a.email ? <span className="text-faint"> · {a.email}</span> : null}</span>
+                    <PwChip a={a} />
+                    <span className="flex-none hidden group-hover:flex gap-2 text-[10px] text-muted">
+                      <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envSetPassword", envId: e.id, label: a.label })}>set pw</button>
+                      <button className="cursor-pointer hover:text-fail" title={a.cloud ? "Remove from Hover Cloud" : "Remove account"} onClick={() => post({ type: a.cloud ? "envRemoveCloudAccount" : "envRemoveAccount", envId: e.id, label: a.label })}>remove</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-3 mt-2 text-[10.5px] text-muted">
+              <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envAddAccount", envId: e.id })}>+ account</button>
+              {!e.isLocal && <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envEditUrl", envId: e.id })}>edit url</button>}
+              <button className="cursor-pointer hover:text-fg" onClick={() => post({ type: "envExport", envId: e.id })}>export .env</button>
+              {!e.isLocal && <button className="cursor-pointer hover:text-fail ml-auto" onClick={() => post({ type: "envRemove", envId: e.id })}>remove env</button>}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -414,7 +403,7 @@ export function Home() {
 
       {activeTab === "overview" && p.dashboard && <DashboardTab data={p.dashboard} source={p.source ?? "local"} remoteAvailable={!!p.remoteAvailable} connected={connected} />}
       {activeTab === "heal" && <HealTab heal={p.heal ?? []} />}
-      {activeTab === "env" && <EnvTab envs={p.environments ?? []} cloudEnvs={p.cloudEnvironments ?? []} cloudAccounts={p.cloudAccounts ?? []} envFileExists={!!p.envFileExists} />}
+      {activeTab === "env" && <EnvTab envs={p.environments ?? []} cloudEnvs={p.cloudEnvironments ?? []} envFileExists={!!p.envFileExists} />}
       {activeTab === "map" && <MapTab map={p.map ?? { exists: false }} />}
 
       {/* Shared footer */}

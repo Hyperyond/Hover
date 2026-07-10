@@ -243,6 +243,18 @@ export async function pushCredential(
   );
 }
 
+/** Fully remove a Cloud-managed test account (its encrypted secret, its display
+ *  metadata, and its GitHub Actions secret) — so it can't reappear in the
+ *  editor or log the MCP in. */
+export async function removeCloudAccount(
+  creds: CloudCredentials,
+  account: { repo: string; environment: string; label: string },
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  const q = `repo=${encodeURIComponent(account.repo)}&environment=${encodeURIComponent(account.environment)}&label=${encodeURIComponent(account.label)}`;
+  await cloudJson(creds, `/api/v1/credentials?${q}`, { method: 'DELETE' }, fetchImpl);
+}
+
 /** Every project the token's user can see (across their org memberships). */
 export async function fetchProjects(
   creds: CloudCredentials,
