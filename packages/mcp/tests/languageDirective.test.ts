@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { languageDirective } from '../src/mcp/server.js';
+import { languageDirective, isZhLang } from '../src/mcp/server.js';
 
 describe('languageDirective', () => {
   it('is empty for unset / English (default = no change)', () => {
@@ -27,5 +27,18 @@ describe('languageDirective', () => {
   it('passes an unknown value through verbatim', () => {
     expect(languageDirective('中文')).toContain('in 中文');
     expect(languageDirective('Français')).toContain('in Français');
+  });
+});
+
+describe('isZhLang (localizes the /mcp__hover__* menu)', () => {
+  it('matches every Chinese variant', () => {
+    for (const v of ['zh', 'zh-CN', 'zh-Hans', 'zh-TW', 'zh-hant', 'Chinese', '中文', '简体中文']) {
+      expect(isZhLang(v)).toBe(true);
+    }
+  });
+  it('does not match other languages or unset', () => {
+    for (const v of [undefined, '', 'en', 'en-US', 'English', 'ja', 'Français', 'fr']) {
+      expect(isZhLang(v)).toBe(false);
+    }
   });
 });

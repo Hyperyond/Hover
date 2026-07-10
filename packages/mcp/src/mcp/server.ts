@@ -34,6 +34,62 @@ export function languageDirective(lang?: string): string {
   );
 }
 
+/** Localized `/mcp__hover__*` menu text (title + description shown in the
+ *  slash-command picker). HOVER_LANG accepts arbitrary values, so we can only
+ *  ship tables for the languages we've translated; everything else falls back
+ *  to the English registered inline. Simplified-Chinese only for now — it's the
+ *  install language most asked for. Arg NAMES stay English (identifiers), same
+ *  rule as languageDirective. Keep in sync when an English description changes. */
+type PromptMeta = { title: string; description: string };
+const PROMPT_ZH: Record<string, PromptMeta> = {
+  test_app: {
+    title: 'Hover — 梳理业务并结晶测试套件',
+    description: '梳理这个应用的业务线,并结晶出一套 Playwright 测试(增量式,可扩展到大型应用)。',
+  },
+  optimize: {
+    title: 'Hover — 用观察到的断言丰富测试',
+    description:
+      '改进已结晶的测试:为录制会话观察到的结果补断言、把易变值去字面化、复用 Page Object。传入某个 spec 只优化它,省略则优化全部。以候选形式提交审阅,绝不覆盖你的 spec。',
+  },
+  lint: {
+    title: 'Hover — 检查测试 wiki 健康度',
+    description:
+      '体检 .hover/:确定性漂移(失效的 spec 引用、覆盖回退、未上图的 spec),加上 LLM 判定的检查(规则冲突、代码路由未上图),然后给出修复建议。',
+  },
+  ask: {
+    title: 'Hover — 向测试 wiki 提问',
+    description:
+      '基于应用的 .hover/ wiki(业务地图 + 记住的规则 + specs + 运行日志)回答问题,带引用出处。只读;可把确认的新规则回写。',
+  },
+  heal: {
+    title: 'Hover — 修复漂移的 spec',
+    description:
+      '把已存的 spec 对着活应用重放;UI 漂移的地方,重新定位断掉的步骤并重新结晶。传入某个 spec 修复它,省略则检查全部。',
+  },
+  guard: {
+    title: 'Hover — 声明 guard(先定义行为)',
+    description:
+      '在写代码之前,把功能意图变成一个声明式 guard:业务规则 + 业务地图上的待办行 + 验收标准。不写代码、不造假 spec——可执行的 spec 稍后录制生成。',
+  },
+  build: {
+    title: 'Hover — 把声明的 guard 建到全绿',
+    description:
+      '把一个已声明的 guard 驱动到全绿:实现、在活应用里对照验收标准验证、结晶录制的 spec、跑完整回归、push、读 Hover Cloud 的裁决,并分派修复直到全部绿。',
+  },
+};
+
+/** True when HOVER_LANG names any Chinese variant (zh, zh-CN, 中文, chinese…). */
+export function isZhLang(raw?: string): boolean {
+  const s = (raw ?? '').trim().toLowerCase();
+  return /^zh(\b|-)/.test(s) || s === 'chinese' || /中文/.test(raw ?? '');
+}
+
+/** Pick the localized menu meta when we have a table for this language, else
+ *  return the English one passed inline at the registration site. */
+function promptMeta(zh: boolean, name: string, en: PromptMeta): PromptMeta {
+  return zh && PROMPT_ZH[name] ? PROMPT_ZH[name] : en;
+}
+
 const GROUND = {
   role: z.string().optional().describe("ARIA role from the snapshot, e.g. 'button', 'textbox', 'link'. Pair with `name`."),
   name: z.string().optional().describe('Accessible name from the snapshot, exactly as shown. Pair with `role`.'),
@@ -95,6 +151,7 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   const server = new McpServer({ name: 'hover', version: '0.1.0' });
   const guard = (fn: () => Promise<string>) => fn().then(md, (e) => md(`✗ ${errLine(e)}`));
   const lang = languageDirective(opts.lang);
+  const zh = isZhLang(opts.lang); // localize the /mcp__hover__* menu text too
 
   server.registerTool(
     'browser_navigate',
@@ -417,8 +474,10 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   server.registerPrompt(
     'test_app',
     {
-      title: 'Hover — map & crystallize a test suite',
-      description: 'Map this app\'s business lines and crystallize a Playwright suite (incremental, scales to large apps).',
+      ...promptMeta(zh, 'test_app', {
+        title: 'Hover — map & crystallize a test suite',
+        description: "Map this app's business lines and crystallize a Playwright suite (incremental, scales to large apps).",
+      }),
       argsSchema: { scope: z.string().optional().describe('An area/flow to focus on. Omit to cover the whole app.') },
     },
     ({ scope }) => ({
@@ -431,8 +490,10 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   server.registerPrompt(
     'optimize',
     {
-      title: 'Hover — enrich specs with observed assertions',
-      description: 'Improve crystallized specs: add assertions for what the session observed, de-literalize volatile values, reuse Page Objects. Pass a spec to optimize one, or omit to optimize every spec. Files review candidates; never overwrites a spec.',
+      ...promptMeta(zh, 'optimize', {
+        title: 'Hover — enrich specs with observed assertions',
+        description: 'Improve crystallized specs: add assertions for what the session observed, de-literalize volatile values, reuse Page Objects. Pass a spec to optimize one, or omit to optimize every spec. Files review candidates; never overwrites a spec.',
+      }),
       argsSchema: { spec: z.string().optional().describe('A spec slug to optimize (e.g. "checkout"). Omit to optimize EVERY spec.') },
     },
     async ({ spec }) => ({
@@ -450,8 +511,10 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   server.registerPrompt(
     'lint',
     {
-      title: 'Hover — lint the test wiki',
-      description: "Health-check .hover/: deterministic drift (dead spec refs, regressed coverage, unmapped specs) plus LLM-judged checks (contradictory rules, code routes missing from the map), then offer fixes.",
+      ...promptMeta(zh, 'lint', {
+        title: 'Hover — lint the test wiki',
+        description: 'Health-check .hover/: deterministic drift (dead spec refs, regressed coverage, unmapped specs) plus LLM-judged checks (contradictory rules, code routes missing from the map), then offer fixes.',
+      }),
       argsSchema: {},
     },
     () => ({
@@ -464,8 +527,10 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   server.registerPrompt(
     'ask',
     {
-      title: 'Hover — ask the test wiki',
-      description: "Answer a question about this app from its .hover/ wiki (business map + remembered rules + specs + run log), with citations. Read-only; can file a confirmed new rule back.",
+      ...promptMeta(zh, 'ask', {
+        title: 'Hover — ask the test wiki',
+        description: 'Answer a question about this app from its .hover/ wiki (business map + remembered rules + specs + run log), with citations. Read-only; can file a confirmed new rule back.',
+      }),
       argsSchema: { question: z.string().describe('The question to answer, e.g. "what happens when a guest tries to check out?"') },
     },
     ({ question }) => ({
@@ -477,8 +542,10 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   server.registerPrompt(
     'heal',
     {
-      title: 'Hover — heal a drifted spec',
-      description: "Replay a saved spec against the live app; where the UI drifted, re-ground the broken step and re-crystallize. Pass a spec to heal one, or omit to check all.",
+      ...promptMeta(zh, 'heal', {
+        title: 'Hover — heal a drifted spec',
+        description: 'Replay a saved spec against the live app; where the UI drifted, re-ground the broken step and re-crystallize. Pass a spec to heal one, or omit to check all.',
+      }),
       argsSchema: { spec: z.string().optional().describe('A spec slug to heal (e.g. "login"). Omit to check every spec.') },
     },
     ({ spec }) => ({
@@ -493,9 +560,11 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   server.registerPrompt(
     'guard',
     {
-      title: 'Hover — declare a guard (define the behavior first)',
-      description:
-        'Turn a feature intent into a declared guard BEFORE implementation: business rules + a pending line on the business map + acceptance criteria. No code, no fake specs — the executable spec is recorded later.',
+      ...promptMeta(zh, 'guard', {
+        title: 'Hover — declare a guard (define the behavior first)',
+        description:
+          'Turn a feature intent into a declared guard BEFORE implementation: business rules + a pending line on the business map + acceptance criteria. No code, no fake specs — the executable spec is recorded later.',
+      }),
       argsSchema: {
         intent: z.string().describe('The feature intent in plain words, e.g. "daily check-in; 7-day streak shows a badge on the stats page".'),
       },
@@ -509,9 +578,11 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
   server.registerPrompt(
     'build',
     {
-      title: 'Hover — build a declared guard to green',
-      description:
-        'Drive a declared guard to green: implement, verify against the acceptance criteria in the live app, crystallize the recorded spec, run the full regression, push, read Hover Cloud’s verdicts, and dispatch fixes until everything is green.',
+      ...promptMeta(zh, 'build', {
+        title: 'Hover — build a declared guard to green',
+        description:
+          'Drive a declared guard to green: implement, verify against the acceptance criteria in the live app, crystallize the recorded spec, run the full regression, push, read Hover Cloud’s verdicts, and dispatch fixes until everything is green.',
+      }),
       argsSchema: {
         line: z.string().describe('The declared business line to build, exactly as on the map, e.g. "Daily check-in".'),
       },
