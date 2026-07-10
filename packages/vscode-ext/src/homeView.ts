@@ -229,12 +229,23 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
     // Cloud, so only fetch those (and resolve the repo) when signed in.
     const repo = cloud.connected ? await resolveRepo(this.context) : undefined;
     const env = cloud.connected ? this.selectedEnv : undefined;
-    const [remote, environments, map, healAll, project] = await Promise.all([
+    // Fetch the linked project FIRST, then reconcile its Cloud-managed accounts
+    // into the local roster — so each environment card shows them (importing an
+    // env only copied name+URL; the accounts live as Cloud metadata). Idempotent:
+    // once backfilled, later renders add nothing. Serialize AFTER, so this
+    // render already reflects the accounts.
+    const project = cloud.connected ? await gatherCloudProject(repo, force) : null;
+    if (project) {
+      for (const e of project.environments ?? []) {
+        const accts = (project.accounts ?? []).filter((a) => a.environment === e.name);
+        if (accts.length) await this.store.ensureAccounts(e.name, accts);
+      }
+    }
+    const [remote, environments, map, healAll] = await Promise.all([
       cloud.connected ? gatherRemoteDashboard(repo, env, force) : Promise.resolve(null),
       serializeEnvironments(this.store),
       gatherMapSummary(),
       cloud.connected ? gatherHeal(repo, force) : Promise.resolve([] as HealVM[]),
-      cloud.connected ? gatherCloudProject(repo, force) : Promise.resolve(null),
     ]);
     // Scope the heal queue to the selected env too (its items carry environment).
     const heal = env ? healAll.filter((h) => h.environment === env) : healAll;

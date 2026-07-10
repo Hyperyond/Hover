@@ -171,6 +171,25 @@ export class EnvironmentStore {
     if (password) await this.setPassword(envId, account.label, password);
   }
 
+  /** Silently ensure the given accounts exist under the env with this NAME
+   *  (Cloud tracks accounts by env name). Adds any missing ones with no
+   *  password — idempotent, no warnings — so Cloud-managed accounts show on the
+   *  roster card (where a password can then be set + synced). Returns true if
+   *  anything changed. */
+  async ensureAccounts(envName: string, accounts: HoverAccount[]): Promise<boolean> {
+    const envs = await this.load();
+    const env = envs.find((e) => e.name === envName || e.id === slugify(envName));
+    if (!env) return false;
+    let changed = false;
+    for (const a of accounts) {
+      if (!a.label || env.accounts.some((x) => x.label === a.label)) continue;
+      env.accounts.push({ label: a.label, ...(a.email ? { email: a.email } : {}) });
+      changed = true;
+    }
+    if (changed) await this.save(envs);
+    return changed;
+  }
+
   async addAccount(envId: string, account: HoverAccount, password?: string): Promise<void> {
     const envs = await this.load();
     const env = envs.find((e) => e.id === envId);
