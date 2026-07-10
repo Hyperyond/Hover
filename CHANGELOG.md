@@ -6,6 +6,27 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-07-10
+
+### Added
+
+- **mcp:** `/mcp__hover__build` now runs the verify fidelity ladder explicitly — `verify_specs` (fast) protects the estate every inner round, `verify_specs` (faithful) gates the push, `cloud_run_result` stays the authority.
+- **mcp:** `hover-hook install --gate` — an opt-in Stop gate: at turn end the hook replays the crystallized flows (sharing the MCP's debug Chrome over CDP, launching one if absent) and BLOCKS the finish with the exact red list while any fail. "No green, no done." Fail-open on every setup gap (no specs / app down / missing creds / errors) and honors `stop_hook_active` so a block can't loop.
+- **core:** `loadHoverEnvFile` — the shared `.hover/.env` loader (MCP server + hooks resolve `HOVER_<LABEL>_USER/PASS` the same way).
+
+## [0.38.0] — 2026-07-10
+
+### Added
+
+- **mcp:** `verify_specs` — the inner-loop check before a push. Batch-verifies flows after a code edit without leaving the agent loop: mode `fast` (default) replays each spec's recorded grounded steps against the live app in seconds; mode `faithful` runs the REAL spec files via `playwright test` (the same engine + files CI runs, `BASE_URL` = the active target). Structured pass/drift/blocked per spec with the exact broken step; a credentials preflight marks missing-env specs `blocked — NOT drift` before anything runs. Read-only and self-labeling: local green means "worth pushing"; CI remains the source of truth.
+
+## [0.37.0] — 2026-07-08
+
+### Fixed
+
+- **core:** replay typed the LITERAL `process.env.X ?? ''` into fills — sidecar credentials are stored as that code expression and replay never resolved it, so any redacted login replayed as garbage and read as drift. Fills/selects now resolve the expression from the environment; a referenced-but-unset var throws with the exact fix.
+- **mcp:** fail-fast setup preflights — an unreachable target stops BEFORE launching a browser with a message naming where the target came from (HOVER_TARGET / active environment / default); `replay_spec` refuses to run with missing credential env vars ("not drift — do not heal"); `cloud_run_result`'s pending message says when to suspect a missing `HOVER_INGEST_TOKEN` instead of inviting an infinite poll.
+
 ## [0.36.0] — 2026-07-06
 
 ### Added
