@@ -181,8 +181,24 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
 
   server.registerTool(
     'fill_control',
-    { description: 'Type a value into a textbox/field by a grounded target.', inputSchema: { ...GROUND, value: z.string() } },
-    ({ value, ...g }) => guard(() => c.fill(g, value)),
+    {
+      description:
+        'Type a value into a textbox/field by a grounded target. For CREDENTIALS (test-account email/password), pass valueFromEnv with the env var NAME (e.g. "HOVER_USER_PASS") instead of value — the server fills the real value from .hover/.env and the secret never enters your context. NEVER type the variable name or a process.env expression as the value.',
+      inputSchema: {
+        ...GROUND,
+        value: z.string().optional().describe('The literal text to type (non-secrets).'),
+        valueFromEnv: z
+          .string()
+          .optional()
+          .describe('Env var NAME whose value the server types for you, e.g. "HOVER_USER_USER" / "HOVER_USER_PASS" (see cloud_context for the account list). Use INSTEAD of value for credentials.'),
+      },
+    },
+    ({ value, valueFromEnv, ...g }) =>
+      guard(() =>
+        value === undefined && valueFromEnv === undefined
+          ? Promise.resolve('✗ pass either value (literal text) or valueFromEnv (credential env var name)')
+          : c.fill(g, value, valueFromEnv),
+      ),
   );
 
   server.registerTool(
@@ -751,7 +767,7 @@ This keeps a returning run cheap: you don't re-derive a map you already have.
 - **Grounded targets only.** Pass role+name EXACTLY as they appear in the LATEST \`browser_snapshot\`. If a locate fails, re-snapshot and read the real target — never guess, invent, or reuse a stale name.
 - **It's the user's REAL app.** Avoid irreversible / destructive actions — real payments, deleting data you didn't create, sending real emails or SMS — unless the user confirms this is a safe test environment. When unsure, ASK first.
 - **Assert stable outcomes.** Assert on semantic, durable signals (a success message, a heading, a new row's label) — NEVER volatile instance data (timestamps, generated ids, "today", a one-off order number), which makes the saved spec flaky on replay.
-- **Log in first.** If the app needs auth, do that before anything else — ask for credentials if you don't have them — then crystallize it as its own "Log in" spec and stay logged in for the rest of the run.
+- **Log in first.** If the app needs auth, do that before anything else, then crystallize it as its own "Log in" spec and stay logged in for the rest of the run. Credentials: use the configured test accounts via env indirection — \`fill_control\` with \`valueFromEnv: "HOVER_<LABEL>_USER"\` / \`"HOVER_<LABEL>_PASS"\` (\`cloud_context\` lists the accounts; the server types the real value — NEVER type a variable name or process.env expression as the value). Only ask the user when no account is configured.
 
 Work in PHASES — this is what lets it scale from a tiny app to a large one.
 

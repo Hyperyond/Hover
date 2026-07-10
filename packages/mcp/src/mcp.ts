@@ -151,6 +151,13 @@ const controller = new HoverMcpController({
     }).catch(() => {});
     return { path: res.path };
   },
+  // fill_control's valueFromEnv: resolve from the process env, re-reading
+  // .hover/.env first when unset — the user may export credentials from the
+  // editor AFTER this server booted, and a restart shouldn't be required.
+  resolveEnvVar: (name: string) => {
+    if (process.env[name] === undefined) loadHoverDotenv(DEV_ROOT);
+    return process.env[name];
+  },
   recordFact: (title, rule, type, line) =>
     writeFact(DEV_ROOT, { name: title, description: title, type, body: rule, ...(line ? { line } : {}) }),
   recall: () => recallMemory(DEV_ROOT),

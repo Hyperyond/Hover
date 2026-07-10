@@ -240,3 +240,53 @@ describe('verifySpecs', () => {
     expect(byStatus).toEqual({ checkout: 'pass', cart: 'fail', locked: 'blocked' });
   });
 });
+
+describe('fill env indirection (valueFromEnv)', () => {
+  it('fills the resolved value but buffers the parameterized expression', async () => {
+    const page = mockPage();
+    const c = new HoverMcpController({
+      getPage: async () => page,
+      crystallize: async () => ({ path: '/p/x.spec.ts' }),
+      resolveEnvVar: (n) => (n === 'HOVER_USER_PASS' ? 's3cret' : undefined),
+    });
+    const out = await c.fill({ role: 'textbox', name: 'Password' }, undefined, 'HOVER_USER_PASS');
+    expect(out).toContain('$HOVER_USER_PASS');
+    expect(out).not.toContain('s3cret'); // the secret never echoes back to the agent
+    expect(page.actions).toEqual(['fill textbox:Password=s3cret']); // the REAL value hit the field
+    expect((c.steps[0].input as { value: string }).value).toBe("process.env.HOVER_USER_PASS ?? ''");
+  });
+
+  it('rescues the classic misuse: the env NAME typed as the literal value', async () => {
+    const page = mockPage();
+    const c = new HoverMcpController({
+      getPage: async () => page,
+      crystallize: async () => ({ path: '/p/x.spec.ts' }),
+      resolveEnvVar: (n) => (n === 'HOVER_USER_USER' ? 'alice@example.com' : undefined),
+    });
+    for (const misuse of ['process.env.HOVER_USER_USER', "process.env.HOVER_USER_USER ?? ''", 'HOVER_USER_USER']) {
+      page.actions.length = 0;
+      await c.fill({ role: 'textbox', name: 'Email' }, misuse);
+      expect(page.actions).toEqual(['fill textbox:Email=alice@example.com']);
+    }
+  });
+
+  it('refuses to type anything when the var is unset, with the fix', async () => {
+    const page = mockPage();
+    const c = new HoverMcpController({
+      getPage: async () => page,
+      crystallize: async () => ({ path: '/p/x.spec.ts' }),
+      resolveEnvVar: () => undefined,
+    });
+    const out = await c.fill({ role: 'textbox', name: 'Email' }, undefined, 'HOVER_NOPE_USER');
+    expect(out).toMatch(/✗.*HOVER_NOPE_USER.*Export credentials for MCP/s);
+    expect(page.actions).toEqual([]); // nothing was typed
+  });
+
+  it('leaves ordinary literal fills untouched', async () => {
+    const page = mockPage();
+    const c = new HoverMcpController({ getPage: async () => page, crystallize: async () => ({ path: '/p/x.spec.ts' }) });
+    await c.fill({ role: 'textbox', name: 'Search' }, 'hello world');
+    expect(page.actions).toEqual(['fill textbox:Search=hello world']);
+    expect((c.steps[0].input as { value: string }).value).toBe('hello world');
+  });
+});

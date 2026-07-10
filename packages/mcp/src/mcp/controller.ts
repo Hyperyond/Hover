@@ -120,6 +120,10 @@ export interface McpDeps {
   /** Signed-in orientation: identity + this repo's project + environments +
    *  the active env. `{ error }` when not connected / unreachable. */
   cloudContext?: () => Promise<CloudContext | { error: string }>;
+  /** Resolve a credential env var for fill_control's valueFromEnv — reads the
+   *  process env, re-reading `.hover/.env` first when unset (the export may
+   *  have happened after this server booted). undefined = genuinely not set. */
+  resolveEnvVar?: (name: string) => string | undefined;
   /** Every crystallized spec slug (one per `.hover/sidecars/<slug>.json`). */
   listSpecSlugs?: () => Promise<string[]>;
   /** Faithful verify: run the REAL spec files via `playwright test` (the same
@@ -129,6 +133,14 @@ export interface McpDeps {
   ) => Promise<{ results: { spec: string; status: 'pass' | 'fail'; error?: string }[] } | { error: string }>;
   /** Write a pending guard line (+ acceptance Note) onto the business map. */
   declareGuard?: (d: GuardDeclaration) => Promise<{ path: string; created: boolean } | { error: string }>;
+}
+
+/** `HOVER_<LABEL>_USER` / `HOVER_<LABEL>_PASS` — the SAME sanitize rule as the
+ *  extension's accountEnvVar (environments.ts) and the spec generator, so the
+ *  names cloud_context advertises match what "Export credentials" writes. */
+export function accountEnvVar(label: string, kind: 'USER' | 'PASS'): string {
+  const slug = label.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return `HOVER_${slug}_${kind}`;
 }
 
 function describe(g: GroundedTarget): string {
@@ -225,22 +237,59 @@ export class HoverMcpController {
     return `✓ clicked ${describe(g)}`;
   }
 
-  async fill(g: GroundedTarget, value: string): Promise<string> {
+  async fill(g: GroundedTarget, value?: string, valueFromEnv?: string): Promise<string> {
+    // Credentials go through ENV INDIRECTION: the agent names the variable
+    // (valueFromEnv), the SERVER fills the real value — the secret never enters
+    // the agent's context. Also catch the classic misuse where the agent types
+    // the variable name/expression as the literal value (it has no other way
+    // to say "the value of X"), and resolve it instead of typing it.
+    let envVar = valueFromEnv?.trim() || undefined;
+    if (!envVar && value) {
+      const m = /^\s*(?:process\.env\.)?(HOVER_[A-Z0-9_]+)\s*(?:\?\?\s*(?:''|""))?\s*$/.exec(value);
+      if (m) envVar = m[1];
+    }
+    let actual: string;
+    if (envVar) {
+      const resolved = this.deps.resolveEnvVar ? this.deps.resolveEnvVar(envVar) : process.env[envVar];
+      if (resolved === undefined) {
+        return (
+          `✗ ${envVar} is not set, so I refused to type the literal name into the field. ` +
+          `Export this environment's credentials first (VS Code: Environments → "Export credentials for MCP", ` +
+          `which writes .hover/.env), then retry with valueFromEnv: "${envVar}".`
+        );
+      }
+      actual = resolved;
+    } else {
+      actual = value ?? '';
+    }
+
     const loc = await this.resolve(g);
-    await loc.fill(value, { timeout: 8000 });
-    this.push('fill_control', { ...g, value });
+    await loc.fill(actual, { timeout: 8000 });
+
+    if (envVar) {
+      // Buffer the step ALREADY parameterized (same expression the sidecar and
+      // spec store), and register the redaction so any duplicate literal — and
+      // auth-as-fixture's login-prefix detection — resolve to the same var.
+      this.push('fill_control', { ...g, value: `process.env.${envVar} ?? ''` });
+      if (!this.redactions.some((r) => r.envVar === envVar)) {
+        this.redactions.push({ value: actual, envVar });
+      }
+      return `✓ filled ${describe(g)} from $${envVar} (value stays server-side)`;
+    }
+
+    this.push('fill_control', { ...g, value: actual });
     // A value typed into a password field is a secret: parameterize it to
     // process.env so it never lands literally in the spec/sidecar, and so
     // auth-as-fixture can detect this fill as part of the login prefix.
-    if (value) {
+    if (actual) {
       let isPassword = false;
       try {
         isPassword = (await loc.getAttribute('type')) === 'password';
       } catch {
         /* locator has no getAttribute (test mock) or field gone — treat as non-secret */
       }
-      if (isPassword && !this.redactions.some((r) => r.value === value)) {
-        this.redactions.push({ value, envVar: 'HOVER_PASSWORD' });
+      if (isPassword && !this.redactions.some((r) => r.value === actual)) {
+        this.redactions.push({ value: actual, envVar: 'HOVER_PASSWORD' });
       }
     }
     return `✓ filled ${describe(g)}`;
@@ -550,6 +599,15 @@ export class HoverMcpController {
         }
       } else {
         out.push('No Cloud-managed environments (just the in-CI localhost default).');
+      }
+      const allAccts = p.accounts.map((a) => a.label);
+      if (allAccts.length) {
+        out.push(
+          '',
+          'To LOG IN as an account, never ask for (or type) the real credentials — fill with env indirection: ' +
+            allAccts.map((l) => `**${l}** → \`fill_control{valueFromEnv:"${accountEnvVar(l, 'USER')}"}\` / \`{valueFromEnv:"${accountEnvVar(l, 'PASS')}"}\``).join(' · ') +
+            '. The server fills the real value from `.hover/.env` (exported from the editor); the secret never enters your context.',
+        );
       }
     }
     if (ctx.activeEnv) {
