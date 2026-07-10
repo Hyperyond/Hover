@@ -6,6 +6,13 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.43.0] — 2026-07-10
+
+### Added
+
+- **core/mcp:** Cloud-synced test-account credentials. `fill_control`'s `valueFromEnv` now resolves through a three-rung chain — `process.env` → re-read `.hover/.env` → pull the project's Cloud-synced credentials (signed in + linked repo; one fetch per process, cached in memory only, never written to disk). Fresh machines and teammates log test accounts in without a manual export; the secret still never enters the agent's context. core adds `fetchCredentials` / `pushCredential`.
+- **vscode-ext (0.40.0):** opt-in account sync to Hover Cloud — after setting a password the editor offers "Sync to Cloud" (encrypted at rest server-side), plus a bulk `Hover: Sync Test Accounts to Hover Cloud` command. Passwords stay in SecretStorage locally; syncing is always a choice, never a default.
+
 ## [0.42.0] — 2026-07-10
 
 ### Added

@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.40.0 — 2026-07-10
+
+- **Opt-in account sync to Hover Cloud.** After setting a test-account password, the editor offers "Sync to Cloud" — encrypted at rest server-side (AES-256-GCM), so the MCP can log in as that account on any signed-in machine without a manual `.hover/.env` export. A bulk `Hover: Sync Test Accounts to Hover Cloud` command pushes every local account. Passwords stay in SecretStorage locally; syncing is always a choice, never a default.
+
 ## 0.39.0 — 2026-07-10
 
 - **The map's API layer is visible.** Lines from the map's `## API` area (written automatically by `crystallize_api_spec`, `@hover-dev` 0.40) render with a 🛡 in the Business Map graph and as hexagons in the Mermaid export — API contracts read at a glance next to the UI flows, with the same run/coverage coloring.
