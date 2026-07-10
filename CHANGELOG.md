@@ -6,6 +6,12 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-07-10
+
+### Added
+
+- **mcp:** the `/mcp__hover__*` command menu is localized. `HOVER_LANG` already set the language the agent converses in; now, when it names a Chinese variant (`zh`, `zh-CN`, `中文`, …), the 7 workflow commands (test_app, optimize, lint, ask, heal, guard, build) also show their title + description in Simplified Chinese in Claude Code's slash-command picker. Arg names stay English (identifiers); other languages fall back to English until translated.
+
 ## [0.40.0] — 2026-07-10
 
 ### Added
