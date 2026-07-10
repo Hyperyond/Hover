@@ -6,6 +6,8 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+- **vscode-ext (0.41.0):** fix — Cloud-managed test accounts now appear on their environment card in the panel (importing an environment copied name+URL but not its accounts; the panel now reconciles them in, silent + idempotent).
+
 ## [0.43.0] — 2026-07-10
 
 ### Added
