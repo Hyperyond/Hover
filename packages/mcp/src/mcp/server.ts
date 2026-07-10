@@ -43,38 +43,38 @@ export function languageDirective(lang?: string): string {
 type PromptMeta = { title: string; description: string };
 const PROMPT_ZH: Record<string, PromptMeta> = {
   test_app: {
-    title: 'Hover — 梳理业务并结晶测试套件',
-    description: '梳理这个应用的业务线,并结晶出一套 Playwright 测试(增量式,可扩展到大型应用)。',
+    title: 'Hover — 梳理业务、生成测试套件',
+    description: '梳理这个应用的业务线,结晶成一套 Playwright 测试(增量进行,适用于大型应用)。',
   },
   optimize: {
-    title: 'Hover — 用观察到的断言丰富测试',
+    title: 'Hover — 用录制到的断言补强测试',
     description:
-      '改进已结晶的测试:为录制会话观察到的结果补断言、把易变值去字面化、复用 Page Object。传入某个 spec 只优化它,省略则优化全部。以候选形式提交审阅,绝不覆盖你的 spec。',
+      '完善已有的 spec:补上录制时观察到的断言、把易变的值换成稳定写法、复用 Page Object。传入某个 spec 只优化它,省略则优化全部。只生成待审阅的候选,绝不覆盖你的 spec。',
   },
   lint: {
-    title: 'Hover — 检查测试 wiki 健康度',
+    title: 'Hover — 体检测试 wiki',
     description:
-      '体检 .hover/:确定性漂移(失效的 spec 引用、覆盖回退、未上图的 spec),加上 LLM 判定的检查(规则冲突、代码路由未上图),然后给出修复建议。',
+      '检查 .hover/ 的健康度:确定性的漂移(失效的 spec 引用、覆盖率回退、没上图的 spec),以及 LLM 判断的问题(规则相互矛盾、代码里的路由没上图),并给出修复建议。',
   },
   ask: {
     title: 'Hover — 向测试 wiki 提问',
     description:
-      '基于应用的 .hover/ wiki(业务地图 + 记住的规则 + specs + 运行日志)回答问题,带引用出处。只读;可把确认的新规则回写。',
+      '根据应用的 .hover/ wiki(业务地图、记录的规则、specs、运行日志)回答问题并附出处。只读;确认无误的新规则可以回写。',
   },
   heal: {
     title: 'Hover — 修复漂移的 spec',
     description:
-      '把已存的 spec 对着活应用重放;UI 漂移的地方,重新定位断掉的步骤并重新结晶。传入某个 spec 修复它,省略则检查全部。',
+      '把已保存的 spec 放到运行中的应用上重放;UI 变了的地方,重新定位失败的那一步并重新结晶。传入某个 spec 只修它,省略则检查全部。',
   },
   guard: {
-    title: 'Hover — 声明 guard(先定义行为)',
+    title: 'Hover — 声明 guard(先把行为定下来)',
     description:
-      '在写代码之前,把功能意图变成一个声明式 guard:业务规则 + 业务地图上的待办行 + 验收标准。不写代码、不造假 spec——可执行的 spec 稍后录制生成。',
+      '写代码前,先把功能意图变成一份 guard:业务规则、业务地图上的一条待办、验收标准。不写代码、不编造 spec——真正可执行的 spec 之后再录制。',
   },
   build: {
-    title: 'Hover — 把声明的 guard 建到全绿',
+    title: 'Hover — 把 guard 做到全绿',
     description:
-      '把一个已声明的 guard 驱动到全绿:实现、在活应用里对照验收标准验证、结晶录制的 spec、跑完整回归、push、读 Hover Cloud 的裁决,并分派修复直到全部绿。',
+      '把已声明的 guard 推进到全绿:实现功能、在运行中的应用里对照验收标准逐条验证、录制并结晶成 spec、跑完整回归、push、读取 Hover Cloud 的判定,再逐个修复直到全绿。',
   },
 };
 
