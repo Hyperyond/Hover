@@ -198,8 +198,12 @@ export function businessMapToMermaid(graph: BusinessMapGraph): string {
   for (const n of graph.nodes) {
     if (n.kind === 'spec') continue; // the line node carries the state — keep the diagram readable
     const id = idOf(n.id);
+    // API contract lines (the `## API` area) render as hexagons — the second
+    // perspective, distinguishable at a glance from UI-flow lines.
+    const isApi = n.kind === 'line' && /\.api-test\.spec\.tsx?$/.test(n.spec ?? '');
     if (n.kind === 'app') lines.push(`  ${id}(["${esc(n.label)}"])`);
     else if (n.kind === 'area') lines.push(`  ${id}["${esc(n.label)}"]`);
+    else if (isApi) lines.push(`  ${id}{{"${esc(n.label)}"}}`);
     else lines.push(`  ${id}("${esc(n.label)}")`);
     if (n.kind === 'line') {
       const cls = n.run ?? (n.status === 'covered' ? 'covered' : 'uncovered');

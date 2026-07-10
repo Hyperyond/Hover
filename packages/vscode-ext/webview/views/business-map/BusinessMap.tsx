@@ -124,11 +124,14 @@ function nodeStyle(n: MapNode, selected: boolean): React.CSSProperties {
 }
 
 const RUN_MARK: Record<Run, string> = { pass: "✓ ", fail: "✗ ", flaky: "~ " };
+/** API contract lines (from the `## API` area) — identified by their spec suffix. */
+const isApiNode = (n: MapNode): boolean => /\.api-test\.spec\.tsx?$/.test(n.spec ?? "");
 function label(n: MapNode): string {
   if (n.kind === "line") {
     const mark = n.run ? RUN_MARK[n.run] : n.status === "covered" ? "✓ " : "○ ";
     const drift = worstSeverity(n.lintFindings) ? " ⚠" : "";
-    return mark + n.label + drift + (n.route ? `  ${n.route}` : "");
+    const shield = isApiNode(n) ? "🛡 " : "";
+    return mark + shield + n.label + drift + (n.route ? `  ${n.route}` : "");
   }
   return n.label;
 }
