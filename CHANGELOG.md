@@ -6,6 +6,8 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 
 ## [Unreleased]
 
+- **vscode-ext (0.38.0):** Copy the Business Map as a Mermaid flowchart (Map-tab button + command) — a GitHub-renderable, shareable projection of the map with coverage/run coloring. Export-only; the checklist stays the source of truth.
+
 ## [0.39.0] — 2026-07-10
 
 ### Added

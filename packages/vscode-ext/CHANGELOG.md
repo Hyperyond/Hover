@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.38.0 — 2026-07-10
+
+- **Copy the Business Map as a Mermaid diagram.** A button on the Map tab (and the `Hover: Copy Business Map as Mermaid` command) copies the map as a fenced Mermaid flowchart — paste it into a README, PR description, or doc and it renders natively on GitHub for people without Hover. app → area → business line, colored by state: green passing, red failing, amber flaky, dashed not covered; relationship edges included. Export-only — `hover-map.md` stays the source of truth.
+
 ## 0.37.0 — 2026-07-06
 
 - **Connect the current repo to Hover Cloud, from the panel.** Signed in, the panel now tells whether *this* repo is actually a Cloud project — a detected repo with no project no longer masquerades as linked with an empty Remote/Heal. When it isn't linked, a **Create project** button opens Cloud's new-project page pre-selected to this repo (creation runs in the browser — it needs the GitHub App to write the workflow + secrets), with a **pick existing** fallback.
