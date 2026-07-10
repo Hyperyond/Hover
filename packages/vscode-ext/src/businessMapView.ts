@@ -19,7 +19,7 @@ import * as vscode from 'vscode';
 import { dirname } from 'node:path';
 import { lintWiki, readWikiLog } from '@hover-dev/core/wiki';
 import { renderWebviewHtml } from './webviewHost.js';
-import { parseBusinessMap, type BusinessMapGraph, type RunStatus } from './businessMap.js';
+import { businessMapToMermaid, parseBusinessMap, type BusinessMapGraph, type RunStatus } from './businessMap.js';
 import { parsePlaywrightRun, type Status } from '@hover-dev/core/dashboard';
 import { resolveTargetUrl } from './extension.js';
 
@@ -237,6 +237,22 @@ export function registerBusinessMapPanel(
     openBusinessMapPanel(extensionUri, track),
   );
   const refresh = vscode.commands.registerCommand('hover.refreshBusinessMap', refreshAll);
+  // Export the map as a Mermaid flowchart — paste into a README / PR / doc and
+  // it renders anywhere (GitHub renders `mermaid` fences natively). Export-only:
+  // the checklist stays the source of truth.
+  const exportMermaid = vscode.commands.registerCommand('hover.exportMapMermaid', async () => {
+    const graph = await gather();
+    if (!graph) {
+      void vscode.window.showInformationMessage(
+        'Hover: no business map yet — run /mcp__hover__test_app in your agent to map this app.',
+      );
+      return;
+    }
+    await vscode.env.clipboard.writeText(`\`\`\`mermaid\n${businessMapToMermaid(graph)}\n\`\`\`\n`);
+    void vscode.window.showInformationMessage(
+      'Hover: copied the business map as a Mermaid diagram — paste into any Markdown (README, PR, docs). Green = tested & passing, dashed = not covered yet.',
+    );
+  });
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/.hover/{hover-map.md,log.md,runs/*.json}');
   watcher.onDidCreate(refreshAll);
@@ -245,5 +261,5 @@ export function registerBusinessMapPanel(
   const specs = vscode.workspace.createFileSystemWatcher('**/__vibe_tests__/**/*.spec.ts');
   specs.onDidCreate(refreshAll);
   specs.onDidDelete(refreshAll);
-  return [open, refresh, watcher, specs];
+  return [open, refresh, exportMermaid, watcher, specs];
 }

@@ -290,6 +290,13 @@ function MapTab({ map }: { map: MapSummary }) {
         <div className="bg-bg2 border border-line rounded-[9px] px-2 py-[7px]"><div className={"text-base font-bold tabular-nums " + (pct >= 80 ? "text-pass" : pct >= 40 ? "text-flaky" : "")}>{pct}%</div><div className="text-faint text-[10px]">covered</div></div>
       </div>
       <button className="w-full p-1.5 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3" onClick={() => post({ type: "openMap" })}>Open full map</button>
+      <button
+        className="w-full p-1.5 rounded-lg border border-line bg-bg2 text-muted text-[11.5px] cursor-pointer inline-flex items-center justify-center gap-1.5 hover:text-fg hover:bg-bg3"
+        title="Copy the map as a Mermaid flowchart — renders natively in GitHub READMEs, PRs, and docs"
+        onClick={() => post({ type: "copyMermaid" })}
+      >
+        Copy as Mermaid
+      </button>
     </div>
   );
 }

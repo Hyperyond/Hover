@@ -328,6 +328,9 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
       case 'openMap':
         void vscode.commands.executeCommand('hover.openBusinessMap');
         return;
+      case 'copyMermaid':
+        void vscode.commands.executeCommand('hover.exportMapMermaid');
+        return;
       case 'pickRepo':
         void this.pickRepo();
         return;
