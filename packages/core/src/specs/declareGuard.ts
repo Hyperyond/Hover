@@ -16,6 +16,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { hoverDir } from './sidecar.js';
 import { ensureKnowledgeTracked } from '../memory/gitignore.js';
+import { writeFact } from '../memory/businessMemory.js';
 
 export interface GuardDeclaration {
   /** Map area (## section), e.g. "Practice". Created if absent. */
@@ -111,6 +112,25 @@ export async function declareGuard(
     void insertAt;
 
     await writeFile(path, lines.join('\n').replace(/\n{3,}/g, '\n\n'), 'utf-8');
+
+    // Auto-distill the acceptance criteria into a line-scoped rule in
+    // `.hover/memory`. The map's `Note:` is for humans + coverage; this makes
+    // the SAME intent queryable knowledge — what Hover Cloud's verdict judge
+    // scores a failure against, and what the "rule changed recently → lean
+    // drift" signal watches. Idempotent (one fact per line, slug-keyed) and
+    // best-effort: writeFact returns {error} rather than throwing, so a memory
+    // hiccup never fails the guard declaration. Re-declaring refreshes it.
+    const criteria = d.criteria.map((c) => c.trim()).filter(Boolean);
+    if (criteria.length > 0) {
+      await writeFact(devRoot, {
+        name: `${line} acceptance`,
+        description: `Acceptance criteria for ${line}`,
+        type: 'expected-behavior',
+        line,
+        body: `${line} is correct when:\n${criteria.map((c) => `- ${c}`).join('\n')}`,
+      });
+    }
+
     await ensureKnowledgeTracked(devRoot);
     return { path, created };
   } catch (err) {

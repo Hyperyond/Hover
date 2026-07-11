@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { declareGuard } from '../../src/specs/declareGuard.js';
 import { parseBusinessMap } from '../../src/specs/businessMap.js';
+import { loadMemory } from '../../src/memory/businessMemory.js';
 
 let root: string;
 const mapPath = () => join(root, '.hover', 'hover-map.md');
@@ -64,6 +65,36 @@ describe('declareGuard', () => {
     expect(src.match(/Daily check-in/g)?.length).toBe(1);
     expect(src).toContain('acceptance = new; newer');
     expect(src).not.toContain('acceptance = old');
+  });
+
+  it('distills the acceptance criteria into a line-scoped memory fact', async () => {
+    await declareGuard(root, {
+      area: 'Practice',
+      line: 'Daily check-in',
+      route: '/checkin',
+      criteria: ['clicking 打卡 shows 已打卡', '7-day streak shows a badge on /stats'],
+    });
+    const facts = await loadMemory(root);
+    const fact = facts.find((f) => f.line === 'Daily check-in');
+    expect(fact).toBeTruthy();
+    expect(fact?.type).toBe('expected-behavior');
+    expect(fact?.body).toContain('clicking 打卡 shows 已打卡');
+    expect(fact?.body).toContain('7-day streak shows a badge on /stats');
+  });
+
+  it('re-declaring refreshes the acceptance fact without duplicating it', async () => {
+    await declareGuard(root, { area: 'Practice', line: 'Daily check-in', criteria: ['old rule'] });
+    await declareGuard(root, { area: 'Practice', line: 'Daily check-in', criteria: ['new rule'] });
+    const facts = (await loadMemory(root)).filter((f) => f.line === 'Daily check-in');
+    expect(facts.length).toBe(1);
+    expect(facts[0].body).toContain('new rule');
+    expect(facts[0].body).not.toContain('old rule');
+  });
+
+  it('writes no acceptance fact when there are no criteria', async () => {
+    await declareGuard(root, { area: 'Practice', line: 'No criteria', criteria: [] });
+    const facts = await loadMemory(root);
+    expect(facts.some((f) => f.line === 'No criteria')).toBe(false);
   });
 
   it('never flips an existing [x] line back to pending', async () => {

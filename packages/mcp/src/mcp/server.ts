@@ -471,7 +471,7 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
     'declare_guard',
     {
       description:
-        'Declare a guard (the RED light of guard-first development): write a pending `- [ ]` business line + its acceptance criteria onto .hover/hover-map.md, BEFORE the feature is implemented. The spec itself is still RECORDED later (crystallize_spec) — never write Playwright for UI that does not exist. Record the intent’s business rules separately via record_fact.',
+        'Declare a guard (the RED light of guard-first development): write a pending `- [ ]` business line + its acceptance criteria onto .hover/hover-map.md, BEFORE the feature is implemented. The criteria are ALSO auto-recorded as a line-scoped `expected-behavior` rule in .hover/memory — the intent Hover Cloud’s verdict judge scores failures against — so you need NOT re-record them via record_fact (use record_fact only for ADDITIONAL domain rules). The spec itself is still RECORDED later (crystallize_spec) — never write Playwright for UI that does not exist.',
       inputSchema: {
         area: z.string().describe('Map area (## section) the line belongs to, e.g. "Practice". Created if new.'),
         line: z.string().describe('The business-line name, e.g. "Daily check-in". Short, imperative, user-facing.'),
@@ -625,9 +625,9 @@ ${intent}
 
 2. **Interview the gaps — ONE message.** Ask only what the intent leaves genuinely ambiguous, the things code can't reveal later: edge behavior (what happens on the boundary?), access (logged-out? which roles?), invariants (once per day? resets when?), and where it lives (route / entry point). Don't ask what the intent already answers.
 
-3. **Record the rules.** For each durable rule the user confirms (or the intent clearly states), call \`record_fact\` with \`line\` set to the business line's name — these are what Hover Cloud's judge will score future failures against, so state each as a clean, testable sentence.
+3. **Record any EXTRA rules.** \`declare_guard\` (step 4) already saves the acceptance criteria as the line's rule, so you don't repeat those. Use \`record_fact\` (with \`line\` set to the line's name) only for durable rules the criteria don't capture — invariants, access policies, edge behavior — stated as clean, testable sentences. Skip this step if the criteria say it all.
 
-4. **Declare the line.** Call \`declare_guard\` with the area, the line name, the route (if known), and the ACCEPTANCE CRITERIA — the ordered, observable outcomes the future spec must assert (each criterion should name a visible outcome, e.g. 'clicking "打卡" shows "已打卡"'). This writes a pending \`- [ ]\` line on the business map: a visible, uncovered contract.
+4. **Declare the line.** Call \`declare_guard\` with the area, the line name, the route (if known), and the ACCEPTANCE CRITERIA — the ordered, observable outcomes the future spec must assert (each criterion should name a visible outcome, e.g. 'clicking "打卡" shows "已打卡"'). This writes a pending \`- [ ]\` line on the business map AND auto-records the criteria as the line's \`expected-behavior\` rule — the intent Hover Cloud's judge scores future failures against.
 
 5. **Confirm and stop.** Show the user what was declared — the rules, the line, the criteria — and STOP. Implementation is a separate step: \`/mcp__hover__build ${'{'}the line name${'}'}\`. Do not start it unbidden.
 
