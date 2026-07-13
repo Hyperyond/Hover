@@ -11,8 +11,8 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { slugify, firstSentence } from './text.js';
+import { specDir, specPath } from './specPaths.js';
 
 /** One asserted API call — a contract, shape, or authz check. */
 export interface ApiCheck {
@@ -112,8 +112,8 @@ export async function writeApiSpec(opts: WriteApiSpecOptions): Promise<WriteApiS
   if (!slug) throw new Error('api spec name must contain at least one alphanumeric character');
   if (!opts.checks.length) throw new Error('api spec needs at least one check');
 
-  const dir = join(opts.devRoot, '__vibe_tests__');
-  const path = join(dir, `${slug}.api-test.spec.ts`);
+  const dir = specDir(opts.devRoot, 'api');
+  const path = specPath(opts.devRoot, 'api', slug);
   if (existsSync(path) && !opts.overwrite) {
     throw new Error(`${path} already exists (pass overwrite to replace)`);
   }

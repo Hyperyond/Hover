@@ -334,6 +334,49 @@ export function createHoverMcpServer(c: HoverMcpController, opts: HoverServerOpt
     ({ name, description, checks }) => guard(() => c.crystallizeApiSpec(name, description, checks)),
   );
 
+  server.registerTool(
+    'crystallize_visual_spec',
+    {
+      description:
+        "Save a visual-regression spec (`*.visual.spec.ts`) that screenshots each page and asserts it against a committed baseline — deterministic pixel diff, NO AI at run time. Use it for pages whose LOOK matters (a landing page, a rendered invoice, a themed dashboard). Baselines are created on the first run + committed; a later diff is a real visual change to review.",
+      inputSchema: {
+        name: z.string().describe('Short imperative English name — becomes the <name>.visual.spec.ts filename.'),
+        description: z.string().optional().describe('One line on what this visual spec guards.'),
+        captures: z
+          .array(
+            z.object({
+              name: z.string().describe('Human name for this shot, e.g. "checkout page".'),
+              url: z.string().describe('URL or same-origin path to screenshot.'),
+              fullPage: z.boolean().optional().describe('Full-page (default) vs viewport only.'),
+            }),
+          )
+          .describe('The pages to baseline.'),
+      },
+    },
+    ({ name, description, captures }) => guard(() => c.crystallizeVisualSpec(name, description, captures)),
+  );
+
+  server.registerTool(
+    'crystallize_a11y_spec',
+    {
+      description:
+        "Save an accessibility spec (`*.a11y.spec.ts`) that runs axe-core against each page and fails on serious/critical WCAG violations — deterministic rule engine, NO AI at run time. Use it on key pages (auth, checkout, forms). Needs @axe-core/playwright in the repo (the CI workflow installs it).",
+      inputSchema: {
+        name: z.string().describe('Short imperative English name — becomes the <name>.a11y.spec.ts filename.'),
+        description: z.string().optional().describe('One line on what this a11y spec covers.'),
+        pages: z
+          .array(
+            z.object({
+              name: z.string().describe('Human name for the page, e.g. "sign-in page".'),
+              url: z.string().describe('URL or same-origin path to scan.'),
+            }),
+          )
+          .describe('The pages to scan.'),
+      },
+    },
+    ({ name, description, pages }) => guard(() => c.crystallizeA11ySpec(name, description, pages)),
+  );
+
   // ── Self-heal ────────────────────────────────────────────────────────────
   server.registerTool(
     'replay_spec',
@@ -752,7 +795,10 @@ Tools: \`recall_business_knowledge\` / \`recall_fact\` · \`browser_navigate\` �
 \`browser_snapshot\` (ARIA tree — read before acting) · \`click_control\` /
 \`fill_control\` / \`select_control\` / \`check_control\` (grounded target from the
 snapshot) · \`assert_visible\` · \`record_fact\` · \`crystallize_spec(name, description?)\`.
-API layer: \`capture_requests\` · \`replay_request\` · \`crystallize_api_spec\`. Suite:
+API layer: \`capture_requests\` · \`replay_request\` · \`crystallize_api_spec\`.
+Other types (same deterministic, no-AI-at-runtime moat — use where they add value):
+\`crystallize_visual_spec\` (screenshot baselines for pages whose LOOK matters) ·
+\`crystallize_a11y_spec\` (axe-core WCAG scan on key pages). Suite:
 \`detect_shared_flows\` · \`extract_page_objects\` · \`replay_spec\` · \`lint_map\`.
 
 Target: the app at HOVER_TARGET (set in the server's env). Scope: ${target}.

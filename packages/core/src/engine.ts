@@ -21,6 +21,13 @@ export { reRenderSpec } from './specs/writeSpec.js';
 // API-layer crystallizer — observed/replayed requests → *.api-test.spec.ts.
 export { writeApiSpec } from './specs/writeApiSpec.js';
 export type { ApiCheck, WriteApiSpecOptions, WriteApiSpecResult } from './specs/writeApiSpec.js';
+// Multi-type: visual regression (toHaveScreenshot) + accessibility (axe-core),
+// both deterministic + AI-free at run time. Layout: __vibe_tests__/{e2e,visual,api,a11y}.
+export { writeVisualSpec } from './specs/writeVisualSpec.js';
+export type { VisualCapture, WriteVisualSpecOptions, WriteVisualSpecResult } from './specs/writeVisualSpec.js';
+export { writeA11ySpec } from './specs/writeA11ySpec.js';
+export type { A11yPage, WriteA11ySpecOptions, WriteA11ySpecResult } from './specs/writeA11ySpec.js';
+export { SPEC_TYPES, specDir, specPath, specTypeOf, slugOfSpecFile, vibeDir, VIBE_DIR, type SpecType } from './specs/specPaths.js';
 // Optimize (F7) — build the improvement brief for the user's own agent, then
 // file its result as a reviewed candidate. No Hover-owned model runs.
 export { buildOptimizeBrief, saveOptimizedCandidate, promoteOptimizedCandidate, OptimizeError } from './specs/optimizeSpec.js';

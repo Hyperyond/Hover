@@ -75,6 +75,18 @@ export interface McpDeps {
   ) => Promise<{ path: string }>;
   /** Write selected API checks to a `*.api-test.spec.ts`; returns the path. */
   crystallizeApi: (name: string, description: string | undefined, checks: ApiCheck[]) => Promise<{ path: string }>;
+  /** Visual-regression spec: navigate to each page → toHaveScreenshot baseline. */
+  crystallizeVisual?: (
+    name: string,
+    description: string | undefined,
+    captures: { name: string; url: string; fullPage?: boolean }[],
+  ) => Promise<{ path: string }>;
+  /** Accessibility spec: axe-core scan per page, fail on serious/critical. */
+  crystallizeA11y?: (
+    name: string,
+    description: string | undefined,
+    pages: { name: string; url: string }[],
+  ) => Promise<{ path: string }>;
   /** Persist a learned business rule to .hover/memory/ (rules only — no secrets). */
   recordFact?: (
     title: string,
@@ -413,6 +425,35 @@ export class HoverMcpController {
     if (!checks?.length) return 'No checks provided — pass the API checks you verified worth locking.';
     const { path } = await this.deps.crystallizeApi(name, description, checks);
     return `✓ wrote ${path} (${checks.length} check${checks.length === 1 ? '' : 's'})`;
+  }
+
+  /** Crystallize a visual-regression spec (screenshot baselines). Deterministic
+   *  pixel diff, no AI at run time. Baselines are created on the first run. */
+  async crystallizeVisualSpec(
+    name: string,
+    description: string | undefined,
+    captures: { name: string; url: string; fullPage?: boolean }[],
+  ): Promise<string> {
+    if (!this.deps.crystallizeVisual) return 'Visual specs unavailable in this server.';
+    if (!captures?.length) return 'No captures — pass the pages (name + url) to screenshot.';
+    const { path } = await this.deps.crystallizeVisual(name, description, captures);
+    return (
+      `✓ wrote ${path} (${captures.length} capture${captures.length === 1 ? '' : 's'}). ` +
+      `Baselines are created on the first run: \`npx playwright test ${path} --update-snapshots\`, then commit the *-snapshots/ PNGs.`
+    );
+  }
+
+  /** Crystallize an accessibility spec (axe-core). Deterministic rule engine, no
+   *  AI. Needs @axe-core/playwright in the repo (the CI workflow installs it). */
+  async crystallizeA11ySpec(
+    name: string,
+    description: string | undefined,
+    pages: { name: string; url: string }[],
+  ): Promise<string> {
+    if (!this.deps.crystallizeA11y) return 'Accessibility specs unavailable in this server.';
+    if (!pages?.length) return 'No pages — pass the pages (name + url) to scan.';
+    const { path } = await this.deps.crystallizeA11y(name, description, pages);
+    return `✓ wrote ${path} (${pages.length} page${pages.length === 1 ? '' : 's'}). Install @axe-core/playwright if the repo doesn't have it.`;
   }
 
   /** Self-heal detection: replay a saved spec's RECORDED grounded steps against

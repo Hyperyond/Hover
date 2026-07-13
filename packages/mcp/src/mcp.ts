@@ -5,6 +5,8 @@ import {
   launchDebugChrome,
   writeSpec,
   writeApiSpec,
+  writeVisualSpec,
+  writeA11ySpec,
   writeFact,
   recallMemory,
   readFact,
@@ -152,6 +154,16 @@ const controller = new HoverMcpController({
       endpoints: checks.map((c) => endpointLabel(c.method, c.url)),
       specFile: res.path,
     }).catch(() => {});
+    return { path: res.path };
+  },
+  crystallizeVisual: async (name, description, captures) => {
+    const res = await writeVisualSpec({ devRoot: DEV_ROOT, name, description, captures, startUrl: TARGET, overwrite: true });
+    await appendWikiLog(DEV_ROOT, 'visual', `${basename(res.path)} — ${name}`);
+    return { path: res.path };
+  },
+  crystallizeA11y: async (name, description, pages) => {
+    const res = await writeA11ySpec({ devRoot: DEV_ROOT, name, description, pages, startUrl: TARGET, overwrite: true });
+    await appendWikiLog(DEV_ROOT, 'a11y', `${basename(res.path)} — ${name}`);
     return { path: res.path };
   },
   // fill_control's valueFromEnv resolution chain:

@@ -13,7 +13,7 @@ describe('writeApiSpec', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  const read = (slug: string) => readFile(join(dir, '__vibe_tests__', `${slug}.api-test.spec.ts`), 'utf-8');
+  const read = (slug: string) => readFile(join(dir, '__vibe_tests__', 'api', `${slug}.api-test.spec.ts`), 'utf-8');
 
   it('writes a contract check (status + body keys), relativizing same-origin URLs', async () => {
     const checks: ApiCheck[] = [

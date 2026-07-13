@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { hoverDir } from './sidecar.js';
 import { ensureKnowledgeTracked } from '../memory/gitignore.js';
 
-export type WikiLogKind = 'crystallize' | 'api' | 'extract' | 'heal' | 'note';
+export type WikiLogKind = 'crystallize' | 'api' | 'visual' | 'a11y' | 'extract' | 'heal' | 'note';
 
 export interface WikiLogEntry {
   /** ISO-8601 timestamp. */
