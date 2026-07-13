@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.44.0 — 2026-07-11
+
+- **Multi-type testing.** Alongside E2E + API, Hover now crystallizes **Visual** (screenshot baselines) and **Accessibility** (axe-core) specs — all deterministic, no AI at run time. The generated CI workflow installs `@axe-core/playwright` when `a11y/` specs exist. The Business Map graph and Mermaid export mark each type at a glance: E2E rounded, API 🛡 hexagon, Visual 🖼 parallelogram, a11y ♿ box. Specs are laid out under `__vibe_tests__/{e2e,visual,api,a11y}/`.
+
 ## 0.42.0 — 2026-07-10
 
 - **Cloud-stored account passwords are now shown + usable.** An account whose password lives in Hover Cloud shows ☁🔑 on its card, and the Agent (MCP) target reads "credentials available from Hover Cloud" — the agent pulls them at run time, so no local `.env` export is needed to log in. (Pairs with the Cloud fix that writes dashboard-configured passwords into the readable encrypted store.)
