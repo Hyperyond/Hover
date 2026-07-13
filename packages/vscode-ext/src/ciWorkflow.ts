@@ -89,6 +89,11 @@ ${setupBlock}      - uses: actions/setup-node@v4
           node-version: 20${cacheLine}
       - run: ${pm.install}
       - run: ${pm.exec} playwright install --with-deps chromium
+      - name: Ensure axe-core (only if a11y specs exist)
+        run: |
+          if [ -d __vibe_tests__/a11y ] && [ -z "$(node -e "try{require.resolve('@axe-core/playwright');process.stdout.write('ok')}catch{}" )" ]; then
+            npm i --no-save @axe-core/playwright
+          fi
       - name: Start the app
         run: ${o.packageManager} run ${o.devScript} &
       - name: Wait for the app
@@ -287,6 +292,11 @@ ${setupBlock}      - uses: actions/setup-node@v4
           node-version: 20${cacheLine}
       - run: ${pm.install}
       - run: ${pm.exec} playwright install --with-deps chromium
+      - name: Ensure axe-core (only if a11y specs exist)
+        run: |
+          if [ -d __vibe_tests__/a11y ] && [ -z "$(node -e "try{require.resolve('@axe-core/playwright');process.stdout.write('ok')}catch{}" )" ]; then
+            npm i --no-save @axe-core/playwright
+          fi
       - name: Start the app
         run: ${o.packageManager} run ${o.devScript} &
       - name: Wait for the app

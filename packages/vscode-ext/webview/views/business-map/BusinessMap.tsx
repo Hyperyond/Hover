@@ -124,14 +124,20 @@ function nodeStyle(n: MapNode, selected: boolean): React.CSSProperties {
 }
 
 const RUN_MARK: Record<Run, string> = { pass: "✓ ", fail: "✗ ", flaky: "~ " };
-/** API contract lines (from the `## API` area) — identified by their spec suffix. */
+/** Test type from the spec filename suffix — a small glyph marks non-e2e lines. */
+function typeMark(spec?: string): string {
+  const s = spec ?? "";
+  if (/\.api-test\.spec\.tsx?$/.test(s)) return "🛡 ";   // API contract
+  if (/\.visual\.spec\.tsx?$/.test(s)) return "🖼 ";      // visual regression
+  if (/\.a11y\.spec\.tsx?$/.test(s)) return "♿ ";        // accessibility
+  return "";
+}
 const isApiNode = (n: MapNode): boolean => /\.api-test\.spec\.tsx?$/.test(n.spec ?? "");
 function label(n: MapNode): string {
   if (n.kind === "line") {
     const mark = n.run ? RUN_MARK[n.run] : n.status === "covered" ? "✓ " : "○ ";
     const drift = worstSeverity(n.lintFindings) ? " ⚠" : "";
-    const shield = isApiNode(n) ? "🛡 " : "";
-    return mark + shield + n.label + drift + (n.route ? `  ${n.route}` : "");
+    return mark + typeMark(n.spec) + n.label + drift + (n.route ? `  ${n.route}` : "");
   }
   return n.label;
 }
