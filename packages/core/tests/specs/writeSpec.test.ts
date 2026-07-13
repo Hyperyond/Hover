@@ -545,7 +545,7 @@ describe('writeSpec — Page Object consumption (Stage 3c)', () => {
     await writePageObjectManifest(devRoot, [manifestEntry]);
     const r = await writeSpec({ devRoot, name: 'login + add todo', steps: consuming });
     const src = readFileSync(r.path, 'utf-8');
-    expect(src).toContain("import { test, expect } from './fixtures';");
+    expect(src).toContain("import { test, expect } from '../fixtures';");
     expect(src).toContain("test('login + add todo', async ({ page, loginPage }) => {");
     expect(src).toContain('await loginPage.login("a@b.co", "secret");');
     // The consumed prefix is NOT re-emitted inline…
@@ -843,7 +843,7 @@ describe('writeSpec — reset helper (debt-2 reproducible state)', () => {
       resetRecipe: { tier: 1 },
     });
     const src = readFileSync(r.path, 'utf-8');
-    expect(src).toContain(`import { resetState } from './support/resetState'`);
+    expect(src).toContain(`import { resetState } from '../support/resetState'`);
     expect(src).toContain('test.beforeEach(async ({ page, context }) => {');
     expect(src).toContain('await resetState(page, context);');
     const helper = readFileSync(join(devRoot, '__vibe_tests__', 'support', 'resetState.ts'), 'utf-8');

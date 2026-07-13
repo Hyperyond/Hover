@@ -95,7 +95,7 @@ export async function buildOptimizeBrief(
   devRoot: string,
   slug: string,
 ): Promise<{ prompt: string; original: string }> {
-  const specPath = join(devRoot, '__vibe_tests__', `${slug}.spec.ts`);
+  const specPath = await findSpecPath(devRoot, slug); // resolves e2e/ (or legacy flat)
   let draft: string;
   try {
     draft = await readFile(specPath, 'utf-8');
@@ -183,7 +183,9 @@ async function findSpecPath(devRoot: string, slug: string): Promise<string> {
     }
     return null;
   };
-  return (await walk(root)) ?? join(root, want);
+  // Not found → the current e2e location (used for the "not found" message /
+  // as the promote target for a freshly-relocated spec).
+  return (await walk(root)) ?? join(root, 'e2e', want);
 }
 
 /**

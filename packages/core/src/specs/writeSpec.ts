@@ -17,7 +17,7 @@
  * `assertions` field on the input.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SkillStep } from '../specs/specStep.js';
 import { humanSteps, humanStep } from './humanSteps.js';
@@ -28,6 +28,7 @@ import {
   type PageObjectManifest,
 } from './pageObjectManifest.js';
 import { stepSignature } from './detectSharedFlows.js';
+import { specDir, specPath, vibeDir } from './specPaths.js';
 import { slugify, firstSentence } from './text.js';
 import { markSessionSaved } from '../sessions/sessions.js';
 import { authPrefixLength, addSetupProjectToConfig } from './authFixture.js';
@@ -270,11 +271,21 @@ async function writeOneSpec(
   rawSteps: SpecStep[],
 ): Promise<WriteSpecResult> {
   if (!slug) throw new Error('spec name must contain at least one alphanumeric character');
-  const dir = join(opts.devRoot, '__vibe_tests__');
-  const path = join(dir, `${slug}.spec.ts`);
+  const dir = specDir(opts.devRoot, 'e2e');
+  const path = specPath(opts.devRoot, 'e2e', slug);
 
   if (!opts.overwrite && existsSync(path)) {
     throw new SpecExistsError(slug, path);
+  }
+  // Migration: a pre-relocation flat spec at __vibe_tests__/<slug>.spec.ts is
+  // superseded by this e2e/ one — remove it so the suite doesn't run both.
+  const legacyFlat = join(opts.devRoot, '__vibe_tests__', `${slug}.spec.ts`);
+  if (existsSync(legacyFlat)) {
+    try {
+      rmSync(legacyFlat);
+    } catch {
+      /* best-effort */
+    }
   }
 
   await mkdir(dir, { recursive: true });
@@ -310,9 +321,12 @@ async function writeOneSpec(
   // hands-off user file. ensurePlaywrightConfig adds the setup project to it.
   const ownScaffold =
     !!userConfigName && readFileSync(join(opts.devRoot, userConfigName), 'utf-8').includes(SCAFFOLD_MARKER);
+  // auth.setup.ts is a SHARED suite artifact — it lives at the __vibe_tests__
+  // root (not in e2e/), so the setup project + storageState work for every type.
+  const vibeRoot = vibeDir(opts.devRoot);
   // Already opted in: auth.setup.ts exists from a prior approval (and the config
   // already registers it), so engage AUTOMATICALLY — don't re-ask or re-edit.
-  const authSetupExists = existsSync(join(dir, 'auth.setup.ts'));
+  const authSetupExists = existsSync(join(vibeRoot, 'auth.setup.ts'));
   // Engage the fixture when a login is detected AND we can register the setup
   // project: we scaffold/own the config, the caller approved editing a user
   // config (opts.authFixture, Stage 4), or the fixture was already set up earlier.
@@ -324,8 +338,9 @@ async function writeOneSpec(
     // Login lifted to setup.ts → a login Page Object fold would double it up.
     match = null;
     try {
+      await mkdir(vibeRoot, { recursive: true });
       await writeFile(
-        join(dir, 'auth.setup.ts'),
+        join(vibeRoot, 'auth.setup.ts'),
         renderAuthSetup(cleanActions.slice(0, authPrefix), authFile, opts.startUrl),
         'utf-8',
       );
@@ -544,9 +559,11 @@ function renderSpec(
   // ── Assemble: import + JSDoc header + signature (widened to { context } when
   //    a popup pairing needs it, and the page-object fixture when matched). ──
   const lines: string[] = [];
+  // e2e specs live in __vibe_tests__/e2e/; shared helpers stay at the
+  // __vibe_tests__ root, so intra-suite imports reach up one level.
   lines.push(
     match
-      ? `import { test, expect } from './fixtures';`
+      ? `import { test, expect } from '../fixtures';`
       : `import { test, expect } from '@playwright/test';`,
   );
   // Auth-as-fixture: reuse the session captured once by auth.setup.ts, so this
@@ -559,7 +576,7 @@ function renderSpec(
   // Debt-2: shared reset helper + a beforeEach so every run starts from a clean
   // client state (the recipe was confirmed reproducible during recon).
   if (emitReset) {
-    lines.push(`import { resetState } from './support/resetState';`);
+    lines.push(`import { resetState } from '../support/resetState';`);
     lines.push('');
     lines.push(`test.beforeEach(async ({ page, context }) => {`);
     lines.push(`  await resetState(page, context);`);

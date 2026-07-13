@@ -42,9 +42,10 @@ describe('extractPageObjects', () => {
     expect(po).toContain('getByRole("button", { name: "Overview"');
     expect(po).toContain('.click()');
 
-    // The folded specs now import from ./fixtures and call the page method.
-    const reports = await readFile(join(dir, '__vibe_tests__', 'open-reports.spec.ts'), 'utf-8');
-    expect(reports).toContain("from './fixtures'");
+    // The folded specs now import from ../fixtures (they live in e2e/) and call
+    // the page method.
+    const reports = await readFile(join(dir, '__vibe_tests__', 'e2e', 'open-reports.spec.ts'), 'utf-8');
+    expect(reports).toContain("from '../fixtures'");
     expect(reports).toMatch(/await \w+Page\.\w+\(/);
   });
 
