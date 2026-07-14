@@ -3,6 +3,10 @@
 All notable changes to the **Hover** VS Code extension. Dates are ISO 8601 (UTC).
 The repository changelog (with the `@hover-dev/*` engine packages) lives at the repo root.
 
+## 0.45.0 — 2026-07-11
+
+- **Visual baselines are generated + reviewed in CI.** Because screenshot baselines are platform-specific (a macOS baseline won't match CI's Linux), the generated workflow now creates them in CI's Linux env: the run uses `--update-snapshots=missing` (write a missing baseline, pixel-compare an existing one, never overwrite), and new baselines open a review PR — so you confirm the captured look is right before it becomes the source of truth. Same-repo only; sharded runs seed baselines but skip the auto-PR.
+
 ## 0.44.0 — 2026-07-11
 
 - **Multi-type testing.** Alongside E2E + API, Hover now crystallizes **Visual** (screenshot baselines) and **Accessibility** (axe-core) specs — all deterministic, no AI at run time. The generated CI workflow installs `@axe-core/playwright` when `a11y/` specs exist. The Business Map graph and Mermaid export mark each type at a glance: E2E rounded, API 🛡 hexagon, Visual 🖼 parallelogram, a11y ♿ box. Specs are laid out under `__vibe_tests__/{e2e,visual,api,a11y}/`.

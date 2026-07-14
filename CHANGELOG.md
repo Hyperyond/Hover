@@ -20,9 +20,7 @@ All notable changes to Hover are recorded here. Conventional Commits in the git 
 - **New layout `__vibe_tests__/{e2e,visual,api,a11y}/`.** E2E specs relocated to `e2e/` (imports rewritten to `../fixtures` / `../support`; `auth.setup.ts` stays a shared root artifact; a legacy flat spec is removed on re-crystallize). API specs moved to `api/`. Sidecars, CI (runs the dir recursively), the map (basename-keyed), and the extension (recursive globs) already handled subfolders.
 - **vscode-ext (0.44.0):** the generated CI workflow installs `@axe-core/playwright` when `a11y/` specs exist; the Business Map graph + Mermaid export mark each type at a glance (E2E rounded, API 🛡 hexagon, Visual 🖼 parallelogram, a11y ♿ box).
 
-### Known follow-up
-
-- Visual baselines are platform-specific; a baseline generated locally (macOS) won't match CI (Linux). Generate/commit baselines in the target environment (or run visual specs where the baseline was made). CI auto-baseline handling is a planned follow-up.
+- **vscode-ext (0.45.0):** visual baselines are now generated + reviewed in CI (they're platform-specific, so a local macOS baseline won't match CI's Linux). The workflow runs `--update-snapshots=missing` and opens a review PR with any new Linux baselines — confirm the look, then merge; future runs pixel-diff against them.
 
 - **cloud + core (0.44.0) + vscode-ext (0.42.0):** a test account configured in the Cloud dashboard is now usable for local login. The dashboard wrote the password only to GitHub Actions secrets (CI's write-only channel), so the MCP and editor could never read it back and `account_secrets` stayed empty. Now the dashboard also encrypts the credential into `account_secrets`, the MCP pulls it at run time, core adds `fetchCredentialPresence` (`?meta=1`, presence-only), and the panel marks Cloud-stored accounts with ☁🔑 / "credentials available from Hover Cloud". Removing the account clears both stores.
 - **vscode-ext (0.41.0):** fix — Cloud-managed test accounts now appear on their environment card in the panel (importing an environment copied name+URL but not its accounts; the panel now reconciles them in, silent + idempotent).
