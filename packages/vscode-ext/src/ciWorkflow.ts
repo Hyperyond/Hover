@@ -149,6 +149,17 @@ ${setupBlock}      - uses: actions/setup-node@v4
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+      # The failure media (screenshots + video) Hover Cloud shows in the run
+      # record. Playwright writes these under test-results/ on failure; Cloud
+      # proxies them on demand and stores no bytes itself. Empty on all-green
+      # runs (if-no-files-found: ignore keeps the step from erroring).
+      - uses: actions/upload-artifact@v4
+        if: \${{ !cancelled() }}
+        with:
+          name: hover-test-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
       # Hover Cloud (optional): add the HOVER_INGEST_TOKEN repo secret (from
       # cloud.gethover.dev → your project) and results flow to the dashboard +
       # heal queue. \`env\` tags which environment ran — 'ci' for this in-CI
