@@ -111,6 +111,31 @@ ${setupBlock}      - uses: actions/setup-node@v4
             gh pr comment "\${{ github.event.pull_request.number }}" --body-file hover-drift.md || true
           fi`;
 
+  // Visual baselines are platform-specific, so the FIRST run of a visual spec
+  // writes its baseline in CI's Linux env (via --update-snapshots=missing). Open
+  // a PR with those new PNGs so a human confirms the captured look is correct
+  // (not a pre-existing bug) before it becomes the source of truth — same
+  // human-reviewed shape as auto-heal. Same-repo only (fork PRs can't push).
+  const baselinePr = `      - name: Visual baselines → review PR (first run of a visual spec)
+        if: \${{ !cancelled() && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request') }}
+        env:
+          GH_TOKEN: \${{ github.token }}
+          HEAD_BRANCH: \${{ github.head_ref || github.ref_name }}
+        run: |
+          if [ -z "$(git status --porcelain __vibe_tests__ | grep -- '-snapshots/')" ]; then
+            echo "No new visual baselines."; exit 0
+          fi
+          BRANCH="hover/baselines-\${{ github.run_id }}"
+          git config user.name "hover-baselines"
+          git config user.email "hover-baselines@users.noreply.github.com"
+          git fetch origin "$HEAD_BRANCH" && git checkout -B "$BRANCH" "origin/$HEAD_BRANCH"
+          git add "__vibe_tests__"
+          git commit -m "test(visual): seed Playwright baselines (review the captured look)" || { echo "nothing to commit"; exit 0; }
+          git push origin "$BRANCH"
+          gh pr create --base "$HEAD_BRANCH" --head "$BRANCH" \\
+            --title "🖼 Hover visual baselines — review before merge" \\
+            --body "First run of a visual spec generated these Linux screenshot baselines. Confirm each page looks correct (not a pre-existing bug), then merge — future runs pixel-diff against them." || true`;
+
   const uploads = `      - name: Upload Hover results
         uses: actions/upload-artifact@v4
         if: \${{ !cancelled() }}
@@ -157,6 +182,10 @@ on:
 concurrency:
   group: hover-e2e-\${{ github.ref }}
   cancel-in-progress: true
+# Needed for the visual-baseline review PR (and self-heal): push a branch + open a PR.
+permissions:
+  contents: write
+  pull-requests: write
 jobs:`;
 
   const footer = `#
@@ -174,12 +203,16 @@ jobs:`;
     steps:
 ${runnerSetup}
       - name: Run Hover specs
-        run: ${pm.exec} playwright test __vibe_tests__ --reporter=html,json
+        # --update-snapshots=missing: a visual spec with no baseline yet gets one
+        # written HERE (in CI's Linux env, so it actually matches future runs);
+        # existing baselines are pixel-compared, never overwritten.
+        run: ${pm.exec} playwright test __vibe_tests__ --update-snapshots=missing --reporter=html,json
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: hover-results.json
 ${secretEnv}
 ${uploads}
 ${reportStep}
+${baselinePr}
 ${footer}`;
   }
 
@@ -196,7 +229,10 @@ ${footer}`;
     steps:
 ${runnerSetup}
       - name: Run Hover specs (shard \${{ matrix.shard }}/${shards})
-        run: ${pm.exec} playwright test __vibe_tests__ --shard=\${{ matrix.shard }}/${shards} --reporter=blob
+        # Sharded: create missing visual baselines so specs don't error. Auto
+        # baseline-PR is skipped here (shards would race); generate baselines via
+        # a non-sharded workflow_dispatch run, or commit them once locally on Linux.
+        run: ${pm.exec} playwright test __vibe_tests__ --update-snapshots=missing --shard=\${{ matrix.shard }}/${shards} --reporter=blob
         env:
 ${secretEnv}
       - name: Upload blob report
